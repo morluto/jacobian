@@ -1325,26 +1325,37 @@ class WeylParabolicWeightOrbitResult(StrictModel):
     simple_root_indices: tuple[
         Annotated[StrictInt, Field(ge=0, le=MAX_RANK - 1)], ...
     ] = Field(max_length=MAX_RANK)
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    orbit: tuple[tuple[StrictInt, ...], ...] = Field(
+    weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
+    orbit: tuple[tuple[ExactInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_WEIGHT_ORBIT_SIZE
     )
 
     @model_validator(mode="after")
     def require_canonical_orbit(self) -> Self:
         rank = len(self.datum.cartan_matrix)
+        # A parabolic with no generators reflects nothing, so its orbit is the
+        # source weight alone and the lattice carrier's own output bound is
+        # the executed bound. Otherwise every image is a Weyl reflection and
+        # the interoperable integer bound applies.
+        if self.simple_root_indices:
+            coordinates_bounded = all(
+                abs(coordinate) <= MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.orbit, self.weight)
+                for coordinate in value
+            )
+        else:
+            coordinates_bounded = self.orbit == (self.weight,) and all(
+                abs(coordinate).bit_length() <= MAX_LATTICE_OUTPUT_COORDINATE_BITS
+                for coordinate in self.weight
+            )
         if (
             tuple(sorted(set(self.simple_root_indices))) != self.simple_root_indices
-            or any(index >= rank for index in self.simple_root_indices)
+            or any(not 0 <= index < rank for index in self.simple_root_indices)
             or len(self.weight) != rank
             or self.orbit != tuple(sorted(set(self.orbit)))
             or self.weight not in self.orbit
             or any(len(value) != rank for value in self.orbit)
-            or any(
-                abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
-                for value in (*self.orbit, self.weight)
-                for coordinate in value
-            )
+            or not coordinates_bounded
         ):
             raise _validation_error(
                 "parabolic_weight_orbit_shape",

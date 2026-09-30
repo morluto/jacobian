@@ -1400,6 +1400,7 @@ def weyl_element_from_word(
 
 def _integer_inverse(
     matrix: tuple[tuple[int, ...], ...],
+    location: str = "element",
 ) -> tuple[tuple[int, ...], ...]:
     """Invert an admitted unimodular integer matrix exactly."""
     from fractions import Fraction
@@ -1414,7 +1415,7 @@ def _integer_inverse(
         pivot = next((row for row in range(column, rank) if work[row][column]), None)
         if pivot is None:
             raise OperationDomainValidationError(
-                location=("matrix",),
+                location=(location, "root_action"),
                 code="root_system.noninvertible_weyl_action",
                 message="a Weyl action matrix must be invertible",
             )
@@ -1430,7 +1431,7 @@ def _integer_inverse(
     inverse = tuple(tuple(value for value in row[rank:]) for row in work)
     if any(value.denominator != 1 for row in inverse for value in row):
         raise OperationDomainValidationError(
-            location=("element", "root_action"),
+            location=(location, "root_action"),
             code="root_system.nonintegral_weyl_inverse",
             message="a Weyl action matrix must have an integral inverse",
         )
@@ -1477,7 +1478,7 @@ def _admit_weyl_element_value(
             tuple(int(i == j) for j in range(rank)) for i in range(rank)
         ):
             return action
-        inverse = _integer_inverse(reduced)
+        inverse = _integer_inverse(reduced, location)
         descent = next(
             (
                 index
@@ -1529,7 +1530,7 @@ def weyl_element_inverse(element: WeylElement) -> WeylElement:
     """Return the inverse of an admitted finite Weyl element."""
     from jacobian.math.matrices.values import IntegerMatrix
 
-    action = _admit_weyl_element_value(element)
+    action = _admit_weyl_element_value(element, location="element")
     inverse = _integer_inverse(action)
     rank = len(action)
     return WeylElement.model_construct(
@@ -1955,10 +1956,65 @@ def _weight_coordinate_bounds(
     return tuple(bounds)
 
 
+def _admit_weight_orbit_coordinate_bounds(
+    rows: tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...],
+    simple_root_indices: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Find exact coordinate maxima before any weight-orbit expansion.
+
+    Coordinate j of w(lambda) is <lambda, w^-1(alpha_j^vee)>. Thus only
+    the selected-generator orbit of each simple coroot is needed. Coroots
+    reflect by the existing root action for the transposed Cartan matrix.
+
+    Finite-type admission bounds rank by 8, each signed coroot orbit by
+    2*MAX_POSITIVE_ROOTS, and its coordinates by MAX_ROOT_COORDINATE. The
+    preflight performs at most rank*2*MAX_POSITIVE_ROOTS*len(indices) small
+    reflections, each with rank terms, and retains one coroot orbit at a
+    time. Pairings have at most rank terms with these bounded coefficients.
+    """
+    if not simple_root_indices:
+        return tuple(abs(value) for value in weight)
+    rank = len(rows)
+    dual_rows = tuple(tuple(rows[j][i] for j in range(rank)) for i in range(rank))
+    bounds: list[int] = []
+    for coordinate in range(rank):
+        simple_coroot = tuple(int(j == coordinate) for j in range(rank))
+        seen = {simple_coroot}
+        pending = [simple_coroot]
+        bound = 0
+        for coroot in pending:
+            pairing = abs(
+                sum(
+                    value * coefficient
+                    for value, coefficient in zip(weight, coroot, strict=True)
+                )
+            )
+            if pairing > MAX_REFLECTION_REPRESENTABLE:
+                raise OperationResourceAdmissionError(
+                    location=("weight",),
+                    code="root_system.weight_orbit_coordinate_bound",
+                    message="a weight orbit image exceeds the interoperable integer bound",
+                )
+            bound = max(bound, pairing)
+            for index in simple_root_indices:
+                image = _simple_reflection_kernel(coroot, index, dual_rows)
+                if any(abs(value) > MAX_ROOT_COORDINATE for value in image):
+                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                if image not in seen:
+                    if len(seen) >= 2 * MAX_POSITIVE_ROOTS:
+                        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                    seen.add(image)
+                    pending.append(image)
+        bounds.append(bound)
+    return tuple(bounds)
+
+
 def _dominant_weight(
     rows: tuple[tuple[int, ...], ...],
     weight: tuple[int, ...],
     *,
+    coordinate_bounds: tuple[int, ...],
     word: list[int] | None = None,
     max_steps: int = MAX_WEIGHT_ORBIT_SIZE,
     bound_code: str = "root_system.weight_orbit_size_bound",
@@ -1982,6 +2038,11 @@ def _dominant_weight(
                 message=bound_message,
             )
         dominant = _weight_reflect(dominant, negative, rows)
+        if any(
+            abs(value) > bound
+            for value, bound in zip(dominant, coordinate_bounds, strict=True)
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         if word is not None:
             word.append(negative)
         normalization_steps += 1
@@ -2156,9 +2217,14 @@ def weyl_antidominant_representative(
             element,
         )
 
-    # Each performed reflection checks its actual resulting coordinates in
-    # _weight_reflect. An orbit-wide norm estimate is only an upper bound and
-    # can reject a representable chamber-normalization path.
+    # The invariant positive-definite norm bounds every intermediate image
+    # without imposing the public coordinate limit on private reflection
+    # prefixes, which can legitimately exceed that limit. Each performed
+    # reflection is checked against it, exactly as the dominant path does;
+    # _weight_reflect itself performs no check.
+    intermediate_bounds = _weight_coordinate_bounds(
+        rows, weight, enforce_interoperable_bound=False
+    )
     longest_word_work_bound = (
         (MAX_POSITIVE_ROOTS + 1) * rank * MAX_POSITIVE_ROOTS * rank
     )
@@ -2191,6 +2257,7 @@ def weyl_antidominant_representative(
     dominant = _dominant_weight(
         rows,
         weight,
+        coordinate_bounds=intermediate_bounds,
         word=dominant_word,
         max_steps=MAX_WEYL_WORD_LENGTH,
         bound_code="root_system.antidominant_representative_word_bound",
@@ -2213,6 +2280,11 @@ def weyl_antidominant_representative(
         root_action = _left_apply_root_reflection_to_action(root_action, index, rows)
     for index in longest_word:
         antidominant = _weight_reflect(antidominant, index, rows)
+        if any(
+            abs(value) > bound
+            for value, bound in zip(antidominant, intermediate_bounds, strict=True)
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         root_action = _left_apply_root_reflection_to_action(root_action, index, rows)
     if any(value > 0 for value in antidominant):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
@@ -2248,13 +2320,17 @@ def _enumerate_weight_orbit(
     weight: tuple[int, ...],
     coordinate_bounds: tuple[int, ...],
     expected_size: int,
+    *,
+    simple_root_indices: tuple[int, ...] | None = None,
 ) -> tuple[tuple[int, ...], ...]:
-    """Enumerate all weight images after exact size and coordinate admission."""
-    rank = len(rows)
+    """Enumerate admitted generators, checking the actual output coordinates."""
+    indices = (
+        tuple(range(len(rows))) if simple_root_indices is None else simple_root_indices
+    )
     seen = {weight}
     pending = [weight]
     for current in pending:
-        for index in range(rank):
+        for index in indices:
             image = _weight_reflect(current, index, rows)
             if any(
                 abs(value) > coordinate_bounds[coordinate_index]
@@ -2278,7 +2354,7 @@ def weyl_weight_orbit(
     """Return a complete finite Weyl orbit in fundamental-weight coordinates.
 
     The fundamental-weight coordinates are the pairings with the ordered
-    simple coroots. Exact norm and orbit-stabilizer bounds are computed before
+    simple coroots. Exact coordinate and orbit-stabilizer bounds are computed before
     orbit expansion; at most ``MAX_WEIGHT_ORBIT_SIZE`` values are admitted.
     """
     cartan = _as_cartan(matrix)
@@ -2302,15 +2378,11 @@ def weyl_weight_orbit(
             message="weight must have one bounded integer fundamental-weight coordinate per simple coroot",
         )
 
-    # The norm gives a representation-safe coordinate bound for every orbit
-    # element before any reflection or output construction.
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.weight_orbit_coordinate_bound",
-            message="some Weyl image coordinate may exceed the interoperable integer bound",
-        )
+    # Dual coroot orbits give exact maxima rather than a conservative norm
+    # estimate, without expanding the requested weight orbit itself.
+    coordinate_bounds = _admit_weight_orbit_coordinate_bounds(
+        rows, weight, tuple(range(rank))
+    )
 
     group_order = _weyl_group_order(rows)
     if not 1 <= group_order <= MAX_WEYL_GROUP_ORDER:
@@ -2319,7 +2391,7 @@ def weyl_weight_orbit(
     # Move to the dominant chamber using strictly increasing pairing with
     # rho^vee. The finite 4096-step cap is admitted before this normalization;
     # exceeding it proves the orbit itself cannot fit the public orbit cap.
-    dominant = _dominant_weight(rows, weight)
+    dominant = _dominant_weight(rows, weight, coordinate_bounds=coordinate_bounds)
 
     # For dominant lambda, its stabilizer is the parabolic subgroup generated
     # by the zero simple-coroot pairings. Orbit-stabilizer gives the exact
@@ -2363,8 +2435,13 @@ def weyl_parabolic_weight_orbit(
     )
     rows = datum.cartan_matrix.entries
     indices = simple_root_indices
-    if tuple(sorted(set(indices))) != indices or any(
-        index >= len(rows) for index in indices
+    if (
+        type(indices) is not tuple
+        or len(indices) > len(rows)
+        or any(
+            type(index) is not int or not 0 <= index < len(rows) for index in indices
+        )
+        or tuple(sorted(set(indices))) != indices
     ):
         raise OperationDomainValidationError(
             location=("simple_root_indices",),
@@ -2372,22 +2449,17 @@ def weyl_parabolic_weight_orbit(
             message="parabolic simple-root indices must be a strictly increasing subset of the Cartan axis",
         )
 
-    # The full Weyl norm bounds every parabolic image coordinate and is
-    # admitted before any subgroup or orbit expansion.
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.weight_orbit_coordinate_bound",
-            message="some parabolic weight image coordinate may exceed the interoperable integer bound",
-        )
-
+    # Admit exact coordinate maxima for only the selected generators before
+    # any weight reflections. The empty set retains its exact singleton.
+    coordinate_bounds = _admit_weight_orbit_coordinate_bounds(rows, weight, indices)
     subgroup = tuple(tuple(rows[i][j] for j in indices) for i in indices)
     if subgroup:
         _admit_cartan_finite_type(subgroup)
         subgroup_order = _weyl_order_from_exponents(subgroup)
         restricted_dominant = _dominant_weight(
-            subgroup, tuple(weight[index] for index in indices)
+            subgroup,
+            tuple(weight[index] for index in indices),
+            coordinate_bounds=tuple(coordinate_bounds[index] for index in indices),
         )
         zero_indices = tuple(
             index for index, value in enumerate(restricted_dominant) if value == 0
@@ -2411,7 +2483,10 @@ def weyl_parabolic_weight_orbit(
             code="root_system.weight_orbit_size_bound",
             message=f"the complete parabolic weight orbit has {orbit_size} values; maximum is {MAX_WEIGHT_ORBIT_SIZE}",
         )
-    max_output_digits = (orbit_size + 1) * len(rows) * 18
+    coordinate_digit_bound = (
+        18 if indices else (MAX_LATTICE_COORDINATE_BITS * 30103) // 100_000 + 2
+    )
+    max_output_digits = (orbit_size + 1) * len(rows) * coordinate_digit_bound
     if max_output_digits > MAX_WEIGHT_ORBIT_OUTPUT_DIGITS:
         raise OperationDomainValidationError(
             location=("weight",),
@@ -2419,26 +2494,14 @@ def weyl_parabolic_weight_orbit(
             message="the complete parabolic weight orbit exceeds the admitted output size",
         )
 
-    seen = {weight}
-    pending = [weight]
-    for current in pending:
-        for index in indices:
-            image = _weight_reflect(current, index, rows)
-            if any(
-                abs(value) > coordinate_bounds[coordinate]
-                for coordinate, value in enumerate(image)
-            ):
-                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-            if image not in seen:
-                seen.add(image)
-                if len(seen) > orbit_size:
-                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-                pending.append(image)
-    if len(seen) != orbit_size:
-        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    return WeylParabolicWeightOrbitResult._from_kernel(
-        datum, indices, weight, tuple(sorted(seen))
+    orbit = _enumerate_weight_orbit(
+        rows,
+        weight,
+        coordinate_bounds,
+        orbit_size,
+        simple_root_indices=indices,
     )
+    return WeylParabolicWeightOrbitResult._from_kernel(datum, indices, weight, orbit)
 
 
 def weyl_element_descents(

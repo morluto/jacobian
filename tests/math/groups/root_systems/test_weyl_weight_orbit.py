@@ -5,7 +5,15 @@ from collections import deque
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.groups.root_systems._models import MAX_WEIGHT_ORBIT_SIZE
+from jacobian.math.groups.root_systems import operations as rs_operations
+from jacobian.math.groups.root_systems._cartan import (
+    cartan_type_matrix,
+    simple_reflection,
+)
+from jacobian.math.groups.root_systems._models import (
+    MAX_POSITIVE_ROOTS,
+    MAX_WEIGHT_ORBIT_SIZE,
+)
 from jacobian.math.groups.root_systems.operations import weyl_weight_orbit
 
 Matrix = tuple[tuple[int, ...], ...]
@@ -150,3 +158,48 @@ def test_nonintegral_and_wrong_rank_weights_are_rejected() -> None:
         weyl_weight_orbit(((2, -1), (-1, 2)), (1,))
     with pytest.raises(OperationDomainValidationError, match="fundamental-weight"):
         weyl_weight_orbit(((2, -1), (-1, 2)), (1, 0.5))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("cartan", "generators"),
+    [
+        (((2, -1), (-1, 2)), (((-1, 0), (1, 1)), ((1, 1), (0, -1)))),
+        (((2, -2), (-1, 2)), (((-1, 0), (1, 1)), ((1, 2), (0, -1)))),
+        (((2, -3), (-1, 2)), (((-1, 0), (1, 1)), ((1, 3), (0, -1)))),
+        (((2, -1), (-3, 2)), (((-1, 0), (3, 1)), ((1, 1), (0, -1)))),
+    ],
+)
+@pytest.mark.parametrize("indices", [(), (0,), (1,), (0, 1)])
+def test_dual_preflight_matches_independent_weight_action_matrices(
+    cartan: Matrix, generators: tuple[Matrix, ...], indices: tuple[int, ...]
+) -> None:
+    for weight in ((0, 0), (1, 1), (2, -1), (-3, 2)):
+        orbit = _independent_group_orbit(tuple(generators[i] for i in indices), weight)
+        expected = tuple(max(abs(image[j]) for image in orbit) for j in range(2))
+
+        assert (
+            rs_operations._admit_weight_orbit_coordinate_bounds(cartan, weight, indices)
+            == expected
+        )
+
+
+def test_e8_dual_preflight_has_a_fixed_work_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = cartan_type_matrix("E", 8)
+    indices = tuple(range(8))
+    reflection_count = 0
+
+    def recording_reflect(root: Vector, index: int, matrix: Matrix) -> Vector:
+        nonlocal reflection_count
+        reflection_count += 1
+        return simple_reflection(root, index, matrix)
+
+    monkeypatch.setattr(rs_operations, "_simple_reflection_kernel", recording_reflect)
+    bounds = rs_operations._admit_weight_orbit_coordinate_bounds(
+        rows, (1,) * 8, indices
+    )
+
+    # rho pairs with a coroot's height; E8 has highest coroot height h-1=29.
+    assert bounds == (29,) * 8
+    assert 0 < reflection_count <= len(rows) * 2 * MAX_POSITIVE_ROOTS * len(indices)

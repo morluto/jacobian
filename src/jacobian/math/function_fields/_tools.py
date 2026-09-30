@@ -977,8 +977,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Compute an exact valuation at the unique GF(p)-rational point at "
             "infinity of an odd-characteristic squarefree model y^2=f(x) with "
-            "odd deg(f). The place retains the exact curve and GF(p) residue "
-            "parent; finite values include zero and the zero element returns "
+            "odd deg(f). Accept the typed infinity place or the generic INFINITE "
+            "FunctionFieldPlace retained by a Riemann-Roch divisor. The returned "
+            "place retains the exact curve and GF(p) residue parent; finite "
+            "values include zero and the zero element returns "
             "the structural POSITIVE_INFINITY branch."
         ),
         request_type=HyperellipticInfinityPlaceValuationRequest,
@@ -1006,6 +1008,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             "modulus_coefficients": ["0", "1"],
                             "generator": "z",
                         },
+                    },
+                    "element": _GF5_HYPERELLIPTIC_Y,
+                },
+            ),
+            OperationExample(
+                name="valuation_at_generic_divisor_infinity",
+                description=(
+                    "Compute v(y)=-3 using generic divisor support; the place "
+                    "must be INFINITE on the odd-degree model y^2=x^3-x over GF(5)."
+                ),
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "kind": "INFINITE",
+                        "degree": 1,
                     },
                     "element": _GF5_HYPERELLIPTIC_Y,
                 },

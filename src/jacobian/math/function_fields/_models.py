@@ -232,7 +232,14 @@ class HyperellipticInfinityPlace(StrictModel):
 
 
 class HyperellipticInfinityPlaceValuationRequest(StrictModel):
-    place: HyperellipticInfinityPlace
+    place: HyperellipticInfinityPlace | FunctionFieldPlace = Field(
+        description=(
+            "The typed hyperelliptic infinity place or a FunctionFieldPlace with "
+            "kind INFINITE, degree one, and no prime polynomial, as retained in "
+            "a Riemann-Roch divisor. Both require an odd-degree squarefree "
+            "hyperelliptic model over an odd prime field."
+        )
+    )
     element: FiniteFunctionFieldElement
 
 

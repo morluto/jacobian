@@ -31,7 +31,6 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisor,
     FunctionFieldDivisorTerm,
     FunctionFieldFiniteValuation,
-    HyperellipticInfinityPlaceValuationRequest,
 )
 from jacobian.math.function_fields._tools import TOOLS
 
@@ -251,18 +250,3 @@ def test_membership_description_reports_cells_instead_of_encoded_bytes() -> None
     assert "MiB" not in description
     assert str(MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS) in description
     assert str(MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS) in description
-
-
-def test_request_carrier_still_requires_a_typed_infinity_place() -> None:
-    """The wire path keeps its typed place until the request widens."""
-    field = _field()
-
-    with pytest.raises(ValueError):
-        HyperellipticInfinityPlaceValuationRequest.model_validate(
-            {
-                "place": FunctionFieldPlace(
-                    field=field, kind="INFINITE", degree=1
-                ).model_dump(),
-                "element": _element(field, (0,), (1,)).model_dump(),
-            }
-        )

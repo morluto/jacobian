@@ -6,10 +6,16 @@ from typing import Self
 
 from pydantic import BaseModel, ValidationError, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_DIMENSION,
+    FacesInDimension,
+    FiniteSimplicialComplex,
 )
 from jacobian.math.topology.cellular_sheaves._kernel import (
     Scalar,
@@ -19,9 +25,12 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _ExactField,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
+    MAX_SHEAF_COVER_MAPS,
+    MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
     MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
+    MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     FiniteCellularSheaf,
     SheafField,
@@ -40,6 +49,19 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
 from jacobian.math.topology.cellular_sheaves.morphism_kernel import (
     _parent_reconstruction_bounds,
     _readmit_parent_sheaf,
+)
+
+# The exact canonical model types reachable in a sheaf payload. Any other model
+# type, including a subclass, may declare fields this walk must not expand.
+_PAYLOAD_MODEL_TYPES = frozenset(
+    {
+        CanonicalRational,
+        FacesInDimension,
+        FiniteCellularSheaf,
+        FiniteSimplicialComplex,
+        SheafRestriction,
+        SheafStalk,
+    }
 )
 
 
@@ -124,16 +146,250 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
     )
 
 
+def _bounded_restriction_sequence(
+    value: object, limit: int, role: str, field: str
+) -> tuple[object, ...] | list[object]:
+    if not isinstance(value, (tuple, list)) or type(value) not in (tuple, list):
+        raise _domain(
+            "parent_restriction_structure",
+            f"{role} restriction {field} must be an ordered container",
+        )
+    if len(value) > limit:
+        raise _resource(
+            "parent_restriction_shape",
+            f"{role} restriction {field} exceeds its {limit}-element envelope",
+        )
+    return value
+
+
+def _restriction_labels(value: object, limit: int, role: str, field: str) -> None:
+    labels = _bounded_restriction_sequence(value, limit, role, field)
+    if any(not isinstance(label, str) for label in labels):
+        raise _domain(
+            "parent_restriction_labels",
+            f"{role} restriction {field} must contain scalar labels",
+        )
+
+
+def _reject_oversized_restriction(restriction: object, role: str) -> None:
+    """Bound every nested matrix axis before the parent is recursively rebuilt."""
+    if type(restriction) is not SheafRestriction:
+        raise _domain(
+            "parent_restriction_type",
+            f"{role} restrictions must be typed restriction matrices",
+        )
+    for field in ("row_basis", "column_basis"):
+        _restriction_labels(
+            getattr(restriction, field, None), MAX_SHEAF_STALK_RANK, role, field
+        )
+    rows = _bounded_restriction_sequence(
+        getattr(restriction, "entries", None), MAX_SHEAF_STALK_RANK, role, "entries"
+    )
+    for row in rows:
+        entries = _bounded_restriction_sequence(row, MAX_SHEAF_STALK_RANK, role, "row")
+        for scalar in entries:
+            if type(scalar) is CanonicalRational:
+                valid = (
+                    type(getattr(scalar, "num", None)) is int
+                    and type(getattr(scalar, "den", None)) is int
+                )
+            else:
+                valid = type(scalar) is int
+            if not valid:
+                raise _domain(
+                    "parent_restriction_scalar",
+                    f"{role} restriction entries must contain exact scalar values",
+                )
+    for field in ("source", "target"):
+        _restriction_labels(
+            getattr(restriction, field, None), MAX_SHEAF_SIMPLICES, role, field
+        )
+    path = _bounded_restriction_sequence(
+        getattr(restriction, "cover_path", None),
+        MAX_SHEAF_SIMPLICES,
+        role,
+        "cover_path",
+    )
+    for simplex in path:
+        _restriction_labels(simplex, MAX_SHEAF_SIMPLICES, role, "cover_path simplex")
+
+
+def _reject_malformed_parent_complex(value: object, role: str) -> None:
+    """Bound the retained face containers before copying any canonical complex."""
+    if type(value) is not FiniteSimplicialComplex:
+        raise _domain(
+            "parent_complex_type", f"{role} parent must retain a typed complex"
+        )
+    _restriction_labels(
+        getattr(value, "vertices", None), MAX_SHEAF_SIMPLICES, role, "complex vertices"
+    )
+    facets = _bounded_restriction_sequence(
+        getattr(value, "maximal_simplices", None),
+        MAX_SHEAF_SIMPLICES,
+        role,
+        "complex facets",
+    )
+    for facet in facets:
+        _restriction_labels(facet, MAX_TOPOLOGY_DIMENSION + 1, role, "complex facet")
+    groups = _bounded_restriction_sequence(
+        getattr(value, "faces_by_dimension", None),
+        MAX_TOPOLOGY_DIMENSION + 1,
+        role,
+        "complex dimensions",
+    )
+    face_count = 0
+    for group in groups:
+        if (
+            type(group) is not FacesInDimension
+            or type(getattr(group, "dimension", None)) is not int
+        ):
+            raise _domain(
+                "parent_complex_structure", f"{role} parent face groups must be typed"
+            )
+        faces = _bounded_restriction_sequence(
+            getattr(group, "faces", None), MAX_SHEAF_SIMPLICES, role, "complex faces"
+        )
+        face_count += len(faces)
+        if face_count > MAX_SHEAF_SIMPLICES:
+            raise _resource(
+                "parent_simpices", f"{role} parent exceeds the simplex envelope"
+            )
+        for face in faces:
+            _restriction_labels(
+                face, MAX_TOPOLOGY_DIMENSION + 1, role, "complex simplex"
+            )
+    counts = _bounded_restriction_sequence(
+        getattr(value, "f_vector", None),
+        MAX_TOPOLOGY_DIMENSION + 1,
+        role,
+        "complex face counts",
+    )
+    if any(type(count) is not int for count in counts) or any(
+        type(getattr(value, field, None)) is not int
+        for field in ("dimension", "closure_size")
+    ):
+        raise _domain(
+            "parent_complex_structure", f"{role} parent face counts must be integers"
+        )
+    if (
+        not isinstance(getattr(value, "orientation_convention", None), str)
+        or type(getattr(value, "empty_simplex_stored", None)) is not bool
+    ):
+        raise _domain(
+            "parent_complex_structure",
+            f"{role} parent complex conventions must be scalar values",
+        )
+
+
+def _reject_malformed_stalk(stalk: object, role: str) -> None:
+    if type(stalk) is not SheafStalk:
+        raise _domain("parent_stalk_type", f"{role} parent stalks must be typed")
+    basis = getattr(stalk, "basis", None)
+    if (
+        isinstance(basis, (tuple, list))
+        and type(basis) in (tuple, list)
+        and len(basis) > MAX_SHEAF_STALK_RANK
+    ):
+        raise _resource(
+            "parent_stalk_rank",
+            f"{role} morphism parent retains a stalk above the rank envelope",
+        )
+    _restriction_labels(basis, MAX_SHEAF_STALK_RANK, role, "stalk basis")
+    _restriction_labels(
+        getattr(stalk, "simplex", None),
+        MAX_TOPOLOGY_DIMENSION + 1,
+        role,
+        "stalk simplex",
+    )
+
+
+def _reject_oversized_parent_container(parent: object, role: str) -> None:
+    """Refuse an over-envelope parent container before any recursive copy.
+
+    ``MAX_SHEAF_SIMPLICES`` bounds the simplices a canonical cellular sheaf may
+    retain, and each stalk basis and restriction row is separately bounded. A
+    ``model_construct`` or ``model_copy`` value bypasses those declared bounds,
+    so check the container lengths here rather than discovering them after the
+    payload has been rebuilt.
+    """
+    stalks = getattr(parent, "stalks", None)
+    if not isinstance(stalks, (tuple, list)) or type(stalks) not in (tuple, list):
+        raise _domain(
+            "parent_container_type", f"{role} stalks must be an ordered container"
+        )
+    if len(stalks) > MAX_SHEAF_SIMPLICES:
+        raise _resource(
+            "parent_simpices",
+            f"{role} morphism parent retains more than {MAX_SHEAF_SIMPLICES} simplices",
+        )
+    for attribute, limit in (
+        ("cover_restrictions", MAX_SHEAF_COVER_MAPS),
+        ("derived_restrictions", MAX_SHEAF_DERIVED_RESTRICTIONS),
+    ):
+        container = getattr(parent, attribute, None)
+        if not isinstance(container, (tuple, list)) or type(container) not in (
+            tuple,
+            list,
+        ):
+            raise _domain(
+                "parent_container_type",
+                f"{role} {attribute} must be an ordered container",
+            )
+        if len(container) > limit:
+            raise _resource(
+                "parent_cells",
+                f"{role} morphism parent retains too many {attribute} rows",
+            )
+        for restriction in container:
+            _reject_oversized_restriction(restriction, role)
+    for stalk in stalks:
+        _reject_malformed_stalk(stalk, role)
+    _reject_malformed_parent_complex(getattr(parent, "complex", None), role)
+    if not isinstance(getattr(parent, "coefficient_field", None), SheafField):
+        raise _domain(
+            "parent_field_type", f"{role} parent must retain a typed coefficient field"
+        )
+    prime = getattr(parent, "prime", None)
+    if prime is not None and type(prime) is not int:
+        raise _domain("parent_field_type", f"{role} parent prime must be an integer")
+    if any(
+        type(getattr(parent, field, None)) is not int
+        for field in ("diamonds", "comparable_pairs")
+    ):
+        raise _domain(
+            "parent_count_type", f"{role} parent incidence counts must be integers"
+        )
+
+
 def _unvalidated_payload(value: object) -> object:
     """Expose nested model fields as raw containers for trust-boundary revalidation."""
     if isinstance(value, BaseModel):
+        # Require the exact canonical model type. A subclass legitimately
+        # declares extra fields, so type(value).model_fields would treat them as
+        # declared and copy their whole unbounded payload before base-model
+        # validation rejects them as extra data.
+        if type(value) not in _PAYLOAD_MODEL_TYPES:
+            raise _domain(
+                "parent_structure",
+                "parent models must be canonical types retaining only declared fields",
+            )
+        fields = type(value).model_fields
+        if len(value.__dict__) != len(fields) or any(
+            key not in fields for key in value.__dict__
+        ):
+            raise _domain(
+                "parent_structure",
+                "parent models must retain exactly their declared fields",
+            )
         return {key: _unvalidated_payload(item) for key, item in value.__dict__.items()}
-    if isinstance(value, tuple):
+    if type(value) is tuple:
         return tuple(_unvalidated_payload(item) for item in value)
-    if isinstance(value, list):
+    if type(value) is list:
         return [_unvalidated_payload(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _unvalidated_payload(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list, dict)):
+        raise _domain(
+            "parent_structure", "parent fields must use canonical builtin containers"
+        )
     return value
 
 
@@ -332,15 +588,24 @@ def _solve_matrix(
 
 def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     """Compute the image sheaf and exact factorization ``F -> im(phi) -> G``."""
-    if not isinstance(value, SheafMorphismResult):
+    if type(value) is not SheafMorphismResult:
         raise _domain("morphism_type", "input must be a typed sheaf morphism")
-    if not isinstance(value.source, FiniteCellularSheaf) or not isinstance(
-        value.target, FiniteCellularSheaf
+    if (
+        type(getattr(value, "source", None)) is not FiniteCellularSheaf
+        or type(getattr(value, "target", None)) is not FiniteCellularSheaf
     ):
         raise _domain(
-            "parent_type", "morphism parents must be typed finite cellular sheaves"
+            "parent_type", "morphism parents must be canonical finite cellular sheaves"
         )
     source, target = value.source, value.target
+    # Bound the parent container sizes before the recursive rebuild below. A
+    # `model_construct` carrier can hold an arbitrarily large `stalks`, basis, or
+    # restriction container, and `_unvalidated_payload` copies every nested
+    # element before any rank, cell-count, work, or output admission runs, so
+    # malformed input could force unbounded CPU and memory merely to reach
+    # validation. Bound each container before walking its already-bounded children.
+    _reject_oversized_parent_container(source, "source")
+    _reject_oversized_parent_container(target, "target")
     try:
         source = FiniteCellularSheaf.model_validate(_unvalidated_payload(source))
         target = FiniteCellularSheaf.model_validate(_unvalidated_payload(target))

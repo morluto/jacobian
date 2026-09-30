@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     SimplicialComplexRequest,
     VertexLabel,
@@ -394,6 +395,73 @@ class PresentationBasepointChangePath(StrictModel):
         return self
 
 
+class PresentationTransportedSimplicialMap(StrictModel):
+    """A simplicial map followed by basepoint transport in its target.
+
+    For a source basepoint a and path p from f(a) to b, this represents the
+    based homomorphism sending a loop w to p^-1 f(w) p. Keeping the target
+    path makes this carrier closed under mixed composition without retaining
+    a recursive computation history.
+    """
+
+    simplicial_map: SimplicialMap
+    basepoint_path: PresentationBasepointChangePath
+
+    def _require_typed_members(self) -> Self:
+        mapped = getattr(self, "simplicial_map", None)
+        path = getattr(self, "basepoint_path", None)
+        if not isinstance(mapped, SimplicialMap) or not isinstance(
+            path, PresentationBasepointChangePath
+        ):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "transport requires a typed simplicial map and basepoint path",
+            )
+        if any(
+            not isinstance(getattr(mapped, field, None), FiniteSimplicialComplex)
+            for field in ("source", "target")
+        ) or not isinstance(getattr(path, "complex", None), FiniteSimplicialComplex):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "typed transport members must retain canonical complexes",
+            )
+        axes = (
+            getattr(mapped.source, "vertices", None),
+            getattr(mapped.target, "vertices", None),
+            getattr(mapped, "vertex_map", None),
+        )
+        if any(
+            not isinstance(axis, (tuple, list))
+            or type(axis) not in (tuple, list)
+            or len(axis) > MAX_TOPOLOGY_VERTICES
+            or any(not isinstance(vertex, str) for vertex in axis)
+            for axis in axes
+        ):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "typed transport maps must retain bounded scalar vertex axes",
+            )
+        if type(getattr(path, "path_vertices", None)) not in (tuple, list) or any(
+            not isinstance(getattr(path, field, None), str)
+            for field in ("source_base_vertex", "target_base_vertex")
+        ):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "typed basepoint paths must retain vertex endpoints and an ordered path",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_target_path(self) -> Self:
+        self._require_typed_members()
+        if self.simplicial_map.target != self.basepoint_path.complex:
+            raise _validation_error(
+                "fundamental_group_map.transport_target",
+                "the basepoint path must belong to the simplicial map target",
+            )
+        return self
+
+
 class FundamentalGroupBasepointChangeRequest(StrictModel):
     """Transport a based fundamental group along one explicit edge path."""
 
@@ -403,7 +471,11 @@ class FundamentalGroupBasepointChangeRequest(StrictModel):
 class FundamentalGroupMapResult(StrictModel):
     """Exact generator words and triangle-relation witnesses for a map."""
 
-    map: SimplicialMap | PresentationBasepointChangePath
+    map: (
+        SimplicialMap
+        | PresentationBasepointChangePath
+        | PresentationTransportedSimplicialMap
+    )
     source_presentation: FundamentalGroupPresentationResult
     target_presentation: FundamentalGroupPresentationResult
     generator_images: tuple[FiniteGroupWord, ...] = Field(
@@ -416,6 +488,10 @@ class FundamentalGroupMapResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_binding(self) -> Self:
+        return self._require_structural_binding()
+
+    def _require_structural_binding(self) -> Self:
+        """Share cheap binding checks with admitted native consumers."""
         if isinstance(self.map, SimplicialMap):
             source_complex = self.map.source
             target_complex = self.map.target
@@ -423,6 +499,23 @@ class FundamentalGroupMapResult(StrictModel):
                 zip(self.map.source.vertices, self.map.vertex_map, strict=True)
             ).get(self.source_presentation.base_vertex)
             bases_match = source_base_image == self.target_presentation.base_vertex
+        elif isinstance(self.map, PresentationTransportedSimplicialMap):
+            self.map._require_typed_members()
+            source_complex = self.map.simplicial_map.source
+            target_complex = self.map.simplicial_map.target
+            source_base_image = dict(
+                zip(
+                    source_complex.vertices,
+                    self.map.simplicial_map.vertex_map,
+                    strict=True,
+                )
+            ).get(self.source_presentation.base_vertex)
+            bases_match = (
+                source_base_image == self.map.basepoint_path.source_base_vertex
+                and self.map.basepoint_path.target_base_vertex
+                == self.target_presentation.base_vertex
+                and self.map.basepoint_path.complex == target_complex
+            )
         else:
             source_complex = target_complex = self.map.complex
             bases_match = (
@@ -482,7 +575,7 @@ class FundamentalGroupMapResult(StrictModel):
 
 
 class PresentationMapCompositionRequest(StrictModel):
-    """Compose two based simplicial maps after applying pi_1."""
+    """Compose based presentation maps, including explicit basepoint transport."""
 
     first: FundamentalGroupMapResult
     second: FundamentalGroupMapResult

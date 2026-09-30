@@ -20,7 +20,11 @@ from jacobian.math.topology.edge_paths._models import (
     MAX_WORD,
     FiniteGroupPresentation,
     FiniteGroupWord,
+    FundamentalGroupBasepointChangeRequest,
     FundamentalGroupMapRequest,
+    PresentationBasepointChangePath,
+    PresentationMapCompositionRequest,
+    PresentationTransportedSimplicialMap,
     WordLetter,
 )
 from jacobian.math.topology.edge_paths.operations import (
@@ -28,6 +32,8 @@ from jacobian.math.topology.edge_paths.operations import (
     presentation_abelianization,
 )
 from jacobian.math.topology.edge_paths.presentation_maps import (
+    change_fundamental_group_basepoint,
+    compose_fundamental_group_maps,
     induced_fundamental_group_map,
 )
 
@@ -239,3 +245,51 @@ class TestNativeAbelianizationAdmission:
         assert result.abelianization.free_rank == 1
         assert result.abelianization.rank == 1
         assert result.abelianization.torsion_invariant_factors == ()
+
+
+def test_a_basepoint_path_composes_with_a_simplicial_map() -> None:
+    """The composite retains both the map and its basepoint transport."""
+    complex_ = canonical_complex(("a", "b", "c"), (("a", "b"), ("b", "c"), ("a", "c")))
+
+    path_map = change_fundamental_group_basepoint(
+        FundamentalGroupBasepointChangeRequest(
+            path=PresentationBasepointChangePath(
+                complex=complex_,
+                source_base_vertex="a",
+                target_base_vertex="b",
+                path_vertices=("a", "b"),
+            )
+        )
+    )
+    assert isinstance(path_map.map, PresentationBasepointChangePath)
+
+    identity_map = induced_fundamental_group_map(
+        FundamentalGroupMapRequest(
+            map=SimplicialMap(
+                source=complex_, target=complex_, vertex_map=("a", "b", "c")
+            ),
+            source_base_vertex="b",
+            target_base_vertex="b",
+        )
+    )
+    assert isinstance(identity_map.map, SimplicialMap)
+    # the two operands already agree on the intermediate presentation
+    assert path_map.target_presentation == identity_map.source_presentation
+
+    composed = compose_fundamental_group_maps(
+        PresentationMapCompositionRequest(first=path_map, second=identity_map)
+    )
+
+    assert isinstance(composed.map, PresentationTransportedSimplicialMap)
+    assert composed.map.simplicial_map == identity_map.map
+    assert composed.map.basepoint_path == path_map.map
+    # Both maps induce isomorphisms of the one-generator presentations.
+    expected = identity_map.generator_images
+    actual = composed.generator_images
+    assert len(actual) == len(expected)
+    for got, want in zip(actual, expected, strict=True):
+        # both are generators of the same one-generator presentation; the basepoint
+        # change inverts the transported word
+        assert {abs(letter.exponent) for letter in got.letters} == {
+            abs(letter.exponent) for letter in want.letters
+        }

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Literal, cast
 
-from pydantic import Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -13,7 +13,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.values import IntegerMatrix
-from jacobian.math.topology._request_admission import run_topology_admission
+from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_shape,
+    run_topology_admission,
+)
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
     MAX_INDUCED_MAP_EDGE_LETTERS,
@@ -30,6 +34,7 @@ from jacobian.math.topology.edge_paths._models import (
     PresentationBasepointChangePath,
     PresentationMapCompositionRequest,
     PresentationRelatorImage,
+    PresentationTransportedSimplicialMap,
     WordLetter,
 )
 from jacobian.math.topology.edge_paths.operations import fundamental_group_presentation
@@ -234,9 +239,39 @@ def _permutation_sign(values: tuple[str, ...]) -> int:
     return -1 if inversions % 2 else 1
 
 
+def _require_native_model(
+    value: object, model: type[BaseModel], location: tuple[str, ...]
+) -> None:
+    if (
+        type(value) is not model
+        or len(value.__dict__) != len(model.model_fields)
+        or any(key not in model.model_fields for key in value.__dict__)
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.native_carrier_shape",
+            message="expected an exact typed carrier with its declared fields",
+        )
+
+
 def _validate_simplicial_map(value: SimplicialMap) -> None:
     """Run model-level simplicial validation under topology admission."""
-    value.__class__.model_validate(value.model_dump())
+    _require_native_model(value, SimplicialMap, ("map",))
+    vertices = getattr(value, "vertex_map", None)
+    if (
+        not isinstance(vertices, (tuple, list))
+        or type(vertices) not in (tuple, list)
+        or len(vertices) > 64
+        or any(type(vertex) is not str for vertex in vertices)
+    ):
+        raise OperationDomainValidationError(
+            location=("map", "vertex_map"),
+            code="fundamental_group_map.native_carrier_shape",
+            message="a typed simplicial map must retain bounded scalar vertex labels",
+        )
+    require_canonical_complex_shape(getattr(value, "source", None))
+    require_canonical_complex_shape(getattr(value, "target", None))
+    SimplicialMap.model_validate(value.model_dump())
 
 
 def induced_fundamental_group_map(
@@ -249,6 +284,16 @@ def induced_fundamental_group_map(
     vertex must map to the target base vertex; an unbased change-of-basepoint
     path is deliberately not inferred.
     """
+    _require_native_model(request, FundamentalGroupMapRequest, ("request",))
+    if any(
+        type(getattr(request, field, None)) is not str
+        for field in ("source_base_vertex", "target_base_vertex")
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="fundamental_group_map.native_carrier_shape",
+            message="typed map requests must retain scalar base vertices",
+        )
     simplicial_map: SimplicialMap = request.map
     run_topology_admission(
         lambda: _validate_simplicial_map(simplicial_map), location=("map",)
@@ -505,6 +550,7 @@ def change_fundamental_group_basepoint(
     exact presentation-map composition operation.
     """
 
+    _require_native_model(request, FundamentalGroupBasepointChangeRequest, ("request",))
     if (
         type(request) is not FundamentalGroupBasepointChangeRequest
         or type(request.path) is not PresentationBasepointChangePath
@@ -515,9 +561,7 @@ def change_fundamental_group_basepoint(
             message="request must contain a canonical based edge path",
         )
     try:
-        path_value = PresentationBasepointChangePath.model_validate(
-            request.path.model_dump(mode="python")
-        )
+        path_value = _admit_composition_path(request.path, ("path",))
     except ValidationError as error:
         raise OperationDomainValidationError(
             location=("path",),
@@ -937,126 +981,149 @@ def _compose_relator_images(
     return tuple(composed)
 
 
+def _admit_composition_path(
+    path: PresentationBasepointChangePath, location: tuple[str, ...]
+) -> PresentationBasepointChangePath:
+    _require_native_model(path, PresentationBasepointChangePath, location)
+    vertices = getattr(path, "path_vertices", None)
+    if not isinstance(vertices, (tuple, list)) or type(vertices) not in (tuple, list):
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.composition_path_shape",
+            message="a typed basepoint path must retain an ordered vertex tuple",
+        )
+    if len(vertices) > MAX_WORD + 1:
+        raise OperationResourceAdmissionError(
+            location=(*location, "path_vertices"),
+            code="fundamental_group_map.composition_path_output",
+            message="the basepoint path exceeds the admitted word bound",
+        )
+    if not isinstance(getattr(path, "complex", None), FiniteSimplicialComplex) or any(
+        type(vertex) is not str for vertex in vertices
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.composition_path_shape",
+            message="a typed basepoint path must retain a canonical complex and scalar vertex labels",
+        )
+    require_canonical_complex_shape(path.complex)
+    return run_topology_admission(
+        lambda: PresentationBasepointChangePath.model_validate(path.model_dump()),
+        location=location,
+    )
+
+
+def _composition_carrier(
+    result: FundamentalGroupMapResult,
+    location: tuple[str, ...],
+) -> tuple[SimplicialMap, tuple[str, ...]]:
+    """Normalize a bound carrier to a simplicial map and target edge path."""
+    carrier = result.map
+    if isinstance(carrier, PresentationTransportedSimplicialMap):
+        _require_native_model(carrier, PresentationTransportedSimplicialMap, location)
+        run_topology_admission(carrier._require_typed_members, location=location)
+        mapped = carrier.simplicial_map
+        path = _admit_composition_path(carrier.basepoint_path, location)
+    elif isinstance(carrier, PresentationBasepointChangePath):
+        path = _admit_composition_path(carrier, location)
+        mapped = SimplicialMap(
+            source=path.complex,
+            target=path.complex,
+            vertex_map=path.complex.vertices,
+        )
+    elif isinstance(carrier, SimplicialMap):
+        mapped, path = carrier, None
+    else:
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.composition_carrier_kind",
+            message="composition requires simplicial maps or typed basepoint transport",
+        )
+    run_topology_admission(lambda: _validate_simplicial_map(mapped), location=location)
+    run_topology_admission(result._require_structural_binding, location=location)
+    vertices = (
+        path.path_vertices
+        if path is not None
+        else (result.target_presentation.base_vertex,)
+    )
+    return mapped, vertices
+
+
 def _compose_simplicial_map(
     first: FundamentalGroupMapResult,
     second: FundamentalGroupMapResult,
-) -> SimplicialMap | PresentationBasepointChangePath:
-    """Compose two compatible presentation-map carriers."""
+) -> (
+    SimplicialMap
+    | PresentationBasepointChangePath
+    | PresentationTransportedSimplicialMap
+):
+    """Compose (f, p) and (g, q) as (g f, g(p) q).
 
-    if isinstance(first.map, PresentationBasepointChangePath) or isinstance(
+    Collapsed edges of g(p) are removed, so even a constant map retains a valid
+    singleton target path. The result has one map and one bounded path, never
+    a growing tree of past compositions.
+    """
+    first_map, first_path = _composition_carrier(first, ("first", "map"))
+    second_map, second_path = _composition_carrier(second, ("second", "map"))
+    vertex_map = dict(
+        zip(second_map.source.vertices, second_map.vertex_map, strict=True)
+    )
+    composed_map = SimplicialMap(
+        source=first_map.source,
+        target=second_map.target,
+        vertex_map=tuple(vertex_map[label] for label in first_map.vertex_map),
+    )
+    if isinstance(first.map, SimplicialMap) and isinstance(second.map, SimplicialMap):
+        return composed_map
+    mapped_path: list[str] = []
+    for vertex in first_path:
+        image = vertex_map[vertex]
+        if not mapped_path or mapped_path[-1] != image:
+            mapped_path.append(image)
+    if len(mapped_path) + len(second_path) - 1 > MAX_WORD + 1:
+        raise OperationResourceAdmissionError(
+            location=("second", "map", "path_vertices"),
+            code="fundamental_group_map.composition_path_output",
+            message="the composed basepoint path exceeds the admitted word bound",
+        )
+    path = PresentationBasepointChangePath(
+        complex=second_map.target,
+        source_base_vertex=mapped_path[0],
+        target_base_vertex=second_path[-1],
+        path_vertices=(*mapped_path, *second_path[1:]),
+    )
+    if isinstance(first.map, PresentationBasepointChangePath) and isinstance(
         second.map, PresentationBasepointChangePath
     ):
-        if not (
-            isinstance(first.map, PresentationBasepointChangePath)
-            and isinstance(second.map, PresentationBasepointChangePath)
-        ):
-            raise OperationDomainValidationError(
-                location=("second", "map"),
-                code="fundamental_group_map.composition_carrier_kind",
-                message=(
-                    "composition requires two simplicial maps or two basepoint paths"
-                ),
-            )
-        first_path, second_path = first.map, second.map
-        for operand, path, location in (
-            (first, first_path, ("first", "map")),
-            (second, second_path, ("second", "map")),
-        ):
-            if (
-                path.complex != operand.source_presentation.complex
-                or path.complex != operand.target_presentation.complex
-                or path.source_base_vertex != operand.source_presentation.base_vertex
-                or path.target_base_vertex != operand.target_presentation.base_vertex
-            ):
-                raise OperationDomainValidationError(
-                    location=location,
-                    code="fundamental_group_map.composition_path_carrier",
-                    message="each basepoint path must match its enclosing source and target presentations",
-                )
-        if (
-            first_path.complex != second_path.complex
-            or first_path.target_base_vertex != second_path.source_base_vertex
-        ):
-            raise OperationDomainValidationError(
-                location=("second", "map"),
-                code="fundamental_group_map.composition_path",
-                message=(
-                    "basepoint paths must use the same complex and matching intermediate vertex"
-                ),
-            )
-        combined_length = (
-            len(first_path.path_vertices) + len(second_path.path_vertices) - 1
-        )
-        if combined_length > MAX_WORD + 1:
-            raise OperationResourceAdmissionError(
-                location=("second", "map", "path_vertices"),
-                code="fundamental_group_map.composition_path_output",
-                message="the composed basepoint path exceeds the admitted word bound",
-            )
-        return PresentationBasepointChangePath(
-            complex=first_path.complex,
-            source_base_vertex=first_path.source_base_vertex,
-            target_base_vertex=second_path.target_base_vertex,
-            path_vertices=(
-                *first_path.path_vertices,
-                *second_path.path_vertices[1:],
-            ),
-        )
-
-    first_carrier = first.map
-    second_carrier = second.map
-    if not isinstance(first_carrier, SimplicialMap) or not isinstance(
-        second_carrier, SimplicialMap
-    ):
-        raise OperationDomainValidationError(
-            location=("first", "map"),
-            code="fundamental_group_map.composition_carrier_kind",
-            message="composition requires two simplicial maps or two basepoint paths",
-        )
-    run_topology_admission(
-        lambda: _validate_simplicial_map(first_carrier), location=("first", "map")
-    )
-    run_topology_admission(
-        lambda: _validate_simplicial_map(second_carrier), location=("second", "map")
-    )
-    if (
-        first.source_presentation.complex != first_carrier.source
-        or first.target_presentation.complex != first_carrier.target
-        or second.source_presentation.complex != second_carrier.source
-        or second.target_presentation.complex != second_carrier.target
-        or first_carrier.target != second_carrier.source
-    ):
-        raise OperationDomainValidationError(
-            location=("first", "map"),
-            code="fundamental_group_map.composition_complex",
-            message="composition requires each presentation to bind its map and a common middle complex",
-        )
-    second_positions = {
-        label: index for index, label in enumerate(second_carrier.source.vertices)
-    }
-    return SimplicialMap(
-        source=first_carrier.source,
-        target=second_carrier.target,
-        vertex_map=tuple(
-            second_carrier.vertex_map[second_positions[label]]
-            for label in first_carrier.vertex_map
-        ),
+        return path
+    return PresentationTransportedSimplicialMap(
+        simplicial_map=composed_map, basepoint_path=path
     )
 
 
 def compose_fundamental_group_maps(
     request: PresentationMapCompositionRequest,
 ) -> FundamentalGroupMapResult:
-    """Compose two based simplicial maps after applying the pi_1 construction.
+    """Compose based presentation maps and their explicit basepoint transports.
 
     The result is the canonical :class:`FundamentalGroupMapResult` carrier for
     the composite map, so it can be supplied unchanged as either operand of a
     later composition. Its simplicial map is the composition of the two input
-    maps and its relation witnesses are the input witnesses composed through the
-    common middle presentation.
+    maps, with target basepoint transport retained whenever necessary. Relation
+    witnesses are composed through the common middle presentation.
     """
 
+    _require_native_model(request, PresentationMapCompositionRequest, ("request",))
     first, second = request.first, request.second
+    for operand, label in ((first, "first"), (second, "second")):
+        _require_native_model(operand, FundamentalGroupMapResult, (label,))
+        for presentation in (operand.source_presentation, operand.target_presentation):
+            _require_native_model(
+                presentation,
+                FundamentalGroupPresentationResult,
+                (label, "presentation"),
+            )
+            require_canonical_complex_shape(presentation.complex)
     if first.target_presentation != second.source_presentation:
         raise OperationDomainValidationError(
             location=("second", "source_presentation"),
@@ -1181,6 +1248,7 @@ __all__ = [
     "PresentationBasepointChangePath",
     "PresentationMapCompositionRequest",
     "PresentationRelatorImage",
+    "PresentationTransportedSimplicialMap",
     "change_fundamental_group_basepoint",
     "compose_fundamental_group_maps",
     "direct_relator_match",

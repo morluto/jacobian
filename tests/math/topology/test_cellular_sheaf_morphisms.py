@@ -26,8 +26,10 @@ from jacobian.math.topology.cellular_sheaves import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
+    SheafScalar,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
+    Component,
     SheafMorphismRequest,
     cochain_map,
     compose_morphisms,
@@ -42,7 +44,7 @@ def _triangle_sheaf(
     edge_scalar: CanonicalRational | None = None,
     rank: int = 1,
     all_cover_scalar: bool = False,
-):
+) -> FiniteCellularSheaf:
     if edge_scalar is None:
         edge_scalar = _q(1)
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
@@ -80,22 +82,25 @@ def _triangle_sheaf(
     return result.sheaf
 
 
-def _independent_square_oracle(source, target, components) -> bool:
+def _fraction(value: SheafScalar) -> Fraction:
+    if isinstance(value, int):
+        return Fraction(value)
+    return Fraction(value.num, value.den)
+
+
+def _independent_square_oracle(
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+    components: tuple[Component, ...],
+) -> bool:
     """Check each incidence square with a separate Fraction implementation."""
-    phi = {
-        tuple(key): Fraction(matrix[0][0].num, matrix[0][0].den)
-        for key, matrix in components
-    }
+    phi = {tuple(key): _fraction(matrix[0][0]) for key, matrix in components}
     rho_f = {
-        (item.source, item.target): Fraction(
-            item.entries[0][0].num, item.entries[0][0].den
-        )
+        (item.source, item.target): _fraction(item.entries[0][0])
         for item in source.cover_restrictions
     }
     rho_g = {
-        (item.source, item.target): Fraction(
-            item.entries[0][0].num, item.entries[0][0].den
-        )
+        (item.source, item.target): _fraction(item.entries[0][0])
         for item in target.cover_restrictions
     }
     return all(
@@ -325,3 +330,38 @@ def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:
         assert "64 digits" in str(error)
     else:
         raise AssertionError("an over-bound component scalar was admitted")
+
+
+def test_image_preflight_bounds_parent_containers_before_rebuilding() -> None:
+    """A `model_construct` parent must be size-checked before the rebuild.
+
+    `image_of_morphism` recursively copied every nested element of both parents
+    before any rank, cell-count, work, or output admission ran, so a parent
+    holding far more simplices than the declared envelope cost time and memory
+    proportional to the oversized container just to reach validation. One `len()`
+    per container now refuses it first.
+    """
+    from jacobian.math.topology.cellular_sheaves._models import MAX_SHEAF_SIMPLICES
+    from jacobian.math.topology.cellular_sheaves.morphism_image import (
+        image_of_morphism,
+    )
+
+    sheaf = _triangle_sheaf()
+    components = tuple((cell, ((_q(1),),)) for cell in sheaf.canonical_face_order)
+    clean = morphism(sheaf, sheaf, components)
+
+    # forge the *result* carrier so its parents hold too many simplices; the
+    # morphism itself is valid, only the parent container is over-envelope
+    oversized_parent = sheaf.model_copy(
+        update={"stalks": tuple(sheaf.stalks) * (MAX_SHEAF_SIMPLICES + 1)}
+    )
+    forged = SheafMorphismResult.model_construct(
+        source=oversized_parent,
+        target=sheaf,
+        components=clean.components,
+        natural=True,
+    )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        image_of_morphism(forged)
+    assert error.value.errors()[0]["type"].endswith("parent_simpices")

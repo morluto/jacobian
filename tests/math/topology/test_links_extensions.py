@@ -208,13 +208,19 @@ class TestGoeritzData:
             LinkBlackboardGraph.model_validate(forged.model_dump())
         assert error.value.errors()[0]["type"] == "link_diagram.blackboard_region_faces"
 
-    def test_permuted_face_axes_with_consistent_incidence_are_rejected(self) -> None:
+    @pytest.mark.parametrize("swap_shading", (False, True))
+    def test_permuted_face_axes_with_consistent_incidence_are_rejected(
+        self, swap_shading: bool
+    ) -> None:
         graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
-        # Swap the seed face with an unshaded face and consistently recolor.
+        # Swap two equal-shading faces, or swap the seed with an unshaded
+        # face and consistently recolor the graph.
         # All cycles, corner incidences, and Tait signs remain individually valid;
         # only their attachment to the canonical region IDs is false.
         other = next(
-            index for index, region in enumerate(graph.regions) if not region.shaded
+            index
+            for index, region in enumerate(graph.regions[1:], start=1)
+            if region.shaded != swap_shading
         )
         permutation = list(range(len(graph.regions)))
         permutation[0], permutation[other] = permutation[other], permutation[0]
@@ -222,7 +228,7 @@ class TestGoeritzData:
             graph.regions[old_index].model_copy(
                 update={
                     "region_id": f"region_{index:03d}",
-                    "shaded": not graph.regions[old_index].shaded,
+                    "shaded": graph.regions[old_index].shaded != swap_shading,
                 }
             )
             for index, old_index in enumerate(permutation)

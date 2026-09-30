@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
+from pydantic import ConfigDict, ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.transducers.output_restriction._models import (
@@ -306,3 +306,47 @@ def test_edge_transport_replay_is_charged_against_the_admitted_work_envelope() -
     # A genuine result still decodes, so the charge refuses nothing legitimate.
     decoded = RestrictRationalOutputResult.model_validate(result.model_dump())
     assert decoded.product_states == result.product_states
+
+
+@pytest.mark.parametrize("through_adapter", (False, True))
+@pytest.mark.parametrize("row_kind", ("dfa", "relation"))
+def test_mutable_row_subclasses_are_rejected_at_native_admission(
+    through_adapter: bool, row_kind: str
+) -> None:
+    class MutableTransition(DFATransition):
+        model_config = ConfigDict(frozen=False)
+
+    class MutableEdge(RationalEdge):
+        model_config = ConfigDict(frozen=False)
+
+    source = _source()
+    language = _output_language()
+    if row_kind == "dfa":
+        transition = MutableTransition(**language.transitions[0].model_dump())
+        transition.target = 1
+        assert transition.target == 1
+        transition.target = 0
+        language = language.model_copy(
+            update={"transitions": (transition, *language.transitions[1:])}
+        )
+    else:
+        edge = MutableEdge(**source.edges[0].model_dump())
+        edge.target = 2
+        assert edge.target == 2
+        edge.target = 1
+        source = source.model_copy(update={"edges": (edge, *source.edges[1:])})
+    request = RestrictRationalOutputRequest.model_construct(
+        transducer=source,
+        output_language=language,
+        output_alphabet=FiniteAlphabet(symbols=("x", "y")),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        if through_adapter:
+            TOOLS[0].run(request)
+        else:
+            _restrict(request)
+    reason = "dfa_transition_invalid" if row_kind == "dfa" else "edge_invalid"
+    assert (
+        error.value.errors()[0]["type"]
+        == f"rational_transducer.restrict_output.{reason}"
+    )

@@ -214,9 +214,9 @@ def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]
         )
     delta: dict[tuple[int, int], int] = {}
     for transition in language.transitions:
-        # As with relation edges, an attribute-only check would admit foreign
-        # mutable rows that are then retained in the result unrevalidated.
-        if not isinstance(transition, DFATransition):
+        # Subclasses may be mutable; retained rows must have the exact
+        # canonical type because the result does not reconstruct them.
+        if type(transition) is not DFATransition:
             _fail(
                 "dfa_transition_invalid",
                 "DFA transition rows must be typed transitions",
@@ -254,11 +254,9 @@ def _validate_relation_edges(
     edge_outputs: list[tuple[int, ...]] = []
     label_cells = 0
     for edge_index, edge in enumerate(relation.edges):
-        # An attribute-only check accepts any object with the right fields, and
-        # the relation is retained in the result without nested revalidation, so
-        # a native caller could otherwise smuggle noncanonical mutable rows into
-        # a declared typed result. Require the canonical row type.
-        if not isinstance(edge, RationalEdge):
+        # As with DFA transitions, reject subclasses that could retain mutable
+        # state inside the result's source relation.
+        if type(edge) is not RationalEdge:
             _fail("edge_invalid", "transducer rows must be typed rational edges")
         if (
             type(edge.source) is not int

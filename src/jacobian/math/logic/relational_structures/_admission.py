@@ -95,7 +95,7 @@ def _bounded_sequence_snapshot(
     location: str,
     code: str,
     message: str,
-) -> Sequence[Any]:
+) -> tuple[Any, ...]:
     """Snapshot at most ``limit`` elements of a caller-supplied sequence.
 
     ``isinstance(value, Sequence)`` admits a user-defined sequence whose
@@ -240,10 +240,10 @@ def admit_polymorphism_check(
     source: FiniteRelationalStructure,
     arity: object,
     operation_table: object,
-) -> tuple[int, int]:
+) -> tuple[tuple[int, ...], int, int]:
     """Preflight one operation table and complete relation-power work.
 
-    Returns (operation table cells, coordinate work). The arity and the
+    Returns (admitted operation table, table cells, coordinate work). The arity and the
     table's totality and source binding are typed domain rejections; no
     relation product or membership index is constructed before the size
     estimates below succeed.
@@ -328,7 +328,7 @@ def admit_polymorphism_check(
                 f"{MAX_POLYMORPHISM_COORDINATE_WORK}-step envelope"
             ),
         )
-    return table_cells, coordinate_work
+    return operation_table, table_cells, coordinate_work
 
 
 def core_search_work(source_size: int, transport_tuples: int) -> int:
@@ -457,7 +457,7 @@ def embedding_reflection_cells(source: FiniteRelationalStructure) -> int:
 
 def admit_induced_substructure(
     source: FiniteRelationalStructure, inclusion: Sequence[int]
-) -> int:
+) -> tuple[tuple[int, ...], int]:
     """Preflight induced-table restriction work for one carrier selection.
 
     The ordered inclusion is the new-carrier-to-source map. Every source row
@@ -515,7 +515,7 @@ def admit_induced_substructure(
             ),
         )
 
-    return work
+    return tuple(inclusion), work
 
 
 def admit_relational_reduct(
@@ -958,7 +958,7 @@ def admit_invariant_relation_closure(
     work = 0 if empty_closure else 8 * state_count * state_count
     for operation in polymorphisms:
         arity = operation.arity
-        table_cells, check_work = admit_polymorphism_check(
+        _table, table_cells, check_work = admit_polymorphism_check(
             source, arity, operation.operation_table
         )
         del table_cells

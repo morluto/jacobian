@@ -108,9 +108,8 @@ def induced_substructure(
     """
 
     source = _admit_structure(source, "source")
-    admit_induced_substructure(source, inclusion)
-    # Admission bounds the input length before copying caller-owned sequences.
-    inclusion = tuple(inclusion)
+    inclusion, _work = admit_induced_substructure(source, inclusion)
+    # Use the admitted immutable snapshot; never iterate caller data twice.
     source_to_induced = {
         source_label: induced_label
         for induced_label, source_label in enumerate(inclusion)
@@ -389,8 +388,9 @@ def check_polymorphism(
     """
 
     source = _admit_structure(source, "source")
-    admit_polymorphism_check(source, arity, operation_table)
-    operation_table = tuple(operation_table)
+    operation_table, _table_cells, _work = admit_polymorphism_check(
+        source, arity, operation_table
+    )
 
     carrier_size = source.carrier_size
     relation_profiles: list[RelationalPolymorphismRelationProfile] = []

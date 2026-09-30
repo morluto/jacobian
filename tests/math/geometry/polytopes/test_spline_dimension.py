@@ -1,8 +1,17 @@
 from fractions import Fraction
+from threading import Event
+from typing import Any
 
 import pytest
+import sympy as sp
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancellation,
+    request_checkpoint,
+)
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -27,7 +36,13 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
 )
 
 
-def _box(x0: int, x1: int, y0: int, y1: int, prefix: str) -> RationalVPolytope:
+def _box(
+    x0: int | Fraction,
+    x1: int | Fraction,
+    y0: int | Fraction,
+    y1: int | Fraction,
+    prefix: str,
+) -> RationalVPolytope:
     points = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
     return RationalVPolytope(
         space=RationalCoordinateSpace(axes=("x", "y")),
@@ -35,7 +50,7 @@ def _box(x0: int, x1: int, y0: int, y1: int, prefix: str) -> RationalVPolytope:
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{index}",
                 coordinates=tuple(
-                    CanonicalRational(num=value, den=1) for value in point
+                    CanonicalRational.from_fraction(Fraction(value)) for value in point
                 ),
             )
             for index, point in enumerate(points)
@@ -137,19 +152,9 @@ def test_dimension_output_bound_is_conservative_at_its_boundary(
         tuple(entry.as_fraction() for entry in row)
         for row in result.compatibility_matrix.entries
     )
-    max_entry_digits = max(
-        (
-            max(
-                decimal_digit_width(value.numerator),
-                decimal_digit_width(value.denominator),
-            )
-            for row in rows
-            for value in row
-        ),
-        default=1,
-    )
-    estimate = spline_kernel._spline_dimension_output_digit_bound(
-        rows, result.compatibility_matrix.column_count, max_entry_digits
+    _, width, row_bound, _ = spline_kernel._admit_spline_dimension(complex_value, 3, 0)
+    _, _, estimate = spline_kernel._admit_spline_dimension_height(
+        complex_value, 3, 0, width, row_bound
     )
     stored_digits = sum(
         decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
@@ -164,8 +169,11 @@ def test_dimension_output_bound_is_conservative_at_its_boundary(
     monkeypatch.setattr(
         spline_kernel, "MAX_SPLINE_DIMENSION_OUTPUT_DIGITS", estimate - 1
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as error:
         spline_dimension(request)
+    assert (
+        error.value.errors()[0]["type"] == "polytopal_complex.spline_dimension_output"
+    )
 
 
 def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound() -> None:
@@ -339,3 +347,193 @@ def test_spline_evaluation_omits_zero_monomials(constant_kind: str) -> None:
     )
 
     assert spline_evaluate(request).value == constant
+
+
+@pytest.mark.parametrize(
+    "coefficients",
+    [
+        (2, -3, 5, 7),
+        (0, 2, -3, 5),
+        (0, 0, -7, 0),
+        (
+            sp.Rational(2, 7),
+            sp.Rational(-3, 11),
+            sp.Rational(5, 13),
+            sp.Rational(7, 17),
+        ),
+    ],
+)
+@pytest.mark.parametrize("degree,smoothness", [(0, 0), (3, 0), (4, 2), (5, 3), (3, 4)])
+def test_source_remainder_bound_and_defining_identity(
+    coefficients: tuple[Any, ...], degree: int, smoothness: int
+) -> None:
+    x, y, z = symbols = sp.symbols("x y z")
+    ell = sp.Poly(
+        sum(c * v for c, v in zip(coefficients, (x, y, z, 1), strict=True)),
+        *symbols,
+        domain=sp.QQ,
+    )
+    leading, bounds, _ = spline_kernel._facet_remainder_bounds(ell, degree, smoothness)
+    assert spline_kernel._facet_remainder_bounds(
+        ell.mul_ground(sp.Rational(-13, 19)), degree, smoothness
+    ) == (
+        leading,
+        bounds,
+        spline_kernel._facet_remainder_bounds(ell, degree, smoothness)[2],
+    )
+    monomials = spline_kernel._monomials(3, degree)
+    remainders = spline_kernel._spline_facet_remainders(
+        ell, monomials, degree, smoothness
+    )
+    for exponents, remainder_coefficients in zip(monomials, remainders, strict=True):
+        remainder = sp.Poly.from_dict(remainder_coefficients, symbols, domain=sp.QQ)
+        monomial = sp.Poly(
+            sp.prod(v**e for v, e in zip(symbols, exponents, strict=True)),
+            *symbols,
+            domain=sp.QQ,
+        )
+        numerator, denominator = bounds[exponents[leading]]
+        assert all(
+            denominator % int(c.q) == 0 and abs(c * denominator) <= numerator
+            for c in remainder.coeffs()
+        )
+        # Independent Taylor remainder: its derivatives through order r
+        # agree with the monomial at the hyperplane, and x-degree is < r+1.
+        root = sp.solve(ell.as_expr(), symbols[leading])[0]
+        for derivative in range(smoothness + 1):
+            difference = sp.diff(
+                (monomial - remainder).as_expr(), symbols[leading], derivative
+            )
+            assert sp.expand(difference.subs(symbols[leading], root)) == 0
+        assert remainder.degree(symbols[leading]) <= smoothness
+
+
+@pytest.mark.parametrize("horizontal", [False, True])
+def test_dimension_axis_permutation_preserves_continuity(horizontal: bool) -> None:
+    cells = (
+        (_box(0, 1, 0, 1, "a"), _box(0, 1, 1, 2, "b"))
+        if horizontal
+        else (_box(0, 1, 0, 1, "a"), _box(1, 2, 0, 1, "b"))
+    )
+    complex_value = polytopal_complex_closure(cells)
+    result = spline_dimension(
+        SplineDimensionRequest(complex=complex_value, degree=3, smoothness=0)
+    )
+    assert result.rank == 4 and result.nullity == 16
+    assert (
+        spline_space(complex_value, 3, 0).compatibility_matrix
+        == result.compatibility_matrix
+    )
+
+
+def test_multiple_rational_facets_aggregate_growth_and_reduction_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    x, y = Fraction(1, 3), Fraction(2, 5)
+    complex_value = polytopal_complex_closure(
+        (
+            _box(0, x, 0, y, "a"),
+            _box(x, 1, 0, y, "b"),
+            _box(0, x, y, 1, "c"),
+            _box(x, 1, y, 1, "d"),
+        )
+    )
+    powers = 0
+    original = spline_kernel._spline_linear_powers
+
+    def counted_powers(terms: Any, dimension: int, degree: int) -> Any:
+        nonlocal powers
+        powers += 1
+        return original(terms, dimension, degree)
+
+    def no_division(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail(
+            "spline construction must use the closed form, not polynomial division"
+        )
+
+    monkeypatch.setattr(spline_kernel, "_spline_linear_powers", counted_powers)
+    monkeypatch.setattr(sp.Poly, "div", no_division)
+    result = spline_dimension(
+        SplineDimensionRequest(complex=complex_value, degree=2, smoothness=0)
+    )
+    # Four quadratic restrictions have one cycle relation at the central point.
+    assert result.rank == 4 * 3 - 1 and result.nullity == 13
+    assert_charged_work_parity(
+        charged={"facet_power_caches": 4},
+        executed={"facet_power_caches": powers},
+    )
+    assert powers == 4
+    rows = [
+        [entry.as_fraction() for entry in row]
+        for row in result.compatibility_matrix.entries
+    ]
+    assert _rank(rows) == result.rank
+    _, width, row_bound, _ = spline_kernel._admit_spline_dimension(complex_value, 2, 0)
+    _, _, output_bound = spline_kernel._admit_spline_dimension_height(
+        complex_value, 2, 0, width, row_bound
+    )
+    assert (
+        sum(
+            decimal_digit_width(v.numerator) + decimal_digit_width(v.denominator)
+            for row in rows
+            for v in row
+        )
+        <= output_bound
+    )
+
+
+def test_inactive_first_axis_remainder_matches_original_ambient_order() -> None:
+    # Old Poly(x*y, x,y).div(Poly(y-1, x,y)) left x*y unreduced.
+    # The shared row-bound check then rejected the horizontal two-cell space.
+    x, y = sp.symbols("x y")
+    remainder = spline_kernel._spline_facet_remainders(
+        sp.Poly(y - 1, x, y, domain=sp.QQ),
+        ((1, 1),),
+        2,
+        0,
+    )
+    assert remainder == ({(1, 0): Fraction(1)},)
+
+
+@pytest.mark.parametrize(
+    "phase",
+    [
+        "source coefficient bounds",
+        "global column admission",
+        "cache storage admission",
+        "facet power convolution",
+        "facet denominator powers",
+        "facet Taylor coefficients",
+        "remainder coefficient shifts",
+        "compatibility matrix assembly",
+        "canonical matrix construction",
+        "rank column clearing",
+        "integer matrix construction",
+    ],
+)
+def test_spline_cancels_inside_bounded_phases(
+    monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    complex_value = polytopal_complex_closure(
+        (_interval(0, 1, "a"), _interval(1, 2, "b"))
+    )
+    cancelled = Event()
+    observed = 0
+
+    def cancel_during_work(stage: str) -> None:
+        nonlocal observed
+        if phase in stage:
+            observed += 1
+            if observed == 2:
+                cancelled.set()
+        request_checkpoint(stage)
+
+    monkeypatch.setattr(spline_kernel, "request_checkpoint", cancel_during_work)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        spline_dimension(
+            SplineDimensionRequest(complex=complex_value, degree=4, smoothness=2)
+        )
+    assert observed == 2

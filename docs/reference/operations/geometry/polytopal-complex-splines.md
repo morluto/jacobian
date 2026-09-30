@@ -26,14 +26,67 @@ coefficient axis, and complete compatibility matrix for the same finite spline
 space, without constructing its nullspace basis. This separate result is useful
 when the full basis would dominate storage. It admits coefficient width at most
 4096, at most 1,048,576 predicted matrix cells, at most 32,000,000 dense rank
-work units, at most 32,768 decimal digits per predicted exact rank intermediate,
-at most 512 MiB of intermediate matrix storage, and at most Jacobian's 10 MiB
-canonical JSON output limit. A conservative canonical-JSON size estimate
-includes the source complex, coefficient axis, and exact matrix scalars before
-rank elimination. The row bound per facet is the dimension of the degree-at-most-d
-remainder space modulo its defining linear form to power `r+1`; total dense rank
-work is bounded from that row bound and the coefficient-axis width. Exact
-matrix scalar heights and output size are measured before rank elimination.
+work units, at most 32,768 decimal digits per predicted exact intermediate,
+at most 512 MiB of estimated intermediate matrix storage, and at most
+10,485,760 decimal digits summed over the stored rational matrix components.
+These are native computation and representation bounds, not JSON byte limits.
+All are admitted from the source before polynomial-power construction,
+remainder construction, or rank elimination. The row bound per facet is the dimension of
+the degree-at-most-d remainder space modulo its defining linear form to power
+`r+1`; dense rank work uses that bound and the coefficient-axis width.
+
+For coefficient growth, clear the facet form's denominators and primitive
+content to write it as `A*x + B(y)`. Monomials with x-exponent below `k=r+1`
+are unchanged. For exponent `m >= k`, the x^j coefficient of the remainder has
+magnitude
+`binom(m,j) * binom(m-j-1,k-j-1) * (B/A)^(m-j)`, for `0 <= j < k`.
+The coefficient one-norm of `B` bounds its powers, and `A^m` clears every
+remainder denominator. A global column combines denominator bounds from all
+incident facets; its unit entries are scaled too. Unit columns remain cheap
+only when the entire column has denominator one.
+
+The kernel constructs this closed form directly in the original ambient axes.
+It caches integer powers of `B` and `A`, then each x-power remainder once per
+facet. Linear convolution has partial coefficient magnitude at most
+`||B||_1^t`; a Taylor piece multiplies such a coefficient by the displayed
+binomial factor before constructing its rational coefficient. Different
+x-exponents have disjoint support, so there are no rational coefficient sums,
+polynomial divisions, or expanded divisors. If `k>d`, all remainders are
+identity monomials and no powers are built.
+
+Rank uses FLINT fraction-free elimination after clearing denominators by
+column; the returned compatibility matrix keeps its original rational entries.
+A minor bound sums the largest column heights and the factorial term instead
+of charging every column the widest coefficient. This admits dense rational
+four-dimensional facets with 32-digit source coordinates at degree 4,
+smoothness 3, and the larger degree-5, smoothness-4 control. Power/piece
+construction, stored coefficients, and elimination temporaries are bounded
+separately. The latter includes the two-product subtraction before Bareiss
+exact division, not only the final minor height. Profiles outside these
+derived envelopes receive a typed resource refusal before expansion.
+
+The 512 MiB limit is an explicit accounting budget, not a process-RSS guarantee.
+The model charges one byte per decimal digit, 64 bytes per integer,
+64 per Fraction wrapper, 512 per canonical-scalar wrapper, 8 per container
+reference, and 64 per row/container header. It sums the rational and canonical
+matrices, Python scaled-integer construction list, FLINT input and separate LU
+matrices, row containers, coefficient axis, column state, permutations, source
+bounds, and active facet caches. Cache terms include mapping/exponent overhead;
+the convolution accumulator and support sorting are also charged. Thirty-two
+maximum-height integer scratch slots cover bounded scalar arithmetic. All
+matrix representations are charged together even where their lifetimes do not
+overlap. Source-complex storage stays under its existing owner admission;
+Allocator/runtime overhead outside these charged payloads is not a promised
+process-RSS ceiling. Newly added loops observe request checkpoints.
+
+The closed form also repairs an axis-order defect: division with an inactive
+first ambient variable could leave terms such as `x*y` unreduced modulo
+`y-1`. The existing row-bound check rejected these spaces; two vertically
+stacked squares now give the same spline dimensions as the
+axis-permuted fixture. This is an acceptance repair: standard remainder columns
+already occupy the exact per-facet row bound, so any additional non-normal
+support previously forced that check to fail. Previously accepted normal
+remainders retain their unique coefficients and ambient axis ordering.
 
 The result retains the source complex and ordered `(cell ID, monomial)` axis,
 so its matrix and nullity survive JSON transport with their mathematical

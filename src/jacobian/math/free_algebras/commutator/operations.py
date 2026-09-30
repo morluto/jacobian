@@ -133,6 +133,17 @@ def _preflight(
     # an over-cap contribution would violate the exact-output bound during
     # convolution even when subsequent unrelated terms happen to cancel it.
     _reject_oversized_contributions(left, right)
+    # Admitting every pair individually does not bound their sum. Bound the
+    # accumulated width of every output word from the reduced contributions,
+    # before any concatenated word is built.
+    if (
+        _accumulated_coefficient_widths(left, right)
+        > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+    ):
+        _reject_resource(
+            "accumulated_coefficient_growth",
+            "the commutator can exceed the accumulated coefficient digit bound",
+        )
 
     left_denominator_sizes = tuple(
         len(str(term.coefficient.as_fraction().denominator)) for term in left.terms
@@ -201,6 +212,73 @@ def _preflight(
             f"commutator work estimate {work_bound} exceeds {MAX_COMMUTATOR_WORK}",
         )
     return left_scaled, right_scaled, left_common, right_common
+
+
+def _accumulated_coefficient_widths(
+    left: FreeAlgebraPolynomial,
+    right: FreeAlgebraPolynomial,
+) -> int:
+    """Return the widest exact coefficient any output word can accumulate.
+
+    Each contribution to an output word is a *reduced* rational, so this is a
+    sound bound on the sum that the kernel will form. It works on digit widths
+    and never materialises an accumulated value: adding ``p/q`` to a running
+    total ``S/D`` produces ``(S*q + p*D) / lcm(D, q)``, so the numerator grows to
+    at most ``max(num + q_width, p_width + den) + 1`` digits and the denominator
+    to at most ``den + q_width``, because ``lcm(D, q) <= D * q``.
+
+    Working from reduced contributions rather than raw operand widths is what
+    keeps a cancellable pair admissible: ``(1/N)x`` against ``N y`` reduces to
+    exactly 1 and widens nothing, while an input-only bound charges it two full
+    operand widths. Charging each product pair in isolation, as the preflight
+    already does, does not bound this sum, which is why it is computed here.
+    """
+
+    widths: dict[tuple[str, ...], tuple[int, int]] = {}
+    left_coefficients = tuple(
+        (term.word, term.coefficient.as_fraction()) for term in left.terms
+    )
+    right_coefficients = tuple(
+        (term.word, term.coefficient.as_fraction()) for term in right.terms
+    )
+    for left_word, left_coefficient in left_coefficients:
+        for right_word, right_coefficient in right_coefficients:
+            forward = left_word + right_word
+            backward = right_word + left_word
+            if forward == backward:
+                # The pair's two contributions land on one key with opposite
+                # signs and cancel identically.
+                continue
+            product = left_coefficient * right_coefficient
+            if not product:
+                continue
+            numerator_digits = len(str(abs(product.numerator)))
+            denominator_digits = len(str(product.denominator))
+            for word, sign in ((forward, 1), (backward, -1)):
+                current = widths.get(word)
+                if current is None:
+                    widths[word] = (numerator_digits, denominator_digits)
+                    continue
+                running_numerator, running_denominator = current
+                widened_numerator = (
+                    max(
+                        running_numerator + denominator_digits,
+                        numerator_digits + running_denominator,
+                    )
+                    + 1
+                )
+                widened_denominator = running_denominator + denominator_digits
+                if sign < 0:
+                    # A subtraction cannot widen a running total beyond the
+                    # same addition, so one width serves both signs.
+                    widened_numerator = max(widened_numerator, running_numerator)
+                    widened_denominator = max(widened_denominator, running_denominator)
+                widths[word] = (widened_numerator, widened_denominator)
+    if not widths:
+        return 1
+    return max(
+        max(numerator, denominator) for numerator, denominator in widths.values()
+    )
 
 
 def _reject_oversized_contributions(

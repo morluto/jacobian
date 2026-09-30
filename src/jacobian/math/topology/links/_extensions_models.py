@@ -230,10 +230,10 @@ class LinkBlackboardGraph(StrictModel):
 
         canonical_faces, _face_of, _adjacency = _projection_faces(self.diagram)
         authored_faces = tuple(region.boundary_darts for region in self.regions)
-        if sorted(canonical_faces) != sorted(authored_faces):
+        if canonical_faces != authored_faces:
             raise _validation_error(
                 "blackboard_region_faces",
-                "region boundaries must be the diagram's own face cycles",
+                "region boundaries must be the diagram's own face cycles in canonical order",
             )
         return self
 

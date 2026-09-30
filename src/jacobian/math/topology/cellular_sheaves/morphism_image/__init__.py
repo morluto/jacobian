@@ -6,6 +6,7 @@ from typing import Self
 
 from pydantic import BaseModel, ValidationError, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -127,6 +128,74 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
     )
 
 
+def _bounded_restriction_sequence(
+    value: object, limit: int, role: str, field: str
+) -> tuple[object, ...] | list[object]:
+    if not isinstance(value, (tuple, list)):
+        raise _domain(
+            "parent_restriction_structure",
+            f"{role} restriction {field} must be an ordered container",
+        )
+    if len(value) > limit:
+        raise _resource(
+            "parent_restriction_shape",
+            f"{role} restriction {field} exceeds its {limit}-element envelope",
+        )
+    return value
+
+
+def _restriction_labels(value: object, limit: int, role: str, field: str) -> None:
+    labels = _bounded_restriction_sequence(value, limit, role, field)
+    if any(not isinstance(label, str) for label in labels):
+        raise _domain(
+            "parent_restriction_labels",
+            f"{role} restriction {field} must contain scalar labels",
+        )
+
+
+def _reject_oversized_restriction(restriction: object, role: str) -> None:
+    """Bound every nested matrix axis before the parent is recursively rebuilt."""
+    if not isinstance(restriction, SheafRestriction):
+        raise _domain(
+            "parent_restriction_type",
+            f"{role} restrictions must be typed restriction matrices",
+        )
+    for field in ("row_basis", "column_basis"):
+        _restriction_labels(
+            getattr(restriction, field, None), MAX_SHEAF_STALK_RANK, role, field
+        )
+    rows = _bounded_restriction_sequence(
+        getattr(restriction, "entries", None), MAX_SHEAF_STALK_RANK, role, "entries"
+    )
+    for row in rows:
+        entries = _bounded_restriction_sequence(row, MAX_SHEAF_STALK_RANK, role, "row")
+        for scalar in entries:
+            if isinstance(scalar, CanonicalRational):
+                valid = (
+                    type(getattr(scalar, "num", None)) is int
+                    and type(getattr(scalar, "den", None)) is int
+                )
+            else:
+                valid = type(scalar) is int
+            if not valid:
+                raise _domain(
+                    "parent_restriction_scalar",
+                    f"{role} restriction entries must contain exact scalar values",
+                )
+    for field in ("source", "target"):
+        _restriction_labels(
+            getattr(restriction, field, None), MAX_SHEAF_SIMPLICES, role, field
+        )
+    path = _bounded_restriction_sequence(
+        getattr(restriction, "cover_path", None),
+        MAX_SHEAF_SIMPLICES,
+        role,
+        "cover_path",
+    )
+    for simplex in path:
+        _restriction_labels(simplex, MAX_SHEAF_SIMPLICES, role, "cover_path simplex")
+
+
 def _reject_oversized_parent_container(parent: object, role: str) -> None:
     """Refuse an over-envelope parent container before any recursive copy.
 
@@ -152,6 +221,8 @@ def _reject_oversized_parent_container(parent: object, role: str) -> None:
                 "parent_cells",
                 f"{role} morphism parent retains too many {attribute} rows",
             )
+        for restriction in container if isinstance(container, (tuple, list)) else ():
+            _reject_oversized_restriction(restriction, role)
     for stalk in stalks if isinstance(stalks, (tuple, list)) else ():
         basis = getattr(stalk, "basis", None)
         if isinstance(basis, (tuple, list)) and len(basis) > MAX_SHEAF_STALK_RANK:
@@ -362,7 +433,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     # restriction container, and `_unvalidated_payload` copies every nested
     # element before any rank, cell-count, work, or output admission runs, so
     # malformed input could force unbounded CPU and memory merely to reach
-    # validation. One `len()` per container is enough.
+    # validation. Bound each container before walking its already-bounded children.
     _reject_oversized_parent_container(source, "source")
     _reject_oversized_parent_container(target, "target")
     try:

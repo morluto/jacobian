@@ -289,14 +289,13 @@ def _admit_transform(
             default=1,
         ),
     )
-    # Evaluating a degree-d polynomial at integer points of magnitude at most r
-    # adds at most d*ceil(log2(r+1)) bits. The shift order alone does not imply
-    # coefficient growth (e.g. a_(n+r)=0 has unit coefficients throughout).
-    evaluation_growth_bits = maximum_degree * operator.order.bit_length()
-    growth_bits = (
-        max(numerator_bits, boundary_numerator_bits, denominator_bits)
-        + evaluation_growth_bits
-    )
+    # The exact quantities above already cover every shift power: each
+    # (derivative order, x-degree) slot multiplies in (-shift)**k together with
+    # its Stirling multiplier, and the retained boundary coefficients are
+    # measured after exact evaluation at their own indices. Adding a separate
+    # evaluation-growth term here would charge the same growth a second time
+    # and reject OGF equations whose exact coefficients already fit the carrier.
+    growth_bits = max(numerator_bits, boundary_numerator_bits, denominator_bits)
     # Only nonzero accumulated boundary coefficients contribute output monomials.
     maximum_output_degree = max(maximum_output_degree, max(forcing, default=-1))
     if maximum_output_degree > MAX_SHIFT_COEFFICIENT_DEGREE:

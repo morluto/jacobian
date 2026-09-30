@@ -17,13 +17,13 @@ from jacobian.math.ore_algebras.differential_left_division._models import (
     DifferentialLeftDivisionResult,
 )
 from jacobian.math.ore_algebras.operations import (
-    _admit_differential_operator,
     _as_differential_operator,
     _decode_rf,
     _encode_differential_rf,
     _Poly,
     _poly_add,
     _poly_mul,
+    _structural_differential_operator,
 )
 
 _MAX_INPUT_ORDER = 4
@@ -74,13 +74,11 @@ def _admit(
 ) -> tuple[int, int, int]:
     """Preflight polynomial growth, scalar height, work and wire output."""
     operators = (dividend, divisor)
+    # The ZZ[x] domain is required to build or echo any result, so it is
+    # established for every request. The ambient order, degree, term, and digit
+    # ceilings below describe work the division would actually perform, so they
+    # apply only once a reduction is known to be necessary.
     for label, operator in zip(("dividend", "divisor"), operators, strict=True):
-        if operator.order > _MAX_INPUT_ORDER:
-            raise OperationResourceAdmissionError(
-                location=(label,),
-                code="ore_algebra.differential_left_division_order",
-                message="left division accepts operator order at most four",
-            )
         for term in operator.terms:
             coefficient = term.coefficient
             if (
@@ -103,6 +101,42 @@ def _admit(
                     code="ore_algebra.differential_left_division_integer_domain",
                     message="left division currently accepts integer polynomial coefficients in ZZ[x]",
                 )
+
+    divisor_leading = _poly_coefficient(divisor, divisor.order)
+    if divisor_leading != {0: Fraction(1)}:
+        raise OperationDomainValidationError(
+            location=("divisor", "terms", divisor.order, "coefficient"),
+            code="ore_algebra.differential_left_division_monic",
+            message="the divisor must be monic in D (leading coefficient exactly one)",
+        )
+
+    # A dividend equal to the divisor, or of lower order than the divisor,
+    # reduces immediately to Q=1,R=0 or Q=0,R=dividend. The division loop
+    # cancels nothing in either case, so the ambient input ceilings that bound
+    # hypothetical quotient growth must not reject these exact results.
+    if dividend == divisor or dividend.order < divisor.order:
+        if 2 * (dividend.order + 1) * (max_term_count(dividend) + 1) > (
+            _MAX_RESULT_TERMS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("dividend", "terms"),
+                code="ore_algebra.differential_left_division_bound",
+                message="left-division exact output exceeds its envelope",
+            )
+        return 0, 1, 1
+
+    for label, operator in zip(("dividend", "divisor"), operators, strict=True):
+        if operator.order > _MAX_INPUT_ORDER:
+            raise OperationResourceAdmissionError(
+                location=(label,),
+                code="ore_algebra.differential_left_division_order",
+                message="left division accepts operator order at most four",
+            )
+        for term in operator.terms:
+            values = tuple(
+                poly_term.coefficient.as_fraction()
+                for poly_term in term.coefficient.numerator.terms
+            )
             if (
                 len(values) > _MAX_INPUT_POLYNOMIAL_TERMS
                 or any(
@@ -115,7 +149,7 @@ def _admit(
                 )
                 or any(
                     poly_term.exponents[0] > _MAX_INPUT_POLYNOMIAL_DEGREE
-                    for poly_term in coefficient.numerator.terms
+                    for poly_term in term.coefficient.numerator.terms
                 )
             ):
                 raise OperationResourceAdmissionError(
@@ -126,14 +160,6 @@ def _admit(
                         "at most two, three terms, and two-digit rational scalars"
                     ),
                 )
-
-    divisor_leading = _poly_coefficient(divisor, divisor.order)
-    if divisor_leading != {0: Fraction(1)}:
-        raise OperationDomainValidationError(
-            location=("divisor", "terms", divisor.order, "coefficient"),
-            code="ore_algebra.differential_left_division_monic",
-            message="the divisor must be monic in D (leading coefficient exactly one)",
-        )
 
     iterations = max(0, dividend.order - divisor.order + 1)
     initial_degree = max(
@@ -227,7 +253,6 @@ def differential_operator_left_divide_monic(
                 else divisor,
             }
         )
-        request = DifferentialLeftDivisionRequest.model_validate(request.model_dump())
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("request",),
@@ -235,9 +260,18 @@ def differential_operator_left_divide_monic(
             message="left division requires a typed dividend and nonzero divisor",
         ) from exc
 
-    _admit(_as_differential_operator(dividend), _as_differential_operator(divisor))
-    dividend_value = _admit_differential_operator(_as_differential_operator(dividend))
-    divisor_value = _admit_differential_operator(_as_differential_operator(divisor))
+    # Canonicalize once and admit once. Re-admitting the same operands a second
+    # time repeats every structural decode and admission estimate before any
+    # division runs, and the shared shift budget would reject inputs this
+    # operation's own envelope already bounds.
+    dividend_value = _structural_differential_operator(
+        _as_differential_operator(request.dividend),
+        code="ore_algebra.differential_left_division_request",
+    )
+    divisor_value = _structural_differential_operator(
+        _as_differential_operator(request.divisor),
+        code="ore_algebra.differential_left_division_request",
+    )
     _admit(dividend_value, divisor_value)
 
     # For A = B*Q + R, cancel the current leading term with q*D^shift

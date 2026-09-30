@@ -17,13 +17,13 @@ from jacobian.math.ore_algebras.differential_right_division._models import (
     DifferentialRightDivisionResult,
 )
 from jacobian.math.ore_algebras.operations import (
-    _admit_differential_operator,
     _as_differential_operator,
     _decode_rf,
     _encode_differential_rf,
     _Poly,
     _poly_add,
     _poly_mul,
+    _structural_differential_operator,
 )
 
 _MAX_WORK = 1_000_000
@@ -201,7 +201,6 @@ def differential_operator_right_divide_monic(
                 else divisor,
             }
         )
-        request = DifferentialRightDivisionRequest.model_validate(request.model_dump())
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("request",),
@@ -209,12 +208,18 @@ def differential_operator_right_divide_monic(
             message="right division requires a typed dividend and nonzero divisor",
         ) from exc
 
-    # Reject out-of-domain requests and establish this operation's own
-    # inexpensive structural bounds before shared canonicalization (which may
-    # perform rational-function GCD work).
-    _admit(_as_differential_operator(dividend), _as_differential_operator(divisor))
-    left = _admit_differential_operator(_as_differential_operator(dividend))
-    right = _admit_differential_operator(_as_differential_operator(divisor))
+    # Canonicalize once and admit once. Re-admitting the same operands a second
+    # time repeats every structural decode and admission estimate before any
+    # division runs, and the shared shift budget would reject the forced
+    # identity result this operation's own envelope already admits.
+    left = _structural_differential_operator(
+        _as_differential_operator(request.dividend),
+        code="ore_algebra.differential_right_division_request",
+    )
+    right = _structural_differential_operator(
+        _as_differential_operator(request.divisor),
+        code="ore_algebra.differential_right_division_request",
+    )
     _admit(left, right)
 
     remainder = {term.order: _poly_coefficient(left, term.order) for term in left.terms}

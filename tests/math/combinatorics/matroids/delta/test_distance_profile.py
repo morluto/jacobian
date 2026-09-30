@@ -18,7 +18,11 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidDistanceProfileRequest,
 )
 from jacobian.math.combinatorics.matroids.delta._tools import _distance_profile
-from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
+from jacobian.math.combinatorics.matroids.delta.operations import distance_profile
+from jacobian.math.combinatorics.matroids.delta.values import (
+    DeltaMatroidDistanceProfile,
+    FiniteDeltaMatroid,
+)
 
 
 def _satisfies_symmetric_exchange(feasible_masks: tuple[int, ...]) -> bool:
@@ -227,3 +231,70 @@ def test_subset_by_feasible_family_evaluations_are_preflighted() -> None:
     assert error.value.errors()[0]["type"] == (
         "delta_matroid.distance_profile_work_exceeded"
     )
+
+
+def _profile_payload(
+    matroid: FiniteDeltaMatroid,
+    distances: tuple[int, ...],
+    counts: tuple[int, ...],
+    histogram: tuple[int, ...],
+) -> dict[str, object]:
+    return {
+        "delta_matroid": matroid.model_dump(),
+        "distance_by_mask": list(distances),
+        "nearest_feasible_count_by_mask": list(counts),
+        "distance_histogram": list(histogram),
+    }
+
+
+def test_a_decoded_profile_must_match_its_retained_feasible_family() -> None:
+    """Each row is a consequence of the family, not an independent integer.
+
+    The existing checks constrain rows in isolation: a nonzero distance may be
+    any value up to the ground size and a nearest count any value in range. A
+    decoded profile could therefore assert a distance function that no feasible
+    family produces, so the complete relation is re-established on decode.
+    """
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+
+    # Mask 3 is {a, b}; its only feasible set is (), at distance 2, not 1.
+    with pytest.raises(ValidationError, match="must match the retained"):
+        DeltaMatroidDistanceProfile.model_validate(
+            _profile_payload(source, (0, 1, 1, 1), (1, 1, 1, 1), (1, 3, 0))
+        )
+
+
+def test_a_decoded_profile_must_match_its_nearest_feasible_counts() -> None:
+    """Exact distances can be right while the nearest counts are false.
+
+    With feasible ((), {a, b}) the true nearest counts are (1, 2, 2, 1): the
+    singleton masks sit at distance 1 from both feasible sets.
+    """
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0, 1)))
+    exact = distance_profile(source)
+    assert exact.nearest_feasible_count_by_mask == (1, 2, 2, 1)
+
+    with pytest.raises(ValidationError, match="must match the retained"):
+        DeltaMatroidDistanceProfile.model_validate(
+            _profile_payload(
+                source,
+                exact.distance_by_mask,
+                (1, 1, 1, 1),
+                exact.distance_histogram,
+            )
+        )
+
+
+def test_a_genuine_profile_still_round_trips_through_decoding() -> None:
+    """Negative control: the added relation must not refuse a real profile."""
+    for feasible in (((),), ((), (0, 1)), ((0,), (1,))):
+        exact = distance_profile(
+            FiniteDeltaMatroid(ground=("a", "b"), feasible=feasible)
+        )
+        decoded = DeltaMatroidDistanceProfile.model_validate(exact.model_dump())
+        assert decoded.distance_by_mask == exact.distance_by_mask
+        assert (
+            decoded.nearest_feasible_count_by_mask
+            == exact.nearest_feasible_count_by_mask
+        )
+        assert decoded.distance_histogram == exact.distance_histogram

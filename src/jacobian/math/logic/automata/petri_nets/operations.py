@@ -2553,42 +2553,6 @@ def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
     place_count = admitted.place_count
     transition_count = admitted.transition_count
 
-    def array_size(items: list[int]) -> int:
-        return 2 + max(0, len(items) - 1) + sum(items)
-
-    def matrix_size(entries: tuple[tuple[int, ...], ...]) -> int:
-        values_size = array_size(
-            [array_size([len(str(value)) + 2 for value in row]) for row in entries]
-        )
-        return strict_json_object_size(
-            (
-                ("domain", 4),
-                ("row_count", len(str(place_count))),
-                ("column_count", len(str(transition_count))),
-                ("entries", values_size),
-            )
-        )
-
-    def support_map_size(
-        *,
-        outer_axis: int,
-        inner_axis: int,
-        matrix: tuple[tuple[int, ...], ...],
-        transpose: bool,
-    ) -> int:
-        row_sizes: list[int] = []
-        for outer in range(outer_axis):
-            indices = [
-                index
-                for index in range(inner_axis)
-                if (matrix[index][outer] if transpose else matrix[outer][index]) > 0
-            ]
-            row_sizes.append(array_size([len(str(index)) for index in indices]))
-        return array_size(row_sizes)
-
-    # Pre-admit support-map serialization from bounded input matrices before
-    # allocating any output tuples.
-
     # Count retained values, not their encoded width, for the same reason as
     # the marking-equation bound: label text must not decide a native
     # allocation. The incidence domain carries the pre-minus-post matrix.
@@ -2604,7 +2568,7 @@ def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.matrices_output_bound",
-            message="Petri-net matrices exceed the serialized output bound",
+            message="Petri-net matrices exceed the retained-cell output bound",
         )
     incidence = tuple(
         tuple(

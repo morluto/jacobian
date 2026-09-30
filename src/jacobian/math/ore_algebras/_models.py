@@ -175,17 +175,27 @@ class DifferentialCoefficientRecurrenceRequest(StrictModel):
     operator: DifferentialOreOperator
 
 
+# A boundary row at Taylor degree `d` collects a_k with k = d - c + order, so
+# k is bounded by the row degree cap plus the shift-order cap, not by the shift
+# order alone. `1 + D^4 + D^16` puts k = 16 + d in its boundary rows, which the
+# old `le=MAX_SHIFT_ORDER` bound refused with an unclassified validation error.
+MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE = 63
+MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX = (
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + MAX_SHIFT_ORDER
+)
+
+
 class CoefficientRecurrenceBoundaryTerm(StrictModel):
     """One exact coefficient of a_k in an exceptional initial row."""
 
-    index: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
+    index: StrictInt = Field(ge=0, le=MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX)
     coefficient: CanonicalRational
 
 
 class CoefficientRecurrenceBoundaryRow(StrictModel):
     """The coefficient equation at one Taylor degree before stable recurrence."""
 
-    degree: StrictInt = Field(ge=0, le=63)
+    degree: StrictInt = Field(ge=0, le=MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE)
     terms: tuple[CoefficientRecurrenceBoundaryTerm, ...] = Field(max_length=80)
 
     @model_validator(mode="after")

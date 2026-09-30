@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX,
     MAX_SHIFT_ORDER,
     DifferentialOreOperator,
     PolynomialRecurrencePrefixRequest,
@@ -348,3 +349,33 @@ def test_generated_recurrence_term_count_is_admitted() -> None:
         len(differential_operator_to_coefficient_recurrence(fitting).recurrence.terms)
         == 16
     )
+
+
+def test_boundary_row_indices_are_not_capped_by_the_shift_order() -> None:
+    """A boundary row at degree d collects a_{d - c + order}, not a shift.
+
+    `D^4 + D^16` has `valid_from = 4`, and its boundary row at degree `d`
+    collects `a_{d + 16}`, so the top row indexes `a_19`. Capping the index at
+    the shift-order limit of 16 refused the result with an unclassified
+    Pydantic error after admission had already accepted the request.
+    """
+    operator = DifferentialOreOperator.model_validate(
+        _operator((4, [(0, 1)]), (16, [(0, 1)]))
+    )
+    result = differential_operator_to_coefficient_recurrence(operator)
+
+    assert result.valid_from == 4
+    assert [row.degree for row in result.boundary_rows] == [0, 1, 2, 3]
+    indices = {term.index for row in result.boundary_rows for term in row.terms}
+    assert max(indices) == 19
+    assert max(indices) > 16
+    assert max(indices) <= MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX
+    # a_k with k = d - c + order, so degree 0 already reaches a_16
+    assert {
+        row.degree: [term.index for term in row.terms] for row in result.boundary_rows
+    } == {
+        0: [4, 16],
+        1: [5, 17],
+        2: [6, 18],
+        3: [7, 19],
+    }

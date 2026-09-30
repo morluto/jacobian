@@ -27,9 +27,12 @@ outputs can be serialized directly into
 that operation's `start_index` and supply the needed initial values. An
 order-zero output (for example, an Euler-type equation) is still a valid
 coefficient equation but is not a finite-prefix recurrence and cannot be
-handed to that operation. The shared shift-operator value admits exponents through 80
-for this recurrence domain; arithmetic and power operations retain their own
-tighter work and output limits.
+handed to that operation. The shared shift-operator value admits exponents
+through 16, its `MAX_SHIFT_ORDER` carrier limit, and a generated recurrence with
+a wider shift span is refused rather than truncated. Boundary rows index Taylor
+coefficients, not shifts, so their indices run to the row-degree cap plus that
+order limit. Arithmetic and power operations retain their own tighter work and
+output limits.
 
 The operation accepts polynomial coefficients over \(\mathbb Q[x]\) only.
 It preserves rational arithmetic and does not choose initial values, claim a

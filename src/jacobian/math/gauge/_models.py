@@ -741,7 +741,9 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
     field: FiniteGroupGaugeField
     # The empty row family is the result of a face-free complex, so it is
     # admitted here for the same reason the complex admits no faces.
-    face_values: tuple[FiniteGroupGaugeFaceCurvature, ...] = Field(max_length=MAX_GAUGE_FACES)
+    face_values: tuple[FiniteGroupGaugeFaceCurvature, ...] = Field(
+        max_length=MAX_GAUGE_FACES
+    )
     flat: StrictBool
 
     @model_validator(mode="before")

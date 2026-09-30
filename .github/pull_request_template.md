@@ -16,12 +16,24 @@ verification. Name the final head SHA that the evidence covers. -->
 
 ### Test lane ownership
 
-`tests/math` boots kernels and must not import `jacobian.catalog.catalog`,
-`jacobian.dispatch`, `jacobian.cli`, or `jacobian.mcp`. This applies to re-lands
-and to tests ported from an older branch. A test that opens a catalog, dispatches
-by operation ID, or decodes a published example in its wire encoding belongs in
-`tests/catalog/`. Lane follows what the test *calls*, not what it concludes, so a
-math-lane and a catalog-lane test may assert the same mathematical fact.
+`tests/math` boots kernels and must not import `jacobian.catalog.builtins`,
+`jacobian.catalog.catalog`, `jacobian.dispatch`, `jacobian.cli`, or
+`jacobian.mcp`. This applies to re-lands and tests ported from an older branch.
+
+For new or moved tests, use the boundary under test:
+
+- `tests/catalog/`: immutable catalog membership, declarations, schema checks,
+  and discovery (30-second per-test budget)
+- `tests/dispatch/`: strict parsing and direct operation-ID regressions,
+  including native-versus-dispatch parity (120-second per-test budget)
+- `tests/integration/catalog/`: advertised-example execution coverage and
+  broader operation-composition checks
+
+An advertised example used as input to a direct-dispatch regression still uses
+the dispatch lane. Existing execution checks in catalog are legacy placements;
+use the owning execution lane when adding or moving regressions. The math-lane
+import guard enforces separation from catalog bootstrapping, not placement among
+catalog, dispatch, and integration.
 
 <!-- Mark N/A only when this PR adds or moves no test at all. -->
 - Tests added or moved, with their lane:

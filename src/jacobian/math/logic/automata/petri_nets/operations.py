@@ -19,7 +19,6 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES,
     MAX_MARKING_COMMUTATION_PROFILE_WORK,
     MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES,
-    MAX_MARKING_EQUATION_FORMAL_TARGET_ABS,
     MAX_PUMPING_WITNESS_MATERIALIZED_BYTES,
     MAX_REACHABLE_DEAD_MARKINGS_MATERIALIZED_BYTES,
     MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES,
@@ -322,6 +321,32 @@ def disjoint_union(
         right_marking=right_marking,
         marking=union_marking,
     )
+
+
+def _petri_net_retained_cells(net: PetriNet) -> int:
+    """Count the values a result retains from one net, not their encoding.
+
+    ``MAX_MARKING_EQUATION_OUTPUT_CELLS`` and
+    ``MAX_PETRI_NET_REVERSE_OUTPUT_CELLS`` are documented as retained entries,
+    so a serialized estimate would let a caller's label text decide a native
+    allocation: two nets differing only in label length retain the same cells
+    and received opposite verdicts.
+    """
+    return (
+        1
+        + net.place_count
+        + net.transition_count
+        + len(net.place_ids or ())
+        + len(net.transition_ids or ())
+    )
+
+
+def _matrix_retained_cells(matrix: tuple[tuple[int, ...], ...]) -> int:
+    return sum(len(row) for row in matrix)
+
+
+def _nonzero_cells(matrix: tuple[tuple[int, ...], ...]) -> int:
+    return sum(1 for row in matrix for value in row if value)
 
 
 def _petri_net_reverse_output_bound(net: PetriNet) -> int:
@@ -1032,17 +1057,32 @@ def _explore_reachability(
     max_states: int,
     *,
     collect_edges: bool = True,
-) -> tuple[list[tuple[int, ...]], list[tuple[int, int, int]], bool]:
+    collect_dead_states: bool = False,
+) -> tuple[
+    list[tuple[int, ...]],
+    list[tuple[int, int, int]],
+    bool,
+    list[int],
+]:
+    """Explore the bounded reachability graph.
+
+    The last element contains dead-state indices only when requested. Check
+    enabledness once per state within the admitted exploration work, without
+    retaining another firing-record-sized collection beside the graph edges.
+    """
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
     edges: list[tuple[int, int, int]] = []
+    dead_state_indices: list[int] = []
     queue: deque[int] = deque([0])
     truncated = False
     while queue:
         idx = queue.popleft()
         marking = _bound_marking(net, initial_marking, state_list[idx])
         enabled = _enabled_transition_indices(net, marking)
+        if collect_dead_states and not enabled:
+            dead_state_indices.append(idx)
         for t in enabled:
             success, new_tokens = _fire_transition_tokens(net, marking, t)
             if not success:
@@ -1059,7 +1099,7 @@ def _explore_reachability(
                 queue.append(len(state_list) - 1)
             if collect_edges:
                 edges.append((idx, t, state_index[new_tokens]))
-    return state_list, edges, truncated
+    return state_list, edges, truncated, dead_state_indices
 
 
 def reachability_graph(
@@ -1071,7 +1111,7 @@ def reachability_graph(
     net = _admit_net(net)
     initial_marking = _require_marking_size(net, initial_marking)
     require_reachability_bounds(net, max_states)
-    state_list, edges, truncated = _explore_reachability(
+    state_list, edges, truncated, _dead_states = _explore_reachability(
         net, initial_marking, max_states
     )
     return ReachabilityResult(
@@ -1124,18 +1164,17 @@ def reachable_dead_markings(
             message="reachable dead-marking profile exceeds the serialized output bound",
         )
 
-    state_list, _, truncated = _explore_reachability(
-        net, initial_marking, max_states, collect_edges=False
+    state_list, _, truncated, dead_state_indices = _explore_reachability(
+        net,
+        initial_marking,
+        max_states,
+        collect_edges=False,
+        collect_dead_states=True,
     )
-    dead = tuple(
-        sorted(
-            tokens
-            for tokens in state_list
-            if not _enabled_transition_indices(
-                net, _bound_marking(net, initial_marking, tokens)
-            )
-        )
-    )
+    # The exploration records deadness before any state or token cutoff. Keep
+    # only those state indices, without retaining enabled-transition families
+    # or paying for a second enabledness pass.
+    dead = tuple(sorted(state_list[index] for index in dead_state_indices))
     return ReachableDeadMarkingsResult._from_kernel(
         net=net,
         initial_marking=initial_marking,
@@ -1326,6 +1365,37 @@ def _preflight_terminal_scc_net_shape(
     return shape
 
 
+def _require_reachability_result_fields(graph: ReachabilityResult) -> None:
+    """Confirm every retained field is present before a consumer reads it.
+
+    A native caller can reach these kernels through ``model_construct`` and
+    bypass the carrier's validators, so an absent field must produce the
+    operation's typed error rather than an ``AttributeError`` from the read
+    itself. #4311 established this pattern for the tree carrier.
+    """
+    missing = tuple(
+        field
+        for field in (
+            "net",
+            "initial_marking",
+            "max_states",
+            "states",
+            "edges",
+            "truncated",
+        )
+        if not hasattr(graph, field)
+    )
+    if missing:
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_shape",
+            message=(
+                "source graph must retain its net, initial marking, state cap, "
+                "states, edges, and truncation flag"
+            ),
+        )
+
+
 def _preflight_terminal_scc_graph_shape(
     graph: object,
 ) -> tuple[int, int, int, int]:
@@ -1336,6 +1406,7 @@ def _preflight_terminal_scc_graph_shape(
             code="petri_net.terminal_scc.graph_type",
             message="source_graph must be a ReachabilityResult",
         )
+    _require_reachability_result_fields(graph)
     checked_nets: dict[int, tuple[int, int, int]] = {}
     place_count, transition_count, label_characters = _preflight_terminal_scc_net_shape(
         graph.net, checked_nets
@@ -1617,6 +1688,7 @@ def reachability_terminal_scc_profile(
             code="petri_net.terminal_scc.graph_type",
             message="source_graph must be a ReachabilityResult",
         )
+    _require_reachability_result_fields(source_graph)
     raw_net = source_graph.net
     if not isinstance(raw_net, PetriNet):
         raise OperationDomainValidationError(
@@ -2414,6 +2486,7 @@ def marking_equation(
 ) -> MarkingEquationResult:
     """Compare a target with M0 + Cx over Z; this is not a reachability test."""
     net = _admit_net(net)
+    _require_valid_axis_encoding(net)
     source_marking = _require_marking_size(net, source_marking)
     target_marking = _require_marking_size(net, target_marking)
     if (
@@ -2435,46 +2508,15 @@ def marking_equation(
             code="petri_net.state_equation_occurrence_bound",
             message="total transition count exceeds the admitted bound",
         )
-    # A shape-based upper bound admits serialization before allocating either
-    # computed vector; input axes cap each vector at 64 coordinates.
-    max_coordinate_digits = len(str(MAX_MARKING_EQUATION_FORMAL_TARGET_ABS)) + 1
-
-    def vector_size(coordinates: tuple[int, ...], *, bounded: bool = False) -> int:
-        return (
-            2
-            + max(0, len(coordinates) - 1)
-            + sum(
-                max_coordinate_digits if bounded else len(str(value))
-                for value in coordinates
-            )
-        )
-
-    def marking_size(marking: Marking) -> int:
-        return strict_json_object_size(
-            (
-                ("tokens", vector_size(marking.tokens)),
-                (
-                    "net",
-                    4 if marking.net is None else _petri_net_reverse_output_bound(net),
-                ),
-            )
-        )
-
-    formal_vector_bound = vector_size(source_marking.tokens, bounded=True)
-    residual_vector_bound = vector_size(target_marking.tokens, bounded=True)
-    output_bound = strict_json_object_size(
-        (
-            ("net", _petri_net_reverse_output_bound(net)),
-            ("source_marking", marking_size(source_marking)),
-            ("target_marking", marking_size(target_marking)),
-            (
-                "transition_counts",
-                2 + max(0, net.transition_count - 1) + net.transition_count * 4,
-            ),
-            ("formal_target", formal_vector_bound),
-            ("residual", residual_vector_bound),
-            ("satisfies_equation", 5),
-        )
+    # Admit the retained cells before allocating either computed vector. Both
+    # markings and the result share the net, so it is charged once.
+    output_bound = (
+        _petri_net_retained_cells(net)
+        + len(source_marking.tokens)
+        + len(target_marking.tokens)
+        + net.transition_count
+        + 2 * net.place_count
+        + 1
     )
     if output_bound > MAX_MARKING_EQUATION_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
@@ -2509,106 +2551,26 @@ def marking_equation(
 def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
     """Return exact Pre, Post, and C=Post-Pre matrices in the net's axes."""
     admitted = _admit_net(net)
+    _require_valid_axis_encoding(admitted)
     place_count = admitted.place_count
     transition_count = admitted.transition_count
 
-    def array_size(items: list[int]) -> int:
-        return 2 + max(0, len(items) - 1) + sum(items)
-
-    def matrix_size(entries: tuple[tuple[int, ...], ...]) -> int:
-        values_size = array_size(
-            [array_size([len(str(value)) + 2 for value in row]) for row in entries]
-        )
-        return strict_json_object_size(
-            (
-                ("domain", 4),
-                ("row_count", len(str(place_count))),
-                ("column_count", len(str(transition_count))),
-                ("entries", values_size),
-            )
-        )
-
-    def support_map_size(
-        *,
-        outer_axis: int,
-        inner_axis: int,
-        matrix: tuple[tuple[int, ...], ...],
-        transpose: bool,
-    ) -> int:
-        row_sizes: list[int] = []
-        for outer in range(outer_axis):
-            indices = [
-                index
-                for index in range(inner_axis)
-                if (matrix[index][outer] if transpose else matrix[outer][index]) > 0
-            ]
-            row_sizes.append(array_size([len(str(index)) for index in indices]))
-        return array_size(row_sizes)
-
-    # Pre-admit support-map serialization from bounded input matrices before
-    # allocating any output tuples.
-    input_places_size = support_map_size(
-        outer_axis=transition_count,
-        inner_axis=place_count,
-        matrix=admitted.pre,
-        transpose=True,
-    )
-    output_places_size = support_map_size(
-        outer_axis=transition_count,
-        inner_axis=place_count,
-        matrix=admitted.post,
-        transpose=True,
-    )
-    consumer_transitions_size = support_map_size(
-        outer_axis=place_count,
-        inner_axis=transition_count,
-        matrix=admitted.pre,
-        transpose=False,
-    )
-    producer_transitions_size = support_map_size(
-        outer_axis=place_count,
-        inner_axis=transition_count,
-        matrix=admitted.post,
-        transpose=False,
-    )
-
-    output_size = strict_json_object_size(
-        (
-            ("net", _petri_net_reverse_output_bound(admitted)),
-            ("pre", matrix_size(admitted.pre)),
-            ("post", matrix_size(admitted.post)),
-            # ExactInteger scalars serialize as quoted decimal strings. An
-            # incidence entry has at most five digits plus sign and quotes.
-            (
-                "incidence",
-                strict_json_object_size(
-                    (
-                        ("domain", 4),
-                        ("row_count", len(str(place_count))),
-                        ("column_count", len(str(transition_count))),
-                        (
-                            "entries",
-                            array_size(
-                                [
-                                    array_size([7] * transition_count)
-                                    for _place in range(place_count)
-                                ]
-                            ),
-                        ),
-                    )
-                ),
-            ),
-            ("input_places_by_transition", input_places_size),
-            ("output_places_by_transition", output_places_size),
-            ("consumer_transitions_by_place", consumer_transitions_size),
-            ("producer_transitions_by_place", producer_transitions_size),
-        )
+    # Count retained values, not their encoded width, for the same reason as
+    # the marking-equation bound: label text must not decide a native
+    # allocation. The incidence domain carries the pre-minus-post matrix.
+    output_size = (
+        _petri_net_retained_cells(admitted)
+        + 2 * _matrix_retained_cells(admitted.pre)
+        + 2 * _matrix_retained_cells(admitted.post)
+        + 2 * place_count * transition_count
+        + 2 * _nonzero_cells(admitted.pre)
+        + 2 * _nonzero_cells(admitted.post)
     )
     if output_size > MAX_PETRI_NET_REVERSE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.matrices_output_bound",
-            message="Petri-net matrices exceed the serialized output bound",
+            message="Petri-net matrices exceed the retained-cell output bound",
         )
     incidence = tuple(
         tuple(

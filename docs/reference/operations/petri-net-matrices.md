@@ -23,9 +23,11 @@ when it is enabled. The projection does not determine enabledness or claim that
 a formal transition-count vector is fireable.
 
 The operation admits a net with at most 64 places, 64 transitions, and arc
-weights at most 1000. Its dense work is bounded by `|P| × |T|`; the combined
-serialized result, including support maps, is checked against a 10 MiB limit
-before the derived matrices and maps are constructed.
+weights at most 1000. Its dense work is bounded by `|P| × |T|`. Before constructing
+the derived matrices and maps, native admission bounds the retained result,
+including its source net, matrix entries, and support-map indices, by 4,194,304
+cells. Label text and encoded byte length do not change this native limit;
+serialized payload limits belong to the delivery layer.
 
 For the standard pre/post/incidence and state-equation conventions, see
 [Murata, “Petri Nets: Properties, Analysis, and Applications,” §3](https://www.dsc.ufcg.edu.br/~abrantes/CursosAnteriores/MVSRP/murata89.pdf).

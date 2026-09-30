@@ -218,3 +218,44 @@ def test_native_family_relation_is_still_checked() -> None:
             class_indices=original.class_indices,
             vertex_maps=original.vertex_maps,
         )
+
+
+@pytest.mark.parametrize("request_payload", [False, True])
+@pytest.mark.parametrize("wire", [False, True])
+@pytest.mark.parametrize("missing_graph", [False, True])
+def test_retained_axis_is_bounded_even_with_malformed_nested_graph(
+    monkeypatch: pytest.MonkeyPatch,
+    request_payload: bool,
+    wire: bool,
+    missing_graph: bool,
+) -> None:
+    payload = _star_profile().model_dump(mode="json")
+    family = payload["family"]
+    card = family["cards"][0]
+    card["retained_vertices"] = ["b"] * 50_000
+    if missing_graph:
+        del card["card"]
+    else:
+        card["card"] = None
+    if request_payload:
+        payload = {"deck": family}
+    owner = (
+        models.VertexDeckIsomorphismProfileRequest
+        if request_payload
+        else models.VertexDeckIsomorphismProfile
+    )
+
+    reached = False
+
+    def fail(value: Any) -> Any:
+        nonlocal reached
+        reached = True
+        raise AssertionError("oversized retained axis reached normalization")
+
+    monkeypatch.setattr(models, "_normalize_vertex_family_json", fail)
+    with pytest.raises(ValueError):
+        if wire:
+            owner.model_validate_json(json.dumps(payload))
+        else:
+            owner.model_validate(payload)
+    assert not reached

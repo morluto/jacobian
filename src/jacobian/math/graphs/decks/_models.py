@@ -1351,6 +1351,12 @@ def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -
         for card in cards:
             if type(card) is not dict:
                 continue
+            retained: Any = card.get("retained_vertices")
+            if type(retained) in (list, tuple) and len(retained) > card_order:
+                raise _validation_error(
+                    "vertex_iso_profile_card_shape",
+                    "retained vertices exceed the declared card-order bound",
+                )
             graph = card.get("card")
             if type(graph) is not dict:
                 continue
@@ -1365,12 +1371,6 @@ def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -
                         "a card exceeds the declared source-order shape bound",
                     )
             _preflight_raw_edge_pairs(graph.get("edges"), card_pair_count)
-            retained: Any = card.get("retained_vertices")
-            if type(retained) in (list, tuple) and len(retained) > card_order:
-                raise _validation_error(
-                    "vertex_iso_profile_card_shape",
-                    "retained vertices exceed the declared card-order bound",
-                )
     for field, maximum in (
         ("edge_appearances", edge_count),
         ("vertex_appearances", order),

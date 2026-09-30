@@ -432,6 +432,7 @@ class PresentationTransportedSimplicialMap(StrictModel):
         )
         if any(
             not isinstance(axis, (tuple, list))
+            or type(axis) not in (tuple, list)
             or len(axis) > MAX_TOPOLOGY_VERTICES
             or any(not isinstance(vertex, str) for vertex in axis)
             for axis in axes
@@ -440,7 +441,7 @@ class PresentationTransportedSimplicialMap(StrictModel):
                 "fundamental_group_map.transport_structure",
                 "typed transport maps must retain bounded scalar vertex axes",
             )
-        if not isinstance(getattr(path, "path_vertices", None), (tuple, list)) or any(
+        if type(getattr(path, "path_vertices", None)) not in (tuple, list) or any(
             not isinstance(getattr(path, field, None), str)
             for field in ("source_base_vertex", "target_base_vertex")
         ):

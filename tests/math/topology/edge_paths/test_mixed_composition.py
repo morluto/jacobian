@@ -1,5 +1,7 @@
 """Mixed based-map composition retains its geometric carrier through consumers."""
 
+from collections.abc import Iterator
+
 import pytest
 from pydantic import ValidationError
 
@@ -316,3 +318,51 @@ def test_native_producers_reject_missing_request_fields() -> None:
         change_fundamental_group_basepoint(
             FundamentalGroupBasepointChangeRequest.model_construct()
         )
+
+
+class _UnvisitedAxisList(list[str]):
+    def __len__(self) -> int:
+        raise AssertionError("noncanonical axis length was inspected")
+
+    def __iter__(self) -> Iterator[str]:
+        raise AssertionError("noncanonical axis was traversed")
+
+
+class _UnvisitedAxisTuple(tuple[str, ...]):
+    def __len__(self) -> int:
+        raise AssertionError("noncanonical axis length was inspected")
+
+    def __iter__(self) -> Iterator[str]:
+        raise AssertionError("noncanonical axis was traversed")
+
+
+@pytest.mark.parametrize("field", ("source", "target", "vertex_map", "path_vertices"))
+@pytest.mark.parametrize("sequence_kind", ("list", "tuple"))
+def test_transported_axes_reject_subclasses_before_inspection(
+    field: str, sequence_kind: str
+) -> None:
+    source = _circle(("a", "b", "c"))
+    result = _compose(
+        _path(source, ("a", "b")), _map(source, source, source.vertices, "b", "b")
+    )
+    assert isinstance(result.map, PresentationTransportedSimplicialMap)
+    axis = _UnvisitedAxisList() if sequence_kind == "list" else _UnvisitedAxisTuple()
+    if field == "path_vertices":
+        path = result.map.basepoint_path.model_copy(update={field: axis})
+        carrier = result.map.model_copy(update={"basepoint_path": path})
+    else:
+        if field == "vertex_map":
+            mapped = result.map.simplicial_map.model_copy(update={field: axis})
+        else:
+            complex_ = source.model_copy(update={"vertices": axis})
+            mapped = result.map.simplicial_map.model_copy(update={field: complex_})
+        carrier = result.map.model_copy(update={"simplicial_map": mapped})
+    forged = result.model_copy(update={"map": carrier})
+    identity = _map(source, source, source.vertices, "b", "b")
+    with pytest.raises(ValidationError):
+        PresentationMapCompositionRequest(first=forged, second=identity)
+    request = PresentationMapCompositionRequest.model_construct(
+        first=forged, second=identity
+    )
+    with pytest.raises(OperationDomainValidationError):
+        compose_fundamental_group_maps(request)

@@ -276,7 +276,7 @@ class _UnvisitedPayload(tuple[int, ...]):
     def __len__(self) -> int:
         raise AssertionError("a subclass payload length was inspected")
 
-    def __iter__(self) -> Iterator[object]:
+    def __iter__(self) -> Iterator[int]:
         raise AssertionError("a subclass payload was traversed")
 
 
@@ -295,6 +295,8 @@ def test_parent_model_subclasses_are_refused_before_payload_expansion(
     """A subclass declares its extra field, so the walk must not copy it."""
     sheaf = constant_sheaf(canonical_complex(("a", "b"), (("a", "b"),)))
     payload = _UnvisitedPayload()
+    forged: SheafStalk | SheafRestriction
+    update: dict[str, object]
     if nested == "stalk":
         forged = _ExtraFieldStalk.model_construct(
             **sheaf.stalks[0].__dict__, payload=payload
@@ -320,6 +322,8 @@ def test_payload_walk_refuses_subclass_models_however_they_arrive(nested: str) -
     """
     sheaf = constant_sheaf(canonical_complex(("a", "b"), (("a", "b"),)))
     payload = tuple(range(1000))
+    forged: SheafStalk | SheafRestriction
+    update: dict[str, object]
     if nested == "stalk":
         forged = _ExtraFieldStalk.model_construct(
             **sheaf.stalks[0].__dict__, payload=payload

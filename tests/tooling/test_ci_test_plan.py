@@ -63,9 +63,14 @@ def _plan(paths: list[str], *, event: str = "pull_request") -> TestPlan:
             "src/jacobian/math/number_theory/numerical_semigroups/operations.py",
             "tests/math/number_theory/numerical_semigroups",
         ),
+        (
+            "src/jacobian/math/number_theory/numerical_semigroups/_tools.py",
+            "tests/math/number_theory/numerical_semigroups",
+        ),
+        ("src/jacobian/math/graphs/values.py", "tests/math/graphs"),
     ],
 )
-def test_public_math_change_selects_owner_and_catalog_evidence(
+def test_public_math_change_selects_owner_and_public_boundary_evidence(
     path: str, math_tests: str
 ) -> None:
     plan = _plan([path])
@@ -75,7 +80,7 @@ def test_public_math_change_selects_owner_and_catalog_evidence(
     assert plan.run_catalog is True
     assert plan.run_catalog_examples is True
     assert plan.run_scale is False
-    assert plan.python_lanes == ()
+    assert plan.python_lanes == ("dispatch",)
     assert plan.boundary_lanes == ()
 
 
@@ -95,6 +100,7 @@ def test_overlapping_math_owner_roots_are_selected_once() -> None:
     )
 
     assert plan.math_tests == ("tests/math/combinatorics",)
+    assert plan.python_lanes == ()
     assert plan.reasons == ("selected mathematical owners: tests/math/combinatorics",)
 
 

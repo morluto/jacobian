@@ -25,7 +25,7 @@ def _load() -> ModuleType:
     return module
 
 
-def test_public_math_contract_selects_scoped_static_and_catalog_evidence() -> None:
+def test_public_math_contract_selects_scoped_static_and_dispatch_evidence() -> None:
     runner = _load()
     plan = runner.build_plan(
         event="pull_request",
@@ -55,6 +55,7 @@ def test_public_math_contract_selects_scoped_static_and_catalog_evidence() -> No
         ("make", "test-math", "TESTS=tests/math/combinatorics/codes/general"),
         ("make", "test-catalog"),
         ("make", "test-integration", "TESTS=tests/integration/catalog/"),
+        ("make", "test-dispatch"),
     )
 
 

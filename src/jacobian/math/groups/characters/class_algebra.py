@@ -28,10 +28,43 @@ def _compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]
     return tuple(second[first[index]] for index in range(len(first)))
 
 
+def _admit_raw_class_algebra_size(request: object) -> None:
+    """Bound the nested partition's raw counts before anything copies it.
+
+    A ``model_construct``-created request bypasses every field bound, so the
+    revalidation below would first ``model_dump`` the whole forged structure. A
+    two-million-class partition costs 15 seconds and several gigabytes that way,
+    before the size admission that exists to prevent exactly that. Count the
+    raw tuples in place, stopping as soon as the bound is passed, and refuse
+    with the same codes the admission owns. Anything not shaped like a
+    partition is left to the revalidation, which reports it as malformed.
+    """
+    partition = getattr(request, "partition", None)
+    classes = getattr(partition, "classes", None)
+    degree = getattr(getattr(partition, "source", None), "degree", None)
+    if not isinstance(classes, tuple) or not isinstance(degree, int):
+        return
+    claimed_count = len(classes)
+    claimed_order = 0
+    for conjugacy_class in classes:
+        if not isinstance(conjugacy_class, tuple):
+            return
+        claimed_order += len(conjugacy_class)
+        if (
+            claimed_count > MAX_CLASS_ALGEBRA_CLASS_COUNT
+            or claimed_order > MAX_CLASS_ALGEBRA_GROUP_ORDER
+        ):
+            _admit_class_algebra_size(claimed_order, claimed_count, degree)
+
+
 def class_multiplication_constants(
     request: ClassMultiplicationConstantsRequest,
 ) -> ClassMultiplicationConstantsResult:
     """Compute the complete integral class-sum multiplication tensor."""
+    # Admit the raw shape before the revalidation copies it, so an oversized
+    # forged partition is refused on its counts rather than after a full
+    # recursive dump.
+    _admit_raw_class_algebra_size(request)
     # Revalidate even model_construct-created values at the public native boundary.
     try:
         request = ClassMultiplicationConstantsRequest.model_validate(

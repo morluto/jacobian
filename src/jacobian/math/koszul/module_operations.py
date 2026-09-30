@@ -2549,7 +2549,13 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
                 message="top Koszul homology coefficients exceed the exact digit bound",
             )
 
-    (
+    # Retained materialization: the algebra and module payloads the result
+    # embeds, the sequence scalars, and the final differential. This was
+    # computed and discarded, so a basis with a very long label passed the
+    # result envelope below, which counts only the number of basis elements.
+    # The carriers impose no string-length limit, so the retained size has to
+    # be part of the admission rather than left to the delivery boundary.
+    retained_materialization = (
         len(value.algebra.model_dump_json().encode("utf-8"))
         + len(value.module.model_dump_json().encode("utf-8"))
         + (
@@ -2617,7 +2623,9 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
     # basis, and one coordinate per basis element per generator. Scalar
     # magnitudes stay exact and unbounded, so the bound counts these retained
     # entries.
-    output_cells = module_dimension + 2 * module_dimension**2 + 1
+    output_cells = (
+        module_dimension + 2 * module_dimension**2 + 1 + retained_materialization
+    )
     if output_cells > MAX_KOSZUL_TOP_HOMOLOGY_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("complex",),

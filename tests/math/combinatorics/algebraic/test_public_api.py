@@ -21,6 +21,7 @@ def test_exact_public_api_symbols() -> None:
         "PermutationRSKPair",
         "PlacticEquivalenceResult",
         "PlacticNormalFormResult",
+        "RSKBumpStep",
         "RSKInsertionEvent",
         "RSKReverseBumpStep",
         "RSKReverseInsertionEvent",

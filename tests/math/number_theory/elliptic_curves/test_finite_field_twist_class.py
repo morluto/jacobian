@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -103,7 +105,7 @@ def test_twist_class_works_over_a_nonprime_field_against_coordinate_oracle() -> 
     )
     target = finite_field_quadratic_twist(source)
 
-    def multiply(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    def multiply(left: Any, right: Any) -> Any:
         # In this presentation a^2 = -2 = 3 in F5.
         return (
             (left[0] * right[0] + 3 * left[1] * right[1]) % 5,
@@ -166,7 +168,9 @@ def test_twist_class_result_rejects_forged_j_invariant() -> None:
 
 
 @pytest.mark.parametrize("exceptional", [_f5_curve(0, 1), _f5_curve(1, 0)])
-def test_twist_class_rejects_automorphism_rich_j_values(exceptional) -> None:
+def test_twist_class_rejects_automorphism_rich_j_values(
+    exceptional: FiniteFieldShortWeierstrassCurve,
+) -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         finite_field_twist_class(exceptional, exceptional)
     assert exc_info.value.errors()[0]["type"] == (
@@ -188,3 +192,36 @@ def test_twist_class_rejects_field_above_complete_search_bound() -> None:
     assert exc_info.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.twist_class_order_bound"
     )
+
+
+def test_unequal_j_is_decided_over_a_field_above_the_search_order_cap() -> None:
+    """DIFFERENT_J needs no isomorphism or twist search, so it is not capped.
+
+    The order cap exists for the exhaustive scaling and twist searches. Charging
+    it before the j comparison refused two nonsingular curves with different
+    j-invariants over supported fields of order 4097 and above, even though that
+    branch decides the relation outright from the already-bounded discriminant
+    calculations.
+    """
+    # 8191 = 2^13 - 1 is prime, so this field has order 8191 > 4096.
+    field = FiniteFieldPresentation(
+        characteristic=8191, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def element(value: int) -> FiniteFieldElement:
+        return FiniteFieldElement(presentation=field, coordinates=(value,))
+
+    curve_a = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=element(1), coefficient_b=element(1)
+    )
+    curve_b = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=element(3), coefficient_b=element(5)
+    )
+
+    result = finite_field_twist_class(curve_a, curve_b)
+
+    assert result.relation == "DIFFERENT_J"
+    assert result.twist is None
+    # A witness-bearing result over the same field is still refused.
+    with pytest.raises(OperationResourceAdmissionError):
+        finite_field_twist_class(curve_a, curve_a)

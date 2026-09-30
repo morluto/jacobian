@@ -6,11 +6,13 @@ bound or domain rejection is unchanged.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -160,26 +162,82 @@ def test_left_forced_result_still_needs_a_monic_divisor() -> None:
 # --- the entry points canonicalize and admit once ---------------------------
 
 
-def test_left_entry_point_validates_once() -> None:
-    import inspect
+@pytest.mark.parametrize("side", ("left", "right"))
+@pytest.mark.parametrize("mapping", (False, True))
+def test_entry_point_validates_and_admits_once(
+    side: str, mapping: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jacobian.math.ore_algebras.differential_left_division import operations as left
+    from jacobian.math.ore_algebras.differential_left_division._models import (
+        DifferentialLeftDivisionRequest,
+    )
+    from jacobian.math.ore_algebras.differential_right_division import (
+        operations as right,
+    )
+    from jacobian.math.ore_algebras.differential_right_division._models import (
+        DifferentialRightDivisionRequest,
+    )
 
-    from jacobian.math.ore_algebras.differential_left_division import operations
+    operations = left if side == "left" else right
+    request_type = (
+        DifferentialLeftDivisionRequest
+        if side == "left"
+        else DifferentialRightDivisionRequest
+    )
+    divide = (
+        differential_operator_left_divide_monic
+        if side == "left"
+        else differential_operator_right_divide_monic
+    )
+    # D(D+x) = D^2+xD+1, while (D+x)D = D^2+xD. The two
+    # nontrivial divisions have the same quotient and different remainders.
+    dividend = _operator([(0, 0, 1), (1, 1, 1), (2, 0, 1)])
+    divisor = _operator([(0, 1, 1), (1, 0, 1)])
+    expected_quotient = _monic(1)
+    expected_remainder = _monic(0) if side == "left" else _operator([])
+    operands = (dividend.model_dump(), divisor.model_dump())
+    request_calls: list[object] = []
+    operand_calls: list[object] = []
+    admission_calls: list[tuple[DifferentialOreOperator, DifferentialOreOperator]] = []
+    validate_request = request_type.model_validate
+    validate_operator = DifferentialOreOperator.model_validate
+    admit: Callable[
+        [DifferentialOreOperator, DifferentialOreOperator], tuple[int, int, int]
+    ] = operations._admit
 
-    source = inspect.getsource(operations)
-    assert "model_validate(request.model_dump())" not in source
-    assert "_admit_differential_operator" not in source
-    assert source.count("\n    _admit(") == 1
+    def observed_request(
+        cls: type[StrictModel], value: object, *args: Any, **kwargs: Any
+    ) -> StrictModel:
+        request_calls.append(value)
+        return validate_request(value, *args, **kwargs)
 
+    def observed_operator(
+        cls: type[DifferentialOreOperator], value: object, *args: Any, **kwargs: Any
+    ) -> DifferentialOreOperator:
+        if value in operands:
+            operand_calls.append(value)
+        return validate_operator(value, *args, **kwargs)
 
-def test_right_entry_point_validates_once() -> None:
-    import inspect
+    def observed_admission(
+        a: DifferentialOreOperator, b: DifferentialOreOperator
+    ) -> tuple[int, int, int]:
+        admission_calls.append((a, b))
+        return admit(a, b)
 
-    from jacobian.math.ore_algebras.differential_right_division import operations
-
-    source = inspect.getsource(operations)
-    assert "model_validate(request.model_dump())" not in source
-    assert "_admit_differential_operator" not in source
-    assert source.count("\n    _admit(") == 1
+    monkeypatch.setattr(request_type, "model_validate", classmethod(observed_request))
+    monkeypatch.setattr(
+        DifferentialOreOperator, "model_validate", classmethod(observed_operator)
+    )
+    monkeypatch.setattr(operations, "_admit", observed_admission)
+    result = divide(
+        operands[0] if mapping else dividend,
+        operands[1] if mapping else divisor,
+    )
+    assert result.quotient == expected_quotient
+    assert result.remainder == expected_remainder
+    assert len(request_calls) == 1
+    assert operand_calls == list(operands)
+    assert admission_calls == [(dividend, divisor)]
 
 
 def test_single_admission_still_rejects_a_forged_operator() -> None:

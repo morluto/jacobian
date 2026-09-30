@@ -44,9 +44,9 @@ from jacobian.math.koszul.values import (
     KoszulDifferentialMatrix,
 )
 
-# The authoritative native surface: every export accepts domain values
-# directly. Wire-envelope request handlers live in ``_tools.py`` and are not
-# part of this native API.
+# Map, sequence-change, and top-homology entry points accept domain values
+# directly through native.py. Their catalog adapters unwrap wire requests
+# in _tools.py.
 __all__ = [
     "BasedFiniteModule",
     "FiniteCommutativeAlgebra",

@@ -19,6 +19,7 @@ from jacobian.math.quantum.stabilizer_clifford._models import (
 )
 from jacobian.math.quantum.stabilizer_clifford._tools import TOOLS
 from jacobian.math.quantum.stabilizer_clifford.operations import (
+    MAX_STABILIZER_CLIFFORD_RESULT_CELLS,
     conjugate_stabilizer_group,
 )
 
@@ -199,13 +200,23 @@ def test_independent_family_order_follows_the_source_presentation() -> None:
 
 
 def test_request_schema_publishes_admission_limits() -> None:
+    """The published limits must name the unit runtime admission actually uses.
+
+    Admission compares structural result cells against
+    ``MAX_STABILIZER_CLIFFORD_RESULT_CELLS`` and never measures encoded bytes, so
+    advertising a byte ceiling would promise a delivery guarantee the native
+    boundary does not keep. The assertion pins the key name so the two cannot
+    drift apart again.
+    """
     limits = StabilizerCliffordTransportRequest.model_json_schema()["admission_limits"]
+    assert "max_result_compact_json_bytes" not in limits
+    assert limits["max_result_cells"] == MAX_STABILIZER_CLIFFORD_RESULT_CELLS
     assert limits == {
         "max_qubits": 32,
         "max_source_generators": 64,
         "max_gate_count": 1,
         "max_work_units": 1_000_000,
-        "max_result_compact_json_bytes": 65_536,
+        "max_result_cells": 65_536,
     }
 
 
@@ -244,13 +255,15 @@ def test_forged_request_axes_are_rejected_before_native_dereference() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     z = _pauli(register, (0,), (1,))
     group = ExactStabilizerGroup(register=register, generators=(z,))
+    # The malformed arguments are the subject of this test: the native
+    # boundary must classify them rather than dereference them.
     with pytest.raises(OperationDomainValidationError) as raised:
-        conjugate_stabilizer_group(group, None, ("q0",))
+        conjugate_stabilizer_group(group, None, ("q0",))  # type: ignore[arg-type]
     assert raised.value.errors()[0]["type"] == (
         "quantum.stabilizer_clifford.invalid_gate"
     )
     with pytest.raises(OperationDomainValidationError) as raised:
-        conjugate_stabilizer_group(group, "H", ["q0"])
+        conjugate_stabilizer_group(group, "H", ["q0"])  # type: ignore[arg-type]
     assert raised.value.errors()[0]["type"] == (
         "quantum.stabilizer_clifford.invalid_axes"
     )

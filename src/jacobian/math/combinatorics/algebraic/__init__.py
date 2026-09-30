@@ -57,6 +57,7 @@ from jacobian.math.combinatorics.algebraic.subsequences import (
 from jacobian.math.combinatorics.algebraic.values import (
     FinitePermutation,
     PermutationRSKPair,
+    RSKBumpStep,
     RSKInsertionEvent,
     RSKReverseBumpStep,
     RSKReverseInsertionEvent,
@@ -85,6 +86,7 @@ __all__ = [
     "PermutationRSKPair",
     "PlacticEquivalenceResult",
     "PlacticNormalFormResult",
+    "RSKBumpStep",
     "RSKInsertionEvent",
     "RSKReverseBumpStep",
     "RSKReverseInsertionEvent",

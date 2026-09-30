@@ -14,9 +14,11 @@ against the link crossing bound before the union is constructed.
 ## Scope
 
 This operation builds the union only. It does not compute invariants of the
-result, and it does not assert that the inputs are related. For the invariants
-of a single diagram — the Jones and Alexander polynomials, the determinant, the
-Goeritz matrix, and the Seifert circles — see the link diagram pages.
+result, and it does not assert that the inputs are related. It does not compute
+the Jones or Alexander polynomial, the determinant, the Goeritz matrix, or the
+Seifert circles of the union either.
 
 `link_diagram.signature.compute` and `link_diagram.blackboard_graph.compute` are
-described on their own page and are not covered here.
+published operations on a single diagram, but they have no operation reference
+page of their own. Discover them with `math.find`, or read the tool surface
+reference.

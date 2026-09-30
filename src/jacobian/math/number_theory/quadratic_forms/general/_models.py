@@ -238,26 +238,15 @@ MAX_INTEGRAL_INVARIANT_SUPPORT = 4_096
 class IntegralContentRequest(StrictModel):
     """Request coefficient content for a bounded integral polynomial form."""
 
-    form: RationalQuadraticForm
-
-    @model_validator(mode="after")
-    def require_integral_bounded_support(self) -> Self:
-        support = len(self.form.diagonal_coefficients) + len(self.form.cross_terms)
-        if support > MAX_INTEGRAL_INVARIANT_SUPPORT:
-            raise _validation_error(
-                "invariant_support_bound",
-                f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
-            )
-        coefficients = (
-            *self.form.diagonal_coefficients,
-            *(t.coefficient for t in self.form.cross_terms),
+    form: RationalQuadraticForm = Field(
+        description=(
+            "The integral polynomial quadratic form whose coefficient content is "
+            "requested. The operation admits retained support before checking "
+            "integrality. Its traversal limit is a capacity bound enforced as a "
+            "resource refusal, so an over-large form is reported as an execution "
+            "bound rather than an invalid request."
         )
-        if any(value.den != 1 for value in coefficients):
-            raise _validation_error(
-                "nonintegral_form",
-                "coefficient content requires integer polynomial coefficients",
-            )
-        return self
+    )
 
 
 class IntegralContentResult(StrictModel):

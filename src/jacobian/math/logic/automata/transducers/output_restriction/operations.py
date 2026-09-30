@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections import deque
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._execution import execution_deadline, request_checkpoint
+from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -16,6 +19,10 @@ from jacobian.math.logic.automata.transducers.output_restriction._models import 
     RestrictOutputEdgeSource,
     RestrictOutputProductState,
     RestrictRationalOutputResult,
+    _preflight_alphabet,
+    _preflight_language,
+    _preflight_relation,
+    _raw_fields,
 )
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_ALPHABET,
@@ -31,6 +38,7 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_DFA_ALPHABET,
     MAX_DFA_STATES,
     MAX_DFA_TRANSITIONS,
+    DFATransition,
 )
 
 
@@ -43,6 +51,15 @@ def _fail(code: str, message: str, *, resource: bool = False) -> None:
         code=f"rational_transducer.restrict_output.{code}",
         message=message,
     )
+
+
+def _require_native_fields(
+    value: object, model: type[StrictModel], code: str, message: str
+) -> None:
+    try:
+        _raw_fields(value, model, allow_mapping=False)
+    except PydanticCustomError:
+        _fail(code, message)
 
 
 def _utf8_length(value: str) -> int:
@@ -70,18 +87,26 @@ def _validate_relation_axes(relation: RationalTransducer) -> None:
             "alphabet_size_invalid",
             "transducer alphabet size is outside its carrier bound",
         )
-    if not isinstance(relation.edges, tuple) or len(relation.edges) > MAX_FST_EDGES:
+    if type(relation.edges) is not tuple:
+        _fail("edge_shape_invalid", "transducer edges must be a canonical tuple")
+    if len(relation.edges) > MAX_FST_EDGES:
         _fail(
             "edge_count_exceeded",
             "transducer edge count exceeds its carrier bound",
             resource=True,
         )
-    if not isinstance(relation.initial_states, tuple) or not relation.initial_states:
+    if (
+        type(relation.initial_states) is not tuple
+        or not 1 <= len(relation.initial_states) <= MAX_FST_STATES
+    ):
         _fail(
             "initial_states_invalid",
             "transducer initial states must be a nonempty tuple",
         )
-    if not isinstance(relation.accepting_states, tuple):
+    if (
+        type(relation.accepting_states) is not tuple
+        or len(relation.accepting_states) > MAX_FST_STATES
+    ):
         _fail("accepting_states_invalid", "transducer accepting states must be a tuple")
     states = (*relation.initial_states, *relation.accepting_states)
     if any(
@@ -103,9 +128,13 @@ def _validate_relation_axes(relation: RationalTransducer) -> None:
 def _validate_alphabet_contexts(
     relation: RationalTransducer, alphabet: FiniteAlphabet
 ) -> None:
-    if not isinstance(alphabet, FiniteAlphabet) or not isinstance(
-        alphabet.symbols, tuple
-    ):
+    _require_native_fields(
+        alphabet,
+        FiniteAlphabet,
+        "output_context_invalid",
+        "output context must be a finite alphabet value",
+    )
+    if type(alphabet.symbols) is not tuple:
         _fail(
             "output_context_invalid", "output context must be a finite alphabet value"
         )
@@ -117,9 +146,13 @@ def _validate_alphabet_contexts(
     for context in (relation.input_alphabet, relation.output_alphabet, alphabet):
         if context is None:
             continue
-        if not isinstance(context, FiniteAlphabet) or not isinstance(
-            context.symbols, tuple
-        ):
+        _require_native_fields(
+            context,
+            FiniteAlphabet,
+            "alphabet_context_invalid",
+            "alphabet contexts must be finite alphabet values",
+        )
+        if type(context.symbols) is not tuple:
             _fail(
                 "alphabet_context_invalid",
                 "alphabet contexts must be finite alphabet values",
@@ -128,7 +161,7 @@ def _validate_alphabet_contexts(
             not context.symbols
             or len(context.symbols) > MAX_FST_ALPHABET
             or any(
-                not isinstance(symbol, str) or _utf8_length(symbol) > 256
+                type(symbol) is not str or _utf8_length(symbol) > 256
                 for symbol in context.symbols
             )
         ):
@@ -151,7 +184,7 @@ def _validate_alphabet_contexts(
         )
     if any(
         identifier is not None
-        and (not isinstance(identifier, str) or _utf8_length(identifier) > 256)
+        and (type(identifier) is not str or _utf8_length(identifier) > 256)
         for identifier in (relation.input_alphabet_id, relation.output_alphabet_id)
     ):
         _fail(
@@ -166,8 +199,12 @@ def _validate_alphabet_contexts(
 
 
 def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]:
-    if not isinstance(language, DFA):
-        _fail("language_type_invalid", "output restriction requires a total DFA")
+    _require_native_fields(
+        language,
+        DFA,
+        "language_type_invalid",
+        "output restriction requires a total DFA",
+    )
     if (
         type(language.state_count) is not int
         or not 1 <= language.state_count <= MAX_DFA_STATES
@@ -178,9 +215,10 @@ def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]
             "alphabet_size_mismatch",
             "DFA alphabet size must match the transducer output alphabet",
         )
+    if type(language.transitions) is not tuple:
+        _fail("dfa_transitions_invalid", "DFA transitions must be a canonical tuple")
     if (
-        not isinstance(language.transitions, tuple)
-        or len(language.transitions) > MAX_DFA_TRANSITIONS
+        len(language.transitions) > MAX_DFA_TRANSITIONS
         or language.alphabet_size > MAX_DFA_ALPHABET
     ):
         _fail("dfa_size_exceeded", "DFA size exceeds its carrier bound", resource=True)
@@ -190,7 +228,7 @@ def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]
     ):
         _fail("dfa_initial_state_invalid", "DFA initial state must be declared")
     if (
-        not isinstance(language.accepting_states, tuple)
+        type(language.accepting_states) is not tuple
         or len(language.accepting_states) > MAX_DFA_STATES
     ):
         _fail(
@@ -213,13 +251,14 @@ def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]
         )
     delta: dict[tuple[int, int], int] = {}
     for transition in language.transitions:
-        if not all(
-            hasattr(transition, field) for field in ("source", "symbol", "target")
-        ):
-            _fail(
-                "dfa_transition_invalid",
-                "DFA transition rows must be typed transitions",
-            )
+        # Subclasses may be mutable; retained rows must have the exact
+        # canonical type because the result does not reconstruct them.
+        _require_native_fields(
+            transition,
+            DFATransition,
+            "dfa_transition_invalid",
+            "DFA transition rows must be typed transitions",
+        )
         if not (
             type(transition.source) is int
             and type(transition.target) is int
@@ -253,11 +292,14 @@ def _validate_relation_edges(
     edge_outputs: list[tuple[int, ...]] = []
     label_cells = 0
     for edge_index, edge in enumerate(relation.edges):
-        if not all(
-            hasattr(edge, field)
-            for field in ("source", "target", "input_label", "output_label")
-        ):
-            _fail("edge_invalid", "transducer rows must be typed rational edges")
+        # As with DFA transitions, reject subclasses that could retain mutable
+        # state inside the result's source relation.
+        _require_native_fields(
+            edge,
+            RationalEdge,
+            "edge_invalid",
+            "transducer rows must be typed rational edges",
+        )
         if (
             type(edge.source) is not int
             or type(edge.target) is not int
@@ -267,9 +309,7 @@ def _validate_relation_edges(
             )
         ):
             _fail("edge_state_invalid", "transducer edge leaves its state domain")
-        if not isinstance(edge.input_label, tuple) or not isinstance(
-            edge.output_label, tuple
-        ):
+        if type(edge.input_label) is not tuple or type(edge.output_label) is not tuple:
             _fail(
                 "edge_label_invalid",
                 "transducer edge labels must be finite word tuples",
@@ -319,13 +359,19 @@ def _validate_inputs(
         tuple[tuple[int, ...], ...],
     ],
 ]:
-    if not isinstance(relation, RationalTransducer):
-        _fail(
-            "relation_type_invalid", "output restriction requires a rational transducer"
-        )
+    _require_native_fields(
+        relation,
+        RationalTransducer,
+        "relation_type_invalid",
+        "output restriction requires a rational transducer",
+    )
     _validate_relation_axes(relation)
-    if not isinstance(language, DFA):
-        _fail("language_type_invalid", "output restriction requires a total DFA")
+    _require_native_fields(
+        language,
+        DFA,
+        "language_type_invalid",
+        "output restriction requires a total DFA",
+    )
     delta = _validate_dfa(language, relation.output_alphabet_size)
     _validate_alphabet_contexts(relation, output_alphabet)
     outgoing, edge_inputs, edge_outputs, label_cells = _validate_relation_edges(
@@ -336,6 +382,17 @@ def _validate_inputs(
             "label_cells_exceeded",
             "aggregate transducer label size exceeds output-restriction admission",
             resource=True,
+        )
+    # The result retains these inputs. Match its complete bounded canonical
+    # shape now, before any product states or edges are constructed.
+    try:
+        _preflight_relation(relation, allow_mapping=False)
+        _preflight_language(language, allow_mapping=False)
+        _preflight_alphabet(output_alphabet, allow_mapping=False)
+    except PydanticCustomError:
+        _fail(
+            "native_input_shape",
+            "retained inputs must have their canonical bounded shape",
         )
     return delta, outgoing, (edge_inputs, edge_outputs)
 

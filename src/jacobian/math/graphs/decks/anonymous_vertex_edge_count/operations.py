@@ -190,7 +190,7 @@ def anonymous_vertex_deck_edge_count(
             source_order=source_order,
             card_edge_total=0,
             overcount_divisor=None,
-            implied_edge_count=0,
+            realizing_edge_count=0,
         )
 
     divisor = source_order - 2
@@ -205,5 +205,5 @@ def anonymous_vertex_deck_edge_count(
         source_order=source_order,
         card_edge_total=card_edge_total,
         overcount_divisor=divisor,
-        implied_edge_count=card_edge_total // divisor,
+        realizing_edge_count=card_edge_total // divisor,
     )

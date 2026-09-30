@@ -1,6 +1,7 @@
 """Exact finite-table face curvature over source-bound oriented 2-complexes."""
 
 from itertools import permutations
+from typing import Any
 
 import pytest
 
@@ -16,7 +17,10 @@ from jacobian.math.gauge import (
     construct_finite_group_gauge_complex,
     finite_group_gauge_curvature,
 )
-from jacobian.math.gauge._models import FiniteGroupGaugeCurvatureRequest
+from jacobian.math.gauge._models import (
+    FiniteGroupGaugeCurvatureRequest,
+    FiniteGroupGaugeCurvatureResult,
+)
 from jacobian.math.groups._table_models import (
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
@@ -24,10 +28,10 @@ from jacobian.math.groups._table_models import (
 from jacobian.math.groups._tools import construct_finite_group_table
 
 
-def _s3():
+def _s3() -> tuple[Any, dict[tuple[int, ...], int]]:
     elements = tuple(permutations(range(3)))
 
-    def compose(first, second):
+    def compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(second[first[i]] for i in range(3))
 
     index = {element: i for i, element in enumerate(elements)}
@@ -38,7 +42,7 @@ def _s3():
     return group, index
 
 
-def _triangle(group, index):
+def _triangle(group: Any, index: dict[tuple[int, ...], int]) -> tuple[Any, ...]:
     lattice = GaugeLattice(
         vertices=("a", "b", "c"),
         edges=(
@@ -90,17 +94,17 @@ def _triangle(group, index):
     return lattice, field, complex_value
 
 
-def test_face_curvature_preserves_orientation_and_table_product():
+def test_face_curvature_preserves_orientation_and_table_product() -> None:
     group, index = _s3()
     _, field, complex_value = _triangle(group, index)
     result = finite_group_gauge_curvature(complex_value, field)
     identity = group.identity
     to_permutation = {value: key for key, value in index.items()}
 
-    def compose(first, second):
+    def compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(second[first[i]] for i in range(3))
 
-    def inverse(permutation):
+    def inverse(permutation: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(permutation.index(i) for i in range(3))
 
     ab, bc, ca = (to_permutation[entry.value.index] for entry in field.edge_values)
@@ -118,7 +122,7 @@ def test_face_curvature_preserves_orientation_and_table_product():
     assert result.flat is (forward == identity)
 
 
-def test_curvature_is_gauge_covariant_for_nonabelian_table_group():
+def test_curvature_is_gauge_covariant_for_nonabelian_table_group() -> None:
     group, index = _s3()
     _, field, complex_value = _triangle(group, index)
     source = finite_group_gauge_curvature(complex_value, field)
@@ -161,7 +165,7 @@ def test_curvature_is_gauge_covariant_for_nonabelian_table_group():
     assert source.flat == target.flat
 
 
-def test_empty_face_is_identity_and_result_round_trips_through_json():
+def test_empty_face_is_identity_and_result_round_trips_through_json() -> None:
     group, index = _s3()
     lattice, field, _ = _triangle(group, index)
     complex_value = construct_finite_group_gauge_complex(
@@ -185,7 +189,7 @@ def test_empty_face_is_identity_and_result_round_trips_through_json():
     # boot the complete product boundary to re-check the declaration.
 
 
-def test_parent_table_repetition_is_admitted_before_face_values_are_built():
+def test_parent_table_repetition_is_admitted_before_face_values_are_built() -> None:
     order = 24
     table = tuple(tuple((a + b) % order for b in range(order)) for a in range(order))
     group = construct_finite_group_table(
@@ -227,3 +231,39 @@ def test_parent_table_repetition_is_admitted_before_face_values_are_built():
     assert error.value.errors()[0]["type"] == (
         "lattice_gauge.finite_group.curvature_output_bound"
     )
+
+
+def test_a_face_free_complex_is_vacuously_flat() -> None:
+    """A complex may represent no 2-cells, and that is not a malformed complex.
+
+    The canonical degenerate complex has an empty curvature family and is
+    vacuously flat. Requiring at least one face excluded it from the carrier,
+    from ``_admit_faces``, and from the curvature result, so the whole face-free
+    case was unreachable.
+    """
+    group, index = _s3()
+    lattice = GaugeLattice(
+        vertices=("a", "b"),
+        edges=(GaugeEdge(edge_id="ab", tail="a", head="b"),),
+    )
+    field = FiniteGroupGaugeField(
+        lattice=lattice,
+        group=group,
+        edge_values=(
+            FiniteGroupGaugeEdgeLabel(
+                edge_id="ab",
+                value=FiniteGroupTableElement(group=group, index=index[(1, 0, 2)]),
+            ),
+        ),
+    )
+    face_free = construct_finite_group_gauge_complex(lattice, group, ())
+    assert face_free.faces == ()
+
+    result = finite_group_gauge_curvature(face_free, field)
+    assert result.face_values == ()
+    assert result.flat is True
+
+    # The empty row family must also survive decoding, not just construction.
+    decoded = FiniteGroupGaugeCurvatureResult.model_validate(result.model_dump())
+    assert decoded.face_values == ()
+    assert decoded.flat is True

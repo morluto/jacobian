@@ -105,7 +105,7 @@ def _admit_faces(
 ) -> int:
     if (
         not isinstance(faces, tuple)
-        or not 1 <= len(faces) <= MAX_GAUGE_FACES
+        or len(faces) > MAX_GAUGE_FACES
         or any(not isinstance(face, FiniteGroupGaugeFace) for face in faces)
     ):
         _reject("faces", "lattice_gauge.complex.face_shape", "faces are malformed")

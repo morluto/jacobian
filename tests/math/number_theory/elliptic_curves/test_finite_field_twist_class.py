@@ -221,3 +221,36 @@ def test_the_twist_relation_retains_the_admitted_source_not_the_caller_value() -
     assert refusal.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.invalid_curve"
     )
+
+
+def test_unequal_j_is_decided_over_a_field_above_the_search_order_cap() -> None:
+    """DIFFERENT_J needs no isomorphism or twist search, so it is not capped.
+
+    The order cap exists for the exhaustive scaling and twist searches. Charging
+    it before the j comparison refused two nonsingular curves with different
+    j-invariants over supported fields of order 4097 and above, even though that
+    branch decides the relation outright from the already-bounded discriminant
+    calculations.
+    """
+    # 8191 = 2^13 - 1 is prime, so this field has order 8191 > 4096.
+    field = FiniteFieldPresentation(
+        characteristic=8191, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def element(value: int) -> FiniteFieldElement:
+        return FiniteFieldElement(presentation=field, coordinates=(value,))
+
+    curve_a = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=element(1), coefficient_b=element(1)
+    )
+    curve_b = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=element(3), coefficient_b=element(5)
+    )
+
+    result = finite_field_twist_class(curve_a, curve_b)
+
+    assert result.relation == "DIFFERENT_J"
+    assert result.twist is None
+    # A witness-bearing result over the same field is still refused.
+    with pytest.raises(OperationResourceAdmissionError):
+        finite_field_twist_class(curve_a, curve_a)

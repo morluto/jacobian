@@ -579,7 +579,9 @@ def pair_crystallographic_polytope_facets(
             "affine realization, polytope, axes, and pairings must be canonical",
             ("source",),
         )
-    realization = affine_realization
+    # `realization` above is the canonical rebuild of the caller's claim. Keep
+    # it: reading source, axes, vertices, or pairing fields off the original
+    # would consult unchecked nested containers and defeat this trust boundary.
     source, order, rank = _admit_and_validate(realization.source)
     if lattice_axes != polytope.space.axes or len(lattice_axes) != rank:
         _domain(

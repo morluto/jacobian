@@ -503,6 +503,19 @@ def unlabelled_vertex_deck(family: VertexDeletionFamily) -> UnlabelledVertexDeck
             code="graph_deck.vertex_family_carrier",
             message="deck must be a VertexDeletionFamily",
         )
+    # `type(...) is VertexDeletionFamily` still admits an instance built with
+    # `model_construct`, whose `family` attribute may be missing or not a
+    # family at all. The induced-count and edge-count consumers guard this same
+    # boundary, so establish the family carrier here before dereferencing
+    # anything on it.
+    if not isinstance(
+        getattr(family, "source", None), SimpleUndirectedGraph
+    ) or not isinstance(getattr(family, "cards", None), tuple):
+        raise OperationDomainValidationError(
+            location=("deck", "family"),
+            code="graph_deck.vertex_family_carrier",
+            message="deck must retain a complete VertexDeletionFamily",
+        )
     source = _admit_deck_graph(family.source)
     n = len(source.vertices)
     if n > MAX_UNLABELLED_DECK_VERTICES:
@@ -599,6 +612,32 @@ def _require_kelly_echo_allocation(
         )
 
 
+def _admit_retained_vertex_family(
+    deck: UnlabelledVertexDeck, code: str
+) -> VertexDeletionFamily:
+    """Establish native parent fields before any count consumer dereferences them."""
+    family = getattr(deck, "family", None)
+    source = (
+        getattr(family, "source", None)
+        if type(family) is VertexDeletionFamily
+        else None
+    )
+    if (
+        type(family) is not VertexDeletionFamily
+        or type(source) is not SimpleUndirectedGraph
+        or type(getattr(source, "vertices", None)) is not tuple
+        or type(getattr(source, "edges", None)) is not tuple
+        or type(getattr(family, "cards", None)) is not tuple
+        or type(getattr(deck, "classes", None)) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("deck", "family"),
+            code=code,
+            message="deck must retain a complete source-bound vertex family",
+        )
+    return family
+
+
 def vertex_deck_induced_subgraph_count(
     deck: UnlabelledVertexDeck,
     pattern: SimpleUndirectedGraph,
@@ -621,7 +660,7 @@ def vertex_deck_induced_subgraph_count(
             code="graph_deck.kelly_pattern_carrier",
             message="pattern must be a SimpleUndirectedGraph",
         )
-    family = deck.family
+    family = _admit_retained_vertex_family(deck, "graph_deck.kelly_family_carrier")
     source = _admit_deck_graph(family.source)
     source_order = len(source.vertices)
     pattern_order = len(pattern.vertices)
@@ -788,7 +827,9 @@ def vertex_deck_subgraph_count(
             code="graph_deck.kelly_subgraph_carrier",
             message="deck and pattern must have their canonical graph carriers",
         )
-    family = deck.family
+    family = _admit_retained_vertex_family(
+        deck, "graph_deck.kelly_subgraph_family_carrier"
+    )
     source = _admit_deck_graph(family.source)
     try:
         source = SimpleUndirectedGraph.model_validate(source.model_dump())
@@ -955,13 +996,7 @@ def vertex_deck_edge_count(
             code="graph_deck.edge_count_carrier",
             message="deck must be an UnlabelledVertexDeck",
         )
-    family = deck.family
-    if type(family) is not VertexDeletionFamily:
-        raise OperationDomainValidationError(
-            location=("deck", "family"),
-            code="graph_deck.edge_count_family_carrier",
-            message="deck must retain a complete source-bound vertex family",
-        )
+    family = _admit_retained_vertex_family(deck, "graph_deck.edge_count_family_carrier")
     source = _admit_deck_graph(family.source)
     source_order = len(source.vertices)
     if source_order < 3:

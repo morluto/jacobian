@@ -58,12 +58,18 @@ class FiniteFieldTwistClassResult(StrictModel):
             raise ValueError(
                 "twist-class curves must share one exact field presentation"
             )
+        # The field-order cap guards the exhaustive isomorphism and twist
+        # searches, so it applies only to a witness-bearing equal-j result. A
+        # DIFFERENT_J result carries no witness and decides the relation without
+        # either search, so it must not be refused for an order the kernel
+        # admitted cheaply.
         if (
-            self.source.field.characteristic**self.source.field.degree
+            self.source_j_invariant == self.target_j_invariant
+            and self.source.field.characteristic**self.source.field.degree
             > MAX_FINITE_FIELD_TWIST_ORDER
         ):
             raise ValueError(
-                "twist-class result exceeds its admitted finite-field order"
+                "twist-class witness exceeds its admitted finite-field order"
             )
         if (
             self.source_j_invariant.presentation != self.source.field
@@ -186,12 +192,6 @@ def _admit_pair(
     require_field(source.field)
     field = source.field
     q = field.characteristic**field.degree
-    if q > min(MAX_FINITE_FIELD_ISOMORPHISM_ORDER, MAX_FINITE_FIELD_TWIST_ORDER):
-        raise OperationResourceAdmissionError(
-            location=("source", "field"),
-            code="elliptic_curve.finite_field.twist_class_order_bound",
-            message="complete twist-class decision requires field order at most 4096",
-        )
     source_data = finite_field_discriminant(
         source.field, source.coefficient_a, source.coefficient_b
     )
@@ -206,8 +206,18 @@ def _admit_pair(
             message="twist-class inputs must be nonsingular curves",
         )
     if source_j != target_j:
+        # Unequal j-invariants decide the relation outright. The order cap below
+        # exists for the exhaustive isomorphism and twist searches, which this
+        # branch never performs, so charging it here refused cheaply decidable
+        # inputs over supported fields of order 4097 and above.
         return source, target, q, source_j, target_j
 
+    if q > min(MAX_FINITE_FIELD_ISOMORPHISM_ORDER, MAX_FINITE_FIELD_TWIST_ORDER):
+        raise OperationResourceAdmissionError(
+            location=("source", "field"),
+            code="elliptic_curve.finite_field.twist_class_order_bound",
+            message="complete twist-class decision requires field order at most 4096",
+        )
     iso_work = q * field.degree**2 * (4 + 4 * q.bit_length())
     twist_work = q * field.degree**2 * (2 * q.bit_length() + 8)
     total = 2 * iso_work + twist_work

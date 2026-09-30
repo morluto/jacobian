@@ -171,6 +171,16 @@ Markers are execution tiers, not synonyms for slow tests:
 Keep a small ordinary regression for the same public behavior when moving a
 near-envelope case to `scale`.
 
+A `test_exhaustive_*` **name** is not a marker claim. That prefix is a
+repo-wide convention for a test that enumerates a complete small finite domain
+rather than sampling it, and it is orthogonal to the `exhaustive` marker: a
+marked sweep may or may not use the prefix, and most tests that use it are
+cheap enough to belong in the ordinary lane. Add the marker when a sweep is
+genuinely expensive to run repeatedly, and not merely because it enumerates
+everything in a small domain. Renaming an unmarked sweep to remove the prefix
+would make it inconsistent with the rest of the suite without changing which
+lane it runs in. See issue #4362.
+
 The marker-lane Make recipes derive their default collection roots with
 `tools/marker_test_roots.py` and then retain pytest's `-m` selection inside those
 files. Marker ownership must therefore use direct `pytest.mark.property`,
@@ -540,9 +550,14 @@ tracks the number but still pins the surrounding wording, so a reword or a
 different bound tripping first fails the test even though the contract holds.
 This is assertion debt: it couples the test to prose instead of behavior.
 
-Some failures have no stable, reason-specific code. A Python `ValueError` has
-no structured error identifier; a Pydantic `ValidationError` may expose a
-custom, owner-specific `errors()[0]["type"]`, or only a generic type such as
+Some failures have no stable, reason-specific code. A bare built-in `ValueError`
+has no structured error identifier. That does not extend to the owner errors
+that subclass it: `OperationDomainValidationError` and
+`OperationResourceAdmissionError` are `ValueError` subclasses, so a
+`pytest.raises(ValueError)` block catches them too, and they do expose a stable
+owner code through `errors()[0]["type"]`. Check for that structured interface
+first and assert the code. A Pydantic `ValidationError` may expose a custom,
+owner-specific `errors()[0]["type"]`, or only a generic type such as
 `value_error`. Prefer the specific type whenever it exists. Do not treat a
 generic type as identifying a particular bound when the message is the only
 thing that distinguishes it.
@@ -562,6 +577,7 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     _convergent_component_digit_cap,
 )
 
+# A bare built-in ValueError, which has no errors()[0]["type"] to assert.
 cap = _convergent_component_digit_cap(4)
 with pytest.raises(ValueError, match=rf"{cap}-digit"):
     ...

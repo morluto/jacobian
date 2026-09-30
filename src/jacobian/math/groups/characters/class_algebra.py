@@ -7,7 +7,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.groups._models import GroupConjugacyClassesResult
+from jacobian.math.groups._models import (
+    MAX_GROUP_DEGREE,
+    GroupConjugacyClassesResult,
+    PermutationGroup,
+)
 from jacobian.math.groups.characters._models import (
     ClassMultiplicationConstantsRequest,
     ClassMultiplicationConstantsResult,
@@ -28,10 +32,66 @@ def _compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]
     return tuple(second[first[index]] for index in range(len(first)))
 
 
+def _raw_request_error() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("partition",),
+        code="groups.characters.class_algebra_request",
+        message="class algebra request is malformed",
+    )
+
+
+def _require_raw_permutation(member: object, degree: int) -> None:
+    if (
+        type(member) is not tuple
+        or len(member) != degree
+        or any(type(point) is not int for point in member)
+    ):
+        raise _raw_request_error()
+
+
+def _admit_raw_class_algebra_size(request: object) -> None:
+    """Bound every retained native container before recursive serialization."""
+    # A direct subclass dump also includes declared fields outside partition.
+    if type(request) is not ClassMultiplicationConstantsRequest:
+        raise _raw_request_error()
+    partition = getattr(request, "partition", None)
+    if not isinstance(partition, GroupConjugacyClassesResult):
+        raise _raw_request_error()
+    classes = getattr(partition, "classes", None)
+    if type(classes) is not tuple or not classes:
+        raise _raw_request_error()
+    # Inspect the outer count before any child, including malformed children.
+    claimed_count = len(classes)
+    _admit_class_algebra_size(0, claimed_count, 0)
+    source = getattr(partition, "source", None)
+    if not isinstance(source, PermutationGroup):
+        raise _raw_request_error()
+    degree = getattr(source, "degree", None)
+    generators = getattr(source, "generators", None)
+    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+        raise _raw_request_error()
+    if type(generators) is not tuple or not 1 <= len(generators) <= MAX_GROUP_DEGREE:
+        raise _raw_request_error()
+    for generator in generators:
+        _require_raw_permutation(generator, degree)
+    claimed_order = 0
+    for conjugacy_class in classes:
+        if type(conjugacy_class) is not tuple or not conjugacy_class:
+            raise _raw_request_error()
+        claimed_order += len(conjugacy_class)
+        _admit_class_algebra_size(claimed_order, claimed_count, degree)
+        for member in conjugacy_class:
+            _require_raw_permutation(member, degree)
+
+
 def class_multiplication_constants(
     request: ClassMultiplicationConstantsRequest,
 ) -> ClassMultiplicationConstantsResult:
     """Compute the complete integral class-sum multiplication tensor."""
+    # Admit the raw shape before the revalidation copies it, so an oversized
+    # forged partition is refused on its counts rather than after a full
+    # recursive dump.
+    _admit_raw_class_algebra_size(request)
     # Revalidate even model_construct-created values at the public native boundary.
     try:
         request = ClassMultiplicationConstantsRequest.model_validate(

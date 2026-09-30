@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import product
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -14,6 +16,7 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaRepresentingVectorsRequest,
     ThetaSelectedCoefficientsRequest,
 )
+from jacobian.math.number_theory.quadratic_forms.general._tools import TOOLS
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
     theta_representing_vectors,
     theta_selected_coefficients,
@@ -39,7 +42,9 @@ def _form(
     )
 
 
-def _brute_force(form: RationalQuadraticForm, radius: int, indices: tuple[int, ...]):
+def _brute_force(
+    form: RationalQuadraticForm, radius: int, indices: tuple[int, ...]
+) -> tuple[dict[int, int], dict[int, list[tuple[int, ...]]]]:
     """Independent oracle: enumerate a large box directly and count.
 
     Deliberately shares nothing with the adjugate bound in the kernel, so it
@@ -156,8 +161,10 @@ def test_sparse_high_index_is_admitted_without_charging_the_dense_prefix() -> No
     only 401 vectors and one coefficient is retained.
     """
     from jacobian.catalog.models import OperationResourceAdmissionError
-    from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
         MAX_THETA_PREFIX_OUTPUT_DIGITS,
+    )
+    from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
         _admit_box_and_output,
     )
 
@@ -184,3 +191,93 @@ def test_sparse_high_index_is_admitted_without_charging_the_dense_prefix() -> No
             1,
             (1,),
         )
+
+
+def test_an_empty_index_selection_is_refused_rather_than_raising_index_error() -> None:
+    """The cutoff is read positionally, so the native boundary owns the rule.
+
+    The request schema already requires a non-empty selection, but a native
+    caller bypasses it. Without the boundary check an empty tuple escaped as a
+    bare ``IndexError`` from ``indices[-1]``, which is neither this operation's
+    documented failure nor a classified one.
+    """
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        theta_selected_coefficients(UNARY, ())
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.theta_indices"
+
+
+def test_a_non_increasing_index_selection_is_refused() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        theta_selected_coefficients(UNARY, (2, 1))
+    with pytest.raises(OperationDomainValidationError):
+        theta_selected_coefficients(UNARY, (1, 1))
+
+
+@pytest.mark.parametrize(
+    "operation", [theta_selected_coefficients, theta_representing_vectors]
+)
+@pytest.mark.parametrize(
+    "indices",
+    [
+        None,
+        [],
+        (),
+        (-1,),
+        (1_000_000_001,),
+        (True,),
+        (0.5,),
+        ("1",),
+        ([0],),
+        (2, 1),
+        (1, 1),
+        tuple(range(129)),
+    ],
+)
+def test_selected_theta_operations_reject_invalid_native_indices(
+    operation: Callable[[RationalQuadraticForm, tuple[int, ...]], object],
+    indices: object,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        operation(UNARY, cast(tuple[int, ...], indices))
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.theta_indices"
+
+
+def test_selected_theta_at_index_count_boundary_round_trips() -> None:
+    indices = tuple(range(MAX_THETA_SELECTED_INDICES))
+    expected_counts, expected_fibers = _brute_force(UNARY, radius=12, indices=indices)
+
+    counts = theta_selected_coefficients(UNARY, indices)
+    counts = type(counts).model_validate_json(counts.model_dump_json())
+    assert counts.form == UNARY
+    assert {
+        row.index: row.coefficient for row in counts.coefficients
+    } == expected_counts
+
+    fibers = theta_representing_vectors(UNARY, indices)
+    fibers = type(fibers).model_validate_json(fibers.model_dump_json())
+    assert fibers.form == UNARY
+    assert {
+        row.index: [
+            tuple(coordinate.num for coordinate in vector.coordinates)
+            for vector in row.vectors
+        ]
+        for row in fibers.rows
+    } == expected_fibers
+
+
+def test_the_theta_pair_publishes_its_integral_precondition() -> None:
+    """Both theta operations enforce integrality; discovery must say so.
+
+    The kernel refuses a non-integral form because the polar matrix it applies
+    Sylvester's criterion to has integral entries. Both descriptions previously
+    advertised a "rational form", so a caller could only discover the rule by
+    being refused.
+    """
+    theta_ids = (
+        "quadratic_form.theta_selected_coefficients.compute",
+        "quadratic_form.representing_vectors.compute",
+    )
+    for operation_id in theta_ids:
+        tool = next(t for t in TOOLS if t.operation_id == operation_id)
+        assert "integral polynomial coefficients" in tool.description
+        assert "non-integral form is refused" in tool.description

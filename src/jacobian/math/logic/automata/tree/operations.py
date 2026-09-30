@@ -248,8 +248,50 @@ def _preflight_tree(tree: RankedTree) -> tuple[int, int]:
     return nodes, depth_bound
 
 
-def _preflight_complete_automaton(
-    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+def _admit_tree_automaton_carrier(
+    automaton: object,
+    automaton_type: type[BottomUpTreeAutomaton],
+    code: str,
+    description: str,
+) -> BottomUpTreeAutomaton:
+    """Re-establish a native automaton's structural contract before use.
+
+    ``model_construct`` populates a carrier without running the model
+    validators, so a native caller can hand these operations a state index
+    outside the state range, a symbol outside the ranked alphabet, a child
+    count that disagrees with its symbol's arity, or duplicate rows. Every one
+    of those reaches the saturation as a silently wrong fixpoint or as an
+    untyped ``KeyError``. Re-validating the carrier here re-runs the owner's
+    invariants at the boundary that actually relies on them.
+    """
+
+    if type(automaton) not in (
+        BottomUpTreeAutomaton,
+        DeterministicBottomUpTreeAutomaton,
+        CompleteDeterministicBottomUpTreeAutomaton,
+    ) or not isinstance(automaton, automaton_type):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code=code,
+            message=description,
+        )
+    _preflight_automaton_shape(automaton)
+    try:
+        # The exact-class whitelist makes the concrete validator safe to call.
+        # Retain and re-establish determinism/completeness for native consumers.
+        return type(automaton).model_validate(
+            automaton.model_dump(mode="python", warnings=False)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code=code,
+            message=description,
+        ) from exc
+
+
+def _preflight_automaton_shape(
+    automaton: BottomUpTreeAutomaton,
 ) -> None:
     state_count = getattr(automaton, "state_count", None)
     arity = getattr(automaton, "arity", None)
@@ -282,6 +324,12 @@ def _preflight_complete_automaton(
             code="tree_context.automaton_signature",
             message="automaton arities must be integers in the supported range",
         )
+    if any(type(state) is not int for state in final_states):
+        raise OperationDomainValidationError(
+            location=("automaton", "final_states"),
+            code="tree_context.automaton_final_state_shape",
+            message="automaton final states must be integer indices",
+        )
     for transition in transitions:
         if (
             type(transition) is not TreeAutomatonTransition
@@ -289,12 +337,19 @@ def _preflight_complete_automaton(
             or type(getattr(transition, "child_states", None)) is not tuple
             or type(getattr(transition, "target_state", None)) is not int
             or len(transition.child_states) > MAX_TA_ARITY
+            or any(type(state) is not int for state in transition.child_states)
         ):
             raise OperationDomainValidationError(
                 location=("automaton", "transitions"),
                 code="tree_context.automaton_transition_shape",
                 message="automaton transitions must be canonical bounded rows",
             )
+
+
+def _preflight_complete_automaton(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+) -> None:
+    _preflight_automaton_shape(automaton)
     # The checks above cover row field types and child length only. A
     # model_construct carrier can still carry an out-of-range target state, a
     # symbol/rank mismatch, or duplicate keys: a one-state unary carrier whose
@@ -1646,6 +1701,12 @@ def reachable_state_profile(
 ) -> ReachableStateProfile:
     """Return each reachable state and its canonical minimum-node witness tree."""
 
+    automaton = _admit_tree_automaton_carrier(
+        automaton,
+        BottomUpTreeAutomaton,
+        "tree_automata.reachability.value_type",
+        "automaton must be a canonical bottom-up tree automaton",
+    )
     return _build_reachable_state_profile(automaton)
 
 
@@ -1661,12 +1722,12 @@ def tree_language_profile(
     state survives the reachability filter.
     """
 
-    if type(automaton) is not BottomUpTreeAutomaton:
-        raise OperationDomainValidationError(
-            location=("automaton",),
-            code="tree_automata.language_profile.value_type",
-            message="automaton must be a canonical bottom-up tree automaton",
-        )
+    automaton = _admit_tree_automaton_carrier(
+        automaton,
+        BottomUpTreeAutomaton,
+        "tree_automata.language_profile.value_type",
+        "automaton must be a canonical bottom-up tree automaton",
+    )
     profile = _build_reachable_state_profile(automaton)
     final_states = set(automaton.final_states)
     accepting = tuple(

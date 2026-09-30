@@ -37,7 +37,14 @@ def test_boolean_product_example_states_the_completeness_precondition() -> None:
     result = operation.run(request)
     assert result.product.state_count == 4
     assert result.product.transitions[0].child_states == ()
-    assert result.product.final_states == (2,)
+    # The product's only transition reaches state 2, so the sole final state
+    # is state 3, which nothing derives: the intersection accepts nothing, as
+    # the example description claims. With the right machine's final state at
+    # 0 it accepted the leaf instead.
+    assert result.product.transitions[0].target_state == 2
+    assert result.product.final_states == (3,)
+    reachable = {result.product.transitions[0].target_state}
+    assert not reachable & set(result.product.final_states)
 
 
 def test_catalog_discovery_surfaces_tree_language_products() -> None:
@@ -100,3 +107,9 @@ def test_minimize_is_published_in_catalog() -> None:
         )
     )
     assert tool.run(request).minimized.state_count == 1
+
+
+def test_language_profile_stays_a_native_projection_of_reachability() -> None:
+    catalog = Catalog.open()
+    assert catalog.operation("tree_automaton.language.profile.compute") is None
+    assert catalog.operation("tree_automaton.states.reachable.compute") is not None

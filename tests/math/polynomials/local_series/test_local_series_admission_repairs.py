@@ -428,6 +428,82 @@ def test_admitted_exact_zero_row_still_leaves_the_degree_unchanged() -> None:
     assert with_zero_row.series.coefficients == plain.series.coefficients
 
 
+# --- forged row degrees are refused before any row is indexed --------------
+
+
+# F(t,y) = -1 + (1-t)y has the unique smooth branch y = 1 + t. The forged
+# sources below present coefficient windows at degrees that bypass the model's
+# own unique-increasing row validator.
+def _forged_degree_source(
+    rows: Sequence[tuple[int, Sequence[int]]],
+) -> LocalPolynomialInSeries:
+    return LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="FINITE",
+        center=_rational(0),
+        coefficients=tuple(
+            LocalPolynomialCoefficient(y_degree=degree, series=_window(values))
+            for degree, values in rows
+        ),
+    )
+
+
+# Declaring y - 1 and (1-t)y - 1 at the same degree is not a polynomial at all:
+# read together, the constant equation is -1 + 2y, whose root is 1/2, so the
+# supplied root is no root. Before the repair the later row simply overwrote
+# the earlier one and answered for a polynomial nobody had declared.
+DUPLICATE_DEGREE_ROWS = ((0, [-1, 0]), (1, [1, 0]), (1, [1, -1]))
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        DUPLICATE_DEGREE_ROWS,
+        ((0, [-1, 0]), (2, [0, 0]), (1, [1, -1])),
+        ((1, [1, -1]), (0, [-1, 0])),
+    ],
+    ids=["duplicate", "out_of_order", "reversed"],
+)
+def test_smooth_jet_rejects_forged_row_degrees(
+    rows: Sequence[tuple[int, Sequence[int]]],
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_first_jet(
+            SmoothBranchFirstJetRequest.model_construct(
+                polynomial=_forged_degree_source(rows), initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_order"
+
+
+def test_smooth_prefix_rejects_forged_row_degrees() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_prefix(
+            SmoothBranchPrefixRequest.model_construct(
+                polynomial=_forged_degree_source(DUPLICATE_DEGREE_ROWS),
+                initial_root=_rational(1),
+                precision=4,
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_order"
+
+
+# Negative control: the canonical order of the same windows is a branch of the
+# declared polynomial. The forged duplicate had returned these exact values
+# for a row it had silently dropped.
+def test_canonical_row_order_still_answers_the_declared_branch() -> None:
+    result = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(
+            polynomial=_polynomial(((0, _window([-1, 0])), (1, _window([1, -1])))),
+            initial_root=_rational(1),
+        )
+    )
+    assert [value.as_fraction() for value in result.series.coefficients] == [
+        Fraction(1),
+        Fraction(1),
+    ]
+
+
 # --- retained source scalars are charged for both components ---------------
 
 # A 256-digit prime keeps every proper fraction below in lowest terms, so each

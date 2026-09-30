@@ -426,12 +426,10 @@ def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
                 f"{MAX_SMOOTH_BRANCH_SERIES_SLOTS} source series coefficients"
             ),
         )
-    # A row with series=None is the canonical exact-zero coefficient, so it
-    # contributes nothing to the represented polynomial. Counting its y-degree
-    # would let a zero row change admission for the same mathematics. Its
-    # degree is still admitted against the canonical row range first, so a
-    # native caller cannot reach the result with an out-of-domain coordinate on
-    # a row that the degree guard never reads.
+    # A native caller can bypass the Pydantic row validator with
+    # model_construct(), so re-establish strict integer degrees, the canonical
+    # row range, and unique increasing order here.
+    degrees: list[int] = []
     for row_index, row in enumerate(source.coefficients):
         if (
             type(row.y_degree) is not int
@@ -442,6 +440,19 @@ def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
                 code="local_series.smooth_branch.row_degree",
                 message="local polynomial row degree is outside its domain",
             )
+        degrees.append(row.y_degree)
+    # The branch tables index by y_degree, so two rows at one degree would let
+    # the later row silently overwrite the earlier one and answer for a
+    # polynomial that was never declared, while a result retaining those rows
+    # fails the model's own unique-increasing requirement. An exact-zero row is
+    # a canonical coefficient, so it does not raise the mathematical degree --
+    # but it still has to hold a canonical degree of its own.
+    if degrees != sorted(set(degrees)):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients"),
+            code="local_series.smooth_branch.row_order",
+            message="local polynomial rows must have unique increasing y degrees",
+        )
     max_degree = max(
         (row.y_degree for row in source.coefficients if row.series is not None),
         default=0,

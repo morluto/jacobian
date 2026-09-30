@@ -1139,8 +1139,9 @@ class VertexDeckIsomorphismProfile(StrictModel):
                     for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
-                or _canonical_card_edges(representative.vertices, representative.edges)
-                != representative.edges
+                # See the edge-profile validator: the canonical adjacency form
+                # is the producer's postcondition, not something result
+                # decoding re-derives on every round trip.
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges
@@ -1294,7 +1295,65 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                 "vertex_iso_profile_output_bound",
                 "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
+        _preflight_vertex_profile_result_rows(value, order, class_count)
     return _normalize_vertex_iso_profile_result(value)
+
+
+def _preflight_vertex_profile_result_rows(
+    value: dict[str, Any], order: int, class_count: int
+) -> None:
+    """Bound the vertex-profile rows before the normalizer copies them.
+
+    The normalizer materializes every attacker-controlled list as tuples, so an
+    oversized ``vertex_maps`` row or class ``card_indices`` list would be fully
+    copied before the after-validator could reject its shape. The edge-profile
+    decoder already preflights the same axes.
+    """
+    card_count = order
+    class_indices: Any = value.get("class_indices")
+    if type(class_indices) in (list, tuple) and len(class_indices) > card_count:
+        raise _validation_error(
+            "vertex_iso_profile_card_count",
+            "class index rows exceed the source-card axis",
+        )
+    maps: Any = value.get("vertex_maps")
+    if type(maps) in (list, tuple):
+        if len(maps) > card_count:
+            raise _validation_error(
+                "vertex_iso_profile_card_count",
+                "vertex map rows exceed the source-card axis",
+            )
+        if any(
+            type(row) in (list, tuple) and len(row) > order
+            for row in cast(list[Any] | tuple[Any, ...], maps)
+        ):
+            raise _validation_error(
+                "vertex_iso_profile_map_shape",
+                "a vertex map exceeds the source vertex axis",
+            )
+    classes: Any = value.get("classes")
+    if type(classes) not in (list, tuple):
+        return
+    for item in cast(list[Any] | tuple[Any, ...], classes):
+        if type(item) is not dict:
+            continue
+        indices: Any = item.get("card_indices")
+        if type(indices) in (list, tuple) and len(indices) > card_count:
+            raise _validation_error(
+                "vertex_iso_profile_class_shape",
+                "class card indices exceed the source-card axis",
+            )
+        representative: Any = item.get("representative")
+        if type(representative) is not dict:
+            continue
+        representative_edges: Any = representative.get("edges")
+        if type(representative_edges) in (list, tuple) and len(
+            representative_edges
+        ) > comb(max(order - 1, 0), 2):
+            raise _validation_error(
+                "vertex_iso_profile_class_shape",
+                "a class representative exceeds the card-order shape bound",
+            )
 
 
 def _vertex_iso_profile_dimensions(
@@ -1605,8 +1664,12 @@ class EdgeDeckIsomorphismProfile(StrictModel):
                     family.cards[index].deleted_edge for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
-                or _canonical_card_edges(representative.vertices, representative.edges)
-                != representative.edges
+                # The representative's canonical adjacency form is the
+                # producer's postcondition, established when the card was
+                # canonicalized. Re-deriving it here would enumerate every
+                # vertex permutation on every decode of an admitted result, so
+                # result validation keeps only the structural axis, ordering,
+                # and reference checks below.
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges

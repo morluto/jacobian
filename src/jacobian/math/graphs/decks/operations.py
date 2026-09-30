@@ -503,6 +503,19 @@ def unlabelled_vertex_deck(family: VertexDeletionFamily) -> UnlabelledVertexDeck
             code="graph_deck.vertex_family_carrier",
             message="deck must be a VertexDeletionFamily",
         )
+    # `type(...) is VertexDeletionFamily` still admits an instance built with
+    # `model_construct`, whose `family` attribute may be missing or not a
+    # family at all. The induced-count and edge-count consumers guard this same
+    # boundary, so establish the family carrier here before dereferencing
+    # anything on it.
+    if not isinstance(
+        getattr(family, "source", None), SimpleUndirectedGraph
+    ) or not isinstance(getattr(family, "cards", None), tuple):
+        raise OperationDomainValidationError(
+            location=("deck", "family"),
+            code="graph_deck.vertex_family_carrier",
+            message="deck must retain a complete VertexDeletionFamily",
+        )
     source = _admit_deck_graph(family.source)
     n = len(source.vertices)
     if n > MAX_UNLABELLED_DECK_VERTICES:

@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from fractions import Fraction
 from unittest.mock import patch
 
@@ -23,7 +24,7 @@ from jacobian.math.polynomials.values import RationalFunction
 
 
 def _rf(
-    terms: list[tuple[Fraction | int, int]],
+    terms: Sequence[tuple[Fraction | int, int]],
     *,
     variable: str = "x",
     denominator: tuple[tuple[int, int], ...] = ((1, 0),),
@@ -408,3 +409,31 @@ def test_incomplete_initial_derivatives_are_rejected_before_kernel_construction(
 ):
     with pytest.raises(OperationDomainValidationError, match="exactly order"):
         differential_series_construct(_sinh_operator(), {"values": [0]})
+
+
+def test_prefix_rejects_a_non_ordinary_series_supplied_as_a_value() -> None:
+    """The ordinary-point condition belongs to the prefix boundary too.
+
+    `DFinitePowerSeries` validates only that the operator is nonzero and that
+    the initial list matches the order, so a series supplied as JSON or via
+    `model_validate` never established regularity. The prefix path then took
+    its initial-only fast path and returned `f(0) = 1` for `f + x f' = 0`,
+    whose x^0 row forces `f(0) = 0`. No such series exists.
+    """
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": 0, "coefficient": _rf([(1, 0)]).model_dump()},
+                {"order": 1, "coefficient": _rf([(1, 1)]).model_dump()},
+            ]
+        }
+    )
+    value = DFinitePowerSeries.model_validate(
+        {"operator": operator, "initial_derivatives": {"values": [1]}}
+    )
+
+    # the carrier itself does not establish regularity
+    assert value.initial_derivatives.values[0].as_fraction() == Fraction(1)
+
+    with pytest.raises(OperationDomainValidationError, match="ordinary center"):
+        differential_series_generate_prefix(value, 1)

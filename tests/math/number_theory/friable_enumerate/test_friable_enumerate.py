@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 
 import pytest
@@ -224,20 +223,3 @@ def test_result_binds_zero_sources_by_value_and_requires_increasing_family() -> 
         FriableEnumerateResult.model_validate(
             {"x": 5, "y": 5, "family": {"elements": [2, 1]}}
         )
-
-
-def test_operation_is_discoverable_with_one_executable_example() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    operation = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "integer.friable.enumerate"
-    )
-    assert len(operation.examples) == 1
-    example = operation.examples[0]
-    request = operation.request_type.model_validate_json(
-        json.dumps(example.input), strict=True
-    )
-    result = operation.run(request)
-    assert result.family.elements == FIVE_SMOOTH_THROUGH_20

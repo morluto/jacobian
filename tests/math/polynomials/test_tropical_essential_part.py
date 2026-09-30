@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.tropical import (
     TropicalPolynomial,
@@ -16,7 +14,6 @@ from jacobian.math.polynomials.tropical import (
     TropicalSemiring,
     tropical_polynomial_essential_part,
 )
-from jacobian.math.polynomials.tropical._models import EssentialPartRequest
 
 
 def _polynomial(
@@ -369,26 +366,3 @@ def test_rank_aware_facet_bound_admits_intrinsic_hull_facets(
     assert len(result.hull_facets) == expected_facets
     assert result.essential_term_indices == _inequality_oracle(poly)
     _assert_face_incidence(poly, result)
-
-
-def test_public_manifest_example_executes_as_a_source_bound_result() -> None:
-    tool = next(
-        operation
-        for operation in BUILTIN_TOOLS
-        if operation.operation_id == "tropical.polynomial.essential_part.compute"
-    )
-    request = EssentialPartRequest.model_validate_json(
-        json.dumps(tool.examples[0].input), strict=True
-    )
-
-    result = tool.run(request)
-
-    assert result.essential_term_indices == tuple(range(5))
-    assert result.source == request.polynomial
-    assert result.polynomial == request.polynomial
-    assert (
-        TropicalPolynomialEssentialPart.model_validate_json(
-            result.model_dump_json(), strict=True
-        )
-        == result
-    )

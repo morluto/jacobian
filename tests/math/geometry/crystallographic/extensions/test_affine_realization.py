@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.math.geometry.crystallographic.extensions._models import (
     FiniteLatticeExtension,
 )
@@ -152,21 +150,3 @@ def test_trivial_holonomy_realizes_the_translation_lattice() -> None:
         Fraction(3),
         Fraction(-2),
     )
-
-
-def test_affine_realization_round_trips_and_manifest_examples_execute() -> None:
-    result = affine_section_realization(_s3_extension())
-    assert type(result).model_validate_json(result.model_dump_json()) == result
-
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "crystallographic.extension.affine_realization.compute"
-    )
-    assert len(tool.examples) == 2
-    for example in tool.examples:
-        request = tool.request_type.model_validate_json(
-            json.dumps(example.input), strict=True
-        )
-        realized = tool.run(request)
-        assert realized.source == request

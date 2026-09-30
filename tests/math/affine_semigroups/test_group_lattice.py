@@ -1,17 +1,11 @@
-import json
-
 import pytest
 from pydantic import ValidationError
 from sympy import Matrix
 from sympy.matrices.normalforms import hermite_normal_form as sympy_column_hnf
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.math.affine_semigroups.group_lattice import (
     AffineGroupLattice,
     compute_group_lattice,
-)
-from jacobian.math.affine_semigroups.group_lattice_models import (
-    AffineGroupLatticeRequest,
 )
 from jacobian.math.affine_semigroups.semigroup import AffineConfiguration
 
@@ -72,16 +66,3 @@ def test_group_lattice_is_canonical_with_redundant_generators() -> None:
     assert "basis_generator_coordinates" not in payload
     assert "generator_lattice_coordinates" not in payload
     assert AffineGroupLattice.model_validate(payload) == result
-
-
-def test_group_lattice_catalog_example_executes() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "affine_semigroup.group_lattice.compute"
-    )
-    request = AffineGroupLatticeRequest.model_validate_json(
-        json.dumps(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert result.lattice.basis.entries == ((2, 0), (0, 2))

@@ -51,7 +51,10 @@ def reachability_token_profile(
         + states * max(1, transitions) * max(1, places)
         + states
         + edges
-        + parented_markings * places * transitions
+        # The preflight's fourth value is already the total matrix-cell work of
+        # every parent-bound marking; multiplying it by the source dimensions
+        # again squared that cost.
+        + parented_markings
         + label_characters
     )
     if work > MAX_REACHABILITY_TOKEN_PROFILE_WORK:

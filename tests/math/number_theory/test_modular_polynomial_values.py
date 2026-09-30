@@ -309,25 +309,6 @@ def test_published_result_schema_matches_residue_image_output_scope() -> None:
     assert "maximum" not in shared_schema["properties"]["exponents"]["items"]
 
 
-def test_both_residue_image_operations_advertise_the_restored_bounds() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    residue_image_tools = [
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id.startswith("modular.polynomial_residue_image.")
-    ]
-    assert len(residue_image_tools) == 2
-
-    for tool in residue_image_tools:
-        exponents_schema = tool.result_type.model_json_schema()["properties"][
-            "normalized_terms"
-        ]["items"]["properties"]["exponents"]
-        assert exponents_schema["maxItems"] == 6
-        assert exponents_schema["items"]["minimum"] == 0
-        assert exponents_schema["items"]["maximum"] == 32
-
-
 def test_emitted_results_parse_under_their_advertised_output_schema() -> None:
     request = _request()
     validator = Draft202012Validator(

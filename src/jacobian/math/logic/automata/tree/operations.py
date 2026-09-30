@@ -1051,9 +1051,14 @@ def tree_automaton_to_regular_tree_grammar(
     """Return a single-start unit-free grammar for exactly the accepted trees."""
     _preflight_tree_automaton_for_grammar(automaton)
     finals = set(automaton.final_states)
+    # The saturation rescans every row once per newly productive state, so its
+    # pass count is part of this operation's work and must be admitted with it
+    # rather than left to the row order of the caller's transition table.
+    _admit_productivity_saturation(automaton)
     productive: set[int] = set()
     changed = True
     while changed:
+        request_checkpoint("during tree-automaton productivity saturation")
         changed = False
         for row in automaton.transitions:
             if (
@@ -1064,6 +1069,9 @@ def tree_automaton_to_regular_tree_grammar(
                 changed = True
     accepting = finals.intersection(productive)
     if not accepting:
+        # Both exits of this function cross a cancellation checkpoint, so a
+        # cancelled request is never answered by the empty grammar.
+        request_checkpoint("tree automaton to regular tree grammar")
         return RegularTreeGrammar(
             nonterminal_count=1,
             arity=automaton.arity,
@@ -1152,6 +1160,29 @@ def tree_automaton_to_regular_tree_grammar(
         start_nonterminal=start,
         productions=tuple(productions),
     )
+
+
+def _admit_productivity_saturation(automaton: BottomUpTreeAutomaton) -> None:
+    """Admit the fixed-point saturation before the loop performs it.
+
+    Each pass that discovers a new productive state is followed by a full
+    rescan, so the work depends on the transition order rather than on the
+    table's size. Price the worst case the state count allows, exactly as the
+    sibling productivity preflight does.
+    """
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    rounds = automaton.state_count + 1
+    saturation_work = rounds * (len(automaton.transitions) + 1) * (maximum_arity + 1)
+    if saturation_work > MAX_TREE_GRAMMAR_CONVERSION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_automata.grammar_conversion_bound",
+            message=(
+                "productivity saturation exceeds the automaton-to-grammar work envelope"
+            ),
+        )
 
 
 def _preflight_tree_automaton_for_grammar(
@@ -2092,6 +2123,47 @@ def _admit_tree_height(max_height: object) -> int:
     return max_height
 
 
+def _productivity_saturation_work(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+) -> int:
+    """Price one productivity saturation: a pass per state over every row."""
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    return (
+        (automaton.state_count + 1)
+        * (len(automaton.transitions) + 1)
+        * (maximum_arity + 1)
+    )
+
+
+def _has_accepted_tree(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+) -> bool:
+    """Report whether any accepted tree exists, at any height.
+
+    A state is productive when some rule with all productive children reaches
+    it, and the automaton is complete and deterministic, so the language is
+    non-empty exactly when a final state is productive. The saturation needs at
+    most one pass per state, which the caller charges before running it.
+    """
+    finals = set(automaton.final_states)
+    if not finals:
+        return False
+    productive: set[int] = set()
+    changed = True
+    while changed:
+        request_checkpoint("during tree-automaton productivity saturation")
+        changed = False
+        for row in automaton.transitions:
+            if row.target_state not in productive and all(
+                state in productive for state in row.child_states
+            ):
+                productive.add(row.target_state)
+                changed = True
+    return bool(finals.intersection(productive))
+
+
 def accepted_tree_height_profile(
     automaton: CompleteDeterministicBottomUpTreeAutomaton,
     max_height: int,
@@ -2112,17 +2184,27 @@ def accepted_tree_height_profile(
 
     has_ground_trees = any(rank == 0 for rank in automaton.arity)
     transition_work = sum(len(row.child_states) + 1 for row in automaton.transitions)
-    estimated_work = (
+    recurrence_work = (
         (max_height + 1) * (transition_work + automaton.state_count)
         if automaton.final_states and has_ground_trees
         else 0
     )
-    if estimated_work > MAX_TREE_AUTOMATON_WORK:
+    # Decide emptiness before the all-trees digit bound. A complete
+    # deterministic automaton with no final state reached by any tree has a
+    # profile of zeros, and that bound would otherwise refuse a request whose
+    # exact answer is (max_height + 1) zeros. The saturation is the same fixed
+    # point the grammar conversion performs, so its worst case is charged with
+    # the rest of this operation's work.
+    saturation_work = _productivity_saturation_work(automaton) if recurrence_work else 0
+    if recurrence_work + saturation_work > MAX_TREE_AUTOMATON_WORK:
         raise OperationResourceAdmissionError(
             location=("automaton", "transitions"),
             code="tree_automata.height_count_work_bound",
             message="height-prefix counting exceeds the admitted transition-work bound",
         )
+    estimated_work = recurrence_work
+    if estimated_work and not _has_accepted_tree(automaton):
+        return (0,) * (max_height + 1)
 
     count_cap = 10**MAX_CANONICAL_INTEGER_DIGITS
     if automaton.final_states:

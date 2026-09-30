@@ -918,10 +918,20 @@ class TreeLanguageProfile(StrictModel):
                 "language_profile_witnesses",
                 "one witness must be supplied for every reachable final state",
             )
+        # MAX_REACHABILITY_WITNESS_NODES is an aggregate limit across states,
+        # not a per-witness limit, so the walk accumulates it over every
+        # witness. The kernel charges the same total.
+        witness_nodes = 0
         for witness in self.witnesses:
             stack = [(witness.tree, 1)]
             while stack:
                 node, depth = stack.pop()
+                witness_nodes += 1
+                if witness_nodes > MAX_REACHABILITY_WITNESS_NODES:
+                    raise _validation_error(
+                        "language_profile_witness_nodes",
+                        "aggregate witness nodes exceed the reachability bound",
+                    )
                 if depth > MAX_RUN_TREE_DEPTH:
                     raise _validation_error(
                         "language_profile_witness_depth",

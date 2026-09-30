@@ -84,23 +84,31 @@ class FiniteTreeContext(StrictModel):
             raise _error("depth", "context spine exceeds the supported depth")
         nodes = len(frames)
         for frame_index, frame in enumerate(frames):
+            # Walk a canonical frame or a raw one without serializing it. A
+            # model_dump here would copy the whole nested tree before the node
+            # and depth accounting below, so an oversized native carrier would
+            # be copied first and then reported by the serializer rather than
+            # by this boundary.
+            siblings: object
             if isinstance(frame, TreeContextFrame):
-                frame = frame.model_dump(mode="python")
-            if not isinstance(frame, dict) or set(frame) != {
-                "symbol",
-                "hole_child",
-                "siblings",
-            }:
-                raise _error("shape", "context frame has invalid fields")
-            siblings = frame.get("siblings")
+                siblings = frame.siblings
+            else:
+                if not isinstance(frame, dict) or set(frame) != {
+                    "symbol",
+                    "hole_child",
+                    "siblings",
+                }:
+                    raise _error("shape", "context frame has invalid fields")
+                siblings = frame.get("siblings")
             if not isinstance(siblings, (tuple, list)):
                 return value
             if len(siblings) > MAX_TA_ARITY - 1:
                 raise _error("arity", "context frame has too many siblings")
             for sibling in siblings:
                 if isinstance(sibling, RankedTree):
-                    sibling = sibling.model_dump(mode="python")
-                if not isinstance(sibling, dict) or set(sibling) != {
+                    if set(sibling.model_fields_set) - {"symbol", "children"}:
+                        raise _error("shape", "context sibling has invalid fields")
+                elif not isinstance(sibling, dict) or set(sibling) != {
                     "symbol",
                     "children",
                 }:
@@ -108,9 +116,6 @@ class FiniteTreeContext(StrictModel):
                 stack = [(sibling, frame_index + 2)]
                 while stack:
                     node, depth = stack.pop()
-                    children = node.get("children")
-                    if not isinstance(children, (tuple, list)):
-                        return value
                     nodes += 1
                     if nodes > MAX_RUN_TREE_NODES:
                         raise _error(
@@ -121,21 +126,19 @@ class FiniteTreeContext(StrictModel):
                         raise _error(
                             "depth", "context exceeds the supported tree depth"
                         )
+                    if isinstance(node, RankedTree):
+                        children = node.children
+                    else:
+                        children = node.get("children")
+                        if not isinstance(children, (tuple, list)):
+                            return value
                     if len(children) > MAX_TA_ARITY:
                         raise _error("arity", "tree node has too many children")
                     if any(
                         not isinstance(child, (dict, RankedTree)) for child in children
                     ):
                         raise _error("shape", "tree children must be objects")
-                    stack.extend(
-                        (
-                            child.model_dump(mode="python")
-                            if isinstance(child, RankedTree)
-                            else child,
-                            depth + 1,
-                        )
-                        for child in children
-                    )
+                    stack.extend((child, depth + 1) for child in children)
         return canonicalize_json_containers(value)
 
     @model_validator(mode="after")

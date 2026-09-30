@@ -263,6 +263,15 @@ def admit_polymorphism_check(
             ),
         )
     table_cells = source.carrier_size**arity
+    if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operation_table",),
+            code="relational.polymorphism.table_bound",
+            message=(
+                f"the complete operation table has {table_cells} cells, exceeding "
+                f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
+            ),
+        )
     operation_table = _bounded_sequence_snapshot(
         operation_table,
         MAX_RELATIONAL_OPERATION_TABLE_CELLS,
@@ -277,15 +286,6 @@ def admit_polymorphism_check(
             message=(
                 "operation_table must contain one value for every tuple in "
                 f"A^{arity} (expected {table_cells} entries)"
-            ),
-        )
-    if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("operation_table",),
-            code="relational.polymorphism.table_bound",
-            message=(
-                f"the complete operation table has {table_cells} cells, exceeding "
-                f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
             ),
         )
     for position, value in enumerate(operation_table):

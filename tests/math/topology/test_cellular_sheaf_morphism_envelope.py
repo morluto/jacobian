@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from fractions import Fraction
 
 import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
+    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import canonical_complex
@@ -24,6 +26,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
 )
 from jacobian.math.topology.cellular_sheaves.morphism_cokernel import (
+    SheafMorphismCokernelResult,
     cokernel_of_morphism,
 )
 
@@ -138,3 +141,75 @@ def test_cokernel_still_computes_its_quotient_within_the_envelope() -> None:
     assert result.cokernel.coefficient_field is SheafField.RATIONAL
     assert result.cokernel.complex == _triangle_sheaf().complex
     assert result.projection.components
+    assert all(not stalk.basis for stalk in result.cokernel.stalks)
+    restored = SheafMorphismCokernelResult.model_validate_json(result.model_dump_json())
+    assert restored == result
+    assert cokernel_of_morphism(restored.projection).cokernel == result.cokernel
+
+
+@pytest.mark.parametrize("role", ("source", "target"))
+@pytest.mark.parametrize("container", ("cover_restrictions", "derived_restrictions"))
+def test_cokernel_validates_restriction_axes_before_pricing_the_diagram(
+    monkeypatch: pytest.MonkeyPatch, role: str, container: str
+) -> None:
+    morphism_value = _identity_morphism()
+    parent = getattr(morphism_value, role)
+    restrictions = getattr(parent, container)
+    forged_restriction = restrictions[0].model_copy(update={"target": ("unknown",)})
+    forged_parent = parent.model_copy(
+        update={container: (forged_restriction, *restrictions[1:])}
+    )
+    reconstructions = _spy_on_parent_reconstruction(monkeypatch)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        cokernel_of_morphism(morphism_value.model_copy(update={role: forged_parent}))
+
+    assert error.value.errors()[0]["type"].endswith("parent_structure")
+    assert reconstructions == []
+
+
+@pytest.mark.parametrize("role", ("source", "target"))
+def test_cokernel_bounds_parent_shape_before_structural_revalidation(
+    monkeypatch: pytest.MonkeyPatch, role: str
+) -> None:
+    morphism_value = _identity_morphism()
+    parent = getattr(morphism_value, role)
+    forged_parent = parent.model_copy(
+        update={"derived_restrictions": parent.derived_restrictions * 1000}
+    )
+    reconstructions = _spy_on_parent_reconstruction(monkeypatch)
+
+    with pytest.raises(OperationResourceAdmissionError):
+        cokernel_of_morphism(morphism_value.model_copy(update={role: forged_parent}))
+
+    assert reconstructions == []
+
+
+@pytest.mark.parametrize("axis", ("components", "component", "matrix", "row"))
+def test_cokernel_rejects_component_container_subclasses_before_traversal(
+    axis: str,
+) -> None:
+    class UnvisitedTuple(tuple[object, ...]):
+        def __len__(self) -> int:
+            raise AssertionError("admission must not inspect subclass length")
+
+        def __iter__(self) -> Iterator[object]:
+            raise AssertionError("admission must not invoke subclass iterator")
+
+    value = _identity_morphism()
+    cell, matrix = value.components[0]
+    components: tuple[object, ...]
+    if axis == "components":
+        components = UnvisitedTuple(value.components)
+    elif axis == "component":
+        components = (UnvisitedTuple((cell, matrix)), *value.components[1:])
+    elif axis == "matrix":
+        components = ((cell, UnvisitedTuple(matrix)), *value.components[1:])
+    else:
+        components = (
+            (cell, (UnvisitedTuple(matrix[0]), *matrix[1:])),
+            *value.components[1:],
+        )
+    with pytest.raises(OperationDomainValidationError) as error:
+        cokernel_of_morphism(value.model_copy(update={"components": components}))
+    assert error.value.errors()[0]["type"].endswith("component_structure")

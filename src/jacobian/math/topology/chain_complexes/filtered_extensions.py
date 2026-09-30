@@ -1204,13 +1204,23 @@ def _scalar_digit_width(value: int | Fraction) -> int:
     integer: ``len(str(value))`` raises beyond ``sys.int_max_str_digits``,
     which would surface as a raw ``ValueError`` instead of the operation's own
     domain error. A rational is charged for both of its exact components, which
-    is at least what its decimal rendering cost before.
+    bounds numerator and denominator growth independently of wire punctuation.
     """
+    if (not isinstance(value, int) or isinstance(value, bool)) and type(
+        value
+    ) is not Fraction:
+        raise OperationDomainValidationError(
+            location=("maps",),
+            code="filtered_chain_map.entry_invalid",
+            message="map entries must use the retained canonical coefficient grammar",
+        )
     if isinstance(value, Fraction):
         return decimal_digit_width(value.numerator) + decimal_digit_width(
             value.denominator
         )
-    return decimal_digit_width(value)
+    # Match the canonical strict-int decoder: normalize the underlying integer
+    # without dispatching a caller subclass's conversion or formatting methods.
+    return decimal_digit_width(int.__int__(value))
 
 
 def _admit_e0_map_request(

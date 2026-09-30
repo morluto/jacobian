@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -40,6 +40,10 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     _admit_morphism_resources,
     _mul,
     _resolve_component_key,
+)
+from jacobian.math.topology.cellular_sheaves.morphism_image import (
+    _reject_oversized_parent_container,
+    _unvalidated_payload,
 )
 from jacobian.math.topology.cellular_sheaves.morphism_kernel import (
     _parent_reconstruction_bounds,
@@ -207,13 +211,27 @@ class _AdmittedCokernelMorphism:
 
 
 def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMorphism:
-    if not isinstance(value, SheafMorphismResult):
+    if type(value) is not SheafMorphismResult:
         raise _domain("morphism_type", "morphism must be a cellular sheaf morphism")
-    source, target = value.source, value.target
-    if not isinstance(source, FiniteCellularSheaf) or not isinstance(
-        target, FiniteCellularSheaf
+    if (
+        type(getattr(value, "source", None)) is not FiniteCellularSheaf
+        or type(getattr(value, "target", None)) is not FiniteCellularSheaf
     ):
         raise _domain("parent_type", "morphism parents must be finite cellular sheaves")
+    source, target = value.source, value.target
+    # Envelope arithmetic relies on canonical stalk and restriction axes, but
+    # must not reconstruct either exact diagram yet. Reuse image admission's
+    # bounded structural walk before any recursive revalidation or indexing.
+    _reject_oversized_parent_container(source, "source")
+    _reject_oversized_parent_container(target, "target")
+    try:
+        source = FiniteCellularSheaf.model_validate(_unvalidated_payload(source))
+        target = FiniteCellularSheaf.model_validate(_unvalidated_payload(target))
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise _domain(
+            "parent_structure",
+            "morphism parents must contain structurally valid cellular sheaf data",
+        ) from error
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (
@@ -223,18 +241,18 @@ def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMor
     ):
         raise _domain("parent_mismatch", "morphisms require one complex and field")
     if (
-        not isinstance(value.components, tuple)
+        type(getattr(value, "components", None)) is not tuple
         or len(value.components) > MAX_SHEAF_SIMPLICES
     ):
         raise _domain("component_structure", "components must be simplex-matrix pairs")
     for component in value.components:
         if (
-            not isinstance(component, tuple)
+            type(component) is not tuple
             or len(component) != 2
-            or not isinstance(component[1], (tuple, list))
+            or type(component[1]) not in (tuple, list)
             or len(component[1]) > MAX_SHEAF_STALK_RANK
             or any(
-                not isinstance(row, (tuple, list)) or len(row) > MAX_SHEAF_STALK_RANK
+                type(row) not in (tuple, list) or len(row) > MAX_SHEAF_STALK_RANK
                 for row in component[1]
             )
         ):

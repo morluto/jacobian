@@ -19,6 +19,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.chain_complexes._integral_homology import (
+    IntegralHomologyDegreePlan,
     IntegralHomologyExecutionPlan,
     admit_integral_homology,
     compute_integral_homology,
@@ -810,33 +811,138 @@ def _admit_projection_scalar_product(
     return output_bits, count * (left_limbs * right_limbs + output_limbs)
 
 
+@dataclass(frozen=True)
+class _HomologyProjectionDegreeBounds:
+    cycle_rank: int
+    generators: int
+    torsion_generators: int
+    cycle_bits: int
+    bounding_bits: int
+    torsion_order_bits: int
+    inverse_right_bits: int
+    incoming_left_bits: int
+
+
+def _homology_projection_degree_bounds(
+    degree: IntegralHomologyDegreePlan,
+) -> _HomologyProjectionDegreeBounds:
+    """Reuse admitted Smith facts, including exact ranks from the presolve.
+
+    In particular, unit and zero reductions already determine which generators
+    exist. They must not acquire hypothetical torsion witnesses or the much
+    larger generic inverse bound during projection admission.
+    """
+    outgoing = degree.outgoing_presolve
+    cycle_ranks = (
+        (degree.chain_rank - outgoing.reduction.rank,)
+        if outgoing is not None
+        else tuple(range(degree.chain_rank + 1))
+    )
+    inverse_right_bits = (
+        max(
+            (
+                abs(value).bit_length()
+                for row in outgoing.right_inverse
+                for value in row
+            ),
+            default=1,
+        )
+        if outgoing is not None
+        else degree.outgoing_height.maximum_bits
+    )
+    generators = torsion_generators = cycle_bits = bounding_bits = 0
+    torsion_order_bits = incoming_left_bits = 0
+    incoming_is_zero = not any(value for row in degree.incoming for value in row)
+    for cycle_rank in cycle_ranks:
+        incoming = degree.incoming_presolves_by_cycle_rank[cycle_rank]
+        height = degree.incoming_heights_by_cycle_rank[cycle_rank]
+        candidate_cycle_bits = degree.output_bits_by_cycle_rank[cycle_rank]
+        if incoming_is_zero:
+            generator_count, torsion_count = cycle_rank, 0
+        elif incoming is not None:
+            reduction = incoming.reduction
+            torsion_count = sum(factor > 1 for factor in reduction.invariant_factors)
+            generator_count = cycle_rank - reduction.rank + torsion_count
+            inverse_left_bits = max(
+                (
+                    abs(value).bit_length()
+                    for row in incoming.left_inverse
+                    for value in row
+                ),
+                default=1,
+            )
+            candidate_cycle_bits = min(
+                candidate_cycle_bits,
+                degree.outgoing_height.right_bits
+                + inverse_left_bits
+                + max(0, cycle_rank - 1).bit_length(),
+            )
+        else:
+            generator_count = cycle_rank
+            torsion_count = min(cycle_rank, degree.incoming_chain_rank)
+        if height.transformations_are_identity:
+            candidate_cycle_bits = min(
+                candidate_cycle_bits, degree.outgoing_height.right_bits
+            )
+        generators = max(generators, generator_count)
+        torsion_generators = max(torsion_generators, torsion_count)
+        if generator_count:
+            cycle_bits = max(cycle_bits, candidate_cycle_bits)
+        if torsion_count:
+            bounding_bits = max(bounding_bits, height.right_bits)
+            torsion_order_bits = max(torsion_order_bits, height.diagonal_bits)
+        incoming_left_bits = max(incoming_left_bits, height.left_bits)
+    return _HomologyProjectionDegreeBounds(
+        max(cycle_ranks),
+        generators,
+        torsion_generators,
+        cycle_bits,
+        bounding_bits,
+        torsion_order_bits,
+        inverse_right_bits,
+        incoming_left_bits,
+    )
+
+
 def _admit_homology_projection_plan(
     chain_map: ChainMapValue,
     source_plan: IntegralHomologyExecutionPlan,
     target_plan: IntegralHomologyExecutionPlan,
 ) -> int:
-    """Bound the homology-coordinate projection from admitted endpoint plans.
+    """Bound every realized projection charge before either endpoint executes.
 
-    The projection work is decided from the endpoint Smith certificates, so a
-    request whose projection exceeds the envelope should be refused before
-    either Smith backend runs. This preflight reads only admitted plan facts:
-    each cycle height, the transformation heights the plan already validated,
-    and the chain-map matrices the caller supplied. It is conservative, so it
-    can only reject earlier than the exact post-execution check, which remains
-    the authority on the realized projection.
+    ``chain_rank`` is the rank of C_n; ``incoming_chain_rank`` is the rank of
+    C_(n+1). Projection is performed for each retained source generator, in
+    degrees below the truncation only. The final check can use tighter realized
+    heights and ranks, but its work cannot exceed this plan's bound.
     """
-    chain_entry_bits = 1
+    entry_bits_by_identity: dict[int, int] = {}
     scan_work = 0
     for matrix in (
         *chain_map.source.differential_matrices,
         *chain_map.target.differential_matrices,
         *chain_map.map_matrices,
     ):
+        entry_bits = 0
         for row in matrix:
             for value in row:
                 integer = value if type(value) is int else _as_integer(value)
-                chain_entry_bits = max(chain_entry_bits, abs(integer).bit_length())
+                entry_bits = max(entry_bits, abs(integer).bit_length())
             scan_work += len(row)
+        entry_bits_by_identity[id(matrix)] = entry_bits
+
+    source_bounds = tuple(
+        _homology_projection_degree_bounds(degree)
+        for degree in source_plan.degrees[:-1]
+    )
+    target_bounds = tuple(
+        _homology_projection_degree_bounds(degree)
+        for degree in target_plan.degrees[:-1]
+    )
+    # The realized admission scans every retained right inverse (including the
+    # top endpoint degree), and the incoming left matrices of supported groups.
+    scan_work += sum(degree.chain_rank**2 for degree in target_plan.degrees)
+    scan_work += sum(bound.cycle_rank**2 for bound in target_bounds)
     if scan_work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
         raise OperationResourceAdmissionError(
             location=("map", "homology"),
@@ -844,106 +950,74 @@ def _admit_homology_projection_plan(
             message="homology-coordinate matrix scans exceed the admitted work envelope",
         )
 
+    def admit_mat_vec(
+        matrix: tuple[tuple[int | Fraction, ...], ...], input_bits: int
+    ) -> tuple[int, int]:
+        return _admit_projection_product(
+            len(matrix),
+            len(matrix[0]) if matrix else 0,
+            entry_bits_by_identity[id(matrix)],
+            input_bits,
+        )
+
     work = scan_work
     output_scalars = 0
-    for index, (source_degree, target_degree) in enumerate(
-        zip(source_plan.degrees, target_plan.degrees, strict=True)
+    for index, (source, target) in enumerate(
+        zip(source_bounds, target_bounds, strict=True)
     ):
+        output_scalars += source.generators * target.generators
+        if not source.generators:
+            continue
+        target_rank = target_plan.degrees[index].chain_rank
+        source_rank = source_plan.degrees[index].chain_rank
+        generator_work = 0
         if index:
-            _bits, cost = _admit_projection_product(
-                source_degree.incoming_chain_rank,
-                source_degree.chain_rank,
-                chain_entry_bits,
-                max(source_degree.output_bits_by_cycle_rank, default=1),
+            _bits, cost = admit_mat_vec(
+                chain_map.source.differential_matrices[index - 1], source.cycle_bits
             )
-            work += cost
-        _bits, cost = _admit_projection_product(
-            target_degree.incoming_chain_rank,
-            source_degree.chain_rank,
-            chain_entry_bits,
-            max(source_degree.output_bits_by_cycle_rank, default=1),
+            generator_work += cost
+        image_bits, cost = admit_mat_vec(
+            chain_map.map_matrices[index], source.cycle_bits
         )
-        work += cost
+        generator_work += cost
         if index:
-            _bits, cost = _admit_projection_product(
-                target_degree.chain_rank,
-                target_degree.incoming_chain_rank,
-                chain_entry_bits,
-                max(source_degree.output_bits_by_cycle_rank, default=1),
+            _bits, cost = admit_mat_vec(
+                chain_map.target.differential_matrices[index - 1], image_bits
             )
-            work += cost
-        transformation_bits = max(
-            target_degree.outgoing_height.maximum_bits,
-            max(target_degree.output_bits_by_cycle_rank, default=1),
-            max(target_degree.coordinate_bits_by_cycle_rank, default=1),
-            max(
-                (
-                    height.maximum_bits
-                    for height in target_degree.incoming_heights_by_cycle_rank
-                ),
-                default=1,
-            ),
-        )
-        image_bits = max(source_degree.output_bits_by_cycle_rank, default=1) + (
-            chain_entry_bits if index else 0
-        )
+            generator_work += cost
         coordinate_bits, cost = _admit_projection_product(
-            target_degree.incoming_chain_rank,
-            target_degree.incoming_chain_rank,
-            transformation_bits,
-            image_bits,
+            target_rank, target_rank, target.inverse_right_bits, image_bits
         )
-        work += cost
+        generator_work += cost
         _bits, cost = _admit_projection_product(
-            target_degree.incoming_chain_rank,
-            target_degree.incoming_chain_rank,
-            transformation_bits,
+            target.cycle_rank,
+            target.cycle_rank,
+            target.incoming_left_bits,
             coordinate_bits,
         )
-        work += cost
-        # A torsion generator adds its bounding-chain products and both witness
-        # products to the same envelope.
-        bounding_bits = max(source_degree.output_bits_by_cycle_rank, default=1)
-        _bits, cost = _admit_projection_product(
-            source_degree.chain_rank,
-            source_degree.incoming_chain_rank,
-            chain_entry_bits,
-            bounding_bits,
-        )
-        work += cost
-        mapped_bits, cost = _admit_projection_product(
-            target_degree.chain_rank,
-            source_degree.incoming_chain_rank,
-            chain_entry_bits,
-            bounding_bits,
-        )
-        work += cost
-        _bits, cost = _admit_projection_product(
-            target_degree.incoming_chain_rank,
-            target_degree.chain_rank,
-            chain_entry_bits,
-            mapped_bits,
-        )
-        work += cost
-        torsion_order_bits = max(
-            (
-                height.diagonal_bits
-                for height in target_degree.incoming_heights_by_cycle_rank
-            ),
-            default=1,
-        )
-        _bits, cost = _admit_projection_scalar_product(
-            torsion_order_bits,
-            max(source_degree.output_bits_by_cycle_rank, default=1),
-            max(1, source_degree.incoming_chain_rank),
-        )
-        work += cost
-        _bits, cost = _admit_projection_scalar_product(
-            torsion_order_bits, image_bits, max(1, target_degree.incoming_chain_rank)
-        )
-        work += cost
-        generator_bound = max(1, source_degree.incoming_chain_rank)
-        output_scalars += generator_bound * max(1, target_degree.incoming_chain_rank)
+        generator_work += cost
+        work += source.generators * generator_work
+        if source.torsion_generators:
+            _bits, torsion_work = admit_mat_vec(
+                chain_map.source.differential_matrices[index], source.bounding_bits
+            )
+            mapped_bits, cost = admit_mat_vec(
+                chain_map.map_matrices[index + 1], source.bounding_bits
+            )
+            torsion_work += cost
+            _bits, cost = admit_mat_vec(
+                chain_map.target.differential_matrices[index], mapped_bits
+            )
+            torsion_work += cost
+            _bits, cost = _admit_projection_scalar_product(
+                source.torsion_order_bits, source.cycle_bits, source_rank
+            )
+            torsion_work += cost
+            _bits, cost = _admit_projection_scalar_product(
+                source.torsion_order_bits, image_bits, target_rank
+            )
+            torsion_work += cost
+            work += source.torsion_generators * torsion_work
         if work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
             raise OperationResourceAdmissionError(
                 location=("map", "homology"),
@@ -1090,7 +1164,7 @@ def _admit_homology_projection(
                 )
                 work += cost
                 _, cost = _admit_projection_scalar_product(
-                    order_bits, image_bits, target_coordinates
+                    order_bits, image_bits, target_group.chain_rank
                 )
                 work += cost
             if work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:

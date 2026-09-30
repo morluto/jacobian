@@ -10,8 +10,10 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
+from sympy import nextprime
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -21,6 +23,7 @@ from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialInSeries,
 )
 from jacobian.math.polynomials.local_series.newton_transform import (
+    MAX_NEWTON_TRANSFORM_OUTPUT_CELLS,
     NewtonTransformRequest,
     newton_transform,
 )
@@ -38,7 +41,7 @@ def _rational(value: int | Fraction) -> CanonicalRational:
 
 
 def _window(
-    coefficients: Sequence[int],
+    coefficients: Sequence[int | Fraction],
     *,
     lower: int = 0,
     place: str = "FINITE",
@@ -366,3 +369,131 @@ def test_smooth_jet_still_enforces_its_row_budget() -> None:
             SmoothBranchFirstJetRequest(polynomial=source, initial_root=_rational(1))
         )
     assert _code(error.value) == "local_series.smooth_branch.row_budget"
+
+
+# --- an exact-zero row is admitted before the degree guard excludes it ------
+
+
+def _zero_row_source(y_degree: object) -> LocalPolynomialInSeries:
+    """A linear polynomial plus one exact-zero row with a forged degree."""
+    return LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="FINITE",
+        center=_rational(0),
+        coefficients=(
+            LocalPolynomialCoefficient(y_degree=0, series=_window([-1, 0])),
+            LocalPolynomialCoefficient(y_degree=1, series=_window([1, 0])),
+            LocalPolynomialCoefficient.model_construct(y_degree=y_degree, series=None),
+        ),
+    )
+
+
+@pytest.mark.parametrize("y_degree", [32_769, -1, True])
+def test_smooth_jet_rejects_a_forged_exact_zero_row_degree(y_degree: object) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_first_jet(
+            SmoothBranchFirstJetRequest.model_construct(
+                polynomial=_zero_row_source(y_degree), initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_degree"
+
+
+def test_smooth_prefix_rejects_a_forged_exact_zero_row_degree() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_prefix(
+            SmoothBranchPrefixRequest.model_construct(
+                polynomial=_zero_row_source(32_769),
+                initial_root=_rational(1),
+                precision=4,
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_degree"
+
+
+# Negative controls: an admitted exact-zero row still leaves the mathematical
+# degree unchanged, and a genuine high-degree row is still refused.
+def test_admitted_exact_zero_row_still_leaves_the_degree_unchanged() -> None:
+    with_zero_row = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(
+            polynomial=_zero_row_source(32_768), initial_root=_rational(1)
+        )
+    )
+    plain = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(
+            polynomial=_polynomial(((0, _window([-1, 0])), (1, _window([1, 0])))),
+            initial_root=_rational(1),
+        )
+    )
+    assert with_zero_row.series.coefficients == plain.series.coefficients
+
+
+# --- retained source scalars are charged for both components ---------------
+
+# A 256-digit prime keeps every proper fraction below in lowest terms, so each
+# retained coefficient really does carry a wide numerator and a wide
+# denominator rather than one wide component.
+WIDE_DENOMINATOR = nextprime(10**255)
+
+
+def _wide_source(terms: int) -> LocalPolynomialInSeries:
+    """``y`` plus a wide degree-zero window with -1 as the edge constant."""
+    return _polynomial(
+        (
+            (
+                0,
+                _window(
+                    [
+                        Fraction(-1),
+                        *(
+                            Fraction(WIDE_DENOMINATOR - index, WIDE_DENOMINATOR)
+                            for index in range(1, terms + 1)
+                        ),
+                    ]
+                ),
+            ),
+            (1, _window([Fraction(1), Fraction(0)])),
+        )
+    )
+
+
+def test_newton_refuses_a_retained_source_wider_than_its_cell_bound() -> None:
+    source = _wide_source(2_000)
+    retained = sum(
+        decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+        for row in source.coefficients
+        if row.series is not None
+        for coefficient in row.series.coefficients
+        if (value := coefficient.as_fraction())
+    )
+    assert retained > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_transform(
+            NewtonTransformRequest(
+                polynomial=source, edge_index=0, initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.newton_transform_output_bound"
+
+
+# Negative control: the same wide shape below the bound still transforms
+# exactly, charging both components without refusing valid mathematics.
+def test_newton_still_transforms_wide_proper_fractions_exactly() -> None:
+    source = _wide_source(3)
+    result = newton_transform(
+        NewtonTransformRequest(
+            polynomial=source, edge_index=0, initial_root=_rational(1)
+        )
+    )
+    rows = result.transformed_polynomial.coefficients
+    constant_row, linear_row = rows
+    assert constant_row.series is not None and linear_row.series is not None
+    assert [value.as_fraction() for value in constant_row.series.coefficients] == [
+        Fraction(0),
+        Fraction(WIDE_DENOMINATOR - 1, WIDE_DENOMINATOR),
+    ]
+    assert [value.as_fraction() for value in linear_row.series.coefficients] == [
+        Fraction(1),
+        Fraction(0),
+    ]
+    assert result.constant_term_valuation_lower_bound == 1

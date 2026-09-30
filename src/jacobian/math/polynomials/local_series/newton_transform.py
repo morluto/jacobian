@@ -115,6 +115,11 @@ def _fraction_digits(value: Fraction) -> int:
     )
 
 
+def _retained_fraction_digits(value: Fraction) -> int:
+    """Width of both components, because the result retains each of them."""
+    return decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+
+
 def _admit_edge_root_powers(
     characteristic: NewtonEdgeCharacteristicResult,
     root: Fraction,
@@ -582,18 +587,21 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
 
     # The retained source scalars are already admitted individually, so their
     # contribution is the sum of their measured widths rather than the global
-    # cap charged per slot. On the output side only the ``work`` slots that a
-    # nonzero source coefficient actually reaches can carry a wide value; the
-    # remaining retained entries are exact zeros and are charged as one cell
-    # each. Every retained output coefficient is at most ``coefficient_digits``
-    # wide, so ``work * coefficient_digits`` bounds the output digit sum
-    # without charging the global maximum to every window slot. Scalar
-    # magnitudes stay exact, so no encoded transport size enters admission.
+    # cap charged per slot. ``characteristic.source`` keeps each rational's
+    # numerator and denominator as separate retained components, so a proper
+    # fraction is charged for both widths and not only the larger one. On the
+    # output side only the ``work`` slots that a nonzero source coefficient
+    # actually reaches can carry a wide value; the remaining retained entries
+    # are exact zeros and are charged as one cell each. Every retained output
+    # coefficient is at most ``coefficient_digits`` wide, so
+    # ``work * coefficient_digits`` bounds the output digit sum without
+    # charging the global maximum to every window slot. Scalar magnitudes stay
+    # exact, so no encoded transport size enters admission.
     source_digit_sum = sum(
-        _fraction_digits(coefficient.as_fraction())
+        _retained_fraction_digits(value)
         for row in source_rows
         for coefficient in row.series.coefficients
-        if coefficient.as_fraction()
+        if (value := coefficient.as_fraction())
     )
     output_cells = (
         source_digit_sum

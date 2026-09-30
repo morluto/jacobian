@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials.local_series.newton_polygon import (
+    MAX_NEWTON_POLYGON_Y_DEGREE,
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
 )
@@ -427,7 +428,20 @@ def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
         )
     # A row with series=None is the canonical exact-zero coefficient, so it
     # contributes nothing to the represented polynomial. Counting its y-degree
-    # would let a zero row change admission for the same mathematics.
+    # would let a zero row change admission for the same mathematics. Its
+    # degree is still admitted against the canonical row range first, so a
+    # native caller cannot reach the result with an out-of-domain coordinate on
+    # a row that the degree guard never reads.
+    for row_index, row in enumerate(source.coefficients):
+        if (
+            type(row.y_degree) is not int
+            or not 0 <= row.y_degree <= MAX_NEWTON_POLYGON_Y_DEGREE
+        ):
+            raise OperationDomainValidationError(
+                location=("polynomial", "coefficients", row_index, "y_degree"),
+                code="local_series.smooth_branch.row_degree",
+                message="local polynomial row degree is outside its domain",
+            )
     max_degree = max(
         (row.y_degree for row in source.coefficients if row.series is not None),
         default=0,

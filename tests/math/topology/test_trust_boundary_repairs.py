@@ -13,7 +13,14 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.combinatorics.posets.core._models import FinitePoset
+from jacobian.math.combinatorics.posets.core._models import (
+    ElementRank,
+    FinitePoset,
+    OrderedPair,
+    ReflexivePairPolicy,
+    RelationInterpretation,
+)
+from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
@@ -30,6 +37,11 @@ from jacobian.math.topology.cellular_sheaves._models import (
 from jacobian.math.topology.cellular_sheaves.morphism_image import (
     SheafMorphismImageResult,
     image_of_morphism,
+)
+from jacobian.math.topology.chain_complexes import (
+    CoefficientRing,
+    HomologyGroupValue,
+    homology_groups,
 )
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalCell,
@@ -49,6 +61,7 @@ from jacobian.math.topology.simplicial_sets import (
 )
 from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
     DegenerateSubmoduleRequest,
+    DegenerateSubmoduleResult,
     degenerate_submodule,
 )
 from jacobian.math.topology.simplicial_sets.map_preimage import (
@@ -180,6 +193,47 @@ def test_raw_prime_field_context_is_canonicalized_before_admission() -> None:
     )
 
 
+@pytest.mark.parametrize("prime", [2, 3, 5])
+def test_raw_prime_field_context_reaches_chain_construction(prime: int) -> None:
+    """Admitted raw contexts must use residue arithmetic throughout construction."""
+    source = standard_simplex(1, 2)
+    request = DegenerateSubmoduleRequest.model_construct(
+        simplicial_set=source, coefficient_ring="GF_p", prime=prime
+    )
+
+    result = degenerate_submodule(request)
+    ambient = result.unnormalized_chains.chain_complex
+    assert ambient.coefficient_ring is CoefficientRing.PRIME_FIELD
+    assert result.degenerate_complex.coefficient_ring is CoefficientRing.PRIME_FIELD
+    assert ambient.prime == result.degenerate_complex.prime == prime
+    # Independently sum the signed faces in the retained simplex basis.
+    for degree in range(1, source.max_degree + 1):
+        expected = tuple(
+            tuple(
+                sum(
+                    (-1) ** face_index
+                    for face_index, face in enumerate(source.face_maps[degree - 1])
+                    if face[column] == row
+                )
+                % prime
+                for column in range(len(source.sets[degree]))
+            )
+            for row in range(len(source.sets[degree - 1]))
+        )
+        assert ambient.differential_matrices[degree - 1] == expected
+    assert result.degenerate_basis_indices == ((), (0, 2), (0, 1, 2, 3))
+    assert result.degenerate_complex.differential_matrices == (
+        (),
+        ((1, 1, 0, 0), (0, 0, 1, 1)),
+    )
+    decoded = DegenerateSubmoduleResult.model_validate_json(result.model_dump_json())
+    assert decoded == result
+    groups = homology_groups(decoded.degenerate_complex).homology_groups
+    for group, expected_rank in zip(groups, (0, 0, 2), strict=True):
+        assert isinstance(group, HomologyGroupValue)
+        assert group.betti_number == expected_rank
+
+
 def test_malformed_coboundary_shape_is_rejected_before_size_preflight() -> None:
     """A non-list matrix cannot defer the aggregate cell admission check."""
     result = sheaf_cochain_complex(_constant_triangle())
@@ -234,6 +288,95 @@ def test_oversized_poset_containers_reject_before_serialization() -> None:
     assert error.value.errors()[0]["type"] == (
         "topology.order_complex.poset_container_budget"
     )
+
+
+@pytest.mark.parametrize("field", ["minimal_elements", "maximal_elements", "ranks"])
+def test_all_retained_poset_containers_are_bounded_before_serialization(
+    field: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    poset = materialize_finite_poset(
+        ("a",), (), RelationInterpretation.COVER_EDGES, ReflexivePairPolicy.FORBIDDEN
+    )
+    entry: object = ElementRank(element="a", rank=0) if field == "ranks" else "a"
+    forged = poset.model_copy(update={field: (entry,) * 65})
+
+    def unexpected_serialization(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail("oversized retained poset fields reached serialization")
+
+    monkeypatch.setattr(OrderComplexRequest, "model_dump", unexpected_serialization)
+    with pytest.raises(OperationResourceAdmissionError):
+        order_complex(OrderComplexRequest.model_construct(poset=forged))
+
+
+def test_poset_container_subclasses_reject_before_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MisleadingTuple(tuple[str, ...]):
+        def __len__(self) -> int:
+            return 0
+
+    forged = FinitePoset.model_construct(elements=MisleadingTuple(("a",) * 65))
+
+    def unexpected_serialization(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail("a poset container with an overridden length was serialized")
+
+    monkeypatch.setattr(OrderComplexRequest, "model_dump", unexpected_serialization)
+    with pytest.raises(OperationResourceAdmissionError):
+        order_complex(OrderComplexRequest.model_construct(poset=forged))
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"elements": ("a" * 33,)},
+        {"minimal_elements": (("a",),)},
+        {"strict_order_pairs": (OrderedPair.model_construct(lower=("a",), upper="b"),)},
+        {"ranks": (ElementRank.model_construct(element="a", rank=(0,)),)},
+        {"poset_digest": "sha256:" + "0" * 65},
+    ],
+)
+def test_poset_nested_payloads_reject_before_serialization(
+    update: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    poset = materialize_finite_poset(
+        ("a",), (), RelationInterpretation.COVER_EDGES, ReflexivePairPolicy.FORBIDDEN
+    ).model_copy(update=update)
+
+    def unexpected_serialization(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail("a malformed nested poset field reached serialization")
+
+    monkeypatch.setattr(OrderComplexRequest, "model_dump", unexpected_serialization)
+    with pytest.raises(OperationDomainValidationError):
+        order_complex(OrderComplexRequest.model_construct(poset=poset))
+
+
+@pytest.mark.parametrize("extend_request", [False, True])
+def test_order_complex_rejects_noncanonical_model_subclasses(
+    extend_request: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class ExtendedPoset(FinitePoset):
+        extra: tuple[int, ...]
+
+    class ExtendedRequest(OrderComplexRequest):
+        extra: tuple[int, ...]
+
+    poset = materialize_finite_poset(
+        ("a",), (), RelationInterpretation.COVER_EDGES, ReflexivePairPolicy.FORBIDDEN
+    )
+    request = (
+        ExtendedRequest.model_construct(poset=poset, extra=(1,))
+        if extend_request
+        else OrderComplexRequest.model_construct(
+            poset=ExtendedPoset.model_construct(**poset.__dict__, extra=(1,))
+        )
+    )
+
+    def unexpected_serialization(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail("a noncanonical model subclass reached serialization")
+
+    monkeypatch.setattr(OrderComplexRequest, "model_dump", unexpected_serialization)
+    with pytest.raises(OperationDomainValidationError):
+        order_complex(request)
 
 
 def test_dependent_product_contract_rejects_an_empty_complex() -> None:

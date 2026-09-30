@@ -118,7 +118,11 @@ def _canonical_scalar_context(
 
 def _admit(
     request: DegenerateSubmoduleRequest,
-) -> tuple[FiniteTruncatedSimplicialSet, tuple[tuple[int, ...], ...]]:
+) -> tuple[
+    DegenerateSubmoduleRequest,
+    FiniteTruncatedSimplicialSet,
+    tuple[tuple[int, ...], ...],
+]:
     """Check scalars/source and admit the combined result before matrices."""
     request = _canonical_scalar_context(request)
     source = chains_module._checked_simplicial_set(request.simplicial_set)
@@ -169,7 +173,7 @@ def _admit(
         output_name="degenerate submodule",
         output_error_code="simplicial_set.degenerate_submodule_output_budget_exceeded",
     )
-    return source, basis_indices
+    return request, source, basis_indices
 
 
 def _admission_error(code: str, message: str) -> None:
@@ -210,7 +214,7 @@ def degenerate_submodule(
         raise TypeError(
             "request must be a degenerate-submodule request or simplicial set"
         )
-    source, basis_indices = _admit(request)
+    request, source, basis_indices = _admit(request)
     ambient = chains_module._unnormalized_chains_from_checked_source(request, source)
     sizes = tuple(len(level) for level in ambient.simplex_bases)
     ranks = tuple(len(indices) for indices in basis_indices)

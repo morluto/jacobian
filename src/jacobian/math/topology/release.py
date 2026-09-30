@@ -14,10 +14,14 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.posets.core._models import (
+    MAX_ELEMENT_LABEL_LENGTH,
     MAX_POSET_ELEMENTS,
     MAX_POSET_RELATIONS,
     ElementLabel,
+    ElementRank,
     FinitePoset,
+    IncomparablePair,
+    OrderedPair,
 )
 from jacobian.math.combinatorics.posets.core.operations import verify_finite_poset
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
@@ -675,12 +679,21 @@ def _admit_poset_container_lengths(request: OrderComplexRequest) -> None:
             code="topology.order_complex.invalid_request",
             message="order-complex input must be an OrderComplexRequest",
         )
+    if type(poset) is not FinitePoset:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="topology.order_complex.invalid_poset",
+            message="poset must use the canonical finite-poset carrier",
+        )
     try:
         containers = (
             poset.elements,
             poset.strict_order_pairs,
             poset.cover_relations,
             poset.incomparable_pairs,
+            poset.minimal_elements,
+            poset.maximal_elements,
+            () if poset.ranks is None else poset.ranks,
         )
     except AttributeError as error:
         raise OperationDomainValidationError(
@@ -693,19 +706,68 @@ def _admit_poset_container_lengths(request: OrderComplexRequest) -> None:
         MAX_POSET_RELATIONS,
         MAX_POSET_RELATIONS,
         MAX_POSET_RELATIONS,
+        MAX_POSET_ELEMENTS,
+        MAX_POSET_ELEMENTS,
+        MAX_POSET_ELEMENTS,
     )
     for container, limit in zip(containers, limits, strict=True):
-        if not isinstance(container, tuple) or len(container) > limit:
+        if type(container) is not tuple or len(container) > limit:
             raise OperationResourceAdmissionError(
                 location=("poset",),
                 code="topology.order_complex.poset_container_budget",
                 message="poset containers exceed their admitted envelope",
             )
+    _admit_poset_scalar_shapes(poset)
+
+
+def _admit_poset_scalar_shapes(poset: FinitePoset) -> None:
+    """Bound the contents of admitted containers before copying native fields."""
+
+    def label(value: object) -> bool:
+        return type(value) is str and len(value) <= MAX_ELEMENT_LABEL_LENGTH
+
+    valid = all(
+        label(value)
+        for values in (poset.elements, poset.minimal_elements, poset.maximal_elements)
+        for value in values
+    )
+    for pairs in (poset.strict_order_pairs, poset.cover_relations):
+        valid = valid and all(
+            type(pair) is OrderedPair
+            and label(getattr(pair, "lower", None))
+            and label(getattr(pair, "upper", None))
+            for pair in pairs
+        )
+    valid = valid and all(
+        type(pair) is IncomparablePair
+        and label(getattr(pair, "left", None))
+        and label(getattr(pair, "right", None))
+        for pair in poset.incomparable_pairs
+    )
+    valid = valid and all(
+        type(rank) is ElementRank
+        and label(getattr(rank, "element", None))
+        and type(getattr(rank, "rank", None)) is int
+        and 0 <= rank.rank < MAX_POSET_ELEMENTS
+        for rank in (() if poset.ranks is None else poset.ranks)
+    )
+    digest = getattr(poset, "poset_digest", None)
+    if (
+        not valid
+        or type(getattr(poset, "graded", None)) is not bool
+        or type(digest) is not str
+        or len(digest) != 71
+    ):
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="topology.order_complex.invalid_poset",
+            message="poset scalar fields and rows must satisfy their canonical shapes",
+        )
 
 
 def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
     """Return the simplicial complex of all nonempty chains in a finite poset."""
-    if not isinstance(request, OrderComplexRequest):
+    if type(request) is not OrderComplexRequest:
         raise OperationDomainValidationError(
             location=(),
             code="topology.order_complex.invalid_request",

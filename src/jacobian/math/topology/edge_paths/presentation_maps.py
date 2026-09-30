@@ -284,6 +284,16 @@ def induced_fundamental_group_map(
     vertex must map to the target base vertex; an unbased change-of-basepoint
     path is deliberately not inferred.
     """
+    _require_native_model(request, FundamentalGroupMapRequest, ("request",))
+    if any(
+        type(getattr(request, field, None)) is not str
+        for field in ("source_base_vertex", "target_base_vertex")
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="fundamental_group_map.native_carrier_shape",
+            message="typed map requests must retain scalar base vertices",
+        )
     simplicial_map: SimplicialMap = request.map
     run_topology_admission(
         lambda: _validate_simplicial_map(simplicial_map), location=("map",)
@@ -540,6 +550,7 @@ def change_fundamental_group_basepoint(
     exact presentation-map composition operation.
     """
 
+    _require_native_model(request, FundamentalGroupBasepointChangeRequest, ("request",))
     if (
         type(request) is not FundamentalGroupBasepointChangeRequest
         or type(request.path) is not PresentationBasepointChangePath

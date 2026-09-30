@@ -307,3 +307,12 @@ def test_transported_path_subclasses_are_refused_before_dumping() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
         compose_fundamental_group_maps(request)
+
+
+def test_native_producers_reject_missing_request_fields() -> None:
+    with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
+        induced_fundamental_group_map(FundamentalGroupMapRequest.model_construct())
+    with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
+        change_fundamental_group_basepoint(
+            FundamentalGroupBasepointChangeRequest.model_construct()
+        )

@@ -247,3 +247,27 @@ def test_tool_is_published_with_a_real_square_example():
     result = tool.run(request)
     assert isinstance(result, CubicalBoundarySubcomplexResult)
     assert len(result.exposed_facets) == 4
+
+
+def test_admitted_boundary_phases_observe_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each admitted expansion, incidence, and boundary phase must reach a
+    checkpoint, so a cancelled request stops inside the computation instead of
+    after the operation returns (AGENTS.md: all mandatory phases share the
+    request's deadline and work accounting)."""
+    observed: list[str] = []
+    monkeypatch.setattr(
+        operations, "request_checkpoint", lambda stage: observed.append(stage)
+    )
+
+    square = _cell((0, 1), (0, 1))
+    result = operations.boundary_subcomplex((square,))
+
+    assert result.exposed_facets
+    assert any("face-closure" in phase for phase in observed)
+    assert any("facet incidence" in phase for phase in observed)
+
+    observed.clear()
+    operations.face_poset((square,))
+    assert any("incidence construction" in phase for phase in observed)

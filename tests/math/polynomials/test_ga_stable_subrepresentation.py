@@ -140,3 +140,24 @@ def test_retained_action_cells_are_included_before_substitution(monkeypatch) -> 
     monkeypatch.setattr(_stable_kernels, "_substitute_basis", expansion_must_not_start)
     with pytest.raises(OperationResourceAdmissionError, match="output budget"):
         ga_stable_subrepresentation(action, (_poly("x", 0),))
+
+
+def test_admitted_stable_subrepresentation_phases_observe_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Admission, basis substitution, and coordinate reconstruction must each
+    reach a checkpoint so a cancelled request stops inside the computation
+    rather than after the operation returns."""
+    observed: list[str] = []
+    monkeypatch.setattr(
+        _stable_kernels, "request_checkpoint", lambda stage: observed.append(stage)
+    )
+
+    result = ga_stable_subrepresentation(
+        _translation_action(), (_poly("x", 0), _poly("x", 1))
+    )
+    assert result.action_matrix
+
+    assert any("action admission" in phase for phase in observed)
+    assert any("basis substitution" in phase for phase in observed)
+    assert any("coordinate reconstruction" in phase for phase in observed)

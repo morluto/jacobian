@@ -2486,6 +2486,7 @@ def marking_equation(
 ) -> MarkingEquationResult:
     """Compare a target with M0 + Cx over Z; this is not a reachability test."""
     net = _admit_net(net)
+    _require_valid_axis_encoding(net)
     source_marking = _require_marking_size(net, source_marking)
     target_marking = _require_marking_size(net, target_marking)
     if (
@@ -2550,6 +2551,7 @@ def marking_equation(
 def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
     """Return exact Pre, Post, and C=Post-Pre matrices in the net's axes."""
     admitted = _admit_net(net)
+    _require_valid_axis_encoding(admitted)
     place_count = admitted.place_count
     transition_count = admitted.transition_count
 

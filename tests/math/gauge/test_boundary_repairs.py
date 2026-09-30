@@ -217,8 +217,8 @@ def test_curvature_result_accepts_a_genuine_computed_result() -> None:
     assert revived.flat is True
 
 
-def test_basepoint_transport_result_binds_the_whole_conjugation_claim() -> None:
-    """A decoded transport must be the conjugated walk with its holonomies."""
+def test_basepoint_transport_result_binds_the_conjugated_walk() -> None:
+    """A decoded transport must retain its parent-bound conjugated walk."""
     field = _square_field()
     loop = _path("ab", "bc", "ca")
     connector = _path("ab")
@@ -242,17 +242,6 @@ def test_basepoint_transport_result_binds_the_whole_conjugation_claim() -> None:
             }
         )
     assert "basepoint_transport_walk" in str(error.value)
-
-    with pytest.raises(ValidationError) as error:
-        FiniteGroupGaugeBasepointTransportResult.model_validate(
-            {
-                **payload,
-                "transported_holonomy": FiniteGroupTableElement(
-                    group=field.group, index=2
-                ).model_dump(),
-            }
-        )
-    assert "basepoint_transport_holonomy" in str(error.value)
 
 
 def test_basepoint_transport_result_accepts_the_degenerate_identity_case() -> None:
@@ -429,3 +418,32 @@ def test_empty_transport_cannot_change_its_basepoint() -> None:
     payload["transported_loop"]["basepoint"] = "b"
     with pytest.raises(ValidationError, match="basepoint_transport_connector"):
         type(result).model_validate(payload)
+
+
+def test_curvature_rejects_a_field_on_a_different_lattice() -> None:
+    result = finite_group_gauge_curvature(_complex(), _square_field())
+    other_field = FiniteGroupGaugeField(
+        lattice=GaugeLattice(
+            vertices=("a", "b", "c", "d"), edges=result.field.lattice.edges
+        ),
+        group=result.field.group,
+        edge_values=result.field.edge_values,
+    )
+    payload = result.model_dump()
+    payload["field"] = other_field.model_dump()
+    with pytest.raises(ValidationError, match="curvature_parent"):
+        type(result).model_validate(payload)
+
+
+def test_transport_decode_retains_values_without_replaying_holonomy() -> None:
+    result = finite_group_gauge_basepoint_transport(
+        _square_field(), _path("ab", "bc", "ca"), _path("ab")
+    )
+    assert result.transported_holonomy.index == 0
+    payload = result.model_dump()
+    payload["transported_holonomy"]["index"] = 2
+    # Parsing checks the table-bound representation. The producing kernel owns
+    # the path product; ordinary result decoding does not authenticate it.
+    decoded = type(result).model_validate(payload)
+    assert decoded.transported_holonomy.index == 2
+    assert type(result).model_validate_json(decoded.model_dump_json()) == decoded

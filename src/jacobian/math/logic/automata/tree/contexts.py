@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -53,6 +53,8 @@ class FiniteTreeContext(StrictModel):
     frame tuple is the identity context consisting only of a hole.
     """
 
+    model_config = ConfigDict(revalidate_instances="always")
+
     arity: tuple[Arity, ...] = Field(
         max_length=MAX_TA_SYMBOLS,
         description="Exact ranked signature; entry i is the arity of symbol i.",
@@ -68,49 +70,76 @@ class FiniteTreeContext(StrictModel):
         """Reject oversized JSON trees before Pydantic builds nested values."""
         if not isinstance(value, dict):
             return value
-        if set(value) != {"arity", "frames"}:
+        if (
+            type(value) is not dict
+            or len(value) != 2
+            or set(value) != {"arity", "frames"}
+        ):
             raise _error("shape", "context must contain only arity and frames")
         raw_arity = value.get("arity")
-        if not isinstance(raw_arity, (tuple, list)) or len(raw_arity) > MAX_TA_SYMBOLS:
+        if (
+            not isinstance(raw_arity, (tuple, list))
+            or type(raw_arity) not in (tuple, list)
+            or len(raw_arity) > MAX_TA_SYMBOLS
+        ):
             raise _error("signature", "context arity exceeds the supported bound")
         if any(
             type(rank) is not int or not 0 <= rank <= MAX_TA_ARITY for rank in raw_arity
         ):
             raise _error("rank", "context arities must be in the supported range")
         frames = value.get("frames")
-        if not isinstance(frames, (tuple, list)):
-            return value
+        if not isinstance(frames, (tuple, list)) or type(frames) not in (tuple, list):
+            raise _error("shape", "context frames must be a bounded sequence")
         if len(frames) > MAX_RUN_TREE_DEPTH:
             raise _error("depth", "context spine exceeds the supported depth")
         nodes = len(frames)
         for frame_index, frame in enumerate(frames):
-            if isinstance(frame, TreeContextFrame):
-                frame = frame.model_dump(mode="python")
-            if not isinstance(frame, dict) or set(frame) != {
-                "symbol",
-                "hole_child",
-                "siblings",
-            }:
-                raise _error("shape", "context frame has invalid fields")
-            siblings = frame.get("siblings")
-            if not isinstance(siblings, (tuple, list)):
-                return value
+            # Walk a canonical frame or a raw one without serializing it. A
+            # model_dump here would copy the whole nested tree before the node
+            # and depth accounting below, so an oversized native carrier would
+            # be copied first and then reported by the serializer rather than
+            # by this boundary.
+            siblings: object
+            native_frame = type(frame) is TreeContextFrame
+            if native_frame:
+                symbol = getattr(frame, "symbol", None)
+                hole_child = getattr(frame, "hole_child", None)
+                siblings = getattr(frame, "siblings", None)
+            else:
+                if (
+                    type(frame) is not dict
+                    or len(frame) != 3
+                    or set(frame)
+                    != {
+                        "symbol",
+                        "hole_child",
+                        "siblings",
+                    }
+                ):
+                    raise _error("shape", "context frame has invalid fields")
+                symbol = frame.get("symbol")
+                hole_child = frame.get("hole_child")
+                siblings = frame.get("siblings")
+            if type(symbol) is not int or not 0 <= symbol < MAX_TA_SYMBOLS:
+                raise _error("symbol", "context frame symbol must be a bounded integer")
+            if type(hole_child) is not int or not 0 <= hole_child < MAX_TA_ARITY:
+                raise _error(
+                    "frame_rank", "context hole position must be a bounded integer"
+                )
+            if not isinstance(siblings, (tuple, list)) or type(siblings) not in (
+                (tuple,) if native_frame else (tuple, list)
+            ):
+                raise _error("shape", "context siblings must be a canonical sequence")
             if len(siblings) > MAX_TA_ARITY - 1:
                 raise _error("arity", "context frame has too many siblings")
             for sibling in siblings:
-                if isinstance(sibling, RankedTree):
-                    sibling = sibling.model_dump(mode="python")
-                if not isinstance(sibling, dict) or set(sibling) != {
-                    "symbol",
-                    "children",
-                }:
-                    raise _error("shape", "context sibling has invalid fields")
+                if native_frame and type(sibling) is not RankedTree:
+                    raise _error(
+                        "shape", "native siblings must be canonical ranked trees"
+                    )
                 stack = [(sibling, frame_index + 2)]
                 while stack:
                     node, depth = stack.pop()
-                    children = node.get("children")
-                    if not isinstance(children, (tuple, list)):
-                        return value
                     nodes += 1
                     if nodes > MAX_RUN_TREE_NODES:
                         raise _error(
@@ -121,21 +150,41 @@ class FiniteTreeContext(StrictModel):
                         raise _error(
                             "depth", "context exceeds the supported tree depth"
                         )
+                    native_node = type(node) is RankedTree
+                    if native_node:
+                        symbol = getattr(node, "symbol", None)
+                        children = getattr(node, "children", None)
+                    else:
+                        if (
+                            type(node) is not dict
+                            or len(node) > 2
+                            or "symbol" not in node
+                            or set(node) - {"symbol", "children"}
+                        ):
+                            raise _error(
+                                "shape", "context tree node has invalid fields"
+                            )
+                        symbol = node.get("symbol")
+                        children = node.get("children", ())
+                    if type(symbol) is not int or not 0 <= symbol < MAX_TA_SYMBOLS:
+                        raise _error(
+                            "sibling_rank", "tree symbol must be a bounded integer"
+                        )
+                    if not isinstance(children, (tuple, list)) or type(
+                        children
+                    ) not in ((tuple,) if native_node else (tuple, list)):
+                        raise _error(
+                            "shape", "tree children must be a canonical sequence"
+                        )
                     if len(children) > MAX_TA_ARITY:
                         raise _error("arity", "tree node has too many children")
                     if any(
-                        not isinstance(child, (dict, RankedTree)) for child in children
+                        type(child)
+                        not in ((RankedTree,) if native_node else (dict, RankedTree))
+                        for child in children
                     ):
                         raise _error("shape", "tree children must be objects")
-                    stack.extend(
-                        (
-                            child.model_dump(mode="python")
-                            if isinstance(child, RankedTree)
-                            else child,
-                            depth + 1,
-                        )
-                        for child in children
-                    )
+                    stack.extend((child, depth + 1) for child in children)
         return canonicalize_json_containers(value)
 
     @model_validator(mode="after")

@@ -7,6 +7,7 @@ bound or domain rejection is unchanged.
 from __future__ import annotations
 
 import time
+from itertools import combinations
 
 import pytest
 
@@ -15,8 +16,14 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids.delta.extra import MAX_BINARY_GROUND
-from jacobian.math.graphs.delta_matroids._models import admit_looped_graph
+from jacobian.math.graphs.delta_matroids._models import (
+    LoopedGraphDeltaMatroidResult,
+    admit_looped_graph,
+)
 from jacobian.math.graphs.delta_matroids._tools import TOOLS
+from jacobian.math.graphs.delta_matroids.operations import (
+    looped_adjacency_delta_matroid,
+)
 from jacobian.math.graphs.values import LoopedSimpleGraph
 
 
@@ -139,3 +146,70 @@ def test_a_canonical_graph_still_revalidates() -> None:
     admitted = admit_looped_graph(forged)
     assert admitted.vertices == ("a", "b", "c")
     assert type(admitted.vertices) is tuple
+
+
+@pytest.mark.parametrize(
+    ("field", "payload"),
+    [
+        ("edges", (("a", "b"),) * 100_000),
+        ("loops", ("a",) * 100_000),
+        ("edges", [("a", "b")] * 100_000),
+        ("loops", ["a"] * 100_000),
+        ("edges", (("a",) * 100_000,)),
+        ("edges", (("a", ["b"] * 100_000),)),
+        ("vertices", ("a", "b" * 100_000)),
+        ("edges", (("a", "b" * 100_000),)),
+        ("loops", ("a" * 100_000,)),
+    ],
+)
+def test_all_raw_graph_storage_is_bounded_before_serialization(
+    monkeypatch: pytest.MonkeyPatch, field: str, payload: object
+) -> None:
+    graph = _forged(("a", "b"))
+    graph = graph.model_copy(update={field: payload})
+
+    def unexpected_dump(*args: object, **kwargs: object) -> None:
+        pytest.fail("unadmitted graph storage reached serialization")
+
+    monkeypatch.setattr(LoopedSimpleGraph, "model_dump", unexpected_dump)
+    with pytest.raises(OperationDomainValidationError) as error:
+        looped_adjacency_delta_matroid(graph)
+    assert _code(error.value) == "graph.looped_graph_invalid"
+
+
+class _DeceptiveTuple(tuple[object, ...]):
+    def __len__(self) -> int:
+        pytest.fail("caller-controlled length hook was invoked")
+
+
+@pytest.mark.parametrize("field", ["vertices", "edges", "loops", "edge_row"])
+def test_raw_container_subclasses_are_refused_without_running_hooks(field: str) -> None:
+    forged = _forged(("a", "b"))
+    payload = _DeceptiveTuple(("a", "b"))
+    forged = forged.model_copy(
+        update={"edges": (payload,)} if field == "edge_row" else {field: payload}
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        looped_adjacency_delta_matroid(forged)
+    assert _code(error.value) == "graph.looped_graph_invalid"
+
+
+@pytest.mark.parametrize("order", [0, MAX_BINARY_GROUND])
+def test_dense_graph_at_derived_storage_limits_roundtrips_and_composes(
+    order: int,
+) -> None:
+    vertices = tuple(f"v{index}" for index in range(order))
+    graph = _canonical(vertices, tuple(combinations(vertices, 2)), vertices)
+    result = looped_adjacency_delta_matroid(graph)
+    # Every nonempty principal matrix is all ones: only singletons have full rank.
+    assert result.matrix.entries == ((1,) * order,) * order
+    assert result.delta_matroid.feasible == ((), *((i,) for i in range(order)))
+    decoded = LoopedGraphDeltaMatroidResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert looped_adjacency_delta_matroid(decoded.graph) == result
+
+
+def test_small_list_edge_storage_still_normalizes_to_canonical_tuples() -> None:
+    graph = _forged(("a", "b"), edges=[["a", "b"]], loops=["a"])
+    assert admit_looped_graph(graph) == _canonical(("a", "b"), (("a", "b"),), ("a",))

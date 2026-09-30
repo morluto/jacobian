@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import permutations, product
+from itertools import pairwise, permutations, product
 from math import factorial, isqrt
 
 from jacobian._exact import canonical_rational_component_digits
@@ -16,6 +16,8 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
+    MAX_THETA_SELECTED_INDEX,
+    MAX_THETA_SELECTED_INDICES,
     ThetaRepresentingVectorsResult,
     ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixResult,
@@ -274,6 +276,29 @@ __all__ = [
 ]
 
 
+def _require_selected_indices(indices: tuple[int, ...]) -> None:
+    """Admit the native selection before indexing, sorting, or lattice work."""
+
+    if (
+        type(indices) is not tuple
+        or not 1 <= len(indices) <= MAX_THETA_SELECTED_INDICES
+        or any(
+            type(index) is not int or not 0 <= index <= MAX_THETA_SELECTED_INDEX
+            for index in indices
+        )
+        or any(left >= right for left, right in pairwise(indices))
+    ):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="quadratic_form.theta_indices",
+            message=(
+                "theta indices must be a non-empty tuple of at most "
+                f"{MAX_THETA_SELECTED_INDICES} strictly increasing integers "
+                f"between 0 and {MAX_THETA_SELECTED_INDEX}"
+            ),
+        )
+
+
 def theta_selected_coefficients(
     form: RationalQuadraticForm, indices: tuple[int, ...]
 ) -> ThetaSelectedCoefficientsResult:
@@ -294,17 +319,8 @@ def theta_selected_coefficients(
     the range are computed but never returned.
     """
 
+    _require_selected_indices(indices)
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
-    # The cutoff is read positionally below, so the selection must be a
-    # non-empty, strictly increasing, in-range sequence. The request schema
-    # already owns that rule; a native caller bypasses it, and an empty
-    # selection would otherwise escape as a bare IndexError from ``indices[-1]``.
-    if not indices or tuple(sorted(set(indices))) != indices:
-        raise OperationDomainValidationError(
-            location=("indices",),
-            code="quadratic_form.theta_indices",
-            message="theta indices must be non-empty, strictly increasing, and distinct",
-        )
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
         form,
@@ -352,6 +368,7 @@ def theta_representing_vectors(
     refuse a non-positive-definite form.
     """
 
+    _require_selected_indices(indices)
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(

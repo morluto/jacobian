@@ -1,6 +1,7 @@
 """Integral coefficient content of rational quadratic forms."""
 
 from fractions import Fraction
+from itertools import combinations, islice
 
 import pytest
 from pydantic import ValidationError
@@ -12,6 +13,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     IntegralContentRequest,
+    IntegralContentResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.operations import (
     integral_coefficient_content,
@@ -80,6 +82,61 @@ def test_integral_content_refuses_oversized_support_as_a_resource_bound() -> Non
     assert refusal.value.errors()[0]["type"] == "quadratic_form.invariant_support_bound"
 
 
+@pytest.mark.parametrize("diagonal_count,cross_count", [(4097, 0), (91, 4006)])
+def test_integral_content_refuses_support_before_serializing(
+    monkeypatch: pytest.MonkeyPatch, diagonal_count: int, cross_count: int
+) -> None:
+    axis = tuple(f"x{i}" for i in range(diagonal_count))
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(_q(6) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(left=left, right=right, coefficient=_q(10))
+            for left, right in islice(
+                combinations(range(diagonal_count), 2), cross_count
+            )
+        ),
+    )
+
+    def refuse_dump(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("over-budget forms must not be serialized")
+
+    monkeypatch.setattr(RationalQuadraticForm, "model_dump", refuse_dump)
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        integral_coefficient_content(form)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.invariant_support_bound"
+
+
+def test_integral_content_at_support_boundary_round_trips_to_primitive_content() -> (
+    None
+):
+    axis = tuple(f"x{i}" for i in range(4093))
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(_q(6) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(left=0, right=right, coefficient=_q(10))
+            for right in (1, 2, 3)
+        ),
+    )
+
+    result = integral_coefficient_content(form)
+    restored = IntegralContentResult.model_validate_json(result.model_dump_json())
+
+    assert restored.content == 2
+    assert restored.form == form
+    assert restored.primitive_part.axis == axis
+    assert all(
+        value.as_fraction() == 3
+        for value in restored.primitive_part.diagonal_coefficients
+    )
+    assert all(
+        term.coefficient.as_fraction() == 5
+        for term in restored.primitive_part.cross_terms
+    )
+    assert integral_coefficient_content(restored.primitive_part).content == 1
+
+
 def test_integral_content_refuses_a_forged_form_before_reading_coefficients() -> None:
     """A native caller can build a form whose collections disagree.
 
@@ -92,6 +149,32 @@ def test_integral_content_refuses_a_forged_form_before_reading_coefficients() ->
         diagonal_coefficients=(_q(6), _q(10)),
         cross_terms=(),
     )
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        integral_coefficient_content(forged)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"
+
+
+@pytest.mark.parametrize("field", ["axis", "diagonal_coefficients", "cross_terms"])
+def test_integral_content_refuses_missing_native_collections(field: str) -> None:
+    form = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(6),))
+    forged = form.model_copy(update={field: None})
+
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        integral_coefficient_content(forged)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"
+
+
+def test_integral_content_refuses_mismatched_axis_before_serializing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    forged = RationalQuadraticForm.model_construct(
+        axis=tuple(f"x{i}" for i in range(4097)), diagonal_coefficients=(_q(6),)
+    )
+
+    def refuse_dump(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("inconsistent form collections must not be serialized")
+
+    monkeypatch.setattr(RationalQuadraticForm, "model_dump", refuse_dump)
     with pytest.raises(OperationDomainValidationError) as refusal:
         integral_coefficient_content(forged)
     assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"

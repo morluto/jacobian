@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import product
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -209,6 +211,58 @@ def test_a_non_increasing_index_selection_is_refused() -> None:
         theta_selected_coefficients(UNARY, (2, 1))
     with pytest.raises(OperationDomainValidationError):
         theta_selected_coefficients(UNARY, (1, 1))
+
+
+@pytest.mark.parametrize(
+    "operation", [theta_selected_coefficients, theta_representing_vectors]
+)
+@pytest.mark.parametrize(
+    "indices",
+    [
+        None,
+        [],
+        (),
+        (-1,),
+        (1_000_000_001,),
+        (True,),
+        (0.5,),
+        ("1",),
+        ([0],),
+        (2, 1),
+        (1, 1),
+        tuple(range(129)),
+    ],
+)
+def test_selected_theta_operations_reject_invalid_native_indices(
+    operation: Callable[[RationalQuadraticForm, tuple[int, ...]], object],
+    indices: object,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        operation(UNARY, cast(tuple[int, ...], indices))
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.theta_indices"
+
+
+def test_selected_theta_at_index_count_boundary_round_trips() -> None:
+    indices = tuple(range(MAX_THETA_SELECTED_INDICES))
+    expected_counts, expected_fibers = _brute_force(UNARY, radius=12, indices=indices)
+
+    counts = theta_selected_coefficients(UNARY, indices)
+    counts = type(counts).model_validate_json(counts.model_dump_json())
+    assert counts.form == UNARY
+    assert {
+        row.index: row.coefficient for row in counts.coefficients
+    } == expected_counts
+
+    fibers = theta_representing_vectors(UNARY, indices)
+    fibers = type(fibers).model_validate_json(fibers.model_dump_json())
+    assert fibers.form == UNARY
+    assert {
+        row.index: [
+            tuple(coordinate.num for coordinate in vector.coordinates)
+            for vector in row.vectors
+        ]
+        for row in fibers.rows
+    } == expected_fibers
 
 
 def test_the_theta_pair_publishes_its_integral_precondition() -> None:

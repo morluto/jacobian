@@ -188,10 +188,32 @@ def integral_coefficient_content(
             code="quadratic_form.form_type",
             message="form must be a rational quadratic form value",
         )
-    # Re-establish the carrier's own structural invariants. A native caller can
-    # build a form whose collections are inconsistent, and this function reads
-    # them positionally, so a forged form would otherwise yield a plausible but
-    # meaningless content. Revalidate before any coefficient is read.
+    # Bound every retained collection before cloning the carrier. Matching the
+    # axis length also prevents a forged short diagonal from hiding a large axis.
+    try:
+        axis_size = len(form.axis)
+        diagonal_size = len(form.diagonal_coefficients)
+        cross_size = len(form.cross_terms)
+    except (AttributeError, TypeError) as exc:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_structure",
+            message="the quadratic form must retain its axis and coefficient collections",
+        ) from exc
+    if axis_size != diagonal_size:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_structure",
+            message="diagonal coefficients must match the quadratic-form axis",
+        )
+    if diagonal_size + cross_size > MAX_INTEGRAL_INVARIANT_SUPPORT:
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="quadratic_form.invariant_support_bound",
+            message=f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
+        )
+    # Re-establish the admitted carrier's remaining structural invariants before
+    # reading coefficients; native callers can bypass its constructors.
     try:
         form = RationalQuadraticForm.model_validate(form.model_dump(mode="python"))
     except Exception as exc:
@@ -200,15 +222,6 @@ def integral_coefficient_content(
             code="quadratic_form.form_structure",
             message=f"the quadratic form is structurally invalid: {exc}",
         ) from exc
-    if (
-        len(form.diagonal_coefficients) + len(form.cross_terms)
-        > MAX_INTEGRAL_INVARIANT_SUPPORT
-    ):
-        raise OperationResourceAdmissionError(
-            location=("form",),
-            code="quadratic_form.invariant_support_bound",
-            message=f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
-        )
     coefficients_q = (
         *form.diagonal_coefficients,
         *(term.coefficient for term in form.cross_terms),

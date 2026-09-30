@@ -360,25 +360,30 @@ class FunctionFieldRiemannRochMembership(StrictModel):
         kernel builds through :meth:`_from_kernel` and pays nothing. The charge
         lands on decoding, which is where an untrusted profile actually arrives.
         """
-        from jacobian.math.function_fields.operations import (
-            function_field_place_valuation,
+        from jacobian.math.function_fields.valuation import (
+            place_valuation_of_rational_function,
         )
 
+        if self.element.coordinates[0].numerator.is_zero():
+            # The zero element has positive-infinity valuation everywhere, which
+            # the zero branch above already decided structurally.
+            return
         for row in self.profile:
             try:
-                derived = function_field_place_valuation(row.place, self.element)
-            except Exception as exc:
+                derived = place_valuation_of_rational_function(
+                    self.element.coordinates[0], row.place
+                )
+            except (AttributeError, TypeError, ValueError) as exc:
                 raise _validation_error(
                     "riemann_roch_membership_valuation",
                     "every profile valuation must be derivable from the element",
                 ) from exc
-            if isinstance(derived, int) and derived == row.element_valuation:
-                continue
-            raise _validation_error(
-                "riemann_roch_membership_valuation",
-                "every profile valuation must equal the element's exact valuation "
-                "at that place",
-            )
+            if derived != row.element_valuation:
+                raise _validation_error(
+                    "riemann_roch_membership_valuation",
+                    "every profile valuation must equal the element's exact "
+                    "valuation at that place",
+                )
 
     @classmethod
     def _from_kernel(

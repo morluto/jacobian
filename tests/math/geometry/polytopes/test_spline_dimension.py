@@ -1,4 +1,5 @@
 from fractions import Fraction
+from threading import Event
 from typing import Any
 
 import pytest
@@ -6,6 +7,11 @@ import sympy as sp
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancellation,
+    request_checkpoint,
+)
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -379,7 +385,8 @@ def test_source_remainder_bound_and_defining_identity(
     remainders = spline_kernel._spline_facet_remainders(
         ell, monomials, degree, smoothness
     )
-    for exponents, remainder in zip(monomials, remainders, strict=True):
+    for exponents, remainder_coefficients in zip(monomials, remainders, strict=True):
+        remainder = sp.Poly.from_dict(remainder_coefficients, symbols, domain=sp.QQ)
         monomial = sp.Poly(
             sp.prod(v**e for v, e in zip(symbols, exponents, strict=True)),
             *symbols,
@@ -431,25 +438,31 @@ def test_multiple_rational_facets_aggregate_growth_and_reduction_work(
             _box(x, 1, y, 1, "d"),
         )
     )
-    divisions = 0
-    original = sp.Poly.div
+    powers = 0
+    original = spline_kernel._spline_linear_powers
 
-    def counted_division(self: Any, other: Any, *args: Any, **kwargs: Any) -> Any:
-        nonlocal divisions
-        divisions += 1
-        return original(self, other, *args, **kwargs)
+    def counted_powers(terms: Any, dimension: int, degree: int) -> Any:
+        nonlocal powers
+        powers += 1
+        return original(terms, dimension, degree)
 
-    monkeypatch.setattr(sp.Poly, "div", counted_division)
+    def no_division(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail(
+            "spline construction must use the closed form, not polynomial division"
+        )
+
+    monkeypatch.setattr(spline_kernel, "_spline_linear_powers", counted_powers)
+    monkeypatch.setattr(sp.Poly, "div", no_division)
     result = spline_dimension(
         SplineDimensionRequest(complex=complex_value, degree=2, smoothness=0)
     )
     # Four quadratic restrictions have one cycle relation at the central point.
     assert result.rank == 4 * 3 - 1 and result.nullity == 13
     assert_charged_work_parity(
-        charged={"facet_monomial_reductions": 4 * 6},
-        executed={"facet_monomial_reductions": divisions},
+        charged={"facet_power_caches": 4},
+        executed={"facet_power_caches": powers},
     )
-    assert divisions == 24
+    assert powers == 4
     rows = [
         [entry.as_fraction() for entry in row]
         for row in result.compatibility_matrix.entries
@@ -467,3 +480,60 @@ def test_multiple_rational_facets_aggregate_growth_and_reduction_work(
         )
         <= output_bound
     )
+
+
+def test_inactive_first_axis_remainder_matches_original_ambient_order() -> None:
+    # Old Poly(x*y, x,y).div(Poly(y-1, x,y)) left x*y unreduced.
+    # The shared row-bound check then rejected the horizontal two-cell space.
+    x, y = sp.symbols("x y")
+    remainder = spline_kernel._spline_facet_remainders(
+        sp.Poly(y - 1, x, y, domain=sp.QQ),
+        ((1, 1),),
+        2,
+        0,
+    )
+    assert remainder == ({(1, 0): Fraction(1)},)
+
+
+@pytest.mark.parametrize(
+    "phase",
+    [
+        "source coefficient bounds",
+        "global column admission",
+        "cache storage admission",
+        "facet power convolution",
+        "facet denominator powers",
+        "facet Taylor coefficients",
+        "remainder coefficient shifts",
+        "compatibility matrix assembly",
+        "canonical matrix construction",
+        "rank column clearing",
+        "integer matrix construction",
+    ],
+)
+def test_spline_cancels_inside_bounded_phases(
+    monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    complex_value = polytopal_complex_closure(
+        (_interval(0, 1, "a"), _interval(1, 2, "b"))
+    )
+    cancelled = Event()
+    observed = 0
+
+    def cancel_during_work(stage: str) -> None:
+        nonlocal observed
+        if phase in stage:
+            observed += 1
+            if observed == 2:
+                cancelled.set()
+        request_checkpoint(stage)
+
+    monkeypatch.setattr(spline_kernel, "request_checkpoint", cancel_during_work)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        spline_dimension(
+            SplineDimensionRequest(complex=complex_value, degree=4, smoothness=2)
+        )
+    assert observed == 2

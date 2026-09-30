@@ -5,7 +5,6 @@ from math import comb
 from typing import Any, NoReturn
 
 import pytest
-import sympy as sp
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -133,12 +132,12 @@ def test_dimension_refuses_source_growth_before_expansion(
 
     def unexpected_expansion(*args: Any, **kwargs: Any) -> NoReturn:
         pytest.fail(
-            "source refusal must precede divisor normalization/expansion and division"
+            "source refusal must precede closed-form power/remainder construction"
         )
 
     catalog = Catalog.open()
-    monkeypatch.setattr(sp.Poly, "monic", unexpected_expansion)
-    monkeypatch.setattr(sp.Poly, "div", unexpected_expansion)
+    monkeypatch.setattr(spline_kernel, "_spline_linear_powers", unexpected_expansion)
+    monkeypatch.setattr(spline_kernel, "_spline_facet_remainders", unexpected_expansion)
     with pytest.raises(OperationResourceAdmissionError) as error:
         spline_dimension(request)
     with pytest.raises(OperationResourceAdmissionError) as dispatch_error:

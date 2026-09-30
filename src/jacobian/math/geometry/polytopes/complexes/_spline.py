@@ -11,6 +11,7 @@ import sympy as sp
 from pydantic import BaseModel
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -1221,34 +1222,94 @@ def spline_space(
     )
 
 
+def _spline_facet_integer_form(ell: Any) -> tuple[int, int, dict[tuple[int, ...], int]]:
+    """Return primitive A*x+B with positive A and the original ambient axes."""
+    _, integral = ell.clear_denoms(convert=True)
+    _, primitive = integral.primitive()
+    terms = primitive.terms()
+    leading = terms[0][0].index(1)
+    a = int(terms[0][1])
+    sign = 1 if a > 0 else -1
+    return (
+        leading,
+        abs(a),
+        {exponent: sign * int(value) for exponent, value in terms[1:]},
+    )
+
+
+def _spline_linear_powers(
+    terms: dict[tuple[int, ...], int],
+    dimension: int,
+    degree: int,
+) -> list[dict[tuple[int, ...], int]]:
+    """Cache B**t by linear convolution; every partial coefficient is <= ||B||_1**t."""
+    powers = [{(0,) * dimension: 1}]
+    for _ in range(degree):
+        request_checkpoint("during spline facet power construction")
+        result: dict[tuple[int, ...], int] = {}
+        for exponent, coefficient in powers[-1].items():
+            request_checkpoint("during spline facet power convolution")
+            for shift, scalar in terms.items():
+                target = tuple(a + b for a, b in zip(exponent, shift, strict=True))
+                result[target] = result.get(target, 0) + coefficient * scalar
+        powers.append({exponent: value for exponent, value in result.items() if value})
+    return powers
+
+
 def _spline_facet_remainders(
     ell: Any,
     monomials: tuple[tuple[int, ...], ...],
     degree: int,
     smoothness: int,
-) -> tuple[Any, ...]:
-    """Reduce in the facet's leading variable, retaining the ambient axes."""
-    symbols = ell.gens
-    leading = ell.terms()[0][0].index(1)
-    ordered = (symbols[leading], *symbols[:leading], *symbols[leading + 1 :])
-    # Poly.div treats the first generator as its main variable. With an
-    # inactive first ambient axis it can otherwise leave reducible terms.
-    divisor = (
-        sp.Poly(ell.monic().as_expr() ** (smoothness + 1), *ordered, domain=sp.QQ)
-        if degree > smoothness
-        else None
-    )
+) -> tuple[dict[tuple[int, ...], Fraction], ...]:
+    """Construct the proved Taylor remainders directly, in ambient axis order.
+
+    Cache integer powers of B and A, then each x**m remainder once per facet.
+    Different j pieces have disjoint x support, so construction never adds
+    rational coefficients. Other monomial factors only shift cached exponents.
+    """
+    leading, a, terms = _spline_facet_integer_form(ell)
+    dimension = len(ell.gens)
+    k = smoothness + 1
+    if degree < k:
+        identities = []
+        for monomial in monomials:
+            request_checkpoint("during spline identity remainders")
+            identities.append({monomial: Fraction(1)})
+        return tuple(identities)
+    powers = _spline_linear_powers(terms, dimension, degree)
+    denominators = [1]
+    for _ in range(degree):
+        request_checkpoint("during spline facet denominator powers")
+        denominators.append(denominators[-1] * a)
+    pieces: list[dict[tuple[int, ...], Fraction]] = []
+    for m in range(degree + 1):
+        request_checkpoint("during spline facet Taylor pieces")
+        piece: dict[tuple[int, ...], Fraction] = {}
+        if m < k:
+            exponent = tuple(m if i == leading else 0 for i in range(dimension))
+            piece[exponent] = Fraction(1)
+        else:
+            for j in range(k):
+                scalar = (-1) ** (m + k - 1) * comb(m, j) * comb(m - j - 1, k - j - 1)
+                for exponent, coefficient in powers[m - j].items():
+                    request_checkpoint("during spline facet Taylor coefficients")
+                    target = tuple(
+                        j if i == leading else e for i, e in enumerate(exponent)
+                    )
+                    piece[target] = Fraction(scalar * coefficient, denominators[m - j])
+        pieces.append(piece)
     remainders = []
     for monomial in monomials:
-        polynomial = sp.Poly(
-            sp.prod(
-                symbol**power for symbol, power in zip(symbols, monomial, strict=True)
-            ),
-            *ordered,
-            domain=sp.QQ,
-        )
-        remainder = polynomial.div(divisor)[1] if divisor is not None else polynomial
-        remainders.append(remainder.reorder(*symbols))
+        request_checkpoint("during spline monomial remainder shifts")
+        remainder = {}
+        for exponent, piece_coefficient in pieces[monomial[leading]].items():
+            request_checkpoint("during spline remainder coefficient shifts")
+            target = tuple(
+                e if i == leading else e + monomial[i] for i, e in enumerate(exponent)
+            )
+            remainder[target] = piece_coefficient
+        remainders.append(remainder)
     return tuple(remainders)
 
 
@@ -1285,30 +1346,26 @@ def _spline_constraint_data(
     constraint_rows: list[list[Fraction]] = []
     cell_index = {cell.cell_id: i for i, cell in enumerate(cells)}
     for face in complex_value.faces:
+        request_checkpoint("during spline facet assembly")
         supports = tuple(sorted(face.maximal_cell_ids))
         if len(supports) != 2 or face.dimension != dimension - 1 or smoothness < 0:
             continue
         ell = _linear_form(face, symbols)
         facet_remainders = _spline_facet_remainders(ell, monomials, degree, smoothness)
-        remainders = [
-            (cell_id, monomial, remainder * sign)
-            for cell_id, sign in ((supports[0], 1), (supports[1], -1))
-            for monomial, remainder in zip(monomials, facet_remainders, strict=True)
-        ]
-        support_coeffs: set[tuple[int, ...]] = set()
-        for _, _, rem in remainders:
-            support_coeffs.update(exp for exp, _ in rem.terms())
+        support_coeffs = set().union(
+            *(remainder.keys() for remainder in facet_remainders)
+        )
         for exponent in sorted(support_coeffs, reverse=True):
+            request_checkpoint("during spline compatibility matrix assembly")
             row = [Fraction(0) for _ in range(width)]
-            for cell_id, monomial, rem in remainders:
-                coeff = rem.coeff_monomial(exponent)
-                if coeff:
-                    col = cell_index[cell_id] * len(monomials) + monomials.index(
-                        monomial
-                    )
-                    row[col] += Fraction(int(coeff.p), int(coeff.q))
+            for index, remainder in enumerate(facet_remainders):
+                coefficient = remainder.get(exponent)
+                if coefficient:
+                    row[cell_index[supports[0]] * len(monomials) + index] = coefficient
+                    row[cell_index[supports[1]] * len(monomials) + index] = -coefficient
             if any(row):
                 constraint_rows.append(row)
+        del facet_remainders, support_coeffs, remainder
     upper_rows = sum(
         1
         for face in complex_value.faces
@@ -1329,13 +1386,12 @@ def _spline_constraint_data(
 def _spline_constraint_matrix(
     rows: tuple[tuple[Fraction, ...], ...], width: int
 ) -> RationalMatrix:
+    entries = []
+    for row in rows:
+        request_checkpoint("during spline canonical matrix construction")
+        entries.append(tuple(CanonicalRational.from_fraction(value) for value in row))
     return RationalMatrix(
-        row_count=len(rows),
-        column_count=width,
-        entries=tuple(
-            tuple(CanonicalRational.from_fraction(value) for value in row)
-            for row in rows
-        ),
+        row_count=len(rows), column_count=width, entries=tuple(entries)
     )
 
 
@@ -1358,15 +1414,13 @@ def _facet_remainder_bounds(
     shift exponents. This bounds every total degree <= degree without any
     polynomial powers or divisions. Scalar rescaling of ell changes nothing.
     """
-    _, integral = ell.clear_denoms(convert=True)
-    _, primitive = integral.primitive()
-    terms = primitive.terms()
-    leading = terms[0][0].index(1)
-    a = abs(int(terms[0][1]))
-    b = sum(abs(int(coefficient)) for _, coefficient in terms[1:])
+    leading, a, terms = _spline_facet_integer_form(ell)
+    b = sum(abs(value) for value in terms.values())
     k = smoothness + 1
     bounds = []
+    expansion_digits = 1
     for m in range(degree + 1):
+        request_checkpoint("during spline source coefficient bounds")
         if m < k or not b:
             bounds.append((1, 1))
         else:
@@ -1375,13 +1429,101 @@ def _facet_remainder_bounds(
                 for j in range(k)
             )
             bounds.append((numerator, a**m))
-    # Long division lowers the leading-variable exponent at every step.
-    # Its coefficient l1 norm grows by at most (1 + ||B||_1/|A|)**k
-    # per step, for at most degree-k+1 steps. This also bounds the monic
-    # divisor, quotient, and partial remainders, including before cancellation.
-    steps = k * max(0, degree - k + 1)
-    expansion_digits = 2 * steps * _scaled_component_width(a + b) + 1
+        if m >= k:
+            # Executed integer convolutions have l1 norm <= b**m. Taylor
+            # pieces multiply a coefficient of B**(m-j) by the binomial
+            # scalar, then construct Fraction(numerator, a**(m-j)). There
+            # are no rational sums, polynomial division, or divisor powers.
+            expansion_digits = max(
+                expansion_digits,
+                decimal_digit_width(a**m),
+                decimal_digit_width(b**m),
+                *(
+                    decimal_digit_width(
+                        comb(m, j) * comb(m - j - 1, k - j - 1) * b ** (m - j)
+                    )
+                    for j in range(k)
+                ),
+            )
     return leading, tuple(bounds), expansion_digits
+
+
+def _spline_dimension_storage_bound(
+    dimension: int,
+    degree: int,
+    smoothness: int,
+    rows: int,
+    width: int,
+    output_digits: int,
+    column_digits: list[int],
+    denominator_digits: list[int],
+    expansion_digits: int,
+    minor_digits: int,
+    intermediate_digits: int,
+) -> int:
+    """Account live spline payloads, not a process-RSS or allocator guarantee.
+
+    Model: one byte per decimal digit; 64 bytes per integer including its
+    header/reference; 64 per Fraction wrapper; 512 per canonical scalar
+    wrapper; 8 per container reference; 64 per row/container header. Charge
+    all matrix representations simultaneously, even where lifetimes do not
+    overlap. Cache terms add 128 bytes for mapping/exponent containers and
+    32 per ambient exponent. Reserve 32 maximum-height integer scratch slots.
+    Source-complex storage remains owned by complex admission.
+    """
+    cells = rows * width
+    rational = cells * (64 + 2 * 64 + 8) + output_digits
+    canonical = cells * (512 + 2 * 64 + 8) + output_digits
+    # The Python integer construction list, FLINT input, and separate LU.
+    construction = cells * (64 + 8) + rows * sum(column_digits)
+    flint_input = cells * 64 + rows * sum(column_digits)
+    flint_lu = cells * (64 + minor_digits)
+    containers = 4 * (64 * rows + 8 * cells)
+    containers += width * (128 + 32 * dimension)  # retained coefficient axis
+    column_state = sum(64 + 8 + max(1, digits) for digits in denominator_digits)
+    column_state += 4 * width * (64 + 8 + 16)  # admission arrays
+    column_state += rows * (64 + 16)  # Python and C permutations
+    cache = 0
+    if smoothness >= 0:
+        k = smoothness + 1
+        monomials = comb(dimension + degree, degree)
+        facet_rows = _facet_remainder_dimension(dimension, degree, smoothness)
+        power_terms = 0
+        piece_terms = 0
+        if degree >= k:
+            power_terms = comb(dimension + degree, degree)
+            power_terms += comb(
+                dimension - 1 + degree, degree
+            )  # convolution accumulator
+            for m in range(degree + 1):
+                request_checkpoint("during spline cache storage admission")
+                piece_terms += (
+                    1
+                    if m < k
+                    else sum(comb(dimension - 1 + m - j, m - j) for j in range(k))
+                )
+        cache_terms = facet_rows * monomials + power_terms + piece_terms
+        # output_digits bounds all shifted remainder coefficients as well:
+        # each appears in both signed cell blocks of the rational matrix.
+        cache = cache_terms * (128 + 32 * dimension + 64 + 2 * 64 + 8)
+        cache += output_digits + 2 * expansion_digits * (power_terms + piece_terms)
+        cache += (degree + 1) * (64 + expansion_digits)  # cached A powers
+        cache += facet_rows * 128  # support set and sorted exponent references
+    source_bounds = (degree + 1) * (128 + 2 * intermediate_digits)
+    source_bounds += (dimension + 1) * (64 + intermediate_digits)
+    scratch = 32 * (64 + intermediate_digits)
+    return (
+        rational
+        + canonical
+        + construction
+        + flint_input
+        + flint_lu
+        + containers
+        + column_state
+        + cache
+        + source_bounds
+        + scratch
+    )
 
 
 def _admit_spline_dimension_height(
@@ -1403,7 +1545,8 @@ def _admit_spline_dimension_height(
     widest entry. Fraction-free elimination stores minors; its pre-division
     products/differences need at most twice that height plus one digit.
     Column scaling preserves rank and leaves the returned rational matrix
-    unchanged. Unit remainder columns thus stay cheap even on wide facets.
+    unchanged. Unit entries stay cheap only if the whole global column has
+    denominator one; otherwise its clearing factor scales those units too.
     """
     if not row_bound:
         return 1, 0, 0
@@ -1422,6 +1565,7 @@ def _admit_spline_dimension_height(
     expansion_digits = 1
     facet_rows = _facet_remainder_dimension(dimension, degree, smoothness)
     for face in complex_value.faces:
+        request_checkpoint("during spline source facet admission")
         if (
             len(face.maximal_cell_ids) != 2
             or face.dimension != dimension - 1
@@ -1436,6 +1580,7 @@ def _admit_spline_dimension_height(
         for cell_id in face.maximal_cell_ids:
             offset = cell_index[cell_id] * len(monomials)
             for index, monomial in enumerate(monomials):
+                request_checkpoint("during spline global column admission")
                 numerator, denominator = bounds[monomial[leading]]
                 n_digits = _scaled_component_width(numerator)
                 d_digits = _scaled_component_width(denominator)
@@ -1459,11 +1604,18 @@ def _admit_spline_dimension_height(
         sorted(column_digits, reverse=True)[:pivots]
     ) + decimal_digit_width(factorial(pivots))
     intermediate_digits = max(expansion_digits, 2 * minor_digits + 1)
-    # The dense elimination matrix stores minors, not pre-division products;
-    # only a constant number of scalar temporaries attain twice their height.
-    intermediate_bytes = (
-        row_bound * width * (2 * max(expansion_digits, minor_digits) + 16)
-        + 8 * intermediate_digits
+    intermediate_bytes = _spline_dimension_storage_bound(
+        dimension,
+        degree,
+        smoothness,
+        row_bound,
+        width,
+        output_digits,
+        column_digits,
+        denominator_digits,
+        expansion_digits,
+        minor_digits,
+        intermediate_digits,
     )
     if (
         intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
@@ -1561,24 +1713,29 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         from flint import fmpz_mat
 
         # Source admission bounds the common denominator of each column.
-        # Clearing columns keeps all unit remainder columns at height one.
-        denominators = [
-            lcm(*(row[column].denominator for row in rows)) for column in range(width)
-        ]
-        backend = fmpz_mat(
-            [
+        # Only globally denominator-one columns leave unit entries unscaled.
+        denominators = []
+        for column in range(width):
+            request_checkpoint("during spline rank column clearing")
+            denominators.append(lcm(*(row[column].denominator for row in rows)))
+        integers = []
+        for row in rows:
+            request_checkpoint("during spline integer matrix construction")
+            integers.append(
                 [
                     value.numerator * (denominators[column] // value.denominator)
                     for column, value in enumerate(row)
                 ]
-                for row in rows
-            ]
-        )
+            )
+        backend = fmpz_mat(integers)
+        del integers
+        request_checkpoint("before spline fraction-free elimination")
         # Use FLINT's fraction-free elimination explicitly: its stored minors
         # and two-product updates are exactly the source-admitted envelope.
         # Generic rank() may select an RREF algorithm with extra allocations.
         _, _, _, backend_rank = backend._fflu()
         rank = int(backend_rank)
+        request_checkpoint("after spline fraction-free elimination")
     else:
         rank = 0
     nullity = width - rank

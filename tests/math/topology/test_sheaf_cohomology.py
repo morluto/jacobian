@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import MathTool
 from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
@@ -37,8 +39,11 @@ def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _tool():
-    return next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+def _tool() -> MathTool[SheafCohomologyRequest, SheafCohomologyResult]:
+    return cast(
+        MathTool[SheafCohomologyRequest, SheafCohomologyResult],
+        next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID),
+    )
 
 
 def _cells(complex_: FiniteSimplicialComplex) -> list[tuple[str, ...]]:
@@ -103,11 +108,26 @@ def _bettis(result: SheafCohomologyResult) -> list[int]:
 
 
 def _parse_matrix(
-    matrix: tuple[tuple[str, ...], ...], prime: int | None
+    matrix: tuple[tuple[CanonicalRational | int, ...], ...], prime: int | None
 ) -> list[list[Fraction | int]]:
     if prime is None:
-        return [[Fraction(entry.num, entry.den) for entry in row] for row in matrix]
-    return [[int(entry) % prime for entry in row] for row in matrix]
+        return [
+            [
+                entry.as_fraction()
+                if isinstance(entry, CanonicalRational)
+                else Fraction(entry)
+                for entry in row
+            ]
+            for row in matrix
+        ]
+    return [
+        [
+            int(entry.as_fraction() if isinstance(entry, CanonicalRational) else entry)
+            % prime
+            for entry in row
+        ]
+        for row in matrix
+    ]
 
 
 def _mat_mul(

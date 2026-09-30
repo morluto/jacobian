@@ -99,17 +99,19 @@ def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() ->
 
 
 def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None:
-    deck = AnonymousGraphCardMultiset(
-        card_order=8,
-        classes=(
-            {
-                "representative": {
-                    "vertices": [f"v{i:02d}" for i in range(8)],
-                    "edges": [],
+    deck = AnonymousGraphCardMultiset.model_validate(
+        {
+            "card_order": 8,
+            "classes": (
+                {
+                    "representative": {
+                        "vertices": [f"v{i:02d}" for i in range(8)],
+                        "edges": [],
+                    },
+                    "multiplicity": 9,
                 },
-                "multiplicity": 9,
-            },
-        ),
+            ),
+        }
     )
     result = anonymous_vertex_deck_edge_count(deck)
     assert result.source_order == 9
@@ -136,9 +138,9 @@ def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
 def test_native_admission_rejects_missing_constructed_graph_fields(
     missing: str,
 ) -> None:
-    fields = {"vertices": ("v00", "v01"), "edges": ()}
+    fields: dict[str, object] = {"vertices": ("v00", "v01"), "edges": ()}
     fields.pop(missing)
-    graph = SimpleUndirectedGraph.model_construct(**fields)
+    graph = SimpleUndirectedGraph.model_construct(_fields_set=None, **fields)
     item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
     deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
 

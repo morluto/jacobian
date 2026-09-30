@@ -1034,3 +1034,136 @@ class TestValidation:
         request = AcceptedTreeCountRequest(automaton=automaton, tree_size=100)
         with pytest.raises(OperationDomainValidationError, match="work"):
             compute_accepted_tree_count(request)
+
+
+def test_reachability_rejects_a_forged_automaton_carrier() -> None:
+    """A `model_construct` carrier must not reach the saturation unchecked.
+
+    `model_construct` populates a carrier without running the model validators.
+    A one-state unary automaton whose only transition targets state 1 therefore
+    looked well-formed, and the fixed point reported state 0 as unreachable --
+    an exact result built from a state that does not exist.
+    """
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.logic.automata.tree.operations import (
+        reachable_state_profile,
+        tree_language_profile,
+    )
+    from jacobian.math.logic.automata.tree.values import (
+        BottomUpTreeAutomaton,
+        TreeAutomatonTransition,
+    )
+
+    forged = BottomUpTreeAutomaton.model_construct(
+        state_count=1,
+        arity=(1,),
+        transitions=(
+            TreeAutomatonTransition.model_construct(
+                symbol=0, child_states=(0,), target_state=1
+            ),
+        ),
+        final_states=(0,),
+    )
+    for operation in (reachable_state_profile, tree_language_profile):
+        with pytest.raises(OperationDomainValidationError):
+            operation(forged)
+
+    # a well-formed carrier over the same shape is admitted, so the refusal is
+    # the contract and not a blanket rejection
+    sound = BottomUpTreeAutomaton(
+        state_count=2,
+        arity=(1, 0),
+        transitions=(
+            TreeAutomatonTransition(symbol=1, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),
+        ),
+        final_states=(1,),
+    )
+    assert reachable_state_profile(sound).reachable_states == (0, 1)
+
+
+def test_reachability_rejects_a_child_count_that_disagrees_with_its_arity() -> None:
+    """Every carrier invariant the saturation relies on is re-checked."""
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.logic.automata.tree.operations import reachable_state_profile
+    from jacobian.math.logic.automata.tree.values import (
+        BottomUpTreeAutomaton,
+        TreeAutomatonTransition,
+    )
+
+    # a binary symbol carrying one child state
+    forged = BottomUpTreeAutomaton.model_construct(
+        state_count=2,
+        arity=(2,),
+        transitions=(
+            TreeAutomatonTransition.model_construct(
+                symbol=0, child_states=(0,), target_state=1
+            ),
+        ),
+        final_states=(1,),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        reachable_state_profile(forged)
+
+
+@pytest.mark.parametrize("malformation", ["rows", "children", "finals"])
+def test_reachability_bounds_constructed_values_before_dumping(
+    monkeypatch: pytest.MonkeyPatch, malformation: str
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.logic.automata.tree.operations import tree_language_profile
+
+    row = TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
+    machine = BottomUpTreeAutomaton(
+        state_count=1, arity=(0,), transitions=(row,), final_states=(0,)
+    )
+    if malformation == "rows":
+        machine = machine.model_copy(
+            update={"transitions": (row,) * (MAX_TA_TRANSITIONS + 1)}
+        )
+    elif malformation == "children":
+        row = row.model_copy(update={"child_states": ([0] * 10_000,)})
+        machine = machine.model_copy(update={"transitions": (row,)})
+    else:
+        machine = machine.model_copy(update={"final_states": ([0] * 10_000,)})
+    dump_calls: list[bool] = []
+
+    def record_dump(*_args: object, **_kwargs: object) -> None:
+        dump_calls.append(True)
+        raise RuntimeError("unbounded input reached serialization")
+
+    monkeypatch.setattr(BottomUpTreeAutomaton, "model_dump", record_dump)
+    for operation in (reachable_state_profile, tree_language_profile):
+        with pytest.raises(
+            (OperationDomainValidationError, OperationResourceAdmissionError)
+        ):
+            operation(machine)
+    assert dump_calls == []
+
+
+def test_reachability_rejects_subclasses_before_their_serializer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.logic.automata.tree.operations import tree_language_profile
+
+    class ExtendedAutomaton(BottomUpTreeAutomaton):
+        extra_payload: tuple[int, ...]
+
+    machine = ExtendedAutomaton(
+        state_count=1,
+        arity=(),
+        transitions=(),
+        final_states=(),
+        extra_payload=(0,) * 10_000,
+    )
+    dump_calls: list[bool] = []
+
+    def record_dump(*_args: object, **_kwargs: object) -> None:
+        dump_calls.append(True)
+        raise RuntimeError("subclass serializer must not run")
+
+    monkeypatch.setattr(ExtendedAutomaton, "model_dump", record_dump)
+    for operation in (reachable_state_profile, tree_language_profile):
+        with pytest.raises(OperationDomainValidationError):
+            operation(machine)
+    assert dump_calls == []

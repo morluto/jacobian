@@ -173,7 +173,7 @@ def _admit_deck_structure(
 def anonymous_vertex_deck_edge_count(
     deck: AnonymousGraphCardMultiset,
 ) -> AnonymousVertexDeckEdgeCount:
-    """Recover the source edge count from a realizable anonymous vertex deck.
+    """Return the edge count implied by an anonymous vertex deck, if realizable.
 
     For each edge of an n-vertex graph, exactly n-2 deleted-vertex cards retain
     that edge. Thus the sum of all card edge counts is (n-2)|E|. The operation
@@ -190,7 +190,7 @@ def anonymous_vertex_deck_edge_count(
             source_order=source_order,
             card_edge_total=0,
             overcount_divisor=None,
-            source_edge_count=0,
+            implied_edge_count=0,
         )
 
     divisor = source_order - 2
@@ -205,5 +205,5 @@ def anonymous_vertex_deck_edge_count(
         source_order=source_order,
         card_edge_total=card_edge_total,
         overcount_divisor=divisor,
-        source_edge_count=card_edge_total // divisor,
+        implied_edge_count=card_edge_total // divisor,
     )

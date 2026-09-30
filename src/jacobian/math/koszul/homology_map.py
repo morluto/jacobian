@@ -133,22 +133,38 @@ def koszul_homology_map(
             code="koszul.module.homology_map_chain_relation",
             message="serialized chain-map data differs from its canonical reconstruction",
         )
-    if (
-        supplied.degree_maps != verified.degree_maps
-        and sum(verified.source_complex.basis_sizes)
-        + sum(verified.target_complex.basis_sizes)
-        <= MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS
-    ):
+    # Below the basis envelope every retained claim is compared against the
+    # canonical reconstruction; above it the basis budget is charged instead,
+    # so a large request is refused on structure rather than on a value
+    # comparison. The complexes are held to the same rule as `module_map` and
+    # `degree_maps` so no retained field is trusted while another is checked.
+    basis_cells = sum(verified.source_complex.basis_sizes) + sum(
+        verified.target_complex.basis_sizes
+    )
+    within_basis_envelope = basis_cells <= MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS
+    if within_basis_envelope and supplied.source_complex != verified.source_complex:
+        raise OperationDomainValidationError(
+            location=("chain_map", "source_complex"),
+            code="koszul.module.homology_map_chain_relation",
+            message=(
+                "serialized source complex differs from its canonical reconstruction"
+            ),
+        )
+    if within_basis_envelope and supplied.target_complex != verified.target_complex:
+        raise OperationDomainValidationError(
+            location=("chain_map", "target_complex"),
+            code="koszul.module.homology_map_chain_relation",
+            message=(
+                "serialized target complex differs from its canonical reconstruction"
+            ),
+        )
+    if within_basis_envelope and supplied.degree_maps != verified.degree_maps:
         raise OperationDomainValidationError(
             location=("chain_map", "degree_maps"),
             code="koszul.module.homology_map_chain_relation",
             message="serialized degree maps differ from their canonical reconstruction",
         )
-    if (
-        sum(verified.source_complex.basis_sizes)
-        + sum(verified.target_complex.basis_sizes)
-        > MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS
-    ):
+    if not within_basis_envelope:
         raise OperationResourceAdmissionError(
             location=("chain_map",),
             code="koszul.module.homology_map_basis_budget",

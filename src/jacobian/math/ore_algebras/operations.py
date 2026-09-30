@@ -11,7 +11,11 @@ from typing import Any
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    request_checkpoint,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -25,6 +29,7 @@ from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_TOTAL_DIGITS,
 )
 from jacobian.math.ore_algebras._models import (
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE,
     MAX_COEFFICIENT_RECURRENCE_WORK_CELLS,
     MAX_DFINITE_PREFIX_ALLOCATION,
     MAX_DFINITE_PREFIX_SCALAR_BITS,
@@ -2771,6 +2776,31 @@ def _differential_coefficient_input(
     return value, polynomials, maximum_degree, work_bound + boundary_work
 
 
+def _coefficient_recurrence_regular_start(polynomial: _Poly, start: int) -> int:
+    """Pass every integral singular index using python-flint's exact roots.
+
+    The already-admitted leading polynomial has degree at most 16 and
+    rational coefficient components of at most 64 digits. Clearing their
+    denominators is bounded by that fixed coefficient count and height;
+    integer-root extraction does not scan up to the magnitude of a root.
+    """
+    from flint import fmpz_poly
+
+    denominator = lcm(*(coefficient.denominator for coefficient in polynomial.values()))
+    coefficients = [
+        polynomial.get(degree, Fraction(0)).numerator
+        * (denominator // polynomial.get(degree, Fraction(0)).denominator)
+        for degree in range(max(polynomial) + 1)
+    ]
+    request_checkpoint("before coefficient-recurrence integer roots")
+    try:
+        roots = fmpz_poly(coefficients).roots()
+    except (ArithmeticError, RuntimeError, ValueError) as exc:
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT) from exc
+    request_checkpoint("after coefficient-recurrence integer roots")
+    return max((start, *(int(root) + 1 for root, _multiplicity in roots)))
+
+
 def _coefficient_recurrence_boundary_rows(
     polynomials: list[tuple[int, _Poly]], maximum_degree: int
 ) -> tuple[CoefficientRecurrenceBoundaryRow, ...]:
@@ -2879,6 +2909,15 @@ def differential_operator_to_coefficient_recurrence(
                 if target[power] == 0:
                     del target[power]
 
+    if len(recurrence_polynomials) > MAX_SHIFT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_terms",
+            message=(
+                "the generated coefficient recurrence exceeds the admitted "
+                f"shift-term limit of {MAX_SHIFT_TERMS}"
+            ),
+        )
     recurrence_operator = ShiftOreOperator.model_validate(
         {
             "variable": "n",
@@ -2892,11 +2931,40 @@ def differential_operator_to_coefficient_recurrence(
             ],
         }
     )
-    boundary_rows = _coefficient_recurrence_boundary_rows(polynomials, maximum_degree)
+    # n = m + minimum_slope. The leading coefficient must remain nonzero
+    # throughout the advertised half-line, not only at its first index.
+    leading = recurrence_polynomials[recurrence_operator.order]
+    valid_from = _coefficient_recurrence_regular_start(
+        leading, maximum_degree + minimum_slope
+    )
+    boundary_count = valid_from - minimum_slope
+    if boundary_count > MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + 1:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_boundary_rows",
+            message="the nonsingular start requires too many explicit Taylor boundary rows",
+        )
+    # Initial admission covered maximum_degree rows. Charge every extra row
+    # introduced by a singular index before constructing any boundary values.
+    additional_rows = boundary_count - maximum_degree
+    boundary_row_work = (
+        sum(len(polynomial) * (order + 1) for order, polynomial in polynomials)
+        + (MAX_SHIFT_ORDER + 1) * 8
+    )
+    if (
+        work_bound + additional_rows * boundary_row_work
+        > MAX_COEFFICIENT_RECURRENCE_WORK_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_work",
+            message="coefficient recurrence boundary expansion exceeds its admitted work budget",
+        )
+    boundary_rows = _coefficient_recurrence_boundary_rows(polynomials, boundary_count)
     return DifferentialCoefficientRecurrence(
         operator=value,
         recurrence=recurrence_operator,
-        valid_from=maximum_degree + minimum_slope,
+        valid_from=valid_from,
         boundary_rows=boundary_rows,
     )
 

@@ -36,9 +36,9 @@ def _vertex_deck(graph: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
     )
 
 
-def test_exhaustive_small_graphs_recover_direct_source_edge_count() -> None:
+def test_exhaustive_small_graphs_recover_direct_implied_edge_count() -> None:
     empty_deck = anonymous_graph_card_multiset(card_order=0, cards=())
-    assert anonymous_vertex_deck_edge_count(empty_deck).source_edge_count == 0
+    assert anonymous_vertex_deck_edge_count(empty_deck).implied_edge_count == 0
     for order in range(1, 5):
         for mask in range(1 << (order * (order - 1) // 2)):
             source = _graph(order, mask)
@@ -48,14 +48,14 @@ def test_exhaustive_small_graphs_recover_direct_source_edge_count() -> None:
                 continue
             result = anonymous_vertex_deck_edge_count(_vertex_deck(source))
             assert result.source_order == order
-            assert result.source_edge_count == len(source.edges)
+            assert result.implied_edge_count == len(source.edges)
             assert result.card_edge_total == sum(
                 len(item.representative.edges) * item.multiplicity
                 for item in result.deck.classes
             )
 
 
-def test_order_two_vertex_deck_does_not_determine_source_edge_count() -> None:
+def test_order_two_vertex_deck_does_not_determine_implied_edge_count() -> None:
     empty = _vertex_deck(_graph(2, 0))
     one_edge = _vertex_deck(_graph(2, 1))
     assert empty == one_edge
@@ -81,10 +81,10 @@ def test_result_round_trip_preserves_typed_input_deck_and_quotient() -> None:
     forged = AnonymousVertexDeckEdgeCount.model_validate(
         {
             **result.model_dump(mode="python"),
-            "source_edge_count": result.source_edge_count + 1,
+            "implied_edge_count": result.implied_edge_count + 1,
         }
     )
-    assert forged.source_edge_count == result.source_edge_count + 1
+    assert forged.implied_edge_count == result.implied_edge_count + 1
 
 
 def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() -> None:
@@ -95,25 +95,27 @@ def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() ->
     )
     assert tool.request_type.__name__ == "AnonymousGraphCardMultiset"
     result = tool.run(_vertex_deck(_graph(3, 0b011)))
-    assert result.source_edge_count == 2
+    assert result.implied_edge_count == 2
 
 
 def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None:
-    deck = AnonymousGraphCardMultiset(
-        card_order=8,
-        classes=(
-            {
-                "representative": {
-                    "vertices": [f"v{i:02d}" for i in range(8)],
-                    "edges": [],
+    deck = AnonymousGraphCardMultiset.model_validate(
+        {
+            "card_order": 8,
+            "classes": (
+                {
+                    "representative": {
+                        "vertices": [f"v{i:02d}" for i in range(8)],
+                        "edges": [],
+                    },
+                    "multiplicity": 9,
                 },
-                "multiplicity": 9,
-            },
-        ),
+            ),
+        }
     )
     result = anonymous_vertex_deck_edge_count(deck)
     assert result.source_order == 9
-    assert result.source_edge_count == 0
+    assert result.implied_edge_count == 0
 
 
 def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
@@ -129,16 +131,16 @@ def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
 
     assert result.source_order == 11
     assert result.card_edge_total == 0
-    assert result.source_edge_count == 0
+    assert result.implied_edge_count == 0
 
 
 @pytest.mark.parametrize("missing", ["vertices", "edges"])
 def test_native_admission_rejects_missing_constructed_graph_fields(
     missing: str,
 ) -> None:
-    fields = {"vertices": ("v00", "v01"), "edges": ()}
+    fields: dict[str, object] = {"vertices": ("v00", "v01"), "edges": ()}
     fields.pop(missing)
-    graph = SimpleUndirectedGraph.model_construct(**fields)
+    graph = SimpleUndirectedGraph.model_construct(_fields_set=None, **fields)
     item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
     deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
 

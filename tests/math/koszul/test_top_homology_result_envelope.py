@@ -15,7 +15,6 @@ from jacobian.math.koszul.module_models import (
     ModuleDifferential,
     ModuleKoszulRequest,
     ModuleKoszulTopHomology,
-    ModuleKoszulTopHomologyRequest,
 )
 from jacobian.math.koszul.module_operations import (
     module_koszul_complex,
@@ -57,9 +56,7 @@ def _compute(
     complex_value = module_koszul_complex(
         ModuleKoszulRequest(algebra=module.algebra, module=module, sequence=sequence)
     )
-    return module_koszul_top_homology(
-        ModuleKoszulTopHomologyRequest(complex=complex_value)
-    )
+    return module_koszul_top_homology(complex_value)
 
 
 def test_an_ordinary_label_is_still_admitted() -> None:
@@ -69,19 +66,19 @@ def test_an_ordinary_label_is_still_admitted() -> None:
     assert result.top_homology_basis == ((_q(0), _q(1)),)
 
 
-def test_a_very_long_basis_label_is_refused_by_the_result_envelope() -> None:
-    """The result envelope counts retained materialization, not just basis count.
+def test_a_very_long_basis_label_is_refused_before_any_kernel_work() -> None:
+    """The carriers impose no string-length limit, so input size must be charged.
 
-    Each retained occurrence contributes its label characters to the intrinsic
-    allocation estimate. The carriers impose no string-length limit, so counting
-    only the number of basis elements would leave retained label data unbounded.
+    The label appears in the algebra, module, and retained complexes, so an
+    unbounded native call would copy megabytes of caller data before the
+    result envelope could count it. The bounded input snapshot refuses it
+    first; ``test_equal_length_labels_have_the_same_intrinsic_admission``
+    covers the result envelope itself with a lowered retained-cell cap.
     """
     _, module = _algebra_and_module("L" * 3_000_000)
     with pytest.raises(OperationResourceAdmissionError) as refusal:
         _compute(module, ((_q(0), _q(1)),))
-    assert (
-        refusal.value.errors()[0]["type"] == "koszul.module.top_homology_result_bound"
-    )
+    assert refusal.value.errors()[0]["type"] == "koszul.module.native_shape_budget"
 
 
 @pytest.mark.parametrize(
@@ -89,9 +86,8 @@ def test_a_very_long_basis_label_is_refused_by_the_result_envelope() -> None:
     ("L", "é", "😀", '"', "\\", "\n"),
     ids=("ascii", "accent", "astral", "quote", "slash", "newline"),
 )
-@pytest.mark.parametrize("mapping", (False, True))
 def test_equal_length_labels_have_the_same_intrinsic_admission(
-    monkeypatch: pytest.MonkeyPatch, character: str, mapping: bool
+    monkeypatch: pytest.MonkeyPatch, character: str
 ) -> None:
     label = character * 1000
     _, module = _algebra_and_module(label)
@@ -100,9 +96,8 @@ def test_equal_length_labels_have_the_same_intrinsic_admission(
             algebra=module.algebra, module=module, sequence=((_q(0), _q(1)),)
         )
     )
-    request = ModuleKoszulTopHomologyRequest(complex=value)
     monkeypatch.setattr(module_operations, "MAX_KOSZUL_TOP_HOMOLOGY_RESULT_CELLS", 6000)
-    result = module_koszul_top_homology(request.model_dump() if mapping else request)
+    result = module_koszul_top_homology(value)
     assert result.module.basis[0] == label
     assert result.annihilator_basis == result.top_homology_basis == ((_q(0), _q(1)),)
     assert (
@@ -127,7 +122,7 @@ def test_native_admission_never_uses_json_serialization(
 
     for model in (FiniteCommutativeAlgebra, BasedFiniteModule, ModuleDifferential):
         monkeypatch.setattr(model, "model_dump_json", forbidden_json)
-    result = module_koszul_top_homology(ModuleKoszulTopHomologyRequest(complex=value))
+    result = module_koszul_top_homology(value)
     assert result.top_homology_basis == ((_q(0), _q(1)),)
     assert serializations == []
 

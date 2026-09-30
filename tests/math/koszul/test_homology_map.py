@@ -14,7 +14,6 @@ from jacobian.math.koszul.module_models import (
     FiniteCommutativeAlgebra,
     ModuleKoszulChainMap,
     ModuleKoszulHomologyMapRequest,
-    ModuleKoszulMapRequest,
 )
 from jacobian.math.koszul.module_operations import module_koszul_map
 
@@ -50,17 +49,15 @@ def test_induced_homology_maps_use_quotient_class_coordinates() -> None:
         ),
     )
     chain_map = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=algebra,
-            source=source,
-            target=target,
-            sequence=((q(0), q(1)),),
-            # 1 mod e -> e is an exact A-module map.
-            map_matrix=((q(0),), (q(1),)),
-        )
+        algebra,
+        source,
+        target,
+        ((q(0), q(1)),),
+        # 1 mod e -> e is an exact A-module map.
+        ((q(0),), (q(1),)),
     )
 
-    result = koszul_homology_map(ModuleKoszulHomologyMapRequest(chain_map=chain_map))
+    result = koszul_homology_map(chain_map)
     assert result.source_homology.dimensions == (1, 1)
     assert result.target_homology.dimensions == (1, 1)
     # In degree zero e is a boundary; in degree one e tensor e is a nonzero
@@ -84,19 +81,13 @@ def test_consumer_rechecks_serialized_chain_map_relations() -> None:
         ),
     )
     chain_map = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=algebra,
-            source=module,
-            target=module,
-            sequence=((q(0), q(1)),),
-            map_matrix=((q(1), q(0)), (q(0), q(1))),
-        )
+        algebra, module, module, ((q(0), q(1)),), ((q(1), q(0)), (q(0), q(1)))
     )
     corrupted = chain_map.model_copy(
         update={"module_map": ((q(1), q(0)), (q(0), q(0)))}
     )
     with pytest.raises(OperationDomainValidationError):
-        koszul_homology_map(ModuleKoszulHomologyMapRequest(chain_map=corrupted))
+        koszul_homology_map(corrupted)
 
 
 def test_forged_small_chain_bases_do_not_bypass_admission() -> None:
@@ -110,13 +101,11 @@ def test_forged_small_chain_bases_do_not_bypass_admission() -> None:
         ),
     )
     chain_map = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=algebra,
-            source=module,
-            target=module,
-            sequence=((q(0), q(1)), (q(0), q(1))),
-            map_matrix=((q(1), q(0)), (q(0), q(1))),
-        )
+        algebra,
+        module,
+        module,
+        ((q(0), q(1)), (q(0), q(1))),
+        ((q(1), q(0)), (q(0), q(1))),
     )
     payload = chain_map.model_dump(mode="json")
     for side in ("source_complex", "target_complex"):
@@ -135,7 +124,7 @@ def test_forged_small_chain_bases_do_not_bypass_admission() -> None:
     # Each true complex has eight total basis vectors, so the pair exceeds the
     # induced-map cap even though the serialized claims say both are zero.
     with pytest.raises(OperationResourceAdmissionError) as error:
-        koszul_homology_map(ModuleKoszulHomologyMapRequest(chain_map=forged))
+        koszul_homology_map(forged)
     assert error.value.errors()[0]["type"] == "koszul.module.homology_map_basis_budget"
 
 
@@ -158,13 +147,7 @@ def test_forged_retained_complex_is_rejected() -> None:
         ),
     )
     chain_map = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=algebra,
-            source=module,
-            target=module,
-            sequence=((q(0), q(1)),),
-            map_matrix=((q(1), q(0)), (q(0), q(1))),
-        )
+        algebra, module, module, ((q(0), q(1)),), ((q(1), q(0)), (q(0), q(1)))
     )
     payload = chain_map.model_dump(mode="json")
     for side in ("source_complex", "target_complex"):
@@ -182,7 +165,7 @@ def test_forged_retained_complex_is_rejected() -> None:
     assert forged.source_complex != chain_map.source_complex
 
     with pytest.raises(OperationDomainValidationError) as error:
-        koszul_homology_map(ModuleKoszulHomologyMapRequest(chain_map=forged))
+        koszul_homology_map(forged)
     assert error.value.errors()[0]["type"] == (
         "koszul.module.homology_map_chain_relation"
     )

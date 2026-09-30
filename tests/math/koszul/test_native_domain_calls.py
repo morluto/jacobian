@@ -174,7 +174,7 @@ def test_native_snapshot_bounds_aggregate_scalar_magnitude(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.catalog.models import OperationResourceAdmissionError
-    from jacobian.math.koszul import native
+    from jacobian.math.koszul import module_operations
     from jacobian.math.koszul.module_models import ModuleDifferential
 
     algebra = koszul.FiniteCommutativeAlgebra(
@@ -204,7 +204,7 @@ def test_native_snapshot_bounds_aggregate_scalar_magnitude(
     def forbidden_kernel(*args: object, **kwargs: object) -> None:
         pytest.fail("large scalar payload reached kernel validation before admission")
 
-    monkeypatch.setattr(native, "_top_homology", forbidden_kernel)
+    monkeypatch.setattr(module_operations, "_admit_top_homology", forbidden_kernel)
     with pytest.raises(
         OperationResourceAdmissionError, match="retained input envelope"
     ):

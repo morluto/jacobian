@@ -13,8 +13,10 @@ from jacobian.catalog.models import (
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
+    ModuleChainMapMatrix,
+    ModuleDifferential,
+    ModuleKoszulComplex,
     ModuleKoszulRequest,
-    ModuleKoszulSequenceLinearChangeRequest,
 )
 from jacobian.math.koszul.module_operations import (
     module_koszul_complex,
@@ -26,7 +28,7 @@ def q(value: int | Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _source(sequence):
+def _source(sequence: tuple[tuple[CanonicalRational, ...], ...]) -> ModuleKoszulComplex:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
     )
@@ -36,8 +38,10 @@ def _source(sequence):
     )
 
 
-def _apply(matrix, vector):
-    result = {}
+def _apply(
+    matrix: ModuleChainMapMatrix | ModuleDifferential, vector: dict[int, Fraction]
+) -> dict[int, Fraction]:
+    result: dict[int, Fraction] = {}
     for row, column, coefficient in matrix.entries:
         value = vector.get(column, Fraction(0))
         if value:
@@ -47,8 +51,8 @@ def _apply(matrix, vector):
     return {index: value for index, value in result.items() if value}
 
 
-def _dense(matrix):
-    rows = [
+def _dense(matrix: ModuleChainMapMatrix | ModuleDifferential) -> list[list[Fraction]]:
+    rows: list[list[Fraction]] = [
         [Fraction(0) for _ in range(matrix.column_count)]
         for _ in range(matrix.row_count)
     ]
@@ -57,12 +61,10 @@ def _dense(matrix):
     return rows
 
 
-def test_shear_constructs_exact_target_and_inverse_exterior_chain_maps():
+def test_shear_constructs_exact_target_and_inverse_exterior_chain_maps() -> None:
     source = _source(((q(1),), (q(0),)))
     change = ((q(Fraction(1, 2)), q(1)), (q(0), q(1)))
-    result = module_koszul_sequence_linear_change(
-        ModuleKoszulSequenceLinearChangeRequest(complex=source, change_matrix=change)
-    )
+    result = module_koszul_sequence_linear_change(source, change)
 
     assert result.target_complex.sequence == ((q(Fraction(1, 2)),), (q(0),))
     assert _dense(result.source_to_target[1]) == [
@@ -100,48 +102,34 @@ def test_shear_constructs_exact_target_and_inverse_exterior_chain_maps():
             assert _apply(forward, _apply(backward, basis)) == basis
 
 
-def test_singular_change_is_rejected():
+def test_singular_change_is_rejected() -> None:
     source = _source(((q(1),), (q(0),)))
     with pytest.raises(OperationDomainValidationError) as caught:
-        module_koszul_sequence_linear_change(
-            ModuleKoszulSequenceLinearChangeRequest(
-                complex=source,
-                change_matrix=((q(1), q(2)), (q(2), q(4))),
-            )
-        )
+        module_koszul_sequence_linear_change(source, ((q(1), q(2)), (q(2), q(4))))
     assert caught.value.errors()[0]["type"] == "koszul.module.sequence_change_singular"
 
 
-def test_row_pivoting_preserves_the_top_exterior_sign():
+def test_row_pivoting_preserves_the_top_exterior_sign() -> None:
     source = _source(((q(1),), (q(0),)))
-    result = module_koszul_sequence_linear_change(
-        ModuleKoszulSequenceLinearChangeRequest(
-            complex=source,
-            change_matrix=((q(0), q(1)), (q(1), q(0))),
-        )
-    )
+    result = module_koszul_sequence_linear_change(source, ((q(0), q(1)), (q(1), q(0))))
     assert result.target_complex.sequence == ((q(0),), (q(1),))
     assert _dense(result.source_to_target[2]) == [[Fraction(-1)]]
 
 
-def test_empty_sequence_uses_the_empty_matrix_as_its_identity_change():
+def test_empty_sequence_uses_the_empty_matrix_as_its_identity_change() -> None:
     source = _source(())
-    result = module_koszul_sequence_linear_change(
-        ModuleKoszulSequenceLinearChangeRequest(complex=source, change_matrix=())
-    )
+    result = module_koszul_sequence_linear_change(source, ())
     assert result.target_complex.sequence == ()
     assert result.source_to_target == result.target_to_source
     assert _dense(result.source_to_target[0]) == [[Fraction(1)]]
 
 
-def test_maximum_sequence_length_accepts_the_identity_change():
+def test_maximum_sequence_length_accepts_the_identity_change() -> None:
     source = _source(tuple((q(0),) for _ in range(6)))
     identity = tuple(
         tuple(q(int(row == column)) for column in range(6)) for row in range(6)
     )
-    result = module_koszul_sequence_linear_change(
-        ModuleKoszulSequenceLinearChangeRequest(complex=source, change_matrix=identity)
-    )
+    result = module_koszul_sequence_linear_change(source, identity)
     assert tuple(len(degree_map.entries) for degree_map in result.source_to_target) == (
         1,
         6,
@@ -154,31 +142,26 @@ def test_maximum_sequence_length_accepts_the_identity_change():
     assert result.target_complex.sequence == source.sequence
 
 
-def test_large_denominator_is_admitted_without_decimal_string_conversion(monkeypatch):
+def test_large_denominator_is_admitted_without_decimal_string_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _source(((q(1),),))
     huge_denominator = 10**5000 + 1
     change = ((CanonicalRational(num=1, den=huge_denominator),),)
 
-    def fail_if_inverted(_matrix):
+    def fail_if_inverted(_matrix: tuple[tuple[Fraction, ...], ...]) -> None:
         raise AssertionError("oversized coefficient reached matrix inversion")
 
     monkeypatch.setattr(operations, "_inverse_matrix", fail_if_inverted)
     with pytest.raises(OperationResourceAdmissionError):
-        module_koszul_sequence_linear_change(
-            ModuleKoszulSequenceLinearChangeRequest(
-                complex=source, change_matrix=change
-            )
-        )
+        module_koszul_sequence_linear_change(source, change)
 
 
-def test_large_integral_change_is_not_miscounted_as_denominator_growth():
+def test_large_integral_change_is_not_miscounted_as_denominator_growth() -> None:
     source = _source(((q(1),),))
     large_integer = 10**3000 + 7
     result = module_koszul_sequence_linear_change(
-        ModuleKoszulSequenceLinearChangeRequest(
-            complex=source,
-            change_matrix=((CanonicalRational(num=large_integer, den=1),),),
-        )
+        source, ((CanonicalRational(num=large_integer, den=1),),)
     )
 
     assert result.target_complex.sequence == (
@@ -192,18 +175,15 @@ def test_large_integral_change_is_not_miscounted_as_denominator_growth():
     )
 
 
-def test_resource_bound_is_checked_before_matrix_inversion(monkeypatch):
+def test_resource_bound_is_checked_before_matrix_inversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _source(((q(1),), (q(0),)))
 
-    def fail_if_inverted(_matrix):
+    def fail_if_inverted(_matrix: tuple[tuple[Fraction, ...], ...]) -> None:
         raise AssertionError("matrix inversion ran before transform admission")
 
     monkeypatch.setattr(operations, "MAX_KOSZUL_SEQUENCE_LINEAR_CHANGE_WORK", 0)
     monkeypatch.setattr(operations, "_inverse_matrix", fail_if_inverted)
     with pytest.raises(OperationResourceAdmissionError):
-        module_koszul_sequence_linear_change(
-            ModuleKoszulSequenceLinearChangeRequest(
-                complex=source,
-                change_matrix=((q(1), q(1)), (q(0), q(1))),
-            )
-        )
+        module_koszul_sequence_linear_change(source, ((q(1), q(1)), (q(0), q(1))))

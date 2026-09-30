@@ -18,6 +18,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.koszul._native_inputs import (
+    admit_native_payload,
+    native_arguments,
+    native_carrier,
+)
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
@@ -40,7 +45,6 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
     ModuleKoszulTopHomology,
-    ModuleKoszulTopHomologyRequest,
     ModuleKoszulUnitContraction,
     ModuleKoszulUnitContractionRequest,
     ModuleKoszulZeroExtension,
@@ -2811,26 +2815,30 @@ def _verify_sequence_change_maps(
 
 
 def module_koszul_map(
-    request: ModuleKoszulMapRequest | Mapping[str, Any],
+    algebra: FiniteCommutativeAlgebra,
+    source: BasedFiniteModule,
+    target: BasedFiniteModule,
+    sequence: tuple[tuple[CanonicalRational, ...], ...],
+    map_matrix: tuple[tuple[CanonicalRational, ...], ...],
 ) -> ModuleKoszulChainMap:
     """Induce a degreewise chain map from one exact module homomorphism.
 
     Both module actions and every chain-map square are checked in the
     operation. Returned values retain the source map and both complexes.
     """
-    try:
-        payload = (
-            request.model_dump()
-            if isinstance(request, ModuleKoszulMapRequest)
-            else request
-        )
-        value = ModuleKoszulMapRequest.model_validate(payload)
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="koszul.module.map_request",
-            message="the module map request is not canonical",
-        ) from exc
+    # The bounded snapshot classifies a malformed or oversized carrier before
+    # the declared axes are read, so its own errors propagate unchanged.
+    value = admit_native_payload(
+        ModuleKoszulMapRequest,
+        native_arguments(
+            algebra=algebra,
+            source=source,
+            target=target,
+            sequence=sequence,
+            map_matrix=map_matrix,
+        ),
+        code="koszul.module.map_request",
+    )
 
     source_dimension = len(value.source.basis)
     target_dimension = len(value.target.basis)
@@ -3057,7 +3065,8 @@ def module_koszul_map(
 
 
 def module_koszul_sequence_linear_change(
-    request: ModuleKoszulSequenceLinearChangeRequest | Mapping[str, Any],
+    complex_value: ModuleKoszulComplex,
+    change_matrix: tuple[tuple[CanonicalRational, ...], ...],
 ) -> ModuleKoszulSequenceLinearChange:
     """Apply an invertible rational change to a finite-module Koszul sequence.
 
@@ -3065,19 +3074,11 @@ def module_koszul_sequence_linear_change(
     returned degreewise maps are the induced exterior powers of the inverse
     matrix and its inverse, tensored with the identity on the module.
     """
-    try:
-        payload = (
-            request.model_dump()
-            if isinstance(request, ModuleKoszulSequenceLinearChangeRequest)
-            else request
-        )
-        value = ModuleKoszulSequenceLinearChangeRequest.model_validate(payload)
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="koszul.module.sequence_change_request_shape",
-            message="the Koszul sequence linear-change request is not canonical",
-        ) from exc
+    value = admit_native_payload(
+        ModuleKoszulSequenceLinearChangeRequest,
+        native_arguments(complex=complex_value, change_matrix=change_matrix),
+        code="koszul.module.sequence_change_request_shape",
+    )
     source, matrix = _admit_sequence_linear_change(value)
     canonical_source = _build_module_koszul_complex(
         ModuleKoszulRequest(
@@ -3129,7 +3130,7 @@ def module_koszul_sequence_linear_change(
 
 
 def module_koszul_top_homology(
-    request: ModuleKoszulTopHomologyRequest | Mapping[str, Any],
+    complex_value: ModuleKoszulComplex,
 ) -> ModuleKoszulTopHomology:
     """Identify top Koszul homology with the common annihilator of the sequence.
 
@@ -3139,20 +3140,11 @@ def module_koszul_top_homology(
     differential is reconstructed from the retained module action before this
     identity is used.
     """
-    try:
-        payload = (
-            request.model_dump()
-            if isinstance(request, ModuleKoszulTopHomologyRequest)
-            else request
-        )
-        parsed_request = ModuleKoszulTopHomologyRequest.model_validate(payload)
-        value = ModuleKoszulComplex.model_validate(parsed_request.complex.model_dump())
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="koszul.module.top_homology_request_shape",
-            message="the top-homology request is not canonical",
-        ) from exc
+    value = admit_native_payload(
+        ModuleKoszulComplex,
+        native_carrier("complex", complex_value),
+        code="koszul.module.top_homology_request_shape",
+    )
 
     # The top-kernel contract needs no elimination in lower degrees. Admit the
     # retained input and this one matrix before rebuilding or densifying it.

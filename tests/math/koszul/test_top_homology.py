@@ -17,7 +17,7 @@ from jacobian.math.koszul.module_models import (
     FiniteCommutativeAlgebra,
     ModuleDifferential,
     ModuleKoszulRequest,
-    ModuleKoszulTopHomologyRequest,
+    ModuleKoszulTopHomology,
 )
 from jacobian.math.koszul.module_operations import (
     module_koszul_complex,
@@ -88,29 +88,31 @@ def _independent_common_kernel(
         pivot_row += 1
 
     pivot_rows = dict(zip(pivot_columns, matrix[:pivot_row], strict=True))
-    basis = []
+    basis: list[tuple[CanonicalRational, ...]] = []
     for free_column in (
         column for column in range(dimension) if column not in pivot_rows
     ):
         vector = [Fraction(0) for _ in range(dimension)]
         vector[free_column] = Fraction(1)
-        for column, row in pivot_rows.items():
-            vector[column] = -row[free_column]
+        for pivot_column, pivot_entries in pivot_rows.items():
+            vector[pivot_column] = -pivot_entries[free_column]
         basis.append(tuple(CanonicalRational.from_fraction(item) for item in vector))
     return tuple(basis)
 
 
-def _compute(module, sequence):
+def _compute(
+    module: BasedFiniteModule, sequence: tuple[tuple[CanonicalRational, ...], ...]
+) -> ModuleKoszulTopHomology:
     algebra = module.algebra
     complex_value = module_koszul_complex(
         ModuleKoszulRequest(algebra=algebra, module=module, sequence=sequence)
     )
-    return module_koszul_top_homology(
-        ModuleKoszulTopHomologyRequest(complex=complex_value)
-    )
+    return module_koszul_top_homology(complex_value)
 
 
-def test_dual_number_top_homology_is_epsilon_annihilator_by_independent_oracle():
+def test_dual_number_top_homology_is_epsilon_annihilator_by_independent_oracle() -> (
+    None
+):
     algebra, module = dual_numbers_regular_module()
     sequence = ((q(0), q(1)),)
     result = _compute(module, sequence)
@@ -133,7 +135,7 @@ def test_dual_number_top_homology_is_epsilon_annihilator_by_independent_oracle()
     assert repeated_result.top_differential.row_count == 4
 
 
-def test_top_annihilator_handles_empty_zero_and_unit_sequences():
+def test_top_annihilator_handles_empty_zero_and_unit_sequences() -> None:
     _algebra, module = dual_numbers_regular_module()
     empty = _compute(module, ())
     zero = _compute(module, ((q(0), q(0)),))
@@ -147,7 +149,9 @@ def test_top_annihilator_handles_empty_zero_and_unit_sequences():
     assert unit.top_homology_basis == ()
 
 
-def test_top_homology_rejects_square_zero_but_noncanonical_source_differential():
+def test_top_homology_rejects_square_zero_but_noncanonical_source_differential() -> (
+    None
+):
     _algebra, module = dual_numbers_regular_module()
     valid = module_koszul_complex(
         ModuleKoszulRequest(
@@ -166,13 +170,13 @@ def test_top_homology_rejects_square_zero_but_noncanonical_source_differential()
     )
 
     with pytest.raises(OperationDomainValidationError) as error:
-        module_koszul_top_homology(ModuleKoszulTopHomologyRequest(complex=forged))
+        module_koszul_top_homology(forged)
     assert error.value.errors()[0]["type"] == "koszul.module.source_complex_mismatch"
 
 
 def test_top_homology_rejects_oversized_coefficients_before_algebra_replay(
     monkeypatch: pytest.MonkeyPatch,
-):
+) -> None:
     huge = CanonicalRational.from_fraction(Fraction(10**128))
     algebra = FiniteCommutativeAlgebra(
         basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
@@ -190,18 +194,18 @@ def test_top_homology_rejects_oversized_coefficients_before_algebra_replay(
         square_zero=True,
     )
 
-    def arithmetic_must_not_run(*_args, **_kwargs):
+    def arithmetic_must_not_run(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("algebra validation ran before coefficient admission")
 
     monkeypatch.setattr(koszul_operations, "_admit", arithmetic_must_not_run)
     with pytest.raises(OperationResourceAdmissionError) as error:
-        module_koszul_top_homology(ModuleKoszulTopHomologyRequest(complex=oversized))
+        module_koszul_top_homology(oversized)
     assert (
         error.value.errors()[0]["type"] == "koszul.module.homology_coefficient_budget"
     )
 
 
-def test_top_homology_is_published_and_example_executes():
+def test_top_homology_is_published_and_example_executes() -> None:
     tool = next(
         tool
         for tool in TOOLS

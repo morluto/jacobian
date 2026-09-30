@@ -11,7 +11,6 @@ from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
     ModuleKoszulChainMap,
-    ModuleKoszulMapRequest,
 )
 from jacobian.math.koszul.module_operations import module_koszul_map
 
@@ -42,15 +41,13 @@ def _dual_numbers() -> tuple[FiniteCommutativeAlgebra, BasedFiniteModule]:
 
 def test_multiplication_by_nilpotent_induces_exact_chain_map() -> None:
     algebra, module = _dual_numbers()
-    request = ModuleKoszulMapRequest(
-        algebra=algebra,
-        source=module,
-        target=module,
-        sequence=((q(0), q(1)),),
-        map_matrix=((q(0), q(0)), (q(1), q(0))),
+    result = module_koszul_map(
+        algebra,
+        module,
+        module,
+        ((q(0), q(1)),),
+        ((q(0), q(0)), (q(1), q(0))),
     )
-
-    result = module_koszul_map(request)
     assert result.source_complex.differentials[0].entries == ((1, 0, q(1)),)
     assert result.degree_maps[0].entries == ((1, 0, q(1)),)
     assert result.degree_maps[1].entries == ((1, 0, q(1)),)
@@ -105,13 +102,7 @@ def test_rectangular_map_between_distinct_modules_induces_chain_maps() -> None:
     )
     # A/(e) -> A sends 1 to e. It is nonzero and A-linear, but rectangular.
     result = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=algebra,
-            source=source,
-            target=target,
-            sequence=((q(0), q(1)),),
-            map_matrix=((q(0),), (q(1),)),
-        )
+        algebra, source, target, ((q(0), q(1)),), ((q(0),), (q(1),))
     )
 
     assert result.source != result.target
@@ -127,15 +118,10 @@ def test_rectangular_map_between_distinct_modules_induces_chain_maps() -> None:
 
 def test_non_module_linear_map_is_rejected() -> None:
     algebra, module = _dual_numbers()
-    request = ModuleKoszulMapRequest(
-        algebra=algebra,
-        source=module,
-        target=module,
-        sequence=((q(0), q(1)),),
-        map_matrix=((q(1), q(0)), (q(0), q(0))),
-    )
     with pytest.raises(OperationDomainValidationError) as error:
-        module_koszul_map(request)
+        module_koszul_map(
+            algebra, module, module, ((q(0), q(1)),), ((q(1), q(0)), (q(0), q(0)))
+        )
     assert error.value.errors()[0]["type"] == "koszul.module.map_not_linear"
 
 
@@ -146,15 +132,7 @@ def test_map_to_zero_module_retains_zero_chain_axes() -> None:
         basis=(),
         action=((), ()),
     )
-    result = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=algebra,
-            source=source,
-            target=target,
-            sequence=((q(0), q(1)),),
-            map_matrix=(),
-        )
-    )
+    result = module_koszul_map(algebra, source, target, ((q(0), q(1)),), ())
     assert result.target_complex.basis_sizes == (0, 0)
     assert tuple(
         (matrix.row_count, matrix.column_count) for matrix in result.degree_maps

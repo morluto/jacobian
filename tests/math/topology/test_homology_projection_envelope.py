@@ -18,9 +18,12 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes._integral_homology import (
     IntegralHomologyExecutionPlan,
     admit_integral_homology,
+    compute_integral_homology,
 )
 from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
     ChainMapValue,
+    CoefficientRing,
     HomologyGroupValue,
     IntegralHomologyGroupValue,
 )
@@ -285,6 +288,40 @@ def test_presolved_cases_keep_their_inexpensive_projection_boundary(
     if degree:
         assert result.degree_maps[0].free_generator_images[0].free == (1,)
         assert result.degree_maps[1].free_generator_images == ()
+
+
+def test_nonpresolved_projection_uses_the_worker_inverse_height() -> None:
+    # Neither diagonal entry divides the other, so this admitted outgoing
+    # reduction uses the real Smith worker rather than a visible-pivot presolve.
+    chain = ChainComplexValue(
+        coefficient_ring=CoefficientRing.INTEGER,
+        degree_min=0,
+        degree_max=2,
+        basis_sizes=(2, 2, 0),
+        differential_matrices=(((2, 0), (0, 3)), ((), ())),
+    )
+    plan = admit_integral_homology(chain)
+    degree = plan.degrees[1]
+    assert degree.outgoing_presolve is None
+    bound = simplicial_maps.__dict__["_homology_projection_degree_bounds"](degree)
+    # For a 2-square unimodular matrix, the shared cofactor bound is the
+    # admitted entry height plus one. The broader Smith maximum also includes
+    # determinant/intermediate heights and is strictly larger for this plan.
+    inverse_bits = degree.outgoing_height.right_bits + 1
+    assert inverse_bits < degree.outgoing_height.maximum_bits
+    assert bound.inverse_right_bits == inverse_bits
+
+    right_inverses: list[list[list[int]]] = []
+    groups = compute_integral_homology(plan, right_inverses=right_inverses)
+    inverse = right_inverses[1]
+    assert (
+        max(abs(value).bit_length() for row in inverse for value in row) <= inverse_bits
+    )
+    right = groups[1].outgoing_smith_certificate.right_transformation.entries
+    assert tuple(
+        tuple(sum(inverse[i][k] * right[k][j] for k in range(2)) for j in range(2))
+        for i in range(2)
+    ) == ((1, 0), (0, 1))
 
 
 def test_torsion_witnesses_use_source_orders_and_target_chain_axes(

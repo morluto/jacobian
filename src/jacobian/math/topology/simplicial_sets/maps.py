@@ -21,6 +21,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes._integral_homology import (
     IntegralHomologyDegreePlan,
     IntegralHomologyExecutionPlan,
+    _inverse_unimodular_bits,
     admit_integral_homology,
     compute_integral_homology,
 )
@@ -848,7 +849,11 @@ def _homology_projection_degree_bounds(
             default=1,
         )
         if outgoing is not None
-        else degree.outgoing_height.maximum_bits
+        # Match the inverse-specific envelope passed to the Smith worker,
+        # without relying on the aggregate bound also including that inverse.
+        else _inverse_unimodular_bits(
+            degree.chain_rank, degree.outgoing_height.right_bits
+        )
     )
     generators = torsion_generators = cycle_bits = bounding_bits = 0
     torsion_order_bits = incoming_left_bits = 0

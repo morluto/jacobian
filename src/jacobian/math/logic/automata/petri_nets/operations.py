@@ -1057,31 +1057,32 @@ def _explore_reachability(
     max_states: int,
     *,
     collect_edges: bool = True,
+    collect_dead_states: bool = False,
 ) -> tuple[
     list[tuple[int, ...]],
     list[tuple[int, int, int]],
     bool,
-    list[tuple[int, ...]],
+    list[int],
 ]:
     """Explore the bounded reachability graph.
 
-    The last element is each explored state's enabled-transition tuple.
-    Enabledness is computed once per state here, inside the charge the
-    exploration admission already accounts for, so a consumer that needs it
-    does not re-derive it in a second uncharged pass.
+    The last element contains dead-state indices only when requested. Check
+    enabledness once per state within the admitted exploration work, without
+    retaining another firing-record-sized collection beside the graph edges.
     """
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
     edges: list[tuple[int, int, int]] = []
-    enabled_per_state: list[tuple[int, ...]] = []
+    dead_state_indices: list[int] = []
     queue: deque[int] = deque([0])
     truncated = False
     while queue:
         idx = queue.popleft()
         marking = _bound_marking(net, initial_marking, state_list[idx])
         enabled = _enabled_transition_indices(net, marking)
-        enabled_per_state.append(tuple(enabled))
+        if collect_dead_states and not enabled:
+            dead_state_indices.append(idx)
         for t in enabled:
             success, new_tokens = _fire_transition_tokens(net, marking, t)
             if not success:
@@ -1098,7 +1099,7 @@ def _explore_reachability(
                 queue.append(len(state_list) - 1)
             if collect_edges:
                 edges.append((idx, t, state_index[new_tokens]))
-    return state_list, edges, truncated, enabled_per_state
+    return state_list, edges, truncated, dead_state_indices
 
 
 def reachability_graph(
@@ -1110,7 +1111,7 @@ def reachability_graph(
     net = _admit_net(net)
     initial_marking = _require_marking_size(net, initial_marking)
     require_reachability_bounds(net, max_states)
-    state_list, edges, truncated, _enabled = _explore_reachability(
+    state_list, edges, truncated, _dead_states = _explore_reachability(
         net, initial_marking, max_states
     )
     return ReachabilityResult(
@@ -1163,20 +1164,17 @@ def reachable_dead_markings(
             message="reachable dead-marking profile exceeds the serialized output bound",
         )
 
-    state_list, _, truncated, enabled_per_state = _explore_reachability(
-        net, initial_marking, max_states, collect_edges=False
+    state_list, _, truncated, dead_state_indices = _explore_reachability(
+        net,
+        initial_marking,
+        max_states,
+        collect_edges=False,
+        collect_dead_states=True,
     )
-    # The exploration already computed each state's enabled transitions inside
-    # the charge its admission accounts for. Re-deriving them here would price
-    # a second full pass over the transition table, once per discovered state,
-    # that nothing charges.
-    dead = tuple(
-        sorted(
-            tokens
-            for tokens, enabled in zip(state_list, enabled_per_state, strict=False)
-            if not enabled
-        )
-    )
+    # The exploration records deadness before any state or token cutoff. Keep
+    # only those state indices, without retaining enabled-transition families
+    # or paying for a second enabledness pass.
+    dead = tuple(sorted(state_list[index] for index in dead_state_indices))
     return ReachableDeadMarkingsResult._from_kernel(
         net=net,
         initial_marking=initial_marking,

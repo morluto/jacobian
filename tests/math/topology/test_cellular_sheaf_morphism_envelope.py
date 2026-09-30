@@ -179,9 +179,12 @@ def test_cokernel_bounds_parent_shape_before_structural_revalidation(
     )
     reconstructions = _spy_on_parent_reconstruction(monkeypatch)
 
-    with pytest.raises(OperationResourceAdmissionError):
+    with pytest.raises(OperationResourceAdmissionError) as error:
         cokernel_of_morphism(morphism_value.model_copy(update={role: forged_parent}))
 
+    assert error.value.errors()[0]["type"] == (
+        "topology.cellular_sheaf.morphism_cokernel.parent_shape"
+    )
     assert reconstructions == []
 
 
@@ -213,3 +216,20 @@ def test_cokernel_rejects_component_container_subclasses_before_traversal(
     with pytest.raises(OperationDomainValidationError) as error:
         cokernel_of_morphism(value.model_copy(update={"components": components}))
     assert error.value.errors()[0]["type"].endswith("component_structure")
+
+
+@pytest.mark.parametrize("role", ("source", "target"))
+@pytest.mark.parametrize(
+    "container", ("stalks", "cover_restrictions", "derived_restrictions")
+)
+def test_cokernel_parent_shape_errors_keep_the_cokernel_owner(
+    role: str, container: str
+) -> None:
+    value = _identity_morphism()
+    parent = getattr(value, role).model_copy(update={container: None})
+    with pytest.raises(OperationDomainValidationError) as error:
+        cokernel_of_morphism(value.model_copy(update={role: parent}))
+    assert type(error.value) is OperationDomainValidationError
+    assert error.value.errors()[0]["type"] == (
+        "topology.cellular_sheaf.morphism_cokernel.parent_structure"
+    )

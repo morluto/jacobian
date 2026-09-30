@@ -210,6 +210,24 @@ class _AdmittedCokernelMorphism:
     checked: SheafMorphismResult
 
 
+def _structurally_validated_parent(
+    parent: FiniteCellularSheaf, role: str
+) -> FiniteCellularSheaf:
+    # Envelope arithmetic relies on canonical stalk and restriction axes, but
+    # must not reconstruct either exact diagram yet. Reuse image admission's
+    # bounded structural walk while keeping diagnostics owned by this operation.
+    try:
+        _reject_oversized_parent_container(parent, role)
+        return FiniteCellularSheaf.model_validate(_unvalidated_payload(parent))
+    except OperationResourceAdmissionError as error:
+        raise _resource("parent_shape", str(error)) from error
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise _domain(
+            "parent_structure",
+            "morphism parents must contain structurally valid cellular sheaf data",
+        ) from error
+
+
 def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMorphism:
     if type(value) is not SheafMorphismResult:
         raise _domain("morphism_type", "morphism must be a cellular sheaf morphism")
@@ -219,19 +237,8 @@ def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMor
     ):
         raise _domain("parent_type", "morphism parents must be finite cellular sheaves")
     source, target = value.source, value.target
-    # Envelope arithmetic relies on canonical stalk and restriction axes, but
-    # must not reconstruct either exact diagram yet. Reuse image admission's
-    # bounded structural walk before any recursive revalidation or indexing.
-    _reject_oversized_parent_container(source, "source")
-    _reject_oversized_parent_container(target, "target")
-    try:
-        source = FiniteCellularSheaf.model_validate(_unvalidated_payload(source))
-        target = FiniteCellularSheaf.model_validate(_unvalidated_payload(target))
-    except (ValidationError, AttributeError, TypeError, ValueError) as error:
-        raise _domain(
-            "parent_structure",
-            "morphism parents must contain structurally valid cellular sheaf data",
-        ) from error
+    source = _structurally_validated_parent(source, "source")
+    target = _structurally_validated_parent(target, "target")
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (

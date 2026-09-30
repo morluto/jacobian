@@ -187,6 +187,45 @@ def _coefficient(series: TruncatedLaurentWindow, exponent: int) -> Fraction:
     return series.coefficients[exponent - series.valuation_lower].as_fraction()
 
 
+def _canonical_root(root: CanonicalRational) -> Fraction:
+    """Establish the supplied root's canonical representation before use.
+
+    A native caller can bypass Pydantic with ``model_construct``, so the
+    strict-integer components, positive denominator, and reducedness are
+    re-established here. Converting first leaks a raw ``ZeroDivisionError``
+    from a zero denominator and can retain a non-reduced value in the result.
+    """
+    root_num = getattr(root, "num", None)
+    root_den = getattr(root, "den", None)
+    if type(root_num) is not int or type(root_den) is not int:
+        raise OperationDomainValidationError(
+            location=("initial_root",),
+            code="local_series.smooth_branch.root_canonical",
+            message="initial_root must have strict integer components",
+        )
+    if root_den <= 0:
+        raise OperationDomainValidationError(
+            location=("initial_root",),
+            code="local_series.smooth_branch.root_canonical",
+            message="initial_root must have a positive denominator",
+        )
+    try:
+        value = root.as_fraction()
+    except (TypeError, ValueError, ZeroDivisionError) as error:
+        raise OperationDomainValidationError(
+            location=("initial_root",),
+            code="local_series.smooth_branch.root_canonical",
+            message="initial_root must be a valid canonical rational",
+        ) from error
+    if (root_num, root_den) != (value.numerator, value.denominator):
+        raise OperationDomainValidationError(
+            location=("initial_root",),
+            code="local_series.smooth_branch.root_canonical",
+            message="initial_root must be reduced",
+        )
+    return value
+
+
 def _fraction_digits(value: Fraction) -> int:
     return max(
         decimal_digit_width(value.numerator), decimal_digit_width(value.denominator)
@@ -341,7 +380,7 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
             message="polynomial rows and nested series must have canonical shapes",
         )
     max_degree, rows = _admit_source(source)
-    root = request.initial_root.as_fraction()
+    root = _canonical_root(request.initial_root)
     if _fraction_digits(root) > MAX_SMOOTH_BRANCH_SCALAR_DIGITS:
         raise OperationResourceAdmissionError(
             location=("initial_root",),
@@ -386,7 +425,13 @@ def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
                 f"{MAX_SMOOTH_BRANCH_SERIES_SLOTS} source series coefficients"
             ),
         )
-    max_degree = max((row.y_degree for row in source.coefficients), default=0)
+    # A row with series=None is the canonical exact-zero coefficient, so it
+    # contributes nothing to the represented polynomial. Counting its y-degree
+    # would let a zero row change admission for the same mathematics.
+    max_degree = max(
+        (row.y_degree for row in source.coefficients if row.series is not None),
+        default=0,
+    )
     if max_degree > MAX_SMOOTH_BRANCH_DEGREE:
         raise OperationResourceAdmissionError(
             location=("polynomial", "coefficients"),
@@ -640,7 +685,7 @@ def _admit_prefix_request(
                 f"{MAX_SMOOTH_BRANCH_PREFIX_WORK}-unit work bound"
             ),
         )
-    root = request.initial_root.as_fraction()
+    root = _canonical_root(request.initial_root)
     if _fraction_digits(root) > MAX_SMOOTH_BRANCH_SCALAR_DIGITS:
         raise OperationResourceAdmissionError(
             location=("initial_root",),

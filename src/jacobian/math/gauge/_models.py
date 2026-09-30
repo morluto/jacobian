@@ -174,7 +174,7 @@ MAX_GAUGE_LOOP_FAMILY_WORK = 750_000
 
 MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS = 350_000
 """Maximum value cells and scalar text units for one loop family result."""
-MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 5_576
+MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 5_592
 """Maximum materialized value cells retained by one finite gauge complex.
 
 This is an operation-owned structural bound, not an encoded-size estimate.
@@ -184,11 +184,10 @@ mathematical domain; encoded-byte limits belong to the delivery boundary.
 
 The value is the structural worst case of the per-component bounds
 (64 base + 64 vertices + 3*128 edges + 2*128 faces + 4096 face steps +
-112 constant-face basepoints + 24**2 table cells + 24 elements). At most
-256 steps fit in one face, so saturating 4096 steps needs at least 16
-nonconstant faces and leaves 128 - 16 constant faces. Reducing the step count
-cannot increase the combined step/basepoint count. This aggregate check is a
-defence-in-depth guard rather than the primary limit.
+128 explicit face basepoints + 24**2 table cells + 24 elements). Both
+nonconstant and constant faces may retain a basepoint, so all 128 can coexist
+with the maximum step count. This aggregate check is a defence-in-depth guard
+rather than the primary limit.
 """
 
 # Materialized-cell weights for one finite gauge complex. Each retained value
@@ -503,10 +502,8 @@ class FiniteGroupGaugeComplex(StrictModel):
         )
         for face in self.faces:
             output_units += _GAUGE_CELLS_PER_FACE
-            if face.boundary.steps:
-                output_units += len(face.boundary.steps)
-            else:
-                output_units += 1
+            output_units += len(face.boundary.steps)
+            output_units += int(face.boundary.basepoint is not None)
         if output_units > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS:
             raise _validation_error(
                 "complex_output_bound",

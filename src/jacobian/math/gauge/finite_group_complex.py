@@ -205,7 +205,7 @@ def _admit_one_face(
             "lattice_gauge.complex.face_closed",
             "each oriented face boundary must be closed",
         )
-    return total_steps, output_units
+    return total_steps, output_units + int(basepoint is not None)
 
 
 def _admit(lattice: GaugeLattice, group: FiniteGroupTable, faces: object) -> None:

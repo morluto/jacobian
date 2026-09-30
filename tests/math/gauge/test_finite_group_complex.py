@@ -6,15 +6,19 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.gauge import (
     FiniteGroupGaugeComplex,
+    FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeFace,
+    FiniteGroupGaugeField,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
     OrientedGaugePath,
     construct_finite_group_gauge_complex,
+    finite_group_gauge_curvature,
 )
 from jacobian.math.gauge._models import FiniteGroupGaugeComplexRequest
-from jacobian.math.groups._table_models import FiniteGroupTable
+from jacobian.math.gauge.finite_group_complex import _admit_faces, _admit_lattice
+from jacobian.math.groups._table_models import FiniteGroupTable, FiniteGroupTableElement
 
 
 def _group() -> FiniteGroupTable:
@@ -242,7 +246,11 @@ def test_maximum_length_labels_are_not_rejected_by_a_serialized_size_estimate() 
 
 
 @pytest.mark.parametrize("admission", ("native", "value"))
-def test_maximum_mixed_step_and_constant_faces_are_accepted(admission: str) -> None:
+@pytest.mark.parametrize("explicit_basepoint", (False, True))
+@pytest.mark.parametrize("group_order", (8, 24))
+def test_maximum_mixed_step_and_constant_faces_are_accepted(
+    admission: str, explicit_basepoint: bool, group_order: int
+) -> None:
     """Saturated step counts can coexist with 112 constant-face basepoints."""
     vertices = tuple(f"v{i:02}" for i in range(64))
     lattice = GaugeLattice(
@@ -253,12 +261,16 @@ def test_maximum_mixed_step_and_constant_faces_are_accepted(admission: str) -> N
         ),
     )
     group = FiniteGroupTable(
-        multiplication=tuple(tuple((i + j) % 24 for j in range(24)) for i in range(24)),
+        multiplication=tuple(
+            tuple((i + j) % group_order for j in range(group_order))
+            for i in range(group_order)
+        ),
         identity=0,
-        inverse=tuple((-i) % 24 for i in range(24)),
+        inverse=tuple((-i) % group_order for i in range(group_order)),
     )
     boundary = OrientedGaugePath(
-        steps=(GaugePathStep(edge_id="e000", forward=True),) * 256
+        steps=(GaugePathStep(edge_id="e000", forward=True),) * 256,
+        basepoint=vertices[0] if explicit_basepoint else None,
     )
     constant = OrientedGaugePath(steps=(), basepoint=vertices[0])
     faces = tuple(
@@ -267,6 +279,14 @@ def test_maximum_mixed_step_and_constant_faces_are_accepted(admission: str) -> N
         )
         for i in range(128)
     )
+    # Each face retains its ID, boundary, every step, and any explicit basepoint.
+    _, _, vertex_set, edge_by_id, lattice_units = _admit_lattice(lattice)
+    face_units = _admit_faces(faces, vertex_set, edge_by_id)
+    assert face_units == 2 * 128 + 4096 + 112 + (16 if explicit_basepoint else 0)
+    if group_order == 24:
+        assert lattice_units + 24**2 + 24 + face_units == (
+            5592 if explicit_basepoint else 5576
+        )
     request = FiniteGroupGaugeComplexRequest(lattice=lattice, group=group, faces=faces)
     if admission == "native":
         result = construct_finite_group_gauge_complex(
@@ -282,3 +302,21 @@ def test_maximum_mixed_step_and_constant_faces_are_accepted(admission: str) -> N
     assert (
         FiniteGroupGaugeComplex.model_validate_json(result.model_dump_json()) == result
     )
+    # The order-24 carrier exceeds curvature's independent output envelope.
+    if group_order == 8:
+        decoded = FiniteGroupGaugeComplex.model_validate_json(result.model_dump_json())
+        field = FiniteGroupGaugeField(
+            lattice=lattice,
+            group=group,
+            edge_values=tuple(
+                FiniteGroupGaugeEdgeLabel(
+                    edge_id=edge.edge_id,
+                    value=FiniteGroupTableElement(group=group, index=0),
+                )
+                for edge in lattice.edges
+            ),
+        )
+        curvature = finite_group_gauge_curvature(decoded, field)
+        assert curvature.flat
+        assert len(curvature.face_values) == 128
+        assert all(face.value.index == 0 for face in curvature.face_values)

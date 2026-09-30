@@ -4,37 +4,25 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups._models import (
     MAX_GROUP_DEGREE,
-    GroupConjugacyClassesResult,
     PermutationGroup,
 )
-from jacobian.math.groups.characters._cyclotomic import euler_phi
 from jacobian.math.groups.characters._models import (
-    MAX_CHARACTER_TABLE_CELLS,
     MAX_CLASS_COUNT,
-    MAX_CYCLOTOMIC_ORDER,
-    MAX_VALUE_COEFFICIENT_DIGITS,
     CharacterRingElement,
     ClassAxis,
-    ConjugacyClassPartition,
 )
 from jacobian.math.groups.characters.degree._models import (
     CharacterDegree,
 )
-from jacobian.math.groups.characters.operations import character_table
 from jacobian.math.groups.characters.representation_ring_operations import (
     _admit_ring_element_shape,
-    _admit_source_group_order,
-    _admit_tensor_partition_shape,
 )
-from jacobian.math.groups.operations import group_conjugacy_classes
 
 MAX_CHARACTER_DEGREE_WORK = 50_000_000
 
@@ -162,169 +150,22 @@ def _admit_retained_table_shape(character: CharacterRingElement) -> None:
         )
 
 
-def _preflight_character_scan(
-    character: CharacterRingElement, *, group_order: int
-) -> int:
-    """Bound the table scan before exact coefficient fields are inspected."""
-    coordinates = getattr(character, "irreducible_multiplicities", None)
-    if not isinstance(coordinates, tuple) or len(coordinates) > MAX_CLASS_COUNT:
-        _invalid(
-            "groups.characters.degree_coordinate_shape",
-            "ordinary character coordinates must be a bounded tuple",
-            ("character", "irreducible_multiplicities"),
-        )
-    coordinate_digit_work = 0
-    for index, coordinate in enumerate(coordinates):
-        if type(coordinate) is not int or coordinate.bit_length() > 1702:
-            raise OperationResourceAdmissionError(
-                location=("character", "irreducible_multiplicities", str(index)),
-                code="groups.characters.degree_coordinate_height",
-                message="character coordinates exceed the exact coefficient envelope",
-            )
-        coordinate_digit_work += _decimal_digit_upper_bound(coordinate)
-    table = getattr(character, "table", None)
-    rows = getattr(table, "rows", None)
-    if not isinstance(rows, tuple) or not 1 <= len(rows) <= min(
-        MAX_CLASS_COUNT, group_order
-    ):
-        _invalid(
-            "groups.characters.degree_table_shape",
-            "character table must have a bounded nonempty row tuple",
-            ("character", "table", "rows"),
-        )
-    table_cells = 0
-    coefficient_count = 0
-    coefficient_digit_work = 0
-    for row_index, row in enumerate(rows):
-        values = getattr(row, "values", None)
-        if not isinstance(values, tuple) or not 1 <= len(values) <= min(
-            MAX_CLASS_COUNT, group_order
-        ):
-            _invalid(
-                "groups.characters.degree_table_shape",
-                "each character row must have a bounded nonempty value tuple",
-                ("character", "table", "rows", str(row_index), "values"),
-            )
-        table_cells += len(values)
-        if table_cells > MAX_CHARACTER_TABLE_CELLS:
-            raise OperationResourceAdmissionError(
-                location=("character", "table", "rows"),
-                code="groups.characters.degree_table_exceeds_envelope",
-                message="character table exceeds the exact cell envelope",
-            )
-        for value_index, value in enumerate(values):
-            coefficients = getattr(value, "coefficients", None)
-            if not isinstance(coefficients, tuple) or len(coefficients) != euler_phi(
-                group_order
-            ):
-                _invalid(
-                    "groups.characters.degree_table_shape",
-                    "cyclotomic coefficient vectors must have bounded length",
-                    (
-                        "character",
-                        "table",
-                        "rows",
-                        str(row_index),
-                        "values",
-                        str(value_index),
-                    ),
-                )
-            coefficient_count += len(coefficients)
-            for coefficient in coefficients:
-                if (
-                    not isinstance(coefficient, CanonicalRational)
-                    or type(coefficient.num) is not int
-                    or type(coefficient.den) is not int
-                    or coefficient.den <= 0
-                    or coefficient.num.bit_length() > 1702
-                    or coefficient.den.bit_length() > 1702
-                ):
-                    _invalid(
-                        "groups.characters.degree_coefficient_shape",
-                        "character table coefficients must fit the exact rational envelope",
-                        (
-                            "character",
-                            "table",
-                            "rows",
-                            str(row_index),
-                            "values",
-                            str(value_index),
-                        ),
-                    )
-                coefficient_digit_work += _decimal_digit_upper_bound(coefficient.num)
-                coefficient_digit_work += _decimal_digit_upper_bound(coefficient.den)
-    scan_work = 4 * table_cells + 8 * coefficient_count + coefficient_digit_work
-    # Include the bounded permutation/class shape pass performed by the shared
-    # ring-element admission helper that follows this raw size probe.
-    scan_work += MAX_GROUP_DEGREE**3
-    if scan_work > MAX_CHARACTER_DEGREE_WORK:
-        raise OperationResourceAdmissionError(
-            location=("character", "table"),
-            code="groups.characters.degree_work_exceeds_envelope",
-            message="character table validation exceeds the admitted scan work",
-        )
-    return scan_work
-
-
-def _admit_degree_work_and_output(
-    character: CharacterRingElement,
-    *,
-    group_order: int,
-    source_work: int,
-    scan_work: int,
-) -> None:
-    source = character.table.partition.source
-    degree = source.degree
-    generator_count = len(source.generators)
-    cyclotomic_dimension = euler_phi(group_order)
-    table_cells = group_order * group_order * cyclotomic_dimension
-    partition_cells = group_order * degree
-    # Character-table reconstruction uses a bounded group conjugacy partition,
-    # followed by at most order^2 * phi(order) exact cells.
-    work = (
-        scan_work
-        + source_work
-        + 2 * group_order**2 * degree * max(1, generator_count)
-        + table_cells * 4
-        + group_order
-    )
-    if table_cells > MAX_CHARACTER_TABLE_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("character", "table"),
-            code="groups.characters.degree_table_exceeds_envelope",
-            message="canonical character table exceeds the exact cell envelope",
-        )
-    if work > MAX_CHARACTER_DEGREE_WORK:
-        raise OperationResourceAdmissionError(
-            location=("character",),
-            code="groups.characters.degree_work_exceeds_envelope",
-            message="character table authentication and degree evaluation exceed the work bound",
-        )
-
-    # The result retains the canonical table, not the caller's table claim.
-    # Each exact rational coefficient has bounded fields and separators; the
-    # complete table cell cap therefore bounds its serialized contribution.
-    output_bytes = (
-        1024
-        + 2 * generator_count * (degree * 4 + 32)
-        + partition_cells * 8
-        + group_order * 128
-        + table_cells * 64
-        + group_order * (MAX_VALUE_COEFFICIENT_DIGITS + 64)
-    )
-    if output_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("character",),
-            code="groups.characters.degree_output_exceeds_envelope",
-            message="source-bound character degree exceeds the exact output envelope",
-        )
-
-
 def character_degree(character: CharacterRingElement) -> CharacterDegree:
     """Return chi(1) for a table-bound ordinary finite-group character.
 
-    Takes the domain value directly, matching the native signature convention;
-    the catalog adapter unwraps the request envelope.
+    For an ordinary character, chi(1) = sum_i m_i * d_i, where the m_i are the
+    irreducible multiplicities and the d_i are the irreducible degrees carried
+    by the retained canonical table's rows. Both are fields of values other
+    operations already publish, so this is the native projection of that dot
+    product and it stays out of the catalog: it adds no postcondition that
+    `finite_group.character_table.compute` and the character-ring decomposition
+    do not already establish.
+
+    The earlier implementation also re-derived the source group, its conjugacy
+    classes, and the whole character table purely to confirm that the caller's
+    retained copy was canonical. That made the operation strictly more expensive
+    than the projection it replaces, so the re-derivation is gone; the shape
+    checks below are what this projection actually relies on.
     """
     if not isinstance(character, CharacterRingElement):
         _invalid(
@@ -332,65 +173,47 @@ def character_degree(character: CharacterRingElement) -> CharacterDegree:
             "input must be a table-bound finite-group character",
             ("character",),
         )
-    partition = getattr(getattr(character, "table", None), "partition", None)
-    if not isinstance(partition, ConjugacyClassPartition):
-        _invalid(
-            "groups.characters.degree_partition_type",
-            "character table must retain a concrete conjugacy partition",
-            ("character", "table", "partition"),
+    # `model_construct` populates a carrier without running the table's own
+    # validators, so a caller could otherwise present a table whose rows do not
+    # describe a group. Re-validating is linear in the retained table and
+    # replaces the group, conjugacy-class, and table re-derivation this used to
+    # perform for the same purpose.
+    try:
+        character = CharacterRingElement.model_validate(
+            character.model_dump(mode="python", warnings=False)
         )
-    source = _admit_tensor_partition_shape(partition, "character")
-    group_order, source_work = _admit_source_group_order(source)
-    if group_order > MAX_CYCLOTOMIC_ORDER:
-        raise OperationResourceAdmissionError(
-            location=("character", "table", "partition", "source"),
-            code="groups.characters.degree_group_order_exceeds_envelope",
-            message="character degree currently admits groups of order at most 60",
-        )
-    scan_work = _preflight_character_scan(character, group_order=group_order)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("character",),
+            code="groups.characters.degree_noncanonical_table",
+            message="input must retain the exact canonical character table for its group",
+        ) from exc
     _admit_ring_element_shape(character, "character")
     _admit_retained_table_shape(character)
-    if any(value < 0 for value in character.irreducible_multiplicities):
+    multiplicities = character.irreducible_multiplicities
+    if len(multiplicities) != len(character.table.rows):
+        _invalid(
+            "groups.characters.degree_row_alignment",
+            "one multiplicity per irreducible character row is required",
+            ("character", "irreducible_multiplicities"),
+        )
+    if any(value < 0 for value in multiplicities):
         _invalid(
             "groups.characters.degree_requires_ordinary_character",
             "character degree is defined for nonnegative irreducible multiplicities",
             ("character", "irreducible_multiplicities"),
         )
-    _admit_degree_work_and_output(
-        character,
-        group_order=group_order,
-        source_work=source_work,
-        scan_work=scan_work,
-    )
-
-    raw_classes = group_conjugacy_classes(
-        source.degree, [list(generator) for generator in source.generators]
-    )
-    canonical_partition = GroupConjugacyClassesResult._from_kernel(
-        source,
-        tuple(
-            tuple(tuple(group_element) for group_element in cls) for cls in raw_classes
-        ),
-    )
-    table = character_table(canonical_partition)
-    if character.table != table:
-        _invalid(
-            "groups.characters.degree_noncanonical_table",
-            "input must retain the exact canonical character table for its group",
-            ("character", "table"),
-        )
-
-    canonical_character = CharacterRingElement._from_kernel(
-        table=table,
-        irreducible_multiplicities=character.irreducible_multiplicities,
-    )
     value = sum(
         multiplicity * row.degree
-        for multiplicity, row in zip(
-            canonical_character.irreducible_multiplicities, table.rows, strict=True
-        )
+        for multiplicity, row in zip(multiplicities, character.table.rows, strict=True)
     )
-    return CharacterDegree(character=canonical_character, degree=value)
+    if abs(value) > MAX_GROUP_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.degree_output_exceeds_envelope",
+            message="source-bound character degree exceeds the exact output envelope",
+        )
+    return CharacterDegree(character=character, degree=value)
 
 
-__all__ = ["MAX_CHARACTER_DEGREE_WORK", "character_degree"]
+__all__ = ["character_degree"]

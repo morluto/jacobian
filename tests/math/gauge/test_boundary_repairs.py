@@ -447,3 +447,61 @@ def test_transport_decode_retains_values_without_replaying_holonomy() -> None:
     decoded = type(result).model_validate(payload)
     assert decoded.transported_holonomy.index == 2
     assert type(result).model_validate_json(decoded.model_dump_json()) == decoded
+
+
+@pytest.mark.parametrize("path_name", ("loop", "connector", "transported_loop"))
+@pytest.mark.parametrize("wrapped", (False, True))
+@pytest.mark.parametrize(
+    "defect",
+    (
+        "wrong_step",
+        "missing_edge",
+        "missing_forward",
+        "nested_edge",
+        "missing_steps",
+        "list_steps",
+        "nested_basepoint",
+    ),
+)
+def test_transport_rejects_forged_native_path_shapes(
+    path_name: str, wrapped: bool, defect: str
+) -> None:
+    result = finite_group_gauge_basepoint_transport(
+        _square_field(), _path("ab", "bc", "ca"), _path("ab")
+    )
+    path = getattr(result, path_name)
+    update: dict[str, object]
+    if defect == "wrong_step":
+        update = {"steps": (1,)}
+    elif defect == "missing_edge":
+        update = {"steps": (GaugePathStep.model_construct(forward=True),)}
+    elif defect == "missing_forward":
+        update = {"steps": (GaugePathStep.model_construct(edge_id="ab"),)}
+    elif defect == "nested_edge":
+        update = {
+            "steps": (GaugePathStep.model_construct(edge_id=["ab"], forward=True),)
+        }
+    elif defect == "missing_steps":
+        update = {"steps": None}
+    elif defect == "list_steps":
+        update = {"steps": list(path.steps)}
+    else:
+        update = {"basepoint": ["a"]}
+    forged = path.model_copy(update=update)
+    payload = (
+        result.model_copy(update={path_name: forged})
+        if wrapped
+        else {**result.model_dump(), path_name: forged}
+    )
+    with pytest.raises(ValidationError):
+        type(result).model_validate(payload)
+
+
+def test_native_path_container_hooks_are_not_invoked() -> None:
+    class UnvisitedSteps(tuple[GaugePathStep, ...]):
+        def __len__(self) -> int:
+            raise AssertionError("noncanonical path containers must not be traversed")
+
+    path = OrientedGaugePath.model_construct(steps=UnvisitedSteps(), basepoint="a")
+    with pytest.raises(ValidationError, match="path_shape"):
+        OrientedGaugePath.model_validate(path)

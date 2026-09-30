@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Self
+from typing import Annotated, Self, TypeGuard
 
 from pydantic import (
     AfterValidator,
@@ -28,14 +28,22 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice_gauge.{reason}", message)
 
 
-def _has_canonical_path_steps(path: object) -> bool:
-    steps = getattr(path, "steps", None)
-    return type(steps) is tuple and all(
-        isinstance(step, GaugePathStep)
-        and type(step.edge_id) is str
-        and type(step.forward) is bool
-        for step in steps
+def _has_canonical_steps(steps: object) -> TypeGuard[tuple[GaugePathStep, ...]]:
+    return (
+        isinstance(steps, tuple)
+        and type(steps) is tuple
+        and len(steps) <= MAX_GAUGE_PATH_LENGTH
+        and all(
+            type(step) is GaugePathStep
+            and _is_raw_label(getattr(step, "edge_id", None))
+            and type(getattr(step, "forward", None)) is bool
+            for step in steps
+        )
     )
+
+
+def _has_canonical_path_steps(path: object) -> bool:
+    return _has_canonical_steps(getattr(path, "steps", None))
 
 
 def _has_valid_permutation_degree(field: object) -> bool:
@@ -197,7 +205,7 @@ def _raw_face_step_count(face: object) -> int:
 
 def _lattice_walk_endpoints(
     by_id: Mapping[str, GaugeEdge],
-    steps: tuple[GaugePathStep, ...],
+    steps: object,
 ) -> tuple[str | None, str | None]:
     """Return the first and last vertex of a walk over the retained lattice.
 
@@ -205,6 +213,10 @@ def _lattice_walk_endpoints(
     directions, and continue from the previous head. A consumer reads these
     walks directly, so a decoded path must be one the lattice admits.
     """
+    if not _has_canonical_steps(steps):
+        raise _validation_error(
+            "lattice_walk", "walk steps must be bounded canonical lattice traversals"
+        )
     cursor: str | None = None
     first: str | None = None
     for step in steps:
@@ -424,7 +436,14 @@ class OrientedGaugePath(StrictModel):
 
     @model_validator(mode="after")
     def require_basepoint_for_empty_path(self) -> Self:
-        if not self.steps and self.basepoint is None:
+        basepoint = getattr(self, "basepoint", None)
+        if not _has_canonical_path_steps(self) or (
+            basepoint is not None and not _is_raw_label(basepoint)
+        ):
+            raise _validation_error(
+                "path_shape", "paths must retain bounded canonical steps and basepoints"
+            )
+        if not self.steps and basepoint is None:
             raise _validation_error(
                 "empty_path_basepoint",
                 "a zero-length path must name its identity-path basepoint",
@@ -814,15 +833,19 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
 
         def walk_of(path: OrientedGaugePath) -> tuple[str | None, str | None]:
             try:
-                first, last = _lattice_walk_endpoints(by_id, path.steps)
+                first, last = _lattice_walk_endpoints(
+                    by_id, getattr(path, "steps", None)
+                )
             except ValueError as exc:
                 raise _validation_error("basepoint_transport_walk", str(exc)) from None
+            basepoint = getattr(path, "basepoint", None)
             if first is None:
-                first = last = path.basepoint
+                first = last = basepoint
             if (
-                first not in self.field.lattice.vertices
+                (basepoint is not None and not _is_raw_label(basepoint))
+                or first not in self.field.lattice.vertices
                 or last not in self.field.lattice.vertices
-                or (path.basepoint is not None and path.basepoint != first)
+                or (basepoint is not None and basepoint != first)
             ):
                 raise _validation_error(
                     "basepoint_transport_walk",

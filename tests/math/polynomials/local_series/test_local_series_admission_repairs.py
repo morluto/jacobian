@@ -10,8 +10,10 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
+from sympy import nextprime
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -19,8 +21,10 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
+    local_polynomial_newton_polygon,
 )
 from jacobian.math.polynomials.local_series.newton_transform import (
+    MAX_NEWTON_TRANSFORM_OUTPUT_CELLS,
     NewtonTransformRequest,
     newton_transform,
 )
@@ -38,7 +42,7 @@ def _rational(value: int | Fraction) -> CanonicalRational:
 
 
 def _window(
-    coefficients: Sequence[int],
+    coefficients: Sequence[int | Fraction],
     *,
     lower: int = 0,
     place: str = "FINITE",
@@ -366,3 +370,304 @@ def test_smooth_jet_still_enforces_its_row_budget() -> None:
             SmoothBranchFirstJetRequest(polynomial=source, initial_root=_rational(1))
         )
     assert _code(error.value) == "local_series.smooth_branch.row_budget"
+
+
+# --- an exact-zero row is admitted before the degree guard excludes it ------
+
+
+def _zero_row_source(y_degree: object) -> LocalPolynomialInSeries:
+    """A linear polynomial plus one exact-zero row with a forged degree."""
+    return LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="FINITE",
+        center=_rational(0),
+        coefficients=(
+            LocalPolynomialCoefficient(y_degree=0, series=_window([-1, 0])),
+            LocalPolynomialCoefficient(y_degree=1, series=_window([1, 0])),
+            LocalPolynomialCoefficient.model_construct(y_degree=y_degree, series=None),
+        ),
+    )
+
+
+@pytest.mark.parametrize("y_degree", [32_769, -1, True])
+def test_smooth_jet_rejects_a_forged_exact_zero_row_degree(y_degree: object) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_first_jet(
+            SmoothBranchFirstJetRequest.model_construct(
+                polynomial=_zero_row_source(y_degree), initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_degree"
+
+
+def test_smooth_prefix_rejects_a_forged_exact_zero_row_degree() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_prefix(
+            SmoothBranchPrefixRequest.model_construct(
+                polynomial=_zero_row_source(32_769),
+                initial_root=_rational(1),
+                precision=4,
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_degree"
+
+
+# Negative controls: an admitted exact-zero row still leaves the mathematical
+# degree unchanged, and a genuine high-degree row is still refused.
+def test_admitted_exact_zero_row_still_leaves_the_degree_unchanged() -> None:
+    with_zero_row = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(
+            polynomial=_zero_row_source(32_768), initial_root=_rational(1)
+        )
+    )
+    plain = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(
+            polynomial=_polynomial(((0, _window([-1, 0])), (1, _window([1, 0])))),
+            initial_root=_rational(1),
+        )
+    )
+    assert with_zero_row.series.coefficients == plain.series.coefficients
+
+
+# --- forged row degrees are refused before any row is indexed --------------
+
+
+# F(t,y) = -1 + (1-t)y has the unique smooth branch y = 1 + t. The forged
+# sources below present coefficient windows at degrees that bypass the model's
+# own unique-increasing row validator.
+def _forged_degree_source(
+    rows: Sequence[tuple[int, Sequence[int]]],
+) -> LocalPolynomialInSeries:
+    return LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="FINITE",
+        center=_rational(0),
+        coefficients=tuple(
+            LocalPolynomialCoefficient(y_degree=degree, series=_window(values))
+            for degree, values in rows
+        ),
+    )
+
+
+# Declaring y - 1 and (1-t)y - 1 at the same degree is not a polynomial at all:
+# read together, the constant equation is -1 + 2y, whose root is 1/2, so the
+# supplied root is no root. Before the repair the later row simply overwrote
+# the earlier one and answered for a polynomial nobody had declared.
+DUPLICATE_DEGREE_ROWS = ((0, [-1, 0]), (1, [1, 0]), (1, [1, -1]))
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        DUPLICATE_DEGREE_ROWS,
+        ((0, [-1, 0]), (2, [0, 0]), (1, [1, -1])),
+        ((1, [1, -1]), (0, [-1, 0])),
+    ],
+    ids=["duplicate", "out_of_order", "reversed"],
+)
+def test_smooth_jet_rejects_forged_row_degrees(
+    rows: Sequence[tuple[int, Sequence[int]]],
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_first_jet(
+            SmoothBranchFirstJetRequest.model_construct(
+                polynomial=_forged_degree_source(rows), initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_order"
+
+
+def test_smooth_prefix_rejects_forged_row_degrees() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_prefix(
+            SmoothBranchPrefixRequest.model_construct(
+                polynomial=_forged_degree_source(DUPLICATE_DEGREE_ROWS),
+                initial_root=_rational(1),
+                precision=4,
+            )
+        )
+    assert _code(error.value) == "local_series.smooth_branch.row_order"
+
+
+# Negative control: the canonical order of the same windows is a branch of the
+# declared polynomial. The forged duplicate had returned these exact values
+# for a row it had silently dropped.
+def test_canonical_row_order_still_answers_the_declared_branch() -> None:
+    result = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(
+            polynomial=_polynomial(((0, _window([-1, 0])), (1, _window([1, -1])))),
+            initial_root=_rational(1),
+        )
+    )
+    assert [value.as_fraction() for value in result.series.coefficients] == [
+        Fraction(1),
+        Fraction(1),
+    ]
+
+
+# --- retained source scalars are charged for both components ---------------
+
+# A 256-digit prime keeps every proper fraction below in lowest terms, so each
+# retained coefficient really does carry a wide numerator and a wide
+# denominator rather than one wide component.
+WIDE_DENOMINATOR = nextprime(10**255)
+
+
+def _wide_source(terms: int) -> LocalPolynomialInSeries:
+    """``y`` plus a wide degree-zero window with -1 as the edge constant."""
+    return _polynomial(
+        (
+            (
+                0,
+                _window(
+                    [
+                        Fraction(-1),
+                        *(
+                            Fraction(WIDE_DENOMINATOR - index, WIDE_DENOMINATOR)
+                            for index in range(1, terms + 1)
+                        ),
+                    ]
+                ),
+            ),
+            (1, _window([Fraction(1), Fraction(0)])),
+        )
+    )
+
+
+def test_newton_refuses_a_retained_source_wider_than_its_cell_bound() -> None:
+    source = _wide_source(2_000)
+    retained = sum(
+        decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+        for row in source.coefficients
+        if row.series is not None
+        for coefficient in row.series.coefficients
+        if (value := coefficient.as_fraction())
+    )
+    assert retained > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_transform(
+            NewtonTransformRequest(
+                polynomial=source, edge_index=0, initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.newton_transform_output_bound"
+
+
+# Negative control: the same wide shape below the bound still transforms
+# exactly, charging both components without refusing valid mathematics.
+def test_newton_still_transforms_wide_proper_fractions_exactly() -> None:
+    source = _wide_source(3)
+    result = newton_transform(
+        NewtonTransformRequest(
+            polynomial=source, edge_index=0, initial_root=_rational(1)
+        )
+    )
+    rows = result.transformed_polynomial.coefficients
+    constant_row, linear_row = rows
+    assert constant_row.series is not None and linear_row.series is not None
+    assert [value.as_fraction() for value in constant_row.series.coefficients] == [
+        Fraction(0),
+        Fraction(WIDE_DENOMINATOR - 1, WIDE_DENOMINATOR),
+    ]
+    assert [value.as_fraction() for value in linear_row.series.coefficients] == [
+        Fraction(1),
+        Fraction(0),
+    ]
+    assert result.constant_term_valuation_lower_bound == 1
+
+
+def _wide_transform_source(
+    terms: int, *, width: int, retain_tail: bool
+) -> LocalPolynomialInSeries:
+    tail = [
+        Fraction(WIDE_DENOMINATOR - index, WIDE_DENOMINATOR)
+        for index in range(1, terms + 1)
+    ]
+    return _polynomial(
+        (
+            (0, _window([-1, *tail, *([0] * (width - terms - 1))])),
+            (1, _window([1, *([0] * (width - 1 if retain_tail else 1))])),
+        )
+    )
+
+
+def _polynomial_component_digits(source: LocalPolynomialInSeries) -> int:
+    return sum(
+        decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+        for row in source.coefficients
+        if row.series is not None
+        for coefficient in row.series.coefficients
+        for value in (coefficient.as_fraction(),)
+    )
+
+
+def test_newton_bounds_both_components_of_retained_output_fractions() -> None:
+    source = _wide_transform_source(1_250, width=1_251, retain_tail=True)
+    # F(t, 1+z) = z + sum_i (D-i)/D*t**i: every wide source fraction
+    # survives unchanged, so source and output together exceed the envelope.
+    assert 2 * _polynomial_component_digits(source) > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_transform(
+            NewtonTransformRequest(
+                polynomial=source, edge_index=0, initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.newton_transform_output_bound"
+
+
+def test_newton_counts_zero_slots_in_the_retained_source() -> None:
+    source = _wide_transform_source(1_950, width=4_096, retain_tail=False)
+    assert _polynomial_component_digits(source) > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_transform(
+            NewtonTransformRequest(
+                polynomial=source, edge_index=0, initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.newton_transform_output_bound"
+
+
+def test_newton_retains_a_near_limit_wide_transform_exactly() -> None:
+    source = _wide_transform_source(900, width=901, retain_tail=True)
+    result = newton_transform(
+        NewtonTransformRequest(
+            polynomial=source, edge_index=0, initial_root=_rational(1)
+        )
+    )
+    constant, linear = result.transformed_polynomial.coefficients
+    original = source.coefficients[0].series
+    assert (
+        original is not None
+        and constant.series is not None
+        and linear.series is not None
+    )
+    assert constant.series.coefficients == (_rational(0), *original.coefficients[1:])
+    assert linear.series.coefficients == (
+        _rational(1),
+        *(_rational(0) for _ in range(900)),
+    )
+    digits = _polynomial_component_digits(source) + _polynomial_component_digits(
+        result.transformed_polynomial
+    )
+    assert 900_000 < digits < MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    restored = type(result).model_validate_json(result.model_dump_json())
+    assert restored == result
+    polygon = local_polynomial_newton_polygon(restored.transformed_polynomial)
+    assert polygon.coefficient_valuations == ((0, 1), (1, 0))
+    assert polygon.edges[0].slope.as_fraction() == -1
+
+
+def test_newton_admits_full_width_zero_filled_windows() -> None:
+    source = _wide_transform_source(0, width=4_096, retain_tail=True)
+    result = newton_transform(
+        NewtonTransformRequest(
+            polynomial=source, edge_index=0, initial_root=_rational(1)
+        )
+    )
+    constant, linear = result.transformed_polynomial.coefficients
+    assert constant.series is not None and linear.series is not None
+    assert len(constant.series.coefficients) == len(linear.series.coefficients) == 4_096
+    assert all(value.as_fraction() == 0 for value in constant.series.coefficients)
+    assert linear.series.coefficients[0].as_fraction() == 1
+    assert all(value.as_fraction() == 0 for value in linear.series.coefficients[1:])
+    assert type(result).model_validate_json(result.model_dump_json()) == result

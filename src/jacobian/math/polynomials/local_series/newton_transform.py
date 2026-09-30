@@ -115,6 +115,88 @@ def _fraction_digits(value: Fraction) -> int:
     )
 
 
+def _retained_fraction_digits(value: Fraction) -> int:
+    """Width of both components, because the result retains each of them."""
+    return decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+
+
+def _retained_cells(value: object) -> int:
+    """Count admitted native model/tuple slots and scalar component widths.
+
+    This walks the already bounded characteristic without making a serialized
+    copy. A repeated scalar is charged at each retained location, including
+    zero numerators, unit denominators, and the characteristic's two copies of
+    each leading coefficient.
+    """
+    if isinstance(value, CanonicalRational):
+        return 2 + _retained_fraction_digits(value.as_fraction())
+    if isinstance(value, StrictModel):
+        fields = type(value).model_fields
+        return len(fields) + sum(
+            _retained_cells(getattr(value, name)) for name in fields
+        )
+    if isinstance(value, tuple):
+        return len(value) + sum(_retained_cells(item) for item in value)
+    if isinstance(value, int):
+        return decimal_digit_width(value)
+    if isinstance(value, str):
+        return len(value)
+    if value is None:
+        return 1
+    raise AssertionError("admitted Newton values must have canonical scalar shapes")
+
+
+def _admit_retained_output(
+    request: NewtonTransformRequest,
+    geometry: _TransformGeometry,
+    output_precisions: tuple[int, ...],
+    output_slots: int,
+    work: int,
+    coefficient_digits: int,
+) -> None:
+    # Every transformed row has the fixed parent (u, FINITE, 0). Count its
+    # structural slots and coordinate widths before allocating coefficients.
+    parent_cells = len("u") + len("FINITE") + 4  # zero rational: two slots + 0/1
+    output_metadata = (
+        len(LocalPolynomialInSeries.model_fields)
+        + parent_cells
+        + len(output_precisions)
+        + sum(
+            len(LocalPolynomialCoefficient.model_fields)
+            + decimal_digit_width(degree)
+            + len(TruncatedLaurentWindow.model_fields)
+            + parent_cells
+            + decimal_digit_width(min(0, precision))
+            + decimal_digit_width(precision)
+            for degree, precision in enumerate(output_precisions)
+        )
+    )
+    # Each rational occupies a tuple slot, two component slots, and at least
+    # two digits. Only slots reached by a retained nonzero product can grow;
+    # each such slot has two components of at most coefficient_digits digits.
+    wide_slots = min(work, output_slots)
+    output_coefficient_cells = 5 * output_slots + 2 * wide_slots * (
+        coefficient_digits - 1
+    )
+    output_cells = (
+        len(NewtonTransformResult.model_fields)
+        + _retained_cells(geometry.characteristic)
+        + _retained_cells(request.initial_root)
+        + decimal_digit_width(geometry.ramification_index)
+        + decimal_digit_width(geometry.ordinate_power)
+        + decimal_digit_width(geometry.removed_valuation)
+        + decimal_digit_width(max(1, output_precisions[0]))
+        + output_metadata
+        + output_coefficient_cells
+    )
+    if output_cells > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS:
+        _resource(
+            "output_bound",
+            "Newton transform source and exact output exceed their admitted cell bound",
+            ("polynomial",),
+        )
+
+
 def _admit_edge_root_powers(
     characteristic: NewtonEdgeCharacteristicResult,
     root: Fraction,
@@ -580,35 +662,14 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
         output_precisions,
     )
 
-    # The retained source scalars are already admitted individually, so their
-    # contribution is the sum of their measured widths rather than the global
-    # cap charged per slot. On the output side only the ``work`` slots that a
-    # nonzero source coefficient actually reaches can carry a wide value; the
-    # remaining retained entries are exact zeros and are charged as one cell
-    # each. Every retained output coefficient is at most ``coefficient_digits``
-    # wide, so ``work * coefficient_digits`` bounds the output digit sum
-    # without charging the global maximum to every window slot. Scalar
-    # magnitudes stay exact, so no encoded transport size enters admission.
-    source_digit_sum = sum(
-        _fraction_digits(coefficient.as_fraction())
-        for row in source_rows
-        for coefficient in row.series.coefficients
-        if coefficient.as_fraction()
+    _admit_retained_output(
+        request,
+        geometry,
+        output_precisions,
+        output_slots,
+        work,
+        coefficient_digits,
     )
-    output_cells = (
-        source_digit_sum
-        + output_slots
-        + len(source_rows)
-        + len(geometry.characteristic.terms)
-        + work * coefficient_digits
-        + output_row_count
-    )
-    if output_cells > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS:
-        _resource(
-            "output_bound",
-            "Newton transform source and exact output exceed their admitted cell bound",
-            ("polynomial",),
-        )
 
     return _Admission(
         characteristic=geometry.characteristic,

@@ -6,16 +6,21 @@ negative control is this file run against unmodified `main`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
-from jacobian._execution import OperationBackendError
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.groups.root_systems import (
     WeylElement,
     weight_lattice_vector,
 )
 from jacobian.math.groups.root_systems import operations as rs_operations
 from jacobian.math.groups.root_systems._models import (
+    MAX_LATTICE_COORDINATE_BITS,
     MAX_LATTICE_OUTPUT_COORDINATE_BITS,
     MAX_REFLECTION_REPRESENTABLE,
     WeylParabolicWeightOrbitResult,
@@ -35,14 +40,22 @@ def _a1(weight: int) -> int:
     return weight
 
 
-def test_trivial_parabolic_admits_a_large_exact_source_weight() -> None:
+@pytest.mark.parametrize(
+    "large",
+    [
+        MAX_REFLECTION_REPRESENTABLE + 1,
+        -MAX_REFLECTION_REPRESENTABLE - 1,
+        (1 << MAX_LATTICE_COORDINATE_BITS) - 1,
+        -(1 << MAX_LATTICE_COORDINATE_BITS) + 1,
+    ],
+)
+def test_trivial_parabolic_admits_a_large_exact_source_weight(large: int) -> None:
     """A parabolic with no generators reflects nothing, so the source is the orbit.
 
     The ambient Weyl norm is a bound for reflections that are never performed;
     applying it to the trivial subgroup refuses a representable singleton orbit.
     """
-    large = MAX_REFLECTION_REPRESENTABLE + 1
-    assert large.bit_length() <= MAX_LATTICE_OUTPUT_COORDINATE_BITS
+    assert abs(large).bit_length() <= MAX_LATTICE_OUTPUT_COORDINATE_BITS
     weight = weight_lattice_vector(A1, (large,))
 
     result = weyl_parabolic_weight_orbit(weight, ())
@@ -50,7 +63,10 @@ def test_trivial_parabolic_admits_a_large_exact_source_weight() -> None:
     assert result.orbit == (result.weight,)
     assert result.weight == (large,)
 
-    revived = WeylParabolicWeightOrbitResult.model_validate(result.model_dump())
+    assert result.model_dump(mode="json")["orbit"] == [[str(large)]]
+    revived = WeylParabolicWeightOrbitResult.model_validate_json(
+        result.model_dump_json()
+    )
     assert revived == result
 
 
@@ -71,15 +87,28 @@ def test_nontrivial_parabolic_still_bounds_every_image() -> None:
     )
 
 
-def test_parabolic_rejects_a_negative_native_generator_index() -> None:
-    """Python would treat -1 as the first generator and report a wrong orbit."""
+@pytest.mark.parametrize("indices", [(-1,), (False,), (0.0,), None, ([],), (0, 0)])
+def test_parabolic_rejects_invalid_native_generator_indices(indices: object) -> None:
+    """Generator positions require strict integers before any indexing or sorting."""
     weight = weight_lattice_vector(A1, (1,))
 
     with pytest.raises(OperationDomainValidationError) as error:
-        weyl_parabolic_weight_orbit(weight, (-1,))
+        weyl_parabolic_weight_orbit(weight, indices)  # type: ignore[arg-type]
 
     assert error.value.errors()[0]["type"] == "root_system.parabolic_simple_indices"
     assert error.value.errors()[0]["loc"] == ("simple_root_indices",)
+
+
+def test_parabolic_rejects_tuple_subclasses_before_iteration() -> None:
+    class UniterableIndices(tuple[int, ...]):
+        def __iter__(self) -> Iterator[int]:
+            raise AssertionError("native admission must reject before iteration")
+
+    weight = weight_lattice_vector(A1, (1,))
+    with pytest.raises(OperationDomainValidationError) as error:
+        weyl_parabolic_weight_orbit(weight, UniterableIndices((0,)))
+
+    assert error.value.errors()[0]["type"] == "root_system.parabolic_simple_indices"
 
 
 def test_parabolic_result_model_rejects_a_negative_index() -> None:
@@ -112,11 +141,24 @@ def test_weight_orbit_admits_a_representable_complete_orbit() -> None:
         for image in result.orbit
         for value in image
     )
+    parabolic = weyl_parabolic_weight_orbit(weight_lattice_vector(G2, weight), (0, 1))
+    assert parabolic.orbit == result.orbit
 
 
 def test_weight_orbit_still_refuses_an_unrepresentable_orbit() -> None:
-    with pytest.raises((OperationBackendError, OperationDomainValidationError)):
-        weyl_weight_orbit(A1, (MAX_REFLECTION_REPRESENTABLE * 8 + 1,))
+    # The source fits; reflection 1 produces 1 - 3 * MAX_REFLECTION_REPRESENTABLE.
+    weight = (1, -MAX_REFLECTION_REPRESENTABLE)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        weyl_weight_orbit(G2, weight)
+    assert (
+        error.value.errors()[0]["type"] == "root_system.weight_orbit_coordinate_bound"
+    )
+    assert error.value.errors()[0]["loc"] == ("weight",)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        weyl_parabolic_weight_orbit(weight_lattice_vector(G2, weight), (0, 1))
+    assert (
+        error.value.errors()[0]["type"] == "root_system.weight_orbit_coordinate_bound"
+    )
     # a representable image set is admitted, an unbounded one is not
     admitted = weyl_weight_orbit(A1, (MAX_REFLECTION_REPRESENTABLE // 2,))
     assert sorted(abs(value) for image in admitted.orbit for value in image) == [
@@ -136,30 +178,35 @@ def test_antidominant_representative_bounds_every_intermediate_reflection(
     """
     weight = (1, -MAX_REFLECTION_REPRESENTABLE)
     reflect = rs_operations._weight_reflect
-    observed: list[int] = []
+    observed: list[tuple[int, ...]] = []
 
     def recording_reflect(
         value: tuple[int, ...], index: int, rows: tuple[tuple[int, ...], ...]
     ) -> tuple[int, ...]:
         reflected = reflect(value, index, rows)
-        observed.extend(abs(item) for item in reflected)
+        observed.append(reflected)
         return reflected
 
     monkeypatch.setattr(rs_operations, "_weight_reflect", recording_reflect)
-    if True:
-        result = weyl_antidominant_representative(G2, weight)
+    result = weyl_antidominant_representative(G2, weight)
 
     assert result.antidominant_weight.coordinates == (
         -1,
         -MAX_REFLECTION_REPRESENTABLE + 1,
     )
-    assert max(observed) <= 3 * MAX_REFLECTION_REPRESENTABLE
+    assert max(abs(value) for image in observed for value in image) <= (
+        3 * MAX_REFLECTION_REPRESENTABLE
+    )
     # The intermediate norm bound is the invariant one, not the public limit.
     bounds = rs_operations._weight_coordinate_bounds(
         G2, weight, enforce_interoperable_bound=False
     )
     assert all(bound > MAX_REFLECTION_REPRESENTABLE for bound in bounds)
-    assert all(observed[index] <= bound for index, bound in enumerate(bounds))
+    assert all(
+        abs(value) <= bound
+        for image in observed
+        for value, bound in zip(image, bounds, strict=True)
+    )
 
 
 def test_integer_inverse_reports_the_caller_location() -> None:

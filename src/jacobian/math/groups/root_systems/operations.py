@@ -2259,20 +2259,29 @@ def _enumerate_weight_orbit(
     weight: tuple[int, ...],
     coordinate_bounds: tuple[int, ...],
     expected_size: int,
+    *,
+    simple_root_indices: tuple[int, ...] | None = None,
 ) -> tuple[tuple[int, ...], ...]:
-    """Enumerate all weight images after exact size and coordinate admission."""
-    rank = len(rows)
+    """Enumerate admitted generators, checking the actual output coordinates."""
+    indices = (
+        tuple(range(len(rows))) if simple_root_indices is None else simple_root_indices
+    )
     seen = {weight}
     pending = [weight]
     for current in pending:
-        for index in range(rank):
+        for index in indices:
             image = _weight_reflect(current, index, rows)
             if any(
                 abs(value) > coordinate_bounds[coordinate_index]
-                or abs(value) > MAX_REFLECTION_REPRESENTABLE
                 for coordinate_index, value in enumerate(image)
             ):
                 raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+            if any(abs(value) > MAX_REFLECTION_REPRESENTABLE for value in image):
+                raise OperationResourceAdmissionError(
+                    location=("weight",),
+                    code="root_system.weight_orbit_coordinate_bound",
+                    message="a weight orbit image exceeds the interoperable integer bound",
+                )
             if image not in seen:
                 seen.add(image)
                 if len(seen) > expected_size:
@@ -2374,8 +2383,13 @@ def weyl_parabolic_weight_orbit(
     )
     rows = datum.cartan_matrix.entries
     indices = simple_root_indices
-    if tuple(sorted(set(indices))) != indices or any(
-        not 0 <= index < len(rows) for index in indices
+    if (
+        type(indices) is not tuple
+        or len(indices) > len(rows)
+        or any(
+            type(index) is not int or not 0 <= index < len(rows) for index in indices
+        )
+        or tuple(sorted(set(indices))) != indices
     ):
         raise OperationDomainValidationError(
             location=("simple_root_indices",),
@@ -2383,24 +2397,22 @@ def weyl_parabolic_weight_orbit(
             message="parabolic simple-root indices must be a strictly increasing subset of the Cartan axis",
         )
 
-    # The full Weyl norm bounds every parabolic image coordinate and is
-    # admitted before any subgroup or orbit expansion. A parabolic with no
-    # generators performs no reflection at all, so its only image is the source
-    # and the lattice carrier's own output bound is the executed bound; the
-    # ambient norm would otherwise refuse a representable singleton orbit.
+    # Admit the norm as a growth bound, as for a full Weyl orbit, then check
+    # each executed image against the output ceiling. An empty generator set
+    # performs no reflection, so its exact singleton uses the lattice bound.
     subgroup = tuple(tuple(rows[i][j] for j in indices) for i in indices)
     if subgroup:
-        coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-        if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-            raise OperationDomainValidationError(
+        if any(abs(value) > MAX_REFLECTION_REPRESENTABLE for value in weight):
+            raise OperationResourceAdmissionError(
                 location=("weight",),
                 code="root_system.weight_orbit_coordinate_bound",
                 message=(
-                    "some parabolic weight image coordinate may exceed the "
-                    "interoperable integer bound"
+                    "the parabolic source weight exceeds the interoperable integer bound"
                 ),
             )
-    if subgroup:
+        coordinate_bounds = _weight_coordinate_bounds(
+            rows, weight, enforce_interoperable_bound=False
+        )
         _admit_cartan_finite_type(subgroup)
         subgroup_order = _weyl_order_from_exponents(subgroup)
         restricted_dominant = _dominant_weight(
@@ -2414,6 +2426,7 @@ def weyl_parabolic_weight_orbit(
         )
         stabilizer_order = _weyl_order_from_exponents(stabilizer_matrix)
     else:
+        coordinate_bounds = tuple(abs(value) for value in weight)
         subgroup_order = 1
         stabilizer_order = 1
     if (
@@ -2428,7 +2441,10 @@ def weyl_parabolic_weight_orbit(
             code="root_system.weight_orbit_size_bound",
             message=f"the complete parabolic weight orbit has {orbit_size} values; maximum is {MAX_WEIGHT_ORBIT_SIZE}",
         )
-    max_output_digits = (orbit_size + 1) * len(rows) * 18
+    coordinate_digit_bound = (
+        18 if indices else (MAX_LATTICE_COORDINATE_BITS * 30103) // 100_000 + 2
+    )
+    max_output_digits = (orbit_size + 1) * len(rows) * coordinate_digit_bound
     if max_output_digits > MAX_WEIGHT_ORBIT_OUTPUT_DIGITS:
         raise OperationDomainValidationError(
             location=("weight",),
@@ -2436,26 +2452,14 @@ def weyl_parabolic_weight_orbit(
             message="the complete parabolic weight orbit exceeds the admitted output size",
         )
 
-    seen = {weight}
-    pending = [weight]
-    for current in pending:
-        for index in indices:
-            image = _weight_reflect(current, index, rows)
-            if any(
-                abs(value) > coordinate_bounds[coordinate]
-                for coordinate, value in enumerate(image)
-            ):
-                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-            if image not in seen:
-                seen.add(image)
-                if len(seen) > orbit_size:
-                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-                pending.append(image)
-    if len(seen) != orbit_size:
-        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    return WeylParabolicWeightOrbitResult._from_kernel(
-        datum, indices, weight, tuple(sorted(seen))
+    orbit = _enumerate_weight_orbit(
+        rows,
+        weight,
+        coordinate_bounds,
+        orbit_size,
+        simple_root_indices=indices,
     )
+    return WeylParabolicWeightOrbitResult._from_kernel(datum, indices, weight, orbit)
 
 
 def weyl_element_descents(

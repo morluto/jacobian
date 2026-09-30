@@ -1325,8 +1325,8 @@ class WeylParabolicWeightOrbitResult(StrictModel):
     simple_root_indices: tuple[
         Annotated[StrictInt, Field(ge=0, le=MAX_RANK - 1)], ...
     ] = Field(max_length=MAX_RANK)
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    orbit: tuple[tuple[StrictInt, ...], ...] = Field(
+    weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
+    orbit: tuple[tuple[ExactInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_WEIGHT_ORBIT_SIZE
     )
 

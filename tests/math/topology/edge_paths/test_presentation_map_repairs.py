@@ -24,6 +24,7 @@ from jacobian.math.topology.edge_paths._models import (
     FundamentalGroupMapRequest,
     PresentationBasepointChangePath,
     PresentationMapCompositionRequest,
+    PresentationTransportedSimplicialMap,
     WordLetter,
 )
 from jacobian.math.topology.edge_paths.operations import (
@@ -247,15 +248,7 @@ class TestNativeAbelianizationAdmission:
 
 
 def test_a_basepoint_path_composes_with_a_simplicial_map() -> None:
-    """A change of basepoint followed by a based map is well defined.
-
-    Composition previously required two carriers of the same kind, so
-    `change_fundamental_group_basepoint` (a path) could not be composed with
-    `induced_fundamental_group_map` (a simplicial map) even when the
-    presentations already agreed. Composing a basepoint path with a simplicial map
-    yields that same map, and it induces the same homomorphism, so the composite
-    is a simplicial map rather than a refusal.
-    """
+    """The composite retains both the map and its basepoint transport."""
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b"), ("b", "c"), ("a", "c")))
 
     path_map = change_fundamental_group_basepoint(
@@ -287,9 +280,10 @@ def test_a_basepoint_path_composes_with_a_simplicial_map() -> None:
         PresentationMapCompositionRequest(first=path_map, second=identity_map)
     )
 
-    assert isinstance(composed.map, SimplicialMap)
-    # the composite is the based map itself, so the induced homomorphism is the
-    # identity map's, transported through the same presentation
+    assert isinstance(composed.map, PresentationTransportedSimplicialMap)
+    assert composed.map.simplicial_map == identity_map.map
+    assert composed.map.basepoint_path == path_map.map
+    # Both maps induce isomorphisms of the one-generator presentations.
     expected = identity_map.generator_images
     actual = composed.generator_images
     assert len(actual) == len(expected)

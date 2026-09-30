@@ -19,6 +19,8 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _ExactField,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
+    MAX_SHEAF_COVER_MAPS,
+    MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
     MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
@@ -140,12 +142,12 @@ def _reject_oversized_parent_container(parent: object, role: str) -> None:
             "parent_simpices",
             f"{role} morphism parent retains more than {MAX_SHEAF_SIMPLICES} simplices",
         )
-    for attribute in ("cover_restrictions", "derived_restrictions", "diamonds"):
+    for attribute, limit in (
+        ("cover_restrictions", MAX_SHEAF_COVER_MAPS),
+        ("derived_restrictions", MAX_SHEAF_DERIVED_RESTRICTIONS),
+    ):
         container = getattr(parent, attribute, None)
-        if (
-            isinstance(container, (tuple, list))
-            and len(container) > MAX_SHEAF_SIMPLICES
-        ):
+        if isinstance(container, (tuple, list)) and len(container) > limit:
             raise _resource(
                 "parent_cells",
                 f"{role} morphism parent retains too many {attribute} rows",

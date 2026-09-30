@@ -27,8 +27,10 @@ from jacobian.math.topology.cellular_sheaves import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
+    SheafScalar,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
+    Component,
     SheafCochainMapRequest,
     SheafMorphismComposeRequest,
     SheafMorphismRequest,
@@ -45,7 +47,7 @@ def _triangle_sheaf(
     edge_scalar: CanonicalRational | None = None,
     rank: int = 1,
     all_cover_scalar: bool = False,
-):
+) -> FiniteCellularSheaf:
     if edge_scalar is None:
         edge_scalar = _q(1)
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
@@ -83,22 +85,25 @@ def _triangle_sheaf(
     return result.sheaf
 
 
-def _independent_square_oracle(source, target, components) -> bool:
+def _fraction(value: SheafScalar) -> Fraction:
+    if isinstance(value, int):
+        return Fraction(value)
+    return Fraction(value.num, value.den)
+
+
+def _independent_square_oracle(
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+    components: tuple[Component, ...],
+) -> bool:
     """Check each incidence square with a separate Fraction implementation."""
-    phi = {
-        tuple(key): Fraction(matrix[0][0].num, matrix[0][0].den)
-        for key, matrix in components
-    }
+    phi = {tuple(key): _fraction(matrix[0][0]) for key, matrix in components}
     rho_f = {
-        (item.source, item.target): Fraction(
-            item.entries[0][0].num, item.entries[0][0].den
-        )
+        (item.source, item.target): _fraction(item.entries[0][0])
         for item in source.cover_restrictions
     }
     rho_g = {
-        (item.source, item.target): Fraction(
-            item.entries[0][0].num, item.entries[0][0].den
-        )
+        (item.source, item.target): _fraction(item.entries[0][0])
         for item in target.cover_restrictions
     }
     return all(

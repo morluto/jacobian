@@ -394,6 +394,28 @@ class PresentationBasepointChangePath(StrictModel):
         return self
 
 
+class PresentationTransportedSimplicialMap(StrictModel):
+    """A simplicial map followed by basepoint transport in its target.
+
+    For a source basepoint a and path p from f(a) to b, this represents the
+    based homomorphism sending a loop w to p^-1 f(w) p. Keeping the target
+    path makes this carrier closed under mixed composition without retaining
+    a recursive computation history.
+    """
+
+    simplicial_map: SimplicialMap
+    basepoint_path: PresentationBasepointChangePath
+
+    @model_validator(mode="after")
+    def require_target_path(self) -> Self:
+        if self.simplicial_map.target != self.basepoint_path.complex:
+            raise _validation_error(
+                "fundamental_group_map.transport_target",
+                "the basepoint path must belong to the simplicial map target",
+            )
+        return self
+
+
 class FundamentalGroupBasepointChangeRequest(StrictModel):
     """Transport a based fundamental group along one explicit edge path."""
 
@@ -403,7 +425,11 @@ class FundamentalGroupBasepointChangeRequest(StrictModel):
 class FundamentalGroupMapResult(StrictModel):
     """Exact generator words and triangle-relation witnesses for a map."""
 
-    map: SimplicialMap | PresentationBasepointChangePath
+    map: (
+        SimplicialMap
+        | PresentationBasepointChangePath
+        | PresentationTransportedSimplicialMap
+    )
     source_presentation: FundamentalGroupPresentationResult
     target_presentation: FundamentalGroupPresentationResult
     generator_images: tuple[FiniteGroupWord, ...] = Field(
@@ -416,6 +442,10 @@ class FundamentalGroupMapResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_binding(self) -> Self:
+        return self._require_structural_binding()
+
+    def _require_structural_binding(self) -> Self:
+        """Share cheap binding checks with admitted native consumers."""
         if isinstance(self.map, SimplicialMap):
             source_complex = self.map.source
             target_complex = self.map.target
@@ -423,6 +453,22 @@ class FundamentalGroupMapResult(StrictModel):
                 zip(self.map.source.vertices, self.map.vertex_map, strict=True)
             ).get(self.source_presentation.base_vertex)
             bases_match = source_base_image == self.target_presentation.base_vertex
+        elif isinstance(self.map, PresentationTransportedSimplicialMap):
+            source_complex = self.map.simplicial_map.source
+            target_complex = self.map.simplicial_map.target
+            source_base_image = dict(
+                zip(
+                    source_complex.vertices,
+                    self.map.simplicial_map.vertex_map,
+                    strict=True,
+                )
+            ).get(self.source_presentation.base_vertex)
+            bases_match = (
+                source_base_image == self.map.basepoint_path.source_base_vertex
+                and self.map.basepoint_path.target_base_vertex
+                == self.target_presentation.base_vertex
+                and self.map.basepoint_path.complex == target_complex
+            )
         else:
             source_complex = target_complex = self.map.complex
             bases_match = (
@@ -482,7 +528,7 @@ class FundamentalGroupMapResult(StrictModel):
 
 
 class PresentationMapCompositionRequest(StrictModel):
-    """Compose two based simplicial maps after applying pi_1."""
+    """Compose based presentation maps, including explicit basepoint transport."""
 
     first: FundamentalGroupMapResult
     second: FundamentalGroupMapResult

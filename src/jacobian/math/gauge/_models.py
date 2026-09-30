@@ -168,12 +168,13 @@ def _raw_face_step_count(face: object) -> int:
             "complex_boundary_shape", "a boundary basepoint must be a gauge label"
         )
     for step in steps:
-        if isinstance(step, dict) and set(step) - {"edge_id", "forward"}:
+        if not isinstance(step, dict) or set(step) - {"edge_id", "forward"}:
             raise _validation_error(
-                "complex_step_shape", "face step has unknown fields"
+                "complex_step_shape", "face steps must be labelled boolean traversals"
             )
-        if (isinstance(step, dict) and not _is_raw_label(step.get("edge_id"))) or (
-            type(step.get("forward")) is not bool
+        if (
+            not _is_raw_label(step.get("edge_id"))
+            or type(step.get("forward")) is not bool
         ):
             raise _validation_error(
                 "complex_step_shape",
@@ -794,23 +795,36 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
 
         def walk_of(path: OrientedGaugePath) -> tuple[str | None, str | None]:
             try:
-                return _lattice_walk_endpoints(by_id, path.steps)
+                first, last = _lattice_walk_endpoints(by_id, path.steps)
             except ValueError as exc:
                 raise _validation_error("basepoint_transport_walk", str(exc)) from None
+            if first is None:
+                first = last = path.basepoint
+            if (
+                first not in self.field.lattice.vertices
+                or last not in self.field.lattice.vertices
+                or (path.basepoint is not None and path.basepoint != first)
+            ):
+                raise _validation_error(
+                    "basepoint_transport_walk",
+                    "each path must retain its lattice basepoint",
+                )
+            return first, last
 
         loop_first, loop_end = walk_of(self.loop)
-        if loop_first is not None and (
-            loop_end != loop_first or loop_first != self.source_basepoint
-        ):
+        if loop_end != self.source_basepoint or loop_first != self.source_basepoint:
             raise _validation_error(
                 "basepoint_transport_loop",
                 "the source loop must be closed at the source basepoint",
             )
-        connector_first, _connector_end = walk_of(self.connector)
-        if connector_first is not None and connector_first != self.source_basepoint:
+        connector_first, connector_end = walk_of(self.connector)
+        if (
+            connector_first != self.source_basepoint
+            or connector_end != self.target_basepoint
+        ):
             raise _validation_error(
                 "basepoint_transport_connector",
-                "the connector must start at the source basepoint",
+                "the connector must join the source and target basepoints",
             )
         if self.transported_loop.steps != (
             tuple(
@@ -825,7 +839,7 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
                 "the transported loop must be the conjugated source walk",
             )
         transported_first, transported_end = walk_of(self.transported_loop)
-        if transported_first is not None and (
+        if (
             transported_first != self.target_basepoint
             or transported_end != self.target_basepoint
         ):
@@ -857,6 +871,8 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
                         "basepoint_transport_holonomy",
                         "transport steps must resolve in the retained edge field",
                     )
+                if not step.forward:
+                    element = self.field.group.inverse[element]
                 product = table[product][element]
             return product
 

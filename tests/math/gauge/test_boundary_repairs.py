@@ -390,3 +390,42 @@ def test_deferred_gauge_projections_are_native_only() -> None:
     assert callable(loop_family_holonomies)
     assert callable(finite_group_holonomy_conjugacy_profile)
     assert callable(finite_group_gauge_transform)
+
+
+@pytest.mark.parametrize("step", (1, None, "ab", [], True))
+def test_complex_rejects_non_mapping_steps_before_canonicalization(
+    step: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jacobian.math.gauge import _models
+
+    payload = _complex().model_dump()
+    payload["faces"][0]["boundary"]["steps"] = [step]
+
+    def unexpected_copy(value: object) -> object:
+        raise AssertionError("invalid steps must be refused before copying")
+
+    monkeypatch.setattr(_models, "canonicalize_json_containers", unexpected_copy)
+    with pytest.raises(ValidationError) as error:
+        FiniteGroupGaugeComplex.model_validate(payload)
+    assert error.value.errors()[0]["type"] == "lattice_gauge.complex_step_shape"
+
+
+@pytest.mark.parametrize("path_name", ("loop", "connector"))
+def test_transport_rejects_forged_authored_path_basepoints(path_name: str) -> None:
+    result = finite_group_gauge_basepoint_transport(
+        _square_field(), _path("ab", "bc", "ca"), _path("ab")
+    )
+    payload = result.model_dump()
+    payload[path_name]["basepoint"] = "b"
+    with pytest.raises(ValidationError, match="basepoint_transport_walk"):
+        FiniteGroupGaugeBasepointTransportResult.model_validate(payload)
+
+
+def test_empty_transport_cannot_change_its_basepoint() -> None:
+    result = finite_group_gauge_basepoint_transport(_square_field(), _path(), _path())
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+    payload = result.model_dump()
+    payload["target_basepoint"] = "b"
+    payload["transported_loop"]["basepoint"] = "b"
+    with pytest.raises(ValidationError, match="basepoint_transport_connector"):
+        type(result).model_validate(payload)

@@ -176,12 +176,17 @@ class DifferentialCoefficientRecurrenceRequest(StrictModel):
 
 
 # A boundary row at Taylor degree `d` collects a_k with k = d - c + order, so
-# k is bounded by the row degree cap plus the shift-order cap, not by the shift
-# order alone. `1 + D^4 + D^16` puts k = 16 + d in its boundary rows, which the
-# old `le=MAX_SHIFT_ORDER` bound refused with an unclassified validation error.
+# k is bounded by the row degree cap plus the differential order, independently
+# of the normalized recurrence's shift span.
 MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE = 63
 MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX = (
-    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + MAX_SHIFT_ORDER
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + MAX_DIFFERENTIAL_ORDER
+)
+
+# The recurrence coordinate n = m + minimum_slope can exceed its Taylor
+# boundary cutoff by at most the differential order.
+MAX_COEFFICIENT_RECURRENCE_START_INDEX = (
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + 1 + MAX_DIFFERENTIAL_ORDER
 )
 
 
@@ -214,7 +219,15 @@ class DifferentialCoefficientRecurrence(StrictModel):
 
     operator: DifferentialOreOperator
     recurrence: ShiftOreOperator
-    valid_from: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
+    valid_from: StrictInt = Field(
+        ge=0,
+        le=MAX_COEFFICIENT_RECURRENCE_START_INDEX,
+        description=(
+            "First normalized recurrence index after every integral root of its "
+            "leading coefficient. The corresponding Taylor boundary cutoff "
+            "must fit the 64-row boundary envelope."
+        ),
+    )
     boundary_rows: tuple[CoefficientRecurrenceBoundaryRow, ...] = Field(max_length=64)
 
     @model_validator(mode="after")

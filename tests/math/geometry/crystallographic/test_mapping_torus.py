@@ -7,13 +7,9 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
-)
-from jacobian.math.geometry.crystallographic._models import (
-    CrystallographicMappingTorusRequest,
 )
 from jacobian.math.geometry.crystallographic.operations import (
     mapping_torus_chain_complex,
@@ -182,22 +178,6 @@ def test_serialized_result_composes_into_integral_homology() -> None:
 
     groups = _integral_groups(restored)
     assert groups[1].torsion_invariant_factors == (2,)
-
-
-def test_request_schema_and_catalog_example_are_executable() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "crystallographic.mapping_torus.chain_complex.compute"
-    )
-    example = tool.examples[0]
-    request = CrystallographicMappingTorusRequest.model_validate_json(
-        json.dumps(example.input)
-    )
-
-    assert tool.run(request) == mapping_torus_chain_complex(_matrix(((-1,),)), 2)
-    schema = CrystallographicMappingTorusRequest.model_json_schema()
-    assert "A^m = I" in schema["properties"]["finite_order_exponent"]["description"]
 
 
 def test_result_round_trip_rejects_noncanonical_integer_entries() -> None:

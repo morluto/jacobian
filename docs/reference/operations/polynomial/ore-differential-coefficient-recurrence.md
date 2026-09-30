@@ -17,10 +17,14 @@ to the coefficient of \(x^m\) is
 c\,(m-l+j)_{\underline j}\,a_{m-l+j}
 \]
 
-when \(m\ge l\), and zero otherwise. Rows before the largest polynomial
-coefficient degree are returned explicitly as `boundary_rows`. Once every
-coefficient monomial is active, the stable recurrence is returned as
-\(\sum_i q_i(n)a_{n+i}=0\), with its first valid index `valid_from`.
+when \(m\ge l\), and zero otherwise. The normalized recurrence coordinate is
+\(n=m+\min(j-l)\), and the stable recurrence is
+\(\sum_i q_i(n)a_{n+i}=0\). Its `valid_from` is at least the index where every
+coefficient monomial is active and lies after every integral root of the
+highest-shift coefficient. All earlier Taylor-degree equations, including
+those passed while avoiding singular indices, are retained in `boundary_rows`.
+Their exclusive cutoff is `valid_from - min(j-l)`, expressed in the original
+Taylor coordinate rather than the normalized recurrence coordinate.
 The recurrence uses the canonical `ShiftOreOperator` value, so positive-order
 outputs can be serialized directly into
 `ore.shift.recurrence.generate_finite_prefix.compute`; pass `valid_from` as
@@ -31,8 +35,12 @@ handed to that operation. The shared shift-operator value admits exponents
 through 16, its `MAX_SHIFT_ORDER` carrier limit, and a generated recurrence with
 a wider shift span is refused rather than truncated. Boundary rows index Taylor
 coefficients, not shifts, so their indices run to the row-degree cap plus that
-order limit. Arithmetic and power operations retain their own tighter work and
-output limits.
+differential-order limit. At most 64 consecutive Taylor boundary rows are
+materialized; a later integral singularity requiring more rows produces a typed
+resource refusal before expansion. The normalized start can exceed 16 and is
+admitted separately from the recurrence shift order. Additional boundary work
+is charged against the shared conversion budget. Arithmetic and power
+operations retain their own tighter work and output limits.
 
 The operation accepts polynomial coefficients over \(\mathbb Q[x]\) only.
 It preserves rational arithmetic and does not choose initial values, claim a

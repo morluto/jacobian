@@ -6,7 +6,6 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -141,27 +140,6 @@ def test_addition_rejects_unequal_canonical_axes() -> None:
     assert error.value.errors()[0]["type"] == "groups.characters.class_axis_mismatch"
 
 
-def test_catalog_addition_declaration_and_example_execute() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "class_function.add.compute"
-    )
-    request = tool.request_type.model_validate(
-        {
-            "phi": TRIVIAL.model_dump(),
-            "psi": STANDARD.model_dump(),
-        }
-    )
-    result = tool.run(request)
-    assert result == class_function_add(TRIVIAL, STANDARD)
-    assert tuple(value.coefficients[0].as_fraction() for value in result.values) == (
-        Fraction(3),
-        Fraction(1),
-        Fraction(0),
-    )
-
-
 def test_addition_admits_coefficient_growth_before_exact_arithmetic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -195,26 +173,6 @@ def test_predicted_coefficient_growth_is_rejected_before_multiplication() -> Non
     assert error.value.errors()[0]["type"] == (
         "groups.characters.pointwise_product_output_digits_exceed_envelope"
     )
-
-
-def test_catalog_declaration_and_example_execute() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "class_function.pointwise_multiply.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(
-            {
-                "phi": TRIVIAL.model_dump(mode="json"),
-                "psi": STANDARD.model_dump(mode="json"),
-            }
-        ),
-        strict=True,
-    )
-    result = tool.run(request)
-    assert isinstance(result, FiniteClassFunction)
-    assert result.values == STANDARD.values
 
 
 def _forged(

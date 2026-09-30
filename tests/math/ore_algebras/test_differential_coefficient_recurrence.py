@@ -1,6 +1,7 @@
 import json
 from fractions import Fraction
 from math import factorial
+from typing import Any
 
 import pytest
 
@@ -20,9 +21,10 @@ from jacobian.math.ore_algebras.operations import (
     differential_operator_to_coefficient_recurrence,
     polynomial_recurrence_generate_prefix,
 )
+from jacobian.math.polynomials.values import RationalFunction
 
 
-def _rf(terms: list[tuple[int, int]]) -> dict:
+def _rf(terms: list[tuple[int, int]]) -> dict[str, Any]:
     return {
         "domain": "QQ",
         "variables": ["x"],
@@ -39,7 +41,7 @@ def _rf(terms: list[tuple[int, int]]) -> dict:
     }
 
 
-def _operator(*terms: tuple[int, list[tuple[int, int]]]) -> dict:
+def _operator(*terms: tuple[int, list[tuple[int, int]]]) -> dict[str, Any]:
     return {
         "variable": "x",
         "terms": [
@@ -49,14 +51,14 @@ def _operator(*terms: tuple[int, list[tuple[int, int]]]) -> dict:
     }
 
 
-def _polynomial(coefficient) -> dict[int, Fraction]:
+def _polynomial(coefficient: RationalFunction) -> dict[int, Fraction]:
     return {
         term.exponents[0]: term.coefficient.as_fraction()
         for term in coefficient.numerator.terms
     }
 
 
-def _index_value(coefficient, index: int) -> Fraction:
+def _index_value(coefficient: RationalFunction, index: int) -> Fraction:
     """Evaluate one cleared-denominator recurrence coefficient at an index."""
     total = Fraction(0)
     for term in coefficient.numerator.terms:
@@ -351,31 +353,125 @@ def test_generated_recurrence_term_count_is_admitted() -> None:
     )
 
 
-def test_boundary_row_indices_are_not_capped_by_the_shift_order() -> None:
-    """A boundary row at degree d collects a_{d - c + order}, not a shift.
-
-    `D^4 + D^16` has `valid_from = 4`, and its boundary row at degree `d`
-    collects `a_{d + 16}`, so the top row indexes `a_19`. Capping the index at
-    the shift-order limit of 16 refused the result with an unclassified
-    Pydantic error after admission had already accepted the request.
-    """
-    operator = DifferentialOreOperator.model_validate(
+def test_positive_coordinate_shift_does_not_invent_boundary_rows() -> None:
+    # D^4 + D^16 has n=m+4. The recurrence starts at n=4, already covering
+    # Taylor degree m=0; there are no exceptional Taylor equations.
+    result = differential_operator_to_coefficient_recurrence(
         _operator((4, [(0, 1)]), (16, [(0, 1)]))
     )
-    result = differential_operator_to_coefficient_recurrence(operator)
-
     assert result.valid_from == 4
-    assert [row.degree for row in result.boundary_rows] == [0, 1, 2, 3]
-    indices = {term.index for row in result.boundary_rows for term in row.terms}
-    assert max(indices) == 19
-    assert max(indices) > 16
-    assert max(indices) <= MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX
-    # a_k with k = d - c + order, so degree 0 already reaches a_16
-    assert {
-        row.degree: [term.index for term in row.terms] for row in result.boundary_rows
-    } == {
-        0: [4, 16],
-        1: [5, 17],
-        2: [6, 18],
-        3: [7, 19],
-    }
+    assert result.boundary_rows == ()
+
+
+def test_negative_coordinate_shift_retains_initial_taylor_constraints() -> None:
+    result = differential_operator_to_coefficient_recurrence(
+        _operator((0, [(0, 1), (8, 1)]))
+    )
+    assert result.valid_from == 0
+    assert [row.degree for row in result.boundary_rows] == list(range(8))
+    assert [
+        [(term.index, term.coefficient.as_fraction()) for term in row.terms]
+        for row in result.boundary_rows
+    ] == [[(index, Fraction(1))] for index in range(8)]
+
+
+def test_regular_start_passes_all_future_integral_singularities() -> None:
+    # L=(8+x)-5xD+x^2D^2 has normalized leading coefficient
+    # (n-1)(n-3). n=2 is regular but is not a valid stable start.
+    result = differential_operator_to_coefficient_recurrence(
+        _operator((0, [(0, 8), (1, 1)]), (1, [(1, -5)]), (2, [(2, 1)]))
+    )
+    assert result.valid_from == 4
+    assert [row.degree for row in result.boundary_rows] == list(range(5))
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    prefix = polynomial_recurrence_generate_prefix(
+        decoded.recurrence,
+        decoded.valid_from,
+        FiniteRationalSequence.model_validate({"values": [7]}),
+        8,
+    )
+    values = [value.as_fraction() for value in prefix.values.values]
+    for offset in range(8):
+        n = decoded.valid_from + offset
+        assert values[offset] + (n - 1) * (n - 3) * values[offset + 1] == 0
+    # Independent coefficient extraction at Taylor degree m, including the
+    # equations skipped at both integral roots.
+    coefficients = [Fraction(index + 1) for index in range(6)]
+    for row in result.boundary_rows:
+        m = row.degree
+        observed = sum(
+            term.coefficient.as_fraction() * coefficients[term.index]
+            for term in row.terms
+        )
+        expected = (8 - 5 * m + m * (m - 1)) * coefficients[m]
+        if m:
+            expected += coefficients[m - 1]
+        assert observed == expected
+
+
+@pytest.mark.parametrize("root", [16, 17])
+def test_advanced_start_and_boundary_indices_exceed_shift_order(root: int) -> None:
+    result = differential_operator_to_coefficient_recurrence(
+        _operator((1, [(0, -root)]), (2, [(1, 1)]), (16, [(16, 1)]))
+    )
+    assert result.valid_from == root + 1
+    assert [row.degree for row in result.boundary_rows] == list(range(root + 1))
+    assert max(term.index for row in result.boundary_rows for term in row.terms) == root
+    assert (
+        max(term.index for row in result.boundary_rows for term in row.terms)
+        <= MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX
+    )
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+    prefix = polynomial_recurrence_generate_prefix(
+        result.recurrence,
+        result.valid_from,
+        FiniteRationalSequence.model_validate({"values": [1]}),
+        3,
+    )
+    values = [value.as_fraction() for value in prefix.values.values]
+    for offset in range(3):
+        n = result.valid_from + offset
+        assert (
+            factorial(n) // factorial(n - 16) * values[offset]
+            + (n + 1) * (n - root) * values[offset + 1]
+            == 0
+        )
+
+
+@pytest.mark.parametrize("root", [10**50])
+def test_far_singularities_refuse_before_boundary_materialization(
+    monkeypatch: pytest.MonkeyPatch, root: int
+) -> None:
+    import jacobian.math.ore_algebras.operations as operations
+
+    def fail_if_expanded(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("oversized boundary rows must be refused before construction")
+
+    monkeypatch.setattr(
+        operations, "_coefficient_recurrence_boundary_rows", fail_if_expanded
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        differential_operator_to_coefficient_recurrence(
+            _operator((0, [(0, -root)]), (1, [(1, 1)]))
+        )
+    assert (
+        error.value.errors()[0]["type"]
+        == "ore_algebra.coefficient_recurrence_boundary_rows"
+    )
+
+
+def test_boundary_row_limit_remains_accepted() -> None:
+    result = differential_operator_to_coefficient_recurrence(
+        _operator((0, [(0, -63)]), (1, [(1, 1)]))
+    )
+    assert result.valid_from == 64
+    assert [row.degree for row in result.boundary_rows] == list(range(64))
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_nonintegral_future_root_does_not_delay_the_start() -> None:
+    result = differential_operator_to_coefficient_recurrence(
+        _operator((0, [(0, -131)]), (1, [(1, 2)]))
+    )
+    assert result.valid_from == 1
+    assert len(result.boundary_rows) == 1

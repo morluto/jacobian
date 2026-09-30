@@ -85,6 +85,9 @@ def test_result_round_trip_preserves_typed_input_deck_and_quotient() -> None:
         }
     )
     assert forged.realizing_edge_count == result.realizing_edge_count + 1
+    # An authored transport result is not an authenticated computation. The
+    # operation re-establishes the quotient from its retained canonical deck.
+    assert anonymous_vertex_deck_edge_count(forged.deck) == result
 
 
 def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() -> None:

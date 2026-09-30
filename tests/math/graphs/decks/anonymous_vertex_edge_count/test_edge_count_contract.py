@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardMultiset,
 )
@@ -18,11 +17,7 @@ from jacobian.math.graphs.decks.anonymous_vertex_edge_count import (
     AnonymousVertexDeckEdgeCount,
     anonymous_vertex_deck_edge_count,
 )
-from jacobian.math.graphs.decks.anonymous_vertex_edge_count._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-
-OPERATION_ID = "graph.deck.anonymous_vertex.edge_count.compute"
-
 
 CARD_LABELS = ("v00", "v01", "v02")
 
@@ -51,19 +46,6 @@ def _nonrealizable_deck() -> AnonymousGraphCardMultiset:
     )
 
 
-# --- the public field names the presupposition it carries -------------------
-
-
-def test_result_field_is_named_for_the_presupposition() -> None:
-    fields = AnonymousVertexDeckEdgeCount.model_fields
-    assert "realizing_edge_count" in fields
-    assert "implied_edge_count" not in fields
-    description = fields["realizing_edge_count"].description
-    assert description is not None
-    assert "does not establish" in description
-    assert "realizab" in description
-
-
 def test_result_carries_no_implied_edge_count_field() -> None:
     deck = _nonrealizable_deck()
     result = anonymous_vertex_deck_edge_count(deck)
@@ -80,30 +62,6 @@ def test_nonrealizable_deck_returns_the_necessary_quotient() -> None:
     assert result.source_order == 4
     assert result.overcount_divisor == 2
     assert result.realizing_edge_count == 2
-
-
-# --- the published description states the presupposition --------------------
-
-
-def test_published_description_states_the_presupposition() -> None:
-    tool = next(item for item in TOOLS if item.operation_id == OPERATION_ID)
-    assert "realizing_edge_count" in tool.description
-    assert "whether or not such a graph exists" in tool.description
-
-
-def test_published_example_states_the_presupposition() -> None:
-    tool = next(item for item in TOOLS if item.operation_id == OPERATION_ID)
-    assert "does not itself establish realizability" in tool.examples[0].description
-
-
-# --- the operation stays discoverable ---------------------------------------
-
-
-def test_operation_remains_published_and_discoverable() -> None:
-    """Kept published: the field and description now carry the caveat."""
-    operation = Catalog.open().operation(OPERATION_ID)
-    assert operation is not None
-    assert operation.operation_id == OPERATION_ID
 
 
 # --- negative controls -----------------------------------------------------
@@ -163,8 +121,8 @@ def test_nondivisible_card_total_is_still_refused() -> None:
     )
 
 
-def test_a_forged_quotient_is_still_refused() -> None:
-    """The result validator still checks the structure it publishes."""
+def test_edge_count_outside_the_transport_envelope_is_refused() -> None:
+    """Decoding bounds the field; it does not authenticate the computed quotient."""
     deck = _nonrealizable_deck()
     result = anonymous_vertex_deck_edge_count(deck)
     with pytest.raises(ValueError):

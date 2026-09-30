@@ -29,6 +29,10 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
     exists. ``realizing_edge_count`` is named for that presupposition rather
     than for a witnessed source graph, and divisibility alone does not supply
     it.
+
+    Decoding checks transport structure and bounds, not the producer's quotient
+    computation. To establish the count for an authored payload, pass its deck
+    to ``anonymous_vertex_deck_edge_count``.
     """
 
     deck: AnonymousGraphCardMultiset

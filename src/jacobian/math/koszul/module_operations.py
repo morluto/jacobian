@@ -2538,6 +2538,7 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
             for _, _, coefficient in differential.entries
         ),
     )
+    retained_digits = 0
     for coefficient in retained_coefficients:
         if (
             abs(coefficient.num) >= _MAX_KOSZUL_HOMOLOGY_COEFFICIENT
@@ -2549,32 +2550,30 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
                 message="top Koszul homology coefficients exceed the exact digit bound",
             )
 
-    (
-        len(value.algebra.model_dump_json().encode("utf-8"))
-        + len(value.module.model_dump_json().encode("utf-8"))
-        + (
-            sum(
-                2 * canonical_rational_component_digits(item) + 24
-                for element in value.sequence
-                for item in element
-            )
-        )
-        + (
-            len(value.differentials[-1].model_dump_json().encode("utf-8"))
-            if value.differentials
-            else 0
-        )
-        + 256
+        retained_digits += _decimal_digits_upper_bound(coefficient.num)
+        retained_digits += _decimal_digits_upper_bound(coefficient.den)
+
+    labels = (*value.algebra.basis, *value.module.algebra.basis, *value.module.basis)
+    top_entries = len(value.differentials[-1].entries) if value.differentials else 0
+    # Intrinsic allocation cells: retained label characters and exact scalar
+    # digits, two component slots per rational, and sparse row/column/value
+    # slots. Encoding width and JSON escaping do not affect native admission.
+    retained_materialization = (
+        sum(len(label) + 1 for label in labels)
+        + retained_digits
+        + 2 * len(retained_coefficients)
+        + 3 * top_entries
+        + 64
     )
     module_dimension = len(value.module.basis)
     differential = value.differentials[-1] if value.differentials else None
     work = 0
+    basis_component_digits = 1
     if differential is not None:
         rows, columns = differential.row_count, differential.column_count
         rank_bound = min(rows, columns)
         row_denominator_bits = [0] * rows
         row_numerator_bits = [0] * rows
-        max_input_digits = 1
         for row, _, coefficient in differential.entries:
             numerator, denominator = abs(coefficient.num), coefficient.den
             row_numerator_bits[row] = max(
@@ -2582,9 +2581,6 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
             )
             if denominator != 1:
                 row_denominator_bits[row] += denominator.bit_length()
-            max_input_digits = max(
-                max_input_digits, canonical_rational_component_digits(coefficient)
-            )
         row_scale_bits = max(row_denominator_bits, default=0)
         entry_bits = max(
             (
@@ -2603,7 +2599,10 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
             rows * columns + rank_bound * columns + 2 * rank_bound * rows * columns
         )
         work = operations * transient_bits * transient_bits * 16
-        4 * max(rows, columns) * (max_input_digits + 4) + 32
+        # Kernel coordinates are ratios of minors of the row-scaled integer
+        # matrix. The same minor-bit bound used for work bounds each reduced
+        # numerator and denominator without constructing those integers.
+        basis_component_digits = (minor_bits * 30_103) // 100_000 + 1
     if work > MAX_KOSZUL_TOP_HOMOLOGY_WORK:
         raise OperationResourceAdmissionError(
             location=("complex", "differentials"),
@@ -2611,13 +2610,14 @@ def _admit_top_homology(value: ModuleKoszulComplex) -> None:
             message="top Koszul homology kernel exceeds its exact work bound",
         )
 
-    # At most two module-dimension-square bases are returned. The coefficient
-    # bound is the same minor bound used for deterministic rational RREF.
-    # The result retains the module, the chain dimensions, the annihilator
-    # basis, and one coordinate per basis element per generator. Scalar
-    # magnitudes stay exact and unbounded, so the bound counts these retained
-    # entries.
-    output_cells = module_dimension + 2 * module_dimension**2 + 1
+    # At most two module-dimension-square rational bases are retained. Charge
+    # both scalar components and their predicted digits as well as row slots.
+    output_cells = (
+        retained_materialization
+        + 2 * module_dimension**2 * (2 * basis_component_digits + 2)
+        + 2 * module_dimension
+        + 1
+    )
     if output_cells > MAX_KOSZUL_TOP_HOMOLOGY_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("complex",),

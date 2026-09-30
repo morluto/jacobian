@@ -8,18 +8,14 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.finite_matrix._models import (
-    GeneralLinearNaturalActionRequest,
     PrimeFieldGeneralLinearGroup,
     PrimeFieldGeneralLinearNaturalAction,
-    PrimeFieldLinearGroupRequest,
     PrimeFieldSpecialLinearNaturalAction,
-    SpecialLinearNaturalActionRequest,
 )
 from jacobian.math.groups.finite_matrix.operations import (
     construct_general_linear_group,
@@ -240,27 +236,3 @@ def test_result_models_reject_mismatched_generator_parents() -> None:
 
     with pytest.raises(ValidationError):
         PrimeFieldGeneralLinearGroup.model_validate_json(json.dumps(payload))
-
-
-def test_catalog_examples_validate_and_execute() -> None:
-    operation_ids = {
-        "finite_matrix_group.general_linear.construct",
-        "finite_matrix_group.special_linear.construct",
-        "finite_matrix_group.general_linear.nonzero_vector_action.compute",
-        "finite_matrix_group.special_linear.nonzero_vector_action.compute",
-    }
-    tools = {
-        tool.operation_id: tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id in operation_ids
-    }
-
-    assert set(tools) == operation_ids
-    for tool in tools.values():
-        example = tool.examples[0]
-        request = tool.request_type.model_validate_json(json.dumps(example.input))
-        assert isinstance(tool.run(request), tool.result_type)
-
-    assert PrimeFieldLinearGroupRequest(prime=2, dimension=2)
-    assert GeneralLinearNaturalActionRequest(group=construct_general_linear_group(2, 2))
-    assert SpecialLinearNaturalActionRequest(group=construct_special_linear_group(3, 2))

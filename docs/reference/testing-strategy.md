@@ -233,11 +233,14 @@ correctness thresholds.
 ### Test lane ownership
 
 `tests/math` boots kernels. A module under `tests/math` must not import
-`jacobian.catalog.catalog`, `jacobian.dispatch`, `jacobian.cli`, or
-`jacobian.mcp`; those start the catalog, bootstrap every declaration, and cost
+`jacobian.catalog.builtins`, `jacobian.catalog.catalog`, `jacobian.dispatch`,
+`jacobian.cli`, or `jacobian.mcp`; those start the catalog, bootstrap every
+declaration, and cost
 far more than the math it would exercise. Drive the kernel directly instead, and
 pass canonical values rather than a request model when the kernel's signature
-takes them.
+takes them. The rule covers direct imports and package-form imports such as
+`from jacobian.catalog import builtins`, including aliases. Contract-only imports
+from `jacobian.catalog.models` remain allowed.
 
 A test that opens a catalog, dispatches by operation ID, or decodes a published
 example in its wire encoding belongs in `tests/catalog/`. That includes a test

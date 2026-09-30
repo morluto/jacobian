@@ -105,6 +105,38 @@ def test_linear_code_dual_and_syndrome_have_one_operation_family() -> None:
     }
 
 
+def test_no_operation_id_duplicates_one_mathematical_postcondition() -> None:
+    """Two built-in IDs sharing a request type, result type, and runner
+    establish the identical postcondition, so ``math.find`` returns competing
+    operations for one capability and splits callers and telemetry. Catalog
+    construction rejects only identical IDs, so the duplication is silent;
+    alternative wording belongs in ``discovery_terms`` instead of a second
+    declaration (AGENTS.md atomicity and public-operation admission)."""
+    by_contract: dict[tuple[str, str, str], list[str]] = {}
+    for tool in BUILTIN_TOOLS:
+        # Key the runner by its defining code object: two operations that
+        # share a code object share a postcondition, while two distinct
+        # lambdas in one module are distinct callables despite both
+        # reporting the ``<lambda>`` qualname.
+        code = getattr(tool.run, "__code__", None)
+        runner = (
+            f"{code.co_filename}:{code.co_firstlineno}"
+            if code is not None
+            else repr(tool.run)
+        )
+        contract = (
+            f"{tool.request_type.__module__}.{tool.request_type.__qualname__}",
+            f"{tool.result_type.__module__}.{tool.result_type.__qualname__}",
+            runner,
+        )
+        by_contract.setdefault(contract, []).append(tool.operation_id)
+
+    duplicates = {
+        contract: sorted(ids) for contract, ids in by_contract.items() if len(ids) > 1
+    }
+    assert not duplicates, f"operations duplicate one postcondition: {duplicates}"
+
+
 def test_finite_magma_countermodel_check_remains_native_only() -> None:
     assert (
         Catalog.open().operation(

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -363,27 +361,6 @@ class TestDefiningInvariant:
             assert derived[(source, target)] == composites[0]
             replayed += 1
         assert replayed == 3
-
-
-class TestNativeCatalogParity:
-    def test_catalog_tool_runs_the_same_kernel(self) -> None:
-        tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
-        request = _rank_one_request(_TRIANGLE)
-        assert tool.run(request) == _native(request)
-
-    def test_published_examples_execute(self) -> None:
-        tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
-        outcomes = []
-        for example in tool.examples:
-            request = FromCoverMapsRequest.model_validate_json(
-                json.dumps(example.input)
-            )
-            result = tool.run(request)
-            outcomes.append(result.outcome)
-        assert outcomes == [
-            SheafOutcome.CELLULAR_SHEAF,
-            SheafOutcome.NOT_A_SHEAF,
-        ]
 
 
 class TestSerialization:

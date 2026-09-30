@@ -8,7 +8,6 @@ import pytest
 
 import jacobian.math.topology.cellular_sheaves.hodge as hodge_module
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -109,12 +108,6 @@ def test_hodge_requires_characteristic_zero() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="rational coefficient"):
         hodge_laplacians(sheaf)
-
-
-def test_hodge_operation_is_published() -> None:
-    assert "cellular_sheaf.hodge_laplacians.compute" in {
-        tool.operation_id for tool in BUILTIN_TOOLS
-    }
 
 
 def test_hodge_work_is_admitted_before_cohomology_expansion(monkeypatch) -> None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.combinatorics.posets.core._models import (
@@ -135,12 +134,6 @@ def test_transitive_closure_completeness() -> None:
     result = _compute([2, 4, 8])
     pairs = {(pair.lower, pair.upper) for pair in result.strict_order_pairs}
     assert pairs == {("2", "4"), ("4", "8"), ("2", "8")}
-
-
-def test_catalog_discovery() -> None:
-    ids = [tool.operation_id for tool in BUILTIN_TOOLS]
-    assert "integer.divisibility_poset.compute" in ids
-    assert "number_theory.divisibility_poset.compute" not in ids
 
 
 def test_power_of_two_chain() -> None:

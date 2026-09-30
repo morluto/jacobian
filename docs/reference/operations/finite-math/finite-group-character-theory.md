@@ -138,3 +138,18 @@ tensor square, so a consumer can cross-check a symmetric/exterior pair against
 `g` is `chi(g**k)` for a positive exponent `k`, computed from the class-power map
 of the canonical complete conjugacy partition. See
 [Finite-group Adams operations](../finite-group-adams-operation.md).
+
+## Character degree
+
+The native `jacobian.math.groups.characters.degree.character_degree` helper
+returns the exact degree `chi(1)` for an ordinary
+character represented by nonnegative irreducible multiplicities in a
+`CharacterRingElement`. It sums each multiplicity times the corresponding
+canonical irreducible degree and retains the source character/table with the
+integer value. Signed virtual characters are rejected because their value at
+the identity is a virtual dimension, not the degree of an ordinary
+representation. It is a deterministic projection of the retained irreducible
+coordinates and row degrees, so it is not published in `math.find` / `math.run`.
+The helper reconstructs the canonical table from the
+retained concrete group before using row degrees, with source-group order at
+most 60 and bounded table, arithmetic work, and result size.

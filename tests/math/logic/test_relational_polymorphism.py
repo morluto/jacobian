@@ -6,7 +6,6 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -138,23 +137,6 @@ def test_operation_table_axis_and_values_are_checked():
             operation_table=(),
         )
     assert MAX_RELATIONAL_OPERATION_TABLE_CELLS == 16_384
-
-
-def test_catalog_example_and_result_round_trip():
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "relational.polymorphism.check"
-    )
-    example = tool.examples[0]
-    request = tool.request_type.model_validate_json(
-        json.dumps(example.input), strict=True
-    )
-    result = tool.run(request)
-    assert result.status is RelationalPolymorphismStatus.POLYMORPHISM
-    assert result.polymorphism is not None
-    restored = type(result).model_validate_json(result.model_dump_json(), strict=True)
-    assert restored == result
 
 
 def test_relation_product_bound_is_checked_before_tuple_expansion(monkeypatch):

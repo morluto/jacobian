@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import itertools
-import json
-from collections.abc import Callable
 from fractions import Fraction
-from typing import cast
 
 import pytest
 
@@ -17,7 +14,6 @@ from jacobian.math.affine_semigroups import (
 )
 from jacobian.math.affine_semigroups.atoms import (
     AffineMinimalGenerators,
-    AffineMinimalGeneratorsRequest,
 )
 
 
@@ -174,25 +170,3 @@ def test_aggregate_work_is_admitted_before_factorization_enumeration(
 
     with pytest.raises(OperationResourceAdmissionError, match="aggregate work"):
         minimal_generators(_semigroup(((1,), (2,))))
-
-
-def test_catalog_example_executes_with_the_published_operation_contract() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "affine_semigroup.minimal_generators.compute"
-    )
-    example = tool.examples[0]
-    request_type = cast(type[AffineMinimalGeneratorsRequest], tool.request_type)
-    request = request_type.model_validate_json(json.dumps(example.input))
-
-    run = cast(
-        Callable[[AffineMinimalGeneratorsRequest], AffineMinimalGenerators],
-        tool.run,
-    )
-    result = run(request)
-
-    assert result.atoms.configuration.columns_vectors == ((1, 0),)
-    assert result.source_factorizations == ((1,), (1,), (2,))

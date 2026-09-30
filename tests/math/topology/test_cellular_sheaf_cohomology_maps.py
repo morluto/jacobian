@@ -6,7 +6,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -242,12 +241,6 @@ def test_map_into_zero_stalks_preserves_empty_cohomology_axes() -> None:
 
     assert tuple(group.betti_number for group in result.target_groups) == (0, 0)
     assert result.components == ((), ())
-
-
-def test_catalog_exposes_the_induced_cohomology_map() -> None:
-    assert "cellular_sheaf.morphism.cohomology_map.compute" in {
-        tool.operation_id for tool in BUILTIN_TOOLS
-    }
 
 
 def test_nonnatural_morphism_has_no_induced_cohomology_map() -> None:

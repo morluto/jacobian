@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 import jacobian.math.groups.finite_matrix.extension_operations as extension_operations
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -321,23 +320,3 @@ def test_extension_gl_uses_primitive_element_search_and_handles_projective_point
     assert group.generators[0].entries[0][0].coordinates != (0, 1)
     assert len(action.points) == 1
     assert action.action.generators == ((0,),)
-
-
-def test_catalog_examples_validate_and_execute() -> None:
-    operation_ids = {
-        "finite_matrix_group.extension.general_linear.construct",
-        "finite_matrix_group.extension.special_linear.construct",
-        "finite_matrix_group.extension.general_linear.projective_action.compute",
-        "finite_matrix_group.extension.special_linear.projective_action.compute",
-    }
-    tools = {
-        tool.operation_id: tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id in operation_ids
-    }
-
-    assert set(tools) == operation_ids
-    for tool in tools.values():
-        example = tool.examples[0]
-        request = tool.request_type.model_validate_json(json.dumps(example.input))
-        assert isinstance(tool.run(request), tool.result_type)

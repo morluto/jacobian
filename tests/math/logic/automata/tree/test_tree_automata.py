@@ -1139,3 +1139,31 @@ def test_reachability_bounds_constructed_values_before_dumping(
         ):
             operation(machine)
     assert dump_calls == []
+
+
+def test_reachability_rejects_subclasses_before_their_serializer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.logic.automata.tree.operations import tree_language_profile
+
+    class ExtendedAutomaton(BottomUpTreeAutomaton):
+        extra_payload: tuple[int, ...]
+
+    machine = ExtendedAutomaton(
+        state_count=1,
+        arity=(),
+        transitions=(),
+        final_states=(),
+        extra_payload=(0,) * 10_000,
+    )
+    dump_calls: list[bool] = []
+
+    def record_dump(*_args: object, **_kwargs: object) -> None:
+        dump_calls.append(True)
+        raise RuntimeError("subclass serializer must not run")
+
+    monkeypatch.setattr(ExtendedAutomaton, "model_dump", record_dump)
+    for operation in (reachable_state_profile, tree_language_profile):
+        with pytest.raises(OperationDomainValidationError):
+            operation(machine)
+    assert dump_calls == []

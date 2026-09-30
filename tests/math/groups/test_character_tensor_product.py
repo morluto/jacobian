@@ -5,7 +5,6 @@ from itertools import permutations
 import pytest
 
 import jacobian.math.groups.characters.representation_ring_operations as representation_ring_operations
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -15,7 +14,6 @@ from jacobian.math.groups.characters._models import (
     CharacterRingElement,
     CharacterRow,
     CharacterTableResult,
-    CharacterTensorProductRequest,
     ConjugacyClassPartition,
 )
 from jacobian.math.groups.characters.operations import character_table
@@ -137,17 +135,6 @@ def test_parent_mismatch_and_noncanonical_table_rejected() -> None:
             ),
             _element(table, (1, 0, 0)),
         )
-
-
-def test_operation_is_published_and_has_exact_result_type() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "character.tensor_product.compute"
-    )
-    assert tool.request_type is CharacterTensorProductRequest
-    assert tool.result_type is CharacterRingElement
-    assert "cyclic" in tool.description
 
 
 def test_oversized_model_constructed_coordinates_rejected_before_group_work(

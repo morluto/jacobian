@@ -1513,8 +1513,8 @@ def _scaled_component_width(value: int) -> int:
 
 def _cancelled_component_widths(
     numerator_factors: list[int], denominator_factors: list[int]
-) -> tuple[int, int]:
-    """Return a reduced-product numerator and denominator width bound.
+) -> tuple[int, int] | None:
+    """Return reduced-product width bounds, or omit an identically zero term.
 
     Exact factors cross-cancel before the product is formed, so a coefficient
     of ``1/N`` against a basis entry of ``N`` is exactly ``1`` and a unit basis
@@ -1522,13 +1522,16 @@ def _cancelled_component_widths(
     product without ever materializing it.
     """
 
-    numerators = [value for value in numerator_factors if value]
-    denominators = [value for value in denominator_factors if value]
+    if 0 in numerator_factors:
+        return None
+    numerators = numerator_factors.copy()
+    denominators = denominator_factors.copy()
     for index, numerator in enumerate(numerators):
         for other, denominator in enumerate(denominators):
             common = gcd(abs(numerator), denominator)
             if common > 1:
-                numerators[index] = numerator // common
+                numerator //= common
+                numerators[index] = numerator
                 denominators[other] = denominator // common
     return (
         sum(_scaled_component_width(value) for value in numerators),
@@ -1580,9 +1583,9 @@ def _admit_spline_evaluation_growth(
             for coordinate, power in zip(point.coordinates, exponents, strict=True):
                 numerator_factors.extend([coordinate.num] * power)
                 denominator_factors.extend([coordinate.den] * power)
-            term_bounds.append(
-                _cancelled_component_widths(numerator_factors, denominator_factors)
-            )
+            bound = _cancelled_component_widths(numerator_factors, denominator_factors)
+            if bound is not None:
+                term_bounds.append(bound)
     if not term_bounds:
         return
     denominator_digits = sum(bound[1] for bound in term_bounds)

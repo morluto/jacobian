@@ -2908,7 +2908,7 @@ def _multiply_for_power(
     ) + max((len(term.word) for term in right.terms), default=0)
     if result_word_length > MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH:
         _reject_resource(
-            ("f",),
+            ("polynomial",),
             "power_result_word_length_budget",
             (
                 "the product's result word exceeds "

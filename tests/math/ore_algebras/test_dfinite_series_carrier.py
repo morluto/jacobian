@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from fractions import Fraction
 from unittest.mock import patch
 
@@ -23,7 +24,7 @@ from jacobian.math.polynomials.values import RationalFunction
 
 
 def _rf(
-    terms: list[tuple[Fraction | int, int]],
+    terms: Sequence[tuple[Fraction | int, int]],
     *,
     variable: str = "x",
     denominator: tuple[tuple[int, int], ...] = ((1, 0),),

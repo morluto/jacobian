@@ -51,6 +51,19 @@ from jacobian.math.topology.cellular_sheaves.morphism_kernel import (
     _readmit_parent_sheaf,
 )
 
+# The exact canonical model types reachable in a sheaf payload. Any other model
+# type, including a subclass, may declare fields this walk must not expand.
+_PAYLOAD_MODEL_TYPES = frozenset(
+    {
+        CanonicalRational,
+        FacesInDimension,
+        FiniteCellularSheaf,
+        FiniteSimplicialComplex,
+        SheafRestriction,
+        SheafStalk,
+    }
+)
+
 
 class SheafMorphismImageRequest(StrictModel):
     """A natural sheaf morphism whose pointwise image is requested."""
@@ -351,6 +364,15 @@ def _reject_oversized_parent_container(parent: object, role: str) -> None:
 def _unvalidated_payload(value: object) -> object:
     """Expose nested model fields as raw containers for trust-boundary revalidation."""
     if isinstance(value, BaseModel):
+        # Require the exact canonical model type. A subclass legitimately
+        # declares extra fields, so type(value).model_fields would treat them as
+        # declared and copy their whole unbounded payload before base-model
+        # validation rejects them as extra data.
+        if type(value) not in _PAYLOAD_MODEL_TYPES:
+            raise _domain(
+                "parent_structure",
+                "parent models must be canonical types retaining only declared fields",
+            )
         fields = type(value).model_fields
         if len(value.__dict__) != len(fields) or any(
             key not in fields for key in value.__dict__

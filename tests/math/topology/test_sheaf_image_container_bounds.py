@@ -13,6 +13,8 @@ from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
     SheafMorphismResult,
+    SheafRestriction,
+    SheafStalk,
     morphism,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
@@ -22,6 +24,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
 from jacobian.math.topology.cellular_sheaves.constants.operations import constant_sheaf
 from jacobian.math.topology.cellular_sheaves.morphism_image import (
     SheafMorphismImageResult,
+    _unvalidated_payload,
     image_of_morphism,
 )
 
@@ -265,3 +268,68 @@ def test_stalk_basis_subclasses_are_refused_without_inspection() -> None:
     parent = sheaf.model_copy(update={"stalks": (stalk,)})
     with pytest.raises(OperationDomainValidationError, match="ordered container"):
         image_of_morphism(_identity(sheaf).model_copy(update={"source": parent}))
+
+
+class _UnvisitedPayload(tuple[int, ...]):
+    """A declared subclass payload whose traversal is a contract violation."""
+
+    def __len__(self) -> int:
+        raise AssertionError("a subclass payload length was inspected")
+
+    def __iter__(self) -> Iterator[object]:
+        raise AssertionError("a subclass payload was traversed")
+
+
+class _ExtraFieldStalk(SheafStalk):
+    payload: tuple[int, ...] = ()
+
+
+class _ExtraFieldRestriction(SheafRestriction):
+    payload: tuple[int, ...] = ()
+
+
+@pytest.mark.parametrize("nested", ("stalk", "restriction"))
+def test_parent_model_subclasses_are_refused_before_payload_expansion(
+    nested: str,
+) -> None:
+    """A subclass declares its extra field, so the walk must not copy it."""
+    sheaf = constant_sheaf(canonical_complex(("a", "b"), (("a", "b"),)))
+    payload = _UnvisitedPayload()
+    if nested == "stalk":
+        forged = _ExtraFieldStalk.model_construct(
+            **sheaf.stalks[0].__dict__, payload=payload
+        )
+        update = {"stalks": (forged, *sheaf.stalks[1:])}
+    else:
+        forged = _ExtraFieldRestriction.model_construct(
+            **sheaf.cover_restrictions[0].__dict__, payload=payload
+        )
+        update = {"cover_restrictions": (forged, *sheaf.cover_restrictions[1:])}
+    parent = sheaf.model_copy(update=update)
+    with pytest.raises(OperationDomainValidationError):
+        image_of_morphism(_identity(sheaf).model_copy(update={"source": parent}))
+
+
+@pytest.mark.parametrize("nested", ("stalk", "restriction"))
+def test_payload_walk_refuses_subclass_models_however_they_arrive(nested: str) -> None:
+    """The recursive payload walk itself must not expand a subclass field.
+
+    A subclass legitimately declares extra fields, so a declared-field check
+    accepts them and then copies the entire unbounded payload. The payload here
+    is a plain tuple, so only an exact-type requirement can refuse it.
+    """
+    sheaf = constant_sheaf(canonical_complex(("a", "b"), (("a", "b"),)))
+    payload = tuple(range(1000))
+    if nested == "stalk":
+        forged = _ExtraFieldStalk.model_construct(
+            **sheaf.stalks[0].__dict__, payload=payload
+        )
+        update = {"stalks": (forged, *sheaf.stalks[1:])}
+    else:
+        forged = _ExtraFieldRestriction.model_construct(
+            **sheaf.cover_restrictions[0].__dict__, payload=payload
+        )
+        update = {"cover_restrictions": (forged, *sheaf.cover_restrictions[1:])}
+    parent = sheaf.model_copy(update=update)
+    with pytest.raises(OperationDomainValidationError, match="canonical types"):
+        _unvalidated_payload(parent)

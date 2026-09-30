@@ -124,6 +124,43 @@ def test_unknown_payload_does_not_trigger_recursive_materialization() -> None:
         models.VertexDeckIsomorphismProfile.model_validate(payload)
 
 
+@pytest.mark.parametrize("request_payload", [False, True])
+def test_missing_source_axis_is_rejected_before_copying(
+    monkeypatch: pytest.MonkeyPatch, request_payload: bool
+) -> None:
+    payload = _star_profile().model_dump(mode="json")
+    family = payload["family"]
+    family["source"] = {}
+    family["cards"] = [family["cards"][0]] * 50_000
+    if request_payload:
+        payload = {"deck": family}
+
+    def fail(value: Any) -> Any:
+        raise AssertionError("an incomplete source must not reach normalization")
+
+    monkeypatch.setattr(models, "_normalize_vertex_family_json", fail)
+    owner = (
+        models.VertexDeckIsomorphismProfileRequest
+        if request_payload
+        else models.VertexDeckIsomorphismProfile
+    )
+    with pytest.raises(ValueError, match="source vertex axis"):
+        owner.model_validate_json(json.dumps(payload))
+
+
+def test_mixed_native_source_carrier_remains_accepted() -> None:
+    profile = _star_profile()
+    payload = profile.model_dump()
+    payload["family"]["source"] = profile.family.source
+    assert models.VertexDeckIsomorphismProfile.model_validate(payload) == profile
+    assert (
+        models.VertexDeckIsomorphismProfileRequest.model_validate(
+            {"deck": payload["family"]}
+        ).deck
+        == profile.family
+    )
+
+
 @pytest.mark.parametrize("consumer", ["ordinary", "induced", "edges"])
 @pytest.mark.parametrize(
     "forgery", ["missing", "wrong", "incomplete", "source", "cards", "foreign"]

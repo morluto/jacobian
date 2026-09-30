@@ -997,19 +997,20 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
         if type(value) is not dict:
             return value
         deck = value.get("deck")
-        source = deck.get("source") if type(deck) is dict else None
-        vertices: Any = source.get("vertices") if type(source) is dict else None
-        edges: Any = source.get("edges") if type(source) is dict else None
-        if type(vertices) not in (list, tuple):
+        if type(deck) is not dict:
             return value
-        order = len(vertices)
+        dimensions = _vertex_iso_profile_dimensions(deck, None)
+        if dimensions is None:
+            raise _validation_error(
+                "vertex_iso_profile_family",
+                "profile family must retain its source vertex axis",
+            )
+        order, source_edges, _ = dimensions
         if order > MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
                 "vertex_iso_profile_bound",
                 "vertex-deck isomorphism profile supports at most 10 source vertices",
             )
-        pair_count = comb(order, 2)
-        source_edges = len(edges) if type(edges) in (list, tuple) else pair_count
         _preflight_vertex_profile_family(deck, order, source_edges)
         _, total_work, output_cells = _vertex_iso_profile_resource_estimates(
             order, source_edges, order
@@ -1223,38 +1224,42 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
     dimensions = _vertex_iso_profile_dimensions(
         value.get("family"), value.get("classes")
     )
-    if dimensions is not None:
-        order, edge_count, class_count = dimensions
-        if order > MAX_UNLABELLED_DECK_VERTICES:
-            raise _validation_error(
-                "vertex_iso_profile_bound",
-                "vertex-deck isomorphism profile exceeds its source-order bound",
-            )
-        classes = value.get("classes")
-        if (
-            type(classes) in (list, tuple)
-            and len(cast(list[Any] | tuple[Any, ...], classes)) > order
-        ):
-            raise _validation_error(
-                "vertex_iso_profile_class_count",
-                "the isomorphism profile cannot have more classes than cards",
-            )
-        _, work, output_cells = _vertex_iso_profile_value_resource_estimates(
-            order, edge_count, class_count
+    if dimensions is None:
+        raise _validation_error(
+            "vertex_iso_profile_family",
+            "profile family must retain its source vertex axis",
         )
-        if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
-            raise _validation_error(
-                "vertex_iso_profile_validation_work_bound",
-                "class representatives and card maps exceed the shared validation work bound",
-            )
-        if output_cells > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
-            raise _validation_error(
-                "vertex_iso_profile_output_bound",
-                "vertex-deck isomorphism profile exceeds its materialization-cell bound",
-            )
-        _preflight_vertex_profile_result_rows(value, order)
-        _preflight_vertex_profile_family(value.get("family"), order, edge_count)
-        _require_exact_profile_wire_integers(value, classes, "vertex")
+    order, edge_count, class_count = dimensions
+    if order > MAX_UNLABELLED_DECK_VERTICES:
+        raise _validation_error(
+            "vertex_iso_profile_bound",
+            "vertex-deck isomorphism profile exceeds its source-order bound",
+        )
+    classes = value.get("classes")
+    if (
+        type(classes) in (list, tuple)
+        and len(cast(list[Any] | tuple[Any, ...], classes)) > order
+    ):
+        raise _validation_error(
+            "vertex_iso_profile_class_count",
+            "the isomorphism profile cannot have more classes than cards",
+        )
+    _, work, output_cells = _vertex_iso_profile_value_resource_estimates(
+        order, edge_count, class_count
+    )
+    if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+        raise _validation_error(
+            "vertex_iso_profile_validation_work_bound",
+            "class representatives and card maps exceed the shared validation work bound",
+        )
+    if output_cells > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
+        raise _validation_error(
+            "vertex_iso_profile_output_bound",
+            "vertex-deck isomorphism profile exceeds its materialization-cell bound",
+        )
+    _preflight_vertex_profile_result_rows(value, order)
+    _preflight_vertex_profile_family(value.get("family"), order, edge_count)
+    _require_exact_profile_wire_integers(value, classes, "vertex")
     return _normalize_vertex_iso_profile_result(value)
 
 
@@ -1382,15 +1387,27 @@ def _vertex_iso_profile_dimensions(
     family: Any, classes: Any
 ) -> tuple[int, int, int] | None:
     if type(family) is VertexDeletionFamily:
-        source = family.source
-        vertices = getattr(source, "vertices", None)
-        edges = getattr(source, "edges", None)
+        source = getattr(family, "source", None)
+        vertices = (
+            getattr(source, "vertices", None)
+            if type(source) is SimpleUndirectedGraph
+            else None
+        )
+        edges = (
+            getattr(source, "edges", None)
+            if type(source) is SimpleUndirectedGraph
+            else None
+        )
     elif type(family) is dict:
         raw_source: Any = family.get("source")
-        if type(raw_source) is not dict:
+        if type(raw_source) is SimpleUndirectedGraph:
+            vertices = getattr(raw_source, "vertices", None)
+            edges = getattr(raw_source, "edges", None)
+        elif type(raw_source) is dict:
+            vertices = raw_source.get("vertices")
+            edges = raw_source.get("edges")
+        else:
             return None
-        vertices = raw_source.get("vertices")
-        edges = raw_source.get("edges")
     else:
         return None
     if type(vertices) not in (list, tuple):

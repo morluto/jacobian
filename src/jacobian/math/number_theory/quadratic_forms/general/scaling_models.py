@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     RationalQuadraticForm,
 )
 
@@ -24,8 +26,25 @@ __all__ = [
 class QuadraticFormScaleRequest(StrictModel):
     """Scale one rational form by an exact rational factor."""
 
-    form: RationalQuadraticForm
-    factor: CanonicalRational
+    form: RationalQuadraticForm = Field(
+        description=(
+            "The rational quadratic form to scale. Its axis, diagonal, and "
+            "cross-term collections are admitted to at most "
+            f"{MAX_QUADRATIC_SCALE_AXIS} coordinates and "
+            f"{MAX_QUADRATIC_SCALE_SUPPORT} retained coefficients. That ceiling "
+            "is an execution capacity, so it is enforced by the operation as a "
+            "resource refusal rather than as a request-validity rule."
+        )
+    )
+    factor: CanonicalRational = Field(
+        description=(
+            "The exact rational factor applied to every coefficient. Each of its "
+            "numerator and denominator is admitted to at most "
+            f"{MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS} decimal digits, which is "
+            "narrower than the shared canonical-rational carrier, so a "
+            "schema-shaped but over-wide factor is refused at admission."
+        )
+    )
 
 
 class QuadraticFormScaleResult(StrictModel):
@@ -95,24 +114,32 @@ class QuadraticFormScaleResult(StrictModel):
             (term.left, term.right): term.coefficient
             for term in self.source_form.cross_terms
         }
-        if len(self.form.cross_terms) != len(source_cross):
-            raise PydanticCustomError(
-                "quadratic_form.scale_cross_axis",
-                "scaling must preserve every cross-term slot",
-            )
-        for term in self.form.cross_terms:
-            source_coefficient = source_cross.get((term.left, term.right))
-            if source_coefficient is None:
-                raise PydanticCustomError(
-                    "quadratic_form.scale_cross_axis",
-                    "a scaled cross term has no source term at the same position",
-                )
+        # A cross term whose scaled coefficient is exactly zero is dropped by
+        # the kernel, because QuadraticCrossTerm admits only a nonzero
+        # coefficient. Compare against the source positions that actually
+        # survive, not against every source position.
+        expected_cross = {}
+        for position, source_coefficient in source_cross.items():
             left_num, right_num, left_den, right_den = _scaled_factors(
                 source_coefficient, self.factor
             )
-            if term.coefficient != CanonicalRational.from_integer_ratio(
+            scaled = CanonicalRational.from_integer_ratio(
                 left_num * right_num, left_den * right_den
-            ):
+            )
+            if scaled.as_fraction() != 0:
+                expected_cross[position] = scaled
+        if len(self.form.cross_terms) != len(expected_cross):
+            raise PydanticCustomError(
+                "quadratic_form.scale_cross_axis",
+                "scaling must preserve every nonzero cross-term slot",
+            )
+        for term in self.form.cross_terms:
+            if (term.left, term.right) not in expected_cross:
+                raise PydanticCustomError(
+                    "quadratic_form.scale_cross_axis",
+                    "a scaled cross term has no nonzero source term at the same position",
+                )
+            if term.coefficient != expected_cross[(term.left, term.right)]:
                 raise PydanticCustomError(
                     "quadratic_form.scale_cross",
                     "a scaled cross term must equal factor times its source",

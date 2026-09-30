@@ -4,7 +4,11 @@
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileRequest,
     FiniteBoxProfileResult,
@@ -93,6 +97,18 @@ def compute_bilinear_pairing(
 def compute_integral_content(
     request: IntegralContentRequest,
 ) -> IntegralContentResult:
+    if not isinstance(request, IntegralContentRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.content_request_type",
+            message="request must be an integral-content request",
+        )
+    if not hasattr(request, "form"):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_type",
+            message="request must retain its rational quadratic form",
+        )
     return integral_coefficient_content(request.form)
 
 
@@ -755,8 +771,10 @@ TOOLS = (
         title="Selected exact representation numbers of a positive-definite form",
         description=(
             "Return the exact representation numbers r_Q(n) at a strictly "
-            "increasing tuple of selected indices, for a positive-definite "
-            "rational form. Positivity is established exactly by Sylvester's "
+            "increasing tuple of selected indices. The form must have integral "
+            "polynomial coefficients, since the integral polar matrix is what "
+            "Sylvester's criterion is applied to; a non-integral form is "
+            "refused. Positivity is established exactly by Sylvester's "
             "criterion on the integral polar matrix, so r_Q(n) is finite and "
             "the set of representing vectors is bounded; a negative-definite, "
             "indefinite, or degenerate form is refused rather than given a "
@@ -805,8 +823,11 @@ TOOLS = (
         title="Integer vectors representing selected values of a positive-definite form",
         description=(
             "Return every integer vector representing each selected value of a "
-            "positive-definite rational form, in the form's ordered axis and "
-            "strictly increasing lexicographic order. This is the fiber behind "
+            "positive-definite form with integral polynomial coefficients; a "
+            "non-integral form is refused, matching the selected "
+            "representation numbers. The vectors are returned in the form's "
+            "ordered axis and strictly increasing lexicographic order. This is "
+            "the fiber behind "
             "the selected representation numbers: where that operation counts, "
             "this one lists. The same proved box is searched, so both are "
             "complete for the indices they are given and both refuse a "

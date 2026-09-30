@@ -5,12 +5,14 @@ from __future__ import annotations
 from math import gcd
 
 import pytest
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
     MAX_QUADRATIC_SCALE_AXIS,
     MAX_QUADRATIC_SCALE_SUPPORT,
+    QuadraticFormScaleRequest,
     QuadraticFormScaleResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.scaling_operations import (
@@ -169,3 +171,67 @@ def test_coefficient_growth_is_refused_before_the_product_is_formed() -> None:
     edge = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
     with pytest.raises(OperationResourceAdmissionError, match="numerator"):
         scale_rational_quadratic_form(_form((edge,)), _q(edge))
+
+
+def test_scaling_by_zero_drops_cancelled_cross_terms() -> None:
+    """A cross term scaled to exact zero is dropped, not retained as a zero slot.
+
+    ``QuadraticCrossTerm`` admits only a nonzero coefficient, so the kernel
+    cannot represent a cancelled term. The result contract therefore compares
+    against the source positions that survive scaling rather than against every
+    source position, and a genuine mismatch is still refused.
+    """
+    source = RationalQuadraticForm(
+        axis=("x", "y"),
+        diagonal_coefficients=(_q(2), _q(4)),
+        cross_terms=(QuadraticCrossTerm(left=0, right=1, coefficient=_q(3)),),
+    )
+    zeroed = scale_rational_quadratic_form(source, _q(0))
+    assert zeroed.form.cross_terms == ()
+    assert zeroed.form.diagonal_coefficients == (_q(0), _q(0))
+    zeroed.require_scaling_agrees_with_its_sources()
+
+    # A scaling that keeps the cross term nonzero must still round-trip exactly.
+    kept = scale_rational_quadratic_form(source, _q(2))
+    kept.require_scaling_agrees_with_its_sources()
+    assert kept.form.cross_terms == (
+        QuadraticCrossTerm(left=0, right=1, coefficient=_q(6)),
+    )
+    assert kept.form.diagonal_coefficients == (_q(4), _q(8))
+
+
+def test_a_forged_scaled_cross_term_position_is_still_refused() -> None:
+    """Dropping cancelled terms must not weaken the surviving-term postcondition."""
+    source = RationalQuadraticForm(
+        axis=("x", "y"),
+        diagonal_coefficients=(_q(2), _q(4)),
+        cross_terms=(QuadraticCrossTerm(left=0, right=1, coefficient=_q(3)),),
+    )
+    forged = QuadraticFormScaleResult.model_construct(
+        form=RationalQuadraticForm(
+            axis=("x", "y"),
+            diagonal_coefficients=(_q(4), _q(8)),
+            cross_terms=(QuadraticCrossTerm(left=0, right=1, coefficient=_q(9)),),
+        ),
+        source_form=source,
+        factor=_q(2),
+    )
+    with pytest.raises(PydanticCustomError, match="factor times its source"):
+        forged.require_scaling_agrees_with_its_sources()
+
+
+def test_the_scale_envelope_is_published_on_the_request_fields() -> None:
+    """The 256-digit factor bound and the capacity envelope are discoverable.
+
+    The factor ceiling is narrower than the shared canonical-rational carrier's
+    own 32,768-digit limit, so it is stated on the field rather than left to be
+    discovered by trial. The form ceiling is a capacity, so the description says
+    the operation refuses it instead of calling it an invalid request.
+    """
+    factor = QuadraticFormScaleRequest.model_fields["factor"].description
+    form = QuadraticFormScaleRequest.model_fields["form"].description
+    assert factor is not None
+    assert form is not None
+    assert str(MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS) in factor
+    assert str(MAX_QUADRATIC_SCALE_AXIS) in form
+    assert "resource" in form

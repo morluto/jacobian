@@ -2,7 +2,7 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -15,6 +15,7 @@ from jacobian.math.geometry.polytopes._models import (
 )
 from jacobian.math.geometry.polytopes.complexes import _spline as spline_kernel
 from jacobian.math.geometry.polytopes.complexes._models import (
+    ComplexPoint,
     SplineDimensionRequest,
     SplineEvaluationRequest,
 )
@@ -104,7 +105,7 @@ def _interval_continuity_matrix(degree: int, smoothness: int) -> list[list[Fract
     return rows
 
 
-def test_spline_dimension_matches_interval_derivative_oracle_and_full_space():
+def test_spline_dimension_matches_interval_derivative_oracle_and_full_space() -> None:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
@@ -124,7 +125,9 @@ def test_spline_dimension_matches_interval_derivative_oracle_and_full_space():
     assert result.coefficient_axis == full.coefficient_axis
 
 
-def test_dimension_output_bound_is_conservative_at_its_boundary(monkeypatch):
+def test_dimension_output_bound_is_conservative_at_its_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
@@ -165,7 +168,7 @@ def test_dimension_output_bound_is_conservative_at_its_boundary(monkeypatch):
         spline_dimension(request)
 
 
-def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound():
+def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound() -> None:
     cells = tuple(_box(index, index + 1, 0, 1, f"c{index}-") for index in range(10))
     complex_value = polytopal_complex_closure(cells)
     request = SplineDimensionRequest(complex=complex_value, degree=12, smoothness=0)
@@ -184,8 +187,155 @@ def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound():
     assert result.nullity == 793
 
 
-def test_native_spline_entry_points_reject_forged_requests_with_typed_errors():
+def test_native_spline_entry_points_reject_forged_requests_with_typed_errors() -> None:
     with pytest.raises(OperationDomainValidationError, match="dimension request"):
         spline_dimension(SplineDimensionRequest.model_construct())
     with pytest.raises(OperationDomainValidationError, match="evaluation request"):
         spline_evaluate(SplineEvaluationRequest.model_construct())
+
+
+def test_spline_evaluation_admits_scalars_whose_exact_result_is_at_the_limit() -> None:
+    """A basis coefficient's own width is not the evaluation's output width.
+
+    The preflight charged each coefficient's numerator *and* denominator width
+    to the numerator, added a unit basis entry's width, and compared the running
+    total of every term against the 32,768-digit per-component limit. A
+    32,768-digit carrier-valid scalar was therefore refused on a 32,770-digit
+    estimate even where the exact value is that scalar unchanged.
+    """
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+    from jacobian.math.geometry.polytopes.complexes._models import (
+        ComplexPoint,
+        SplineEvaluationRequest,
+    )
+    from jacobian.math.geometry.polytopes.complexes.operations import spline_evaluate
+
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    # degree 2 on one interval: three basis rows over the monomials (x^2, x, 1)
+    spline = spline_space(complex_value, 2, 0)
+    assert spline.nullity == 3
+    point = ComplexPoint(coordinates=(CanonicalRational(num=1, den=2),))
+    limit = MAX_CANONICAL_RATIONAL_DIGITS
+    # 2**108850 has exactly 32,768 decimal digits, the carrier maximum
+    at_limit = 2**108850
+    assert decimal_digit_width(at_limit) == limit
+
+    def evaluate(coefficient: CanonicalRational) -> CanonicalRational:
+        request = SplineEvaluationRequest(
+            complex=complex_value,
+            degree=2,
+            smoothness=0,
+            basis_coefficients=(CanonicalRational(num=0, den=1),) * 2 + (coefficient,),
+            point=point,
+        )
+        value = spline_evaluate(request).value
+        assert value is not None
+        return value
+
+    # the x^0 basis row selects the constant, so this is the scalar itself
+    assert evaluate(CanonicalRational(num=at_limit, den=1)).num == at_limit
+    assert evaluate(CanonicalRational(num=1, den=at_limit)).den == at_limit
+
+    # a genuinely oversized exact result is still refused: the point's own
+    # denominator multiplies the coefficient's into a 65,537-digit rational
+    oversized_point = ComplexPoint(
+        coordinates=(CanonicalRational(num=1, den=at_limit),)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+        spline_evaluate(
+            SplineEvaluationRequest(
+                complex=complex_value,
+                degree=2,
+                smoothness=0,
+                basis_coefficients=(
+                    CanonicalRational(num=0, den=1),
+                    CanonicalRational(num=1, den=at_limit),
+                    CanonicalRational(num=0, den=1),
+                ),
+                point=oversized_point,
+            )
+        )
+
+
+def test_spline_evaluation_cancels_factors_before_summing() -> None:
+    """A coefficient of 1/N against a point of N/2 evaluates to an exact 1/2.
+
+    The preflight added factor widths without reducing, so this was refused
+    while the exact value is one digit wide.
+    """
+    from jacobian.math.geometry.polytopes.complexes._models import (
+        ComplexPoint,
+        SplineEvaluationRequest,
+    )
+    from jacobian.math.geometry.polytopes.complexes.operations import spline_evaluate
+
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    big = 2**108850
+    # basis row 1 selects the x monomial, so N against the point 1/N is 1
+    point = ComplexPoint(coordinates=(CanonicalRational(num=1, den=big),))
+    request = SplineEvaluationRequest(
+        complex=complex_value,
+        degree=2,
+        smoothness=0,
+        basis_coefficients=(
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=big, den=1),
+            CanonicalRational(num=0, den=1),
+        ),
+        point=point,
+    )
+    value = spline_evaluate(request).value
+    assert value is not None
+    assert value.num == 1
+    assert value.den == 1
+
+
+@pytest.mark.parametrize("sign", (-1, 1))
+@pytest.mark.parametrize("degree", (2, 3))
+def test_spline_evaluation_cancels_each_factor_only_once(
+    sign: int, degree: int
+) -> None:
+    """N * (1/N)^d is 1/N^(d-1), even with repeated denominator factors."""
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    at_limit = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    request = SplineEvaluationRequest(
+        complex=complex_value,
+        degree=degree,
+        smoothness=0,
+        basis_coefficients=(CanonicalRational(num=sign * at_limit, den=1),)
+        + (CanonicalRational(num=0, den=1),) * degree,
+        point=ComplexPoint(coordinates=(CanonicalRational(num=1, den=at_limit),)),
+    )
+
+    if degree == 2:
+        assert spline_evaluate(request).value == CanonicalRational(
+            num=sign, den=at_limit
+        )
+    else:
+        # Squaring the carrier-sized denominator exceeds the output envelope.
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            spline_evaluate(request)
+        assert error.value.errors()[0]["type"] == (
+            "polytopal_complex.spline_evaluation_growth"
+        )
+
+
+@pytest.mark.parametrize("constant_kind", ("zero", "integer", "rational"))
+def test_spline_evaluation_omits_zero_monomials(constant_kind: str) -> None:
+    """At x=0 only the constant survives, regardless of other coefficients."""
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    at_limit = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    constant = {
+        "zero": CanonicalRational(num=0, den=1),
+        "integer": CanonicalRational(num=at_limit, den=1),
+        "rational": CanonicalRational(num=1, den=at_limit),
+    }[constant_kind]
+    request = SplineEvaluationRequest(
+        complex=complex_value,
+        degree=2,
+        smoothness=0,
+        basis_coefficients=(CanonicalRational(num=1, den=at_limit),) * 2 + (constant,),
+        point=ComplexPoint(coordinates=(CanonicalRational(num=0, den=1),)),
+    )
+
+    assert spline_evaluate(request).value == constant

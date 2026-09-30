@@ -143,6 +143,11 @@ def _preflight_term(
     image_axis_maxima: tuple[tuple[int, ...], ...],
 ) -> _TermPlan:
     """Admit one source monomial's expansion without materializing products."""
+    # ``_expand`` accumulates the product in a dictionary keyed by the summed
+    # exponent vector, so equal monomials collapse as soon as they are formed.
+    # A source monomial expands to at most one output monomial per multiset of
+    # image terms drawn per generator, which is the bound charged here rather
+    # than the raw count of ordered products.
     expansion_count = 1
     pair_products = 0
     component_digits = canonical_rational_component_digits(term.coefficient)
@@ -153,22 +158,27 @@ def _preflight_term(
         image_count = image_counts[generator_index]
         if exponent and image_count == 0:
             return _TermPlan(0, pair_products, 0, 0, maximum_partial_support)
-        for _ in range(exponent):
-            if expansion_count > MAX_GA_ORBIT_EXPANSIONS // image_count:
-                _reject_resource(
-                    "expansion_budget",
-                    "polynomial orbit exceeds the admitted monomial expansion count",
-                    ("polynomial", "polynomial", "terms", term_index),
-                )
-            expansion_count *= image_count
-            pair_products += expansion_count
-            maximum_partial_support = max(maximum_partial_support, expansion_count)
+        for step in range(exponent):
+            # Each step multiplies the current distinct support by every term of
+            # the image, which is exactly the work ``_expand`` performs.
+            pair_products += maximum_partial_support * image_count
             if pair_products > MAX_GA_ORBIT_WORK:
                 _reject_resource(
                     "work_budget",
                     "polynomial orbit exceeds its repeated-product work bound",
                     ("polynomial", "polynomial", "terms", term_index),
                 )
+            # C(m + s, s) from C(m + s - 1, s - 1) multiplies by (m + s) / s.
+            maximum_partial_support = (
+                maximum_partial_support * (image_count + step) // (step + 1)
+            )
+            if maximum_partial_support > MAX_GA_ORBIT_EXPANSIONS:
+                _reject_resource(
+                    "expansion_budget",
+                    "polynomial orbit exceeds the admitted monomial expansion count",
+                    ("polynomial", "polynomial", "terms", term_index),
+                )
+        expansion_count = maximum_partial_support
         denominator_digits += exponent * image_denominator_digits[generator_index]
         numerator_digits += exponent * image_num_digits[generator_index]
 

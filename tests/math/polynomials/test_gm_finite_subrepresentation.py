@@ -70,7 +70,7 @@ def _poly_with_denominators(
 
 
 def _prime_denominators(start: int, count: int) -> tuple[int, ...]:
-    primes = []
+    primes: list[int] = []
     candidate = start
     while len(primes) < count:
         if all(candidate % divisor for divisor in range(2, int(candidate**0.5) + 1)):
@@ -99,14 +99,12 @@ def _sparse_same_weight_seeds(
 
 def test_mixed_weight_seed_generates_exact_minimal_stable_span_and_action() -> None:
     result = gm_generated_subrepresentation(
-        {
-            "action": {"variables": ["x", "y", "z"], "weights": [1, -1, 0]},
-            "generators": [
-                _poly(("x", "y", "z"), (1, (1, 0, 0)), (1, (0, 1, 0)), (2, (0, 0, 1))),
-                _poly(("x", "y", "z"), (1, (1, 0, 0))),
-            ],
-            "parameter": "lambda",
-        }
+        {"variables": ["x", "y", "z"], "weights": [1, -1, 0]},
+        [
+            _poly(("x", "y", "z"), (1, (1, 0, 0)), (1, (0, 1, 0)), (2, (0, 0, 1))),
+            _poly(("x", "y", "z"), (1, (1, 0, 0))),
+        ],
+        "lambda",
     )
 
     # Independent character-projection oracle: x, y, and z span exactly the
@@ -146,13 +144,11 @@ def test_mixed_weight_seed_generates_exact_minimal_stable_span_and_action() -> N
 
 def test_same_weight_generators_are_reduced_to_a_deterministic_basis() -> None:
     result = gm_generated_subrepresentation(
-        {
-            "action": {"variables": ["x", "y"], "weights": [2, 2]},
-            "generators": [
-                _poly(("x", "y"), (1, (1, 0)), (1, (0, 1))),
-                _poly(("x", "y"), (1, (1, 0)), (3, (0, 1))),
-            ],
-        }
+        {"variables": ["x", "y"], "weights": [2, 2]},
+        [
+            _poly(("x", "y"), (1, (1, 0)), (1, (0, 1))),
+            _poly(("x", "y"), (1, (1, 0)), (3, (0, 1))),
+        ],
     )
     assert result.weights == (2, 2)
     assert [_coefficient_map(p) for p in result.basis] == [
@@ -173,13 +169,11 @@ def test_output_admission_covers_every_retained_result_field() -> None:
     be met by an encoder that writes a smaller transport payload.
     """
     result = gm_generated_subrepresentation(
-        {
-            "action": {"variables": ["x", "y"], "weights": [1, -1]},
-            "generators": [
-                _poly(("x", "y"), (1, (1, 0)), (1, (0, 1))),
-            ],
-            "parameter": "lambda",
-        }
+        {"variables": ["x", "y"], "weights": [1, -1]},
+        [
+            _poly(("x", "y"), (1, (1, 0)), (1, (0, 1))),
+        ],
+        "lambda",
     )
     support, _ = _admit_subrepresentation_support(
         result.action, result.generators, result.parameter
@@ -245,11 +239,9 @@ def test_output_preflight_boundary_and_pre_rref_rejection(
     admitted_digit_work = admitted_cells * coefficient_digits
     assert 40_000_000 < admitted_digit_work <= MAX_GM_SUBREP_RESULT_DIGIT_WORK
     result = gm_generated_subrepresentation(
-        {
-            "action": accepted_action.model_dump(),
-            "generators": [generator.model_dump() for generator in accepted_generators],
-            "parameter": parameter,
-        }
+        accepted_action.model_dump(),
+        [generator.model_dump() for generator in accepted_generators],
+        parameter,
     )
     assert len(result.basis) == dimension
     assert len(result.matrix) == dimension
@@ -266,13 +258,9 @@ def test_output_preflight_boundary_and_pre_rref_rejection(
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
         gm_generated_subrepresentation(
-            {
-                "action": rejected_action.model_dump(),
-                "generators": [
-                    generator.model_dump() for generator in rejected_generators
-                ],
-                "parameter": parameter,
-            }
+            rejected_action.model_dump(),
+            [generator.model_dump() for generator in rejected_generators],
+            parameter,
         )
     assert error.value.errors()[0]["type"] == "gm_subrepresentation.result_digit_work"
 
@@ -281,7 +269,7 @@ def test_empty_zero_and_duplicate_generators_have_canonical_degenerate_results()
     None
 ):
     action = {"variables": ["x"], "weights": [0]}
-    empty = gm_generated_subrepresentation({"action": action, "generators": []})
+    empty = gm_generated_subrepresentation(action, ())
     assert empty.basis == ()
     assert empty.weights == ()
     assert empty.matrix == ()
@@ -289,7 +277,7 @@ def test_empty_zero_and_duplicate_generators_have_canonical_degenerate_results()
 
     zero = _poly(("x",))
     degenerate = gm_generated_subrepresentation(
-        {"action": action, "generators": [zero, zero, _poly(("x",), (1, (0,)))]}
+        action, [zero, zero, _poly(("x",), (1, (0,)))]
     )
     assert degenerate.weights == (0,)
     assert [_coefficient_map(p) for p in degenerate.basis] == [{(0,): Fraction(1)}]

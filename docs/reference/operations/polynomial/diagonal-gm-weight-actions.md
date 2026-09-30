@@ -49,11 +49,12 @@ The admitted envelope allows at most 16 generators, 64 terms per generator,
 and 8 decimal digits per source coefficient. Exact normalized basis
 coefficients are bounded to 2300 digits. The operation preflights weight
 projection support and row-reduction work. It clears exact row denominators
-and uses a Hadamard minor bound to admit coefficient growth and the complete
-serialized result before RREF. Output, including echoed inputs, is bounded by
-the canonical 10 MiB output limit. This is a finite generated subspace;
-it makes no claim about an invariant ring or a global classification of
-representations.
+and uses a Hadamard minor bound to admit coefficient growth before RREF. The
+result is admitted by its retained cell count multiplied by the exact
+basis-coefficient width, so a native caller is not bound by a delivery byte
+ceiling; any transport limit is applied when the result is serialized. This is
+a finite generated subspace; it makes no claim about an invariant ring or a
+global classification of representations.
 
 For a diagonal torus action, every representation decomposes into character
 spaces, and each polynomial has finitely many character components. Thus the

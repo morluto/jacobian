@@ -31,7 +31,7 @@ MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS = 2_300
 # Maximum exact decimal digits the subrepresentation result may materialize.
 # The result's retained cells are already bounded by MAX_GM_SUBREP_GENERATORS,
 # MAX_GM_SUBREP_DIMENSION, MAX_GM_SUBREP_TOTAL_TERMS, and
-# MAX_WEIGHT_ACTION_VARIABLES; the coefficient width is bounded by
+# MAX_POLYNOMIAL_VARIABLES; the coefficient width is bounded by
 # MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS. This bound admits the product of
 # those two facts, so admission never depends on an encoded transport size.
 MAX_GM_SUBREP_RESULT_DIGIT_WORK = 50_000_000
@@ -170,20 +170,38 @@ class PolynomialWeightInvariantResult(StrictModel):
 
 
 class PolynomialWeightSubrepresentationRequest(StrictModel):
-    """Generate the smallest G_m-stable polynomial span containing generators."""
+    """Generate the smallest G_m-stable polynomial span containing generators.
 
-    action: PolynomialWeightAction
-    generators: tuple[RationalPolynomial, ...] = Field(
-        max_length=MAX_GM_SUBREP_GENERATORS
+    Every generator must use the action's exact ordered variable axis, and the
+    parameter must be distinct from every action variable. Both prerequisites
+    are also enforced by the model validator; they are stated here because a
+    schema-driven caller can otherwise form a structurally valid request that
+    is only rejected at execution time.
+    """
+
+    action: PolynomialWeightAction = Field(
+        description=(
+            "The diagonal integer-weight action whose exact ordered variable "
+            "axis every generator must reproduce."
+        )
     )
-    parameter: PolynomialVariable = "t"
+    generators: tuple[RationalPolynomial, ...] = Field(
+        max_length=MAX_GM_SUBREP_GENERATORS,
+        description=(
+            "Generators in the action's ordered polynomial ring. Each one must "
+            "declare the same variable tuple as the action, in the same order."
+        ),
+    )
+    parameter: PolynomialVariable = Field(
+        default="t",
+        description=(
+            "The Laurent parameter variable. It must not appear among the "
+            "action's variables."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_bound_polynomial_parent(self) -> Self:
-        if len(self.action.variables) > MAX_WEIGHT_ACTION_VARIABLES:
-            raise ValueError(
-                "the Laurent coaction carrier admits at most seven source variables"
-            )
         if self.parameter in self.action.variables:
             raise ValueError(
                 "the Laurent parameter must be distinct from ring variables"
@@ -219,10 +237,6 @@ class PolynomialWeightSubrepresentationResult(StrictModel):
         if not 0 <= dimension <= MAX_GM_SUBREP_DIMENSION:
             raise ValueError(
                 "representation basis dimension is outside its admitted range"
-            )
-        if len(self.action.variables) > MAX_WEIGHT_ACTION_VARIABLES:
-            raise ValueError(
-                "the Laurent coaction carrier admits at most seven source variables"
             )
         if self.parameter in self.action.variables:
             raise ValueError(

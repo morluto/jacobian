@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from fractions import Fraction
-from math import comb, factorial, lcm, prod
+from math import comb, factorial, gcd, lcm, prod
 from typing import NoReturn
 
 from pydantic_core import PydanticCustomError
@@ -15,7 +15,7 @@ from jacobian._exact import (
     canonical_rational_component_digits,
 )
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import decimal_digit_width, format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -561,12 +561,26 @@ def _prepare_input(
                 code="polynomial_ga_subrepresentation.request",
                 message="basis is already carried by request",
             )
-        request = PolynomialGaStableSubrepresentationRequest.model_validate(
-            action.model_dump()
-        )
+        try:
+            request = PolynomialGaStableSubrepresentationRequest.model_validate(
+                action.model_dump()
+            )
+        except (PydanticCustomError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.request_shape",
+                message="the request must carry one checked action and an ordered basis",
+            ) from exc
         return _canonical_action(request.action), request.basis
     if isinstance(action, Mapping) and basis is None:
-        request = PolynomialGaStableSubrepresentationRequest.model_validate(action)
+        try:
+            request = PolynomialGaStableSubrepresentationRequest.model_validate(action)
+        except (PydanticCustomError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.request_shape",
+                message="the request must carry one checked action and an ordered basis",
+            ) from exc
         return _canonical_action(request.action), request.basis
     action_value = _canonical_action(action)
     if basis is None:
@@ -588,6 +602,32 @@ def _prepare_input(
     return action_value, basis_value
 
 
+def _image_coefficient_facts(
+    image: RationalPolynomial,
+) -> tuple[int, int]:
+    """Return the shared-denominator and widest-numerator digit widths.
+
+    Every product drawn from ``image**e`` has a denominator dividing the least
+    common multiple of ``image``'s coefficient denominators raised to ``e``,
+    because each summand picks one coefficient per factor. Bounding the
+    expansion by that shared denominator is exact for the denominator, where
+    charging the raw product count instead would admit nothing the kernel does
+    not actually form.
+    """
+    denominators = [abs(term.coefficient.den) for term in image.polynomial.terms]
+    common = 1
+    for denominator in denominators:
+        common = lcm(common, denominator)
+    numerator_width = max(
+        (
+            decimal_digit_width(abs(term.coefficient.num))
+            for term in image.polynomial.terms
+        ),
+        default=1,
+    )
+    return (0 if common == 1 else decimal_digit_width(common)), max(numerator_width, 1)
+
+
 def _admit_basis(
     action: PolynomialGaAction, basis: tuple[RationalPolynomial, ...]
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[tuple[Fraction, ...], ...]]:
@@ -600,18 +640,15 @@ def _admit_basis(
     action_term_counts = tuple(
         len(image.polynomial.terms) for image in action.generator_images
     )
-    max_action_digit = max(
-        (
-            canonical_rational_component_digits(term.coefficient)
-            for image in action.generator_images
-            for term in image.polynomial.terms
-        ),
-        default=1,
+    image_denominator_digits = tuple(
+        _image_coefficient_facts(image)[0] for image in action.generator_images
+    )
+    image_numerator_digits = tuple(
+        _image_coefficient_facts(image)[1] for image in action.generator_images
     )
     expansion_terms = 0
     expansion_work = len(basis) * sum(action_term_counts)
-    max_source_digits = 1
-    max_source_degree = 0
+    aggregate_digit_bound = 1
     for index, value in enumerate(basis):
         request_checkpoint("during stable-subrepresentation basis admission")
         try:
@@ -637,11 +674,36 @@ def _admit_basis(
                 "basis polynomial exceeds the admitted total degree",
                 resource=True,
             )
+        source_denominator = 1
+        maximum_exponents = [0] * len(action.generator_images)
+        widest_product_numerator = 1
+        polynomial_expansion_terms = 0
         for term in value.polynomial.terms:
-            max_source_digits = max(
-                max_source_digits,
-                canonical_rational_component_digits(term.coefficient),
-            )
+            # Each source denominator has at most 128 digits. Cancel the gcd
+            # first, then refuse a product known to exceed the same bound.
+            # The remaining exact multiplication allocates at most 129 digits;
+            # checking its width resolves the one-digit boundary ambiguity.
+            denominator = term.coefficient.den
+            cofactor = denominator // gcd(source_denominator, denominator)
+            if (
+                decimal_digit_width(source_denominator) + decimal_digit_width(cofactor)
+                > MAX_DERIVATION_COEFFICIENT_DIGITS + 1
+            ):
+                _reject(
+                    "coefficient_growth",
+                    "source common denominator exceeds the coefficient digit budget",
+                    resource=True,
+                )
+            source_denominator *= cofactor
+            if (
+                decimal_digit_width(source_denominator)
+                > MAX_DERIVATION_COEFFICIENT_DIGITS
+            ):
+                _reject(
+                    "coefficient_growth",
+                    "source common denominator exceeds the coefficient digit budget",
+                    resource=True,
+                )
             factor = prod(
                 max(1, count) ** exponent
                 for count, exponent in zip(
@@ -649,35 +711,45 @@ def _admit_basis(
                 )
             )
             degree = sum(term.exponents)
-            max_source_degree = max(max_source_degree, degree)
             expansion_terms += factor
+            polynomial_expansion_terms += factor
             # Sequential multiplication costs at most degree times the final
             # monomial product bound. Charge that before performing it.
             expansion_work += max(1, degree) * factor
-            coefficient_digits = canonical_rational_component_digits(
-                term.coefficient
-            ) + factor * (
-                degree * (2 * max_action_digit + 1) + len(str(max(1, factor)))
+            for position, exponent in enumerate(term.exponents):
+                maximum_exponents[position] = max(maximum_exponents[position], exponent)
+            numerator_width = decimal_digit_width(abs(term.coefficient.num)) + sum(
+                exponent * image_numerator_digits[position]
+                for position, exponent in enumerate(term.exponents)
             )
-            if coefficient_digits > MAX_DERIVATION_COEFFICIENT_DIGITS:
-                _reject(
-                    "coefficient_growth",
-                    "predicted action expansion coefficient exceeds the digit budget",
-                    resource=True,
-                )
+            widest_product_numerator = max(widest_product_numerator, numerator_width)
+        # Every expanded source term has denominator dividing Q = LCM(source
+        # denominators) * product(image_common_denominator[j]**max_exponent[j]).
+        # Thus a collision does not multiply repeated source denominators or
+        # charge the same image denominator once per raw expansion product.
+        denominator_width = (
+            0 if source_denominator == 1 else decimal_digit_width(source_denominator)
+        ) + sum(
+            exponent * digits
+            for exponent, digits in zip(
+                maximum_exponents, image_denominator_digits, strict=True
+            )
+        )
+        # Lifting each raw product to Q multiplies its numerator by at most Q.
+        # A sum of at most N products adds ceil(log10(N)) digits. This also
+        # bounds partial accumulations before any cancellation occurs.
+        polynomial_digit_bound = (
+            denominator_width
+            + widest_product_numerator
+            + _ceil_log_count(polynomial_expansion_terms)
+        )
+        aggregate_digit_bound = max(aggregate_digit_bound, polynomial_digit_bound)
     if expansion_terms > MAX_GA_ACTION_OUTPUT_TERMS:
         _reject(
             "expanded_terms",
             "predicted basis action output exceeds the term budget",
             resource=True,
         )
-    # Terms from distinct source monomials can collide. Treat every bounded
-    # product as a possible summand of one output coefficient, so denominator
-    # growth from rational addition is also admitted before expansion.
-    aggregate_digit_bound = max_source_digits + expansion_terms * (
-        max_source_degree * (2 * max_action_digit + 1)
-        + len(str(max(1, expansion_terms)))
-    )
     if aggregate_digit_bound > MAX_DERIVATION_COEFFICIENT_DIGITS:
         _reject(
             "coefficient_growth",

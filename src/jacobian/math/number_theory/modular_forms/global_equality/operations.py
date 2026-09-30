@@ -438,8 +438,22 @@ def modular_form_coordinates_global_equal(
         * common_field.degree
         * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
     )
+    # `intermediate_digits` above grows *linearly* in coordinate height, but the
+    # Sturm prefix multiplies cyclotomic elements, and that product grows
+    # *multiplicatively* in the operand width: one product of degree-`d` elements
+    # reaches `(2d + 2) * operand_digits + len(str(d)) + 2` digits. The two rules
+    # therefore disagree, and for Q(zeta_12) they part company at 26 digits --
+    # where this budget is still far inside its cap but the product already
+    # exceeds `MAX_CYCLIC_FIELD_ELEMENT_DIGITS`. Charge the product height here so
+    # an unsupported request is refused before the Sturm worker starts, rather
+    # than spending backend work to reach the same conclusion.
+    common_degree = max(common_field.degree, 1)
+    cyclotomic_product_digits = (
+        coordinate_height * (2 * common_degree + 2) + len(str(common_degree)) + 2
+    )
     if (
         intermediate_digits > 100_000
+        or cyclotomic_product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or worker_cells > MAX_GLOBAL_EQUALITY_OUTPUT_CELLS
         or rref_cells + mapped_cells > MAX_GLOBAL_EQUALITY_INTERMEDIATE_CELLS
     ):

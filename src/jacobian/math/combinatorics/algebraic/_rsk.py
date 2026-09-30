@@ -250,13 +250,14 @@ def _admit_inverse_trace(pair: RSKTableauPair) -> tuple[RSKTableauPair, int]:
             message="the complete reverse-insertion trace exceeds the work bound",
         )
     bump_count = cell_count * max(0, height - 1)
-    output_bound = (
-        2048
-        + 6 * (alphabet_scalars + 2 * cell_count * MAX_SYMBOL_LENGTH)
-        + 192 * cell_count
-        + 72 * bump_count
-        + 16 * cell_count * height
-    )
+    # Count the same structural ledger the forward trace counts: one event per
+    # source letter plus one bump step per displaced cell. The previous formula
+    # was a serialized-byte estimate charged against the same cell constant, so
+    # it grew with MAX_SYMBOL_LENGTH and rejected pairs the forward path admits.
+    # For a 255-letter word over a one-character alphabet it produced 250,934
+    # against the 250,000-cell limit even though the ledger holds 255 events
+    # and no bump steps at all.
+    output_bound = cell_count + bump_count
     if output_bound > MAX_RSK_TRACE_LEDGER_CELLS:
         raise OperationResourceAdmissionError(
             location=("pair",),

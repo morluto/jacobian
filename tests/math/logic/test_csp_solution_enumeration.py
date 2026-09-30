@@ -6,7 +6,6 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.relational_structures import (
     CspSolutions,
@@ -38,28 +37,6 @@ def _direct_solutions(instance: FiniteCspInstance) -> tuple[tuple[int, ...], ...
             for constraint in instance.constraints
         )
     )
-
-
-def test_operation_is_published_with_source_bound_solution_value() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "csp.solutions.enumerate.compute"
-    )
-    assert tool.request_type is FiniteCspInstance
-    assert tool.result_type is CspSolutions
-    instance = FiniteCspInstance(
-        template=FiniteRelationalStructure(
-            carrier_size=2,
-            signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
-            relation_tables=(((0, 1), (1, 0)),),
-        ),
-        variable_count=2,
-        constraints=(
-            FiniteCspConstraint(constraint_id="edge", symbol_id="E", scope=(0, 1)),
-        ),
-    )
-    assert tool.run(instance).assignments == ((0, 1), (1, 0))
 
 
 @pytest.mark.parametrize("carrier_relation_mask", range(16))

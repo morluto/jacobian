@@ -2150,7 +2150,10 @@ def weyl_antidominant_representative(
             ),
         )
         return WeylAntidominantRepresentativeResult._from_kernel(
-            cartan, weight, weight, element
+            cartan,
+            weight_lattice_vector(cartan, weight),
+            weight_lattice_vector(cartan, weight),
+            element,
         )
 
     # Each performed reflection checks its actual resulting coordinates in
@@ -2222,7 +2225,10 @@ def weyl_antidominant_representative(
         ),
     )
     return WeylAntidominantRepresentativeResult._from_kernel(
-        cartan, weight, antidominant, element
+        cartan,
+        weight_lattice_vector(cartan, weight),
+        weight_lattice_vector(cartan, antidominant),
+        element,
     )
 
 

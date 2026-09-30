@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from fractions import Fraction
 from math import comb, factorial, lcm, prod
 from typing import NoReturn
@@ -14,6 +14,7 @@ from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
 )
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -58,6 +59,14 @@ MAX_GA_FIXED_SUPPORT_TERMS = 4_096
 MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS = 512
 
 
+def _checkpointed[T](items: Iterable[T], stage: str) -> Iterator[T]:
+    """Keep bounded inner work responsive without a checkpoint per arithmetic op."""
+    for index, item in enumerate(items):
+        if index % 128 == 0:
+            request_checkpoint(stage)
+        yield item
+
+
 def _integer_digits(value: int) -> int:
     return len(format_canonical_integer(abs(value)))
 
@@ -84,8 +93,16 @@ def _check_coefficient_group_heights(
     groups: Mapping[tuple[int, ...], list[tuple[int, int]]],
 ) -> None:
     """Bound exact rational sums using support collisions and common denominators."""
-    for contributions in groups.values():
-        denominators = {denominator for _, denominator in contributions}
+    for contributions in _checkpointed(
+        groups.values(), "during stable-subrepresentation coefficient height checks"
+    ):
+        denominators = {
+            denominator
+            for _, denominator in _checkpointed(
+                contributions,
+                "during stable-subrepresentation coefficient height grouping",
+            )
+        }
         if (
             sum(len(str(value)) for value in denominators if value != 1)
             > MAX_DERIVATION_COEFFICIENT_DIGITS
@@ -109,7 +126,10 @@ def _check_coefficient_group_heights(
                 if common_denominator // denominator > 1
                 else 0
             )
-            for numerator_digits, denominator in contributions
+            for numerator_digits, denominator in _checkpointed(
+                contributions,
+                "during stable-subrepresentation coefficient height checks",
+            )
         )
         if (
             max_numerator_digits + _ceil_log_count(len(contributions))
@@ -126,6 +146,7 @@ def _verify_action_laws(
     action_terms: tuple[_Terms, ...], variables: tuple[str, ...]
 ) -> None:
     for index, image in enumerate(action_terms):
+        request_checkpoint("during stable-subrepresentation action-law verification")
         counit = {
             exponents[:-1]: coefficient
             for exponents, coefficient in image.items()
@@ -155,14 +176,23 @@ def _verify_action_laws(
                     for powers, value in generator_image.items()
                 }
                 for _ in range(exponent):
+                    request_checkpoint(
+                        "during stable-subrepresentation action-law multiplication"
+                    )
                     product_terms = _multiply(product_terms, lifted)
-            for powers, value in product_terms.items():
+            for powers, value in _checkpointed(
+                product_terms.items(),
+                "during stable-subrepresentation action-law accumulation",
+            ):
                 key = (*powers[:-1], powers[-1] + exponents[-1])
                 lhs[key] = lhs.get(key, Fraction(0)) + coefficient * value
         rhs: _Terms = {}
         for exponents, coefficient in image.items():
             degree = exponents[-1]
-            for s_degree in range(degree + 1):
+            for s_degree in _checkpointed(
+                range(degree + 1),
+                "during stable-subrepresentation action-law accumulation",
+            ):
                 key = (*exponents[:-1], s_degree, degree - s_degree)
                 rhs[key] = rhs.get(key, Fraction(0)) + coefficient * comb(
                     degree, s_degree
@@ -200,12 +230,18 @@ def _substitute_basis(
     images = tuple(_term_map(image) for image in action.generator_images)
     result: _Terms = {}
     for term in polynomial.polynomial.terms:
+        request_checkpoint("during stable-subrepresentation basis substitution")
         product_terms = dict(one)
         for image, exponent in zip(images, term.exponents, strict=True):
             for _ in range(exponent):
+                request_checkpoint(
+                    "during stable-subrepresentation basis multiplication"
+                )
                 product_terms = _multiply(product_terms, image)
         scalar = term.coefficient.as_fraction()
-        for monomial, coefficient in product_terms.items():
+        for monomial, coefficient in _checkpointed(
+            product_terms.items(), "during stable-subrepresentation basis accumulation"
+        ):
             result[monomial] = result.get(monomial, Fraction(0)) + scalar * coefficient
     return {
         monomial: coefficient for monomial, coefficient in result.items() if coefficient
@@ -221,6 +257,7 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
     lhs_terms = 0
     rhs_terms = 0
     for image in action_terms:
+        request_checkpoint("during stable-subrepresentation action admission")
         for exponents in image:
             factor = prod(
                 max(1, len(generator_image)) ** exponent
@@ -251,6 +288,9 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
     max_scaled_numerator_digits: list[int] = []
     support_images: list[tuple[tuple[int, ...], ...]] = []
     for image in action_terms:
+        request_checkpoint(
+            "during stable-subrepresentation action coefficient preparation"
+        )
         image_denominators = {value.denominator for value in image.values()}
         if (
             sum(len(str(value)) for value in image_denominators if value != 1)
@@ -283,7 +323,10 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
                 for _ in range(exponent):
                     multiplied: dict[tuple[int, ...], int] = {}
                     for left, left_count in support_product.items():
-                        for right in support:
+                        for right in _checkpointed(
+                            support,
+                            "during stable-subrepresentation support multiplication",
+                        ):
                             key = tuple(a + b for a, b in zip(left, right, strict=True))
                             multiplied[key] = multiplied.get(key, 0) + left_count
                     support_product = multiplied
@@ -311,12 +354,18 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
                     exponents[:-1], max_scaled_numerator_digits, strict=True
                 )
             )
-            for support_powers, multiplicity in support_product.items():
+            for support_powers, multiplicity in _checkpointed(
+                support_product.items(),
+                "during stable-subrepresentation coefficient grouping",
+            ):
                 key = (*support_powers[:-1], support_powers[-1], exponents[-1])
                 lhs_height_groups.setdefault(key, []).append(
                     (numerator_digits + _ceil_log_count(multiplicity), denominator)
                 )
-            for s_degree in range(exponents[-1] + 1):
+            for s_degree in _checkpointed(
+                range(exponents[-1] + 1),
+                "during stable-subrepresentation coefficient grouping",
+            ):
                 binomial = comb(exponents[-1], s_degree)
                 key = (*exponents[:-1], s_degree, exponents[-1] - s_degree)
                 rhs_height_groups.setdefault(key, []).append(
@@ -338,7 +387,13 @@ def _coordinate_frame(
     """Precompute an exact coordinate map from independent monomial rows."""
     size = len(basis)
     support = sorted(
-        {term.exponents for value in basis for term in value.polynomial.terms},
+        {
+            term.exponents
+            for value in basis
+            for term in _checkpointed(
+                value.polynomial.terms, "during coordinate-frame support collection"
+            )
+        },
         reverse=True,
     )
     basis_term_count = sum(len(value.polynomial.terms) for value in basis)
@@ -354,7 +409,9 @@ def _coordinate_frame(
             next(
                 (
                     term.coefficient.as_fraction()
-                    for term in value.polynomial.terms
+                    for term in _checkpointed(
+                        value.polynomial.terms, "during coordinate-frame source rows"
+                    )
                     if term.exponents == monomial
                 ),
                 Fraction(0),
@@ -366,8 +423,10 @@ def _coordinate_frame(
     echelon: list[tuple[int, list[Fraction]]] = []
     pivot_monomials: list[tuple[int, ...]] = []
     for monomial, source in zip(support, source_rows, strict=True):
+        request_checkpoint("during coordinate-frame echelon reduction")
         working = source.copy()
         for pivot, normalized in echelon:
+            request_checkpoint("during coordinate-frame echelon reduction")
             if working[pivot]:
                 scale = working[pivot]
                 working = [
@@ -404,6 +463,7 @@ def _coordinate_frame(
         for i, row in enumerate(pivot_rows)
     ]
     for column in range(size):
+        request_checkpoint("during coordinate-frame inversion")
         selected = next(
             (row for row in range(column, size) if augmented[row][column]), None
         )
@@ -416,6 +476,7 @@ def _coordinate_frame(
         pivot_scale = augmented[column][column]
         augmented[column] = [value / pivot_scale for value in augmented[column]]
         for row in range(size):
+            request_checkpoint("during coordinate-frame inversion")
             if row != column and augmented[row][column]:
                 row_scale = augmented[row][column]
                 augmented[row] = [
@@ -458,14 +519,26 @@ def _coordinates(
     )
     coordinates = tuple(
         sum(
-            (inverse[row][column] * pivot_values[column] for column in range(size)),
+            (
+                inverse[row][column] * pivot_values[column]
+                for column in _checkpointed(
+                    range(size),
+                    "during stable-subrepresentation coordinate dot products",
+                )
+            ),
             Fraction(0),
         )
-        for row in range(size)
+        for row in _checkpointed(
+            range(size), "during stable-subrepresentation coordinate dot products"
+        )
     )
     reconstructed: dict[tuple[int, ...], Fraction] = {}
     for value, coordinate in zip(basis, coordinates, strict=True):
-        for term in value.polynomial.terms:
+        request_checkpoint("during stable-subrepresentation coordinate reconstruction")
+        for term in _checkpointed(
+            value.polynomial.terms,
+            "during stable-subrepresentation coordinate reconstruction",
+        ):
             exponents = tuple(term.exponents)
             reconstructed[exponents] = (
                 reconstructed.get(exponents, Fraction(0))
@@ -540,6 +613,7 @@ def _admit_basis(
     max_source_digits = 1
     max_source_degree = 0
     for index, value in enumerate(basis):
+        request_checkpoint("during stable-subrepresentation basis admission")
         try:
             require_polynomial_budget(
                 value,
@@ -657,7 +731,9 @@ def _compute_matrix(
     for value in basis:
         expanded = _substitute_basis(action, value)
         by_parameter: dict[int, dict[tuple[int, ...], Fraction]] = {}
-        for exponents, coefficient in expanded.items():
+        for exponents, coefficient in _checkpointed(
+            expanded.items(), "during stable-subrepresentation parameter grouping"
+        ):
             by_parameter.setdefault(exponents[-1], {})[exponents[:-1]] = coefficient
         column: list[dict[int, Fraction]] = [{} for _ in basis]
         for parameter_degree, target in by_parameter.items():
@@ -692,7 +768,9 @@ def _compute_matrix(
                     for degree, coefficient in columns[col][row].items()
                 },
             )
-            for col in range(len(basis))
+            for col in _checkpointed(
+                range(len(basis)), "during stable-subrepresentation matrix encoding"
+            )
         )
         for row in range(len(basis))
     )
@@ -725,7 +803,10 @@ def _infinitesimal_matrix(
     matrix = [[Fraction(0) for _ in range(size)] for _ in range(size)]
     for row in range(size):
         for column in range(size):
-            for term in representation.action_matrix[row][column].polynomial.terms:
+            for term in _checkpointed(
+                representation.action_matrix[row][column].polynomial.terms,
+                "during fixed-space infinitesimal matrix construction",
+            ):
                 if term.exponents == (1,):
                     matrix[row][column] = term.coefficient.as_fraction()
                     break
@@ -760,6 +841,7 @@ def _admit_and_integerize_kernel_matrix(
 
     row_denominators: list[int] = []
     for row in matrix:
+        request_checkpoint("during fixed-space denominator admission")
         if any(
             max(_integer_digits(value.numerator), _integer_digits(value.denominator))
             > MAX_DERIVATION_COEFFICIENT_DIGITS
@@ -788,6 +870,7 @@ def _admit_and_integerize_kernel_matrix(
     integer_matrix: list[list[Fraction]] = []
     maximum_entry_digits = 1
     for row, denominator in zip(matrix, row_denominators, strict=True):
+        request_checkpoint("during fixed-space integerization")
         integer_row = []
         for value in row:
             integer = value.numerator * (denominator // value.denominator)
@@ -815,6 +898,7 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
     pivot_columns: list[int] = []
     pivot_row = 0
     for column in range(size):
+        request_checkpoint("during fixed-space elimination")
         selected = next(
             (row for row in range(pivot_row, size) if matrix[row][column]), None
         )
@@ -824,6 +908,7 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
         leading_entry = matrix[pivot_row][column]
         matrix[pivot_row] = [value / leading_entry for value in matrix[pivot_row]]
         for row in range(size):
+            request_checkpoint("during fixed-space elimination")
             if row != pivot_row and matrix[row][column]:
                 factor = matrix[row][column]
                 matrix[row] = [
@@ -840,6 +925,7 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
     free_columns = [column for column in range(size) if column not in pivot_rows]
     basis = []
     for free in free_columns:
+        request_checkpoint("during fixed-space kernel assembly")
         vector = [Fraction(0) for _ in range(size)]
         vector[free] = Fraction(1)
         for pivot_column, row in pivot_rows.items():
@@ -880,7 +966,9 @@ def _admit_claimed_action_matrix(
     term_count = 0
     for row in representation.action_matrix:
         for entry in row:
-            for term in entry.polynomial.terms:
+            for term in _checkpointed(
+                entry.polynomial.terms, "during fixed-space claimed matrix admission"
+            ):
                 component_digits = canonical_rational_component_digits(term.coefficient)
                 if component_digits > MAX_DERIVATION_COEFFICIENT_DIGITS:
                     raise OperationResourceAdmissionError(
@@ -991,17 +1079,24 @@ def _fixed_polynomial_basis(
 
     output = []
     for vector in coordinates:
+        request_checkpoint("during fixed-subspace polynomial reconstruction")
         grouped: dict[tuple[int, ...], list[Fraction]] = {}
         for coordinate, polynomial in zip(vector, representation.basis, strict=True):
-            for term in polynomial.polynomial.terms:
+            for term in _checkpointed(
+                polynomial.polynomial.terms, "during fixed-polynomial accumulation"
+            ):
                 if coordinate:
                     grouped.setdefault(term.exponents, []).append(
                         coordinate * term.coefficient.as_fraction()
                     )
         terms = []
-        for exponents, contributions in grouped.items():
+        for exponents, contributions in _checkpointed(
+            grouped.items(), "during fixed-polynomial coefficient grouping"
+        ):
             denominator = 1
-            for value in contributions:
+            for value in _checkpointed(
+                contributions, "during fixed-polynomial coefficient grouping"
+            ):
                 factor = denominator // gcd(denominator, value.denominator)
                 if (
                     len(str(factor)) + len(str(value.denominator))
@@ -1116,8 +1211,13 @@ def ga_fixed_subspace(
     return PolynomialGaFixedSubspace.model_construct(
         subrepresentation=checked,
         coordinates=tuple(
-            tuple(CanonicalRational.from_fraction(value) for value in vector)
-            for vector in coordinate_vectors
+            tuple(
+                CanonicalRational.from_fraction(value)
+                for value in _checkpointed(vector, "during fixed result encoding")
+            )
+            for vector in _checkpointed(
+                coordinate_vectors, "during fixed result encoding"
+            )
         ),
         basis=tuple(fixed_basis),
     )

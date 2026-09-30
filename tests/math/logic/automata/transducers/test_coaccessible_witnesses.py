@@ -200,3 +200,48 @@ def test_maximum_admitted_witness_output_length_is_accepted() -> None:
     )
     result = coaccessible_state_witnesses(transducer)
     assert len(result.witnesses[0].output_word) == MAX_FST_RESULT_WORD_LENGTH
+
+
+def test_aggregate_symbol_bound_is_separate_from_the_per_witness_bound() -> None:
+    """A 32-state chain is admitted, because the aggregate has its own bound.
+
+    One witness is a shortest path of at most `MAX_FST_STATES` states, so it
+    emits at most that many outputs. The aggregate over all start states is up
+    to `MAX_FST_STATES` times larger, and reusing the per-witness constant for
+    the sum refused a 32-state chain whose largest individual witness (16,384
+    symbols) was well inside the 262,144-symbol limit, because the aggregate
+    was 270,336.
+    """
+    from jacobian.math.logic.automata.transducers.coaccessibility_witnesses.operations import (
+        MAX_COACCESSIBLE_OUTPUT_SYMBOLS,
+        MAX_COACCESSIBLE_WITNESS_OUTPUT_SYMBOLS,
+    )
+
+    assert MAX_COACCESSIBLE_OUTPUT_SYMBOLS > MAX_COACCESSIBLE_WITNESS_OUTPUT_SYMBOLS
+
+    states = 32
+    symbols = 512
+    transducer = SubsequentialTransducer(
+        input_alphabet_size=1,
+        output_alphabet_size=1,
+        state_count=states,
+        initial_state=0,
+        transitions=tuple(
+            SubseqTransition(
+                source=index,
+                input_symbol=0,
+                target=index + 1,
+                output=(0,) * symbols,
+            )
+            for index in range(states - 1)
+        ),
+        final_outputs=(SubseqFinalOutput(state=states - 1, output=(0,) * symbols),),
+    )
+
+    result = coaccessible_state_witnesses(transducer)
+
+    # every start state has a continuation, and each witness stays inside the
+    # per-witness bound while the aggregate exceeds it
+    assert len(result.witnesses) == states
+    for witness in result.witnesses:
+        assert len(witness.output_word) <= MAX_COACCESSIBLE_WITNESS_OUTPUT_SYMBOLS

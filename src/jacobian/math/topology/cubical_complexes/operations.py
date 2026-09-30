@@ -11,6 +11,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -114,8 +115,13 @@ def _face_cells(
 ) -> tuple[CubicalCell, ...]:
     """Materialize the canonical face closure once during operation admission."""
     all_cells: set[tuple[tuple[int, int], ...]] = set()
+    visited = 0
 
     def add_faces(intervals: tuple[tuple[int, int], ...]) -> None:
+        nonlocal visited
+        if visited % 128 == 0:
+            request_checkpoint("during cubical face-closure expansion")
+        visited += 1
         if intervals in all_cells:
             return
         if len(all_cells) >= output_limit:
@@ -136,7 +142,15 @@ def _face_cells(
 
     for cell in cells:
         add_faces(cell.intervals)
-    return tuple(CubicalCell(intervals=intervals) for intervals in sorted(all_cells))
+    request_checkpoint("before cubical face-closure ordering")
+    ordered_cells = sorted(all_cells)
+    request_checkpoint("after cubical face-closure ordering")
+    materialized: list[CubicalCell] = []
+    for index, intervals in enumerate(ordered_cells):
+        if index % 128 == 0:
+            request_checkpoint("during cubical face-closure materialization")
+        materialized.append(CubicalCell(intervals=intervals))
+    return tuple(materialized)
 
 
 def _canonical_complex(
@@ -273,6 +287,7 @@ def _face_poset_cover_pairs(
     cell_intervals = {cell.intervals for cell in complex_.cells}
     cover_pairs: set[tuple[str, str]] = set()
     for upper in complex_.cells:
+        request_checkpoint("during cubical face-poset incidence construction")
         upper_label = label_by_cell[upper]
         for axis, (start, end) in enumerate(upper.intervals):
             if start == end:
@@ -351,7 +366,9 @@ def face_poset(cells: tuple[CubicalCell, ...]) -> CubicalFacePosetResult:
 
 def _counts(complex_: CubicalComplex) -> FVector:
     by_dimension = [0] * (complex_.ambient_dimension + 1)
-    for cell in complex_.cells:
+    for index, cell in enumerate(complex_.cells):
+        if index % 128 == 0:
+            request_checkpoint("during cubical dimension counting")
         by_dimension[cell.dimension] += 1
     return FVector(
         dimension_axis=tuple(range(complex_.ambient_dimension + 1)),
@@ -1652,6 +1669,18 @@ def chain_product(
     )
 
 
+def _exposed_boundary_facets(
+    facet_incidence: dict[tuple[tuple[int, int], ...], int],
+) -> tuple[CubicalCell, ...]:
+    exposed: list[CubicalCell] = []
+    for index, (intervals, incidence) in enumerate(sorted(facet_incidence.items())):
+        if index % 128 == 0:
+            request_checkpoint("during cubical exposed-facet materialization")
+        if incidence == 1:
+            exposed.append(CubicalCell(intervals=intervals))
+    return tuple(exposed)
+
+
 def boundary_subcomplex(
     cells: tuple[CubicalCell, ...],
 ) -> CubicalBoundarySubcomplexResult:
@@ -1797,6 +1826,7 @@ def boundary_subcomplex(
 
     facet_incidence: dict[tuple[tuple[int, int], ...], int] = {}
     for cell in top_cells:
+        request_checkpoint("during cubical boundary-subcomplex facet incidence")
         active_axes = tuple(
             axis for axis, (lower, upper) in enumerate(cell.intervals) if upper > lower
         )
@@ -1807,11 +1837,7 @@ def boundary_subcomplex(
                 face[axis] = (endpoint, endpoint)
                 face_key = tuple(face)
                 facet_incidence[face_key] = facet_incidence.get(face_key, 0) + 1
-    exposed_facets = tuple(
-        CubicalCell(intervals=intervals)
-        for intervals, incidence in sorted(facet_incidence.items())
-        if incidence == 1
-    )
+    exposed_facets = _exposed_boundary_facets(facet_incidence)
     boundary_cells = _face_cells(exposed_facets)
     return CubicalBoundarySubcomplexResult.model_construct(
         complex=complex_,

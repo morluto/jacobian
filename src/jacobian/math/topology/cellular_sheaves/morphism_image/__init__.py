@@ -160,7 +160,7 @@ def _restriction_labels(value: object, limit: int, role: str, field: str) -> Non
 
 def _reject_oversized_restriction(restriction: object, role: str) -> None:
     """Bound every nested matrix axis before the parent is recursively rebuilt."""
-    if not isinstance(restriction, SheafRestriction):
+    if type(restriction) is not SheafRestriction:
         raise _domain(
             "parent_restriction_type",
             f"{role} restrictions must be typed restriction matrices",
@@ -175,7 +175,7 @@ def _reject_oversized_restriction(restriction: object, role: str) -> None:
     for row in rows:
         entries = _bounded_restriction_sequence(row, MAX_SHEAF_STALK_RANK, role, "row")
         for scalar in entries:
-            if isinstance(scalar, CanonicalRational):
+            if type(scalar) is CanonicalRational:
                 valid = (
                     type(getattr(scalar, "num", None)) is int
                     and type(getattr(scalar, "den", None)) is int
@@ -203,7 +203,7 @@ def _reject_oversized_restriction(restriction: object, role: str) -> None:
 
 def _reject_malformed_parent_complex(value: object, role: str) -> None:
     """Bound the retained face containers before copying any canonical complex."""
-    if not isinstance(value, FiniteSimplicialComplex):
+    if type(value) is not FiniteSimplicialComplex:
         raise _domain(
             "parent_complex_type", f"{role} parent must retain a typed complex"
         )
@@ -227,7 +227,7 @@ def _reject_malformed_parent_complex(value: object, role: str) -> None:
     face_count = 0
     for group in groups:
         if (
-            not isinstance(group, FacesInDimension)
+            type(group) is not FacesInDimension
             or type(getattr(group, "dimension", None)) is not int
         ):
             raise _domain(
@@ -269,7 +269,7 @@ def _reject_malformed_parent_complex(value: object, role: str) -> None:
 
 
 def _reject_malformed_stalk(stalk: object, role: str) -> None:
-    if not isinstance(stalk, SheafStalk):
+    if type(stalk) is not SheafStalk:
         raise _domain("parent_stalk_type", f"{role} parent stalks must be typed")
     basis = getattr(stalk, "basis", None)
     if isinstance(basis, (tuple, list)) and len(basis) > MAX_SHEAF_STALK_RANK:
@@ -536,7 +536,7 @@ def _solve_matrix(
 
 def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     """Compute the image sheaf and exact factorization ``F -> im(phi) -> G``."""
-    if not isinstance(value, SheafMorphismResult):
+    if type(value) is not SheafMorphismResult:
         raise _domain("morphism_type", "input must be a typed sheaf morphism")
     if not isinstance(
         getattr(value, "source", None), FiniteCellularSheaf

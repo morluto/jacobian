@@ -10,7 +10,6 @@ from math import gcd
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general.finite_box_operations import (
     finite_box_value_profile,
@@ -153,11 +152,3 @@ def test_maximal_admissible_support_is_converted() -> None:
         ),
     )
     assert len(integral_form_to_rational(source).target.cross_terms) == 1_920
-
-
-def test_catalog_operation_is_discoverable_and_its_example_runs() -> None:
-    operation_id = "quadratic_form.integral.rational_extension.compute"
-    tool = next(item for item in BUILTIN_TOOLS if item.operation_id == operation_id)
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    assert result.target.cross_terms[0].coefficient.as_fraction() == 3

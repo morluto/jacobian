@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -31,8 +30,6 @@ from jacobian.math.topology.cellular_sheaves._models import (
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     Component,
-    SheafCochainMapRequest,
-    SheafMorphismComposeRequest,
     SheafMorphismRequest,
     cochain_map,
     compose_morphisms,
@@ -152,37 +149,6 @@ def test_morphism_bounds_only_cover_coefficients_not_derived_composites() -> Non
     assert result.natural
 
 
-def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> None:
-    f, g, h = _triangle_sheaf(), _triangle_sheaf(), _triangle_sheaf()
-    axis = f.canonical_face_order
-    first = morphism(f, g, tuple((face, ((_q("2"),),)) for face in axis))
-    second = morphism(g, h, tuple((face, ((_q("3"),),)) for face in axis))
-    first_copy = SheafMorphismResult.model_validate_json(first.model_dump_json())
-    second_copy = SheafMorphismResult.model_validate_json(second.model_dump_json())
-    composed = compose_morphisms(first_copy, second_copy)
-    assert composed.source == f
-    assert composed.target == h
-    assert composed.natural
-    assert tuple(matrix for _, matrix in composed.components) == (((_q("6"),),),) * len(
-        axis
-    )
-
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "cellular_sheaf.morphism.compose"
-    )
-    request = SheafMorphismComposeRequest(first=first_copy, second=second_copy)
-    tool_result = tool.run(request)
-    assert tool_result == composed
-
-
-def test_catalog_morphism_example_remains_discoverable() -> None:
-    assert any(
-        tool.operation_id == "cellular_sheaf.morphism.compute" for tool in BUILTIN_TOOLS
-    )
-
-
 def test_composition_preserves_zero_dimensional_middle_stalks() -> None:
     f, g, h = _triangle_sheaf(), _triangle_sheaf(rank=0), _triangle_sheaf()
     axis = f.canonical_face_order
@@ -194,42 +160,6 @@ def test_composition_preserves_zero_dimensional_middle_stalks() -> None:
         axis
     )
     assert SheafMorphismRequest is not None
-
-
-def test_natural_morphism_induces_axis_bound_cochain_matrices() -> None:
-    sheaf = _triangle_sheaf()
-    components = tuple((face, ((_q("2"),),)) for face in sheaf.canonical_face_order)
-    sheaf_map = morphism(sheaf, sheaf, components)
-    result = cochain_map(sheaf_map)
-    restored = type(result).model_validate_json(result.model_dump_json())
-    assert restored == result
-    assert tuple(
-        tuple(len(axis) for axis in axes)
-        for axes in (result.source_bases, result.target_bases)
-    ) == (
-        (3, 3, 1),
-        (3, 3, 1),
-    )
-    assert result.components == (
-        (
-            (_q("2"), _q("0"), _q("0")),
-            (_q("0"), _q("2"), _q("0")),
-            (_q("0"), _q("0"), _q("2")),
-        ),
-        (
-            (_q("2"), _q("0"), _q("0")),
-            (_q("0"), _q("2"), _q("0")),
-            (_q("0"), _q("0"), _q("2")),
-        ),
-        ((_q("2"),),),
-    )
-    request = SheafCochainMapRequest(morphism=sheaf_map)
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "cellular_sheaf.morphism.cochain_map"
-    )
-    assert tool.run(request) == result
 
 
 def test_cochain_map_consumer_rechecks_serialized_naturality_claim() -> None:

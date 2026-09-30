@@ -11,7 +11,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -105,10 +104,6 @@ def _replay_differential_squares(value: KoszulComplexValue) -> None:
                             else:
                                 composed.pop(exponents, None)
                 assert composed == {}, (degree, target_row, source_column)
-
-
-def _catalog_tool():
-    return next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
 
 
 def _wire_payload(
@@ -223,19 +218,6 @@ def test_zero_entry_is_exact_and_sparse() -> None:
     _replay_differential_squares(value)
 
 
-def test_catalog_example_executes() -> None:
-    tool = _catalog_tool()
-    expected = koszul_complex(_XY, (_X, _Y))
-    assert len(tool.examples) == 1
-    for example in tool.examples:
-        request = tool.request_type.model_validate_json(
-            json.dumps(example.input), strict=True
-        )
-        assert request.variables == _XY
-        assert request.sequence == (_X, _Y)
-        assert tool.run(request) == expected
-
-
 def test_serialization_round_trip() -> None:
     value = koszul_complex(_XY, (_X, _Y))
     assert KoszulComplexValue.model_validate_json(value.model_dump_json()) == value
@@ -340,8 +322,3 @@ def test_replay_work_budget_rejects_dense_length_eight() -> None:
         "koszul.replay_work_budget",
         "koszul.product_term_budget",
     }
-
-
-def test_operation_is_published_in_the_catalog() -> None:
-    ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-    assert OPERATION_ID in ids

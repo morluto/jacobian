@@ -231,3 +231,79 @@ def test_transported_carrier_rejects_malformed_member_fields(
     )
     with pytest.raises(OperationDomainValidationError, match="typed"):
         compose_fundamental_group_maps(request)
+
+
+@pytest.mark.parametrize("member", ("basepoint_path", "simplicial_map"))
+@pytest.mark.parametrize(
+    "field", ("maximal_simplices", "faces_by_dimension", "faces", "f_vector")
+)
+def test_composition_bounds_retained_complexes_before_serialization(
+    member: str, field: str
+) -> None:
+    source = _circle(("a", "b", "c"))
+    result = _compose(
+        _path(source, ("a", "b")), _map(source, source, source.vertices, "b", "b")
+    )
+    assert isinstance(result.map, PresentationTransportedSimplicialMap)
+    if field == "faces":
+        group = source.faces_by_dimension[0].model_copy(
+            update={"faces": (("a",),) * 2049}
+        )
+        malformed_complex = source.model_copy(update={"faces_by_dimension": (group,)})
+    else:
+        bound = 128 if field == "maximal_simplices" else 8
+        malformed_complex = source.model_copy(
+            update={field: (getattr(source, field)[0],) * (bound + 1)}
+        )
+    inner_field = "complex" if member == "basepoint_path" else "source"
+    malformed = getattr(result.map, member).model_copy(
+        update={inner_field: malformed_complex}
+    )
+    forged = result.model_copy(
+        update={"map": result.map.model_copy(update={member: malformed})}
+    )
+    identity = _map(source, source, source.vertices, "b", "b")
+    request = PresentationMapCompositionRequest.model_construct(
+        first=forged, second=identity
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="envelope"):
+        compose_fundamental_group_maps(request)
+
+
+@pytest.mark.parametrize("field", ("source_presentation", "target_presentation"))
+def test_composition_bounds_presentation_complexes_before_comparison(
+    field: str,
+) -> None:
+    source = _circle(("a", "b", "c"))
+    identity = _map(source, source, source.vertices, "a", "a")
+    malformed = source.model_copy(update={"maximal_simplices": (("a",),) * 129})
+    presentation = getattr(identity, field).model_copy(update={"complex": malformed})
+    first = identity.model_copy(update={field: presentation})
+    request = PresentationMapCompositionRequest.model_construct(
+        first=first, second=identity
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="envelope"):
+        compose_fundamental_group_maps(request)
+
+
+def test_transported_path_subclasses_are_refused_before_dumping() -> None:
+    class ExtendedPath(PresentationBasepointChangePath):
+        payload: tuple[int, ...] = ()
+
+    source = _circle(("a", "b", "c"))
+    result = _compose(
+        _path(source, ("a", "b")), _map(source, source, source.vertices, "b", "b")
+    )
+    assert isinstance(result.map, PresentationTransportedSimplicialMap)
+    path = ExtendedPath.model_construct(
+        **result.map.basepoint_path.__dict__, payload=(1,) * 10000
+    )
+    forged = result.model_copy(
+        update={"map": result.map.model_copy(update={"basepoint_path": path})}
+    )
+    identity = _map(source, source, source.vertices, "b", "b")
+    request = PresentationMapCompositionRequest.model_construct(
+        first=forged, second=identity
+    )
+    with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
+        compose_fundamental_group_maps(request)

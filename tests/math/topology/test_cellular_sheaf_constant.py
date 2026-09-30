@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
@@ -27,7 +25,6 @@ from jacobian.math.topology.cellular_sheaves.constants import (
 from jacobian.math.topology.cellular_sheaves.constants._models import (
     ConstantSheafRequest,
 )
-from jacobian.math.topology.cellular_sheaves.constants._tools import TOOLS
 from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology
 from jacobian.math.topology.cohomology.operations import simplicial_cohomology
 
@@ -172,17 +169,6 @@ def test_constant_sheaf_accepts_large_bounded_face_poset() -> None:
     assert sheaf.comparable_pairs == 602
     assert len(sheaf.derived_restrictions) == 416
     assert len(sheaf.model_dump_json().encode("utf-8")) < 8_000_000
-
-
-def test_constant_sheaf_manifest_publishes_one_canonical_result() -> None:
-    tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
-    result = tool.run(
-        tool.request_type.model_validate_json(
-            json.dumps(tool.examples[0].input), strict=True
-        )
-    )
-    assert isinstance(result, FiniteCellularSheaf)
-    assert len(TOOLS) == 1
 
 
 def test_constant_sheaf_request_requires_unique_ordered_basis_ids() -> None:

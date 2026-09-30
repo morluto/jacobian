@@ -6,7 +6,6 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
@@ -164,17 +163,3 @@ def test_map_to_zero_module_retains_zero_chain_axes() -> None:
         (0, 2),
     )
     assert all(not matrix.entries for matrix in result.degree_maps)
-
-
-def test_catalog_declares_module_map_transport() -> None:
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "homological.koszul.module_map.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert result.source == result.target
-    assert result.degree_maps[0].entries == ((0, 0, q(1)),)

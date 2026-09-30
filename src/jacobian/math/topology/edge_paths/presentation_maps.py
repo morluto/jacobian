@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Literal, cast
 
-from pydantic import Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -14,7 +14,10 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology._models import FiniteSimplicialComplex
-from jacobian.math.topology._request_admission import run_topology_admission
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_shape,
+    run_topology_admission,
+)
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
     MAX_INDUCED_MAP_EDGE_LETTERS,
@@ -236,9 +239,39 @@ def _permutation_sign(values: tuple[str, ...]) -> int:
     return -1 if inversions % 2 else 1
 
 
+def _require_native_model(
+    value: object, model: type[BaseModel], location: tuple[str, ...]
+) -> None:
+    if (
+        type(value) is not model
+        or len(value.__dict__) != len(model.model_fields)
+        or any(key not in model.model_fields for key in value.__dict__)
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.native_carrier_shape",
+            message="expected an exact typed carrier with its declared fields",
+        )
+
+
 def _validate_simplicial_map(value: SimplicialMap) -> None:
     """Run model-level simplicial validation under topology admission."""
-    value.__class__.model_validate(value.model_dump())
+    _require_native_model(value, SimplicialMap, ("map",))
+    vertices = getattr(value, "vertex_map", None)
+    if (
+        not isinstance(vertices, (tuple, list))
+        or type(vertices) not in (tuple, list)
+        or len(vertices) > 64
+        or any(type(vertex) is not str for vertex in vertices)
+    ):
+        raise OperationDomainValidationError(
+            location=("map", "vertex_map"),
+            code="fundamental_group_map.native_carrier_shape",
+            message="a typed simplicial map must retain bounded scalar vertex labels",
+        )
+    require_canonical_complex_shape(getattr(value, "source", None))
+    require_canonical_complex_shape(getattr(value, "target", None))
+    SimplicialMap.model_validate(value.model_dump())
 
 
 def induced_fundamental_group_map(
@@ -517,9 +550,7 @@ def change_fundamental_group_basepoint(
             message="request must contain a canonical based edge path",
         )
     try:
-        path_value = PresentationBasepointChangePath.model_validate(
-            request.path.model_dump(mode="python")
-        )
+        path_value = _admit_composition_path(request.path, ("path",))
     except ValidationError as error:
         raise OperationDomainValidationError(
             location=("path",),
@@ -942,8 +973,9 @@ def _compose_relator_images(
 def _admit_composition_path(
     path: PresentationBasepointChangePath, location: tuple[str, ...]
 ) -> PresentationBasepointChangePath:
+    _require_native_model(path, PresentationBasepointChangePath, location)
     vertices = getattr(path, "path_vertices", None)
-    if not isinstance(vertices, (tuple, list)):
+    if not isinstance(vertices, (tuple, list)) or type(vertices) not in (tuple, list):
         raise OperationDomainValidationError(
             location=location,
             code="fundamental_group_map.composition_path_shape",
@@ -956,13 +988,14 @@ def _admit_composition_path(
             message="the basepoint path exceeds the admitted word bound",
         )
     if not isinstance(getattr(path, "complex", None), FiniteSimplicialComplex) or any(
-        not isinstance(vertex, str) for vertex in vertices
+        type(vertex) is not str for vertex in vertices
     ):
         raise OperationDomainValidationError(
             location=location,
             code="fundamental_group_map.composition_path_shape",
             message="a typed basepoint path must retain a canonical complex and scalar vertex labels",
         )
+    require_canonical_complex_shape(path.complex)
     return run_topology_admission(
         lambda: PresentationBasepointChangePath.model_validate(path.model_dump()),
         location=location,
@@ -976,6 +1009,7 @@ def _composition_carrier(
     """Normalize a bound carrier to a simplicial map and target edge path."""
     carrier = result.map
     if isinstance(carrier, PresentationTransportedSimplicialMap):
+        _require_native_model(carrier, PresentationTransportedSimplicialMap, location)
         run_topology_admission(carrier._require_typed_members, location=location)
         mapped = carrier.simplicial_map
         path = _admit_composition_path(carrier.basepoint_path, location)
@@ -1068,7 +1102,17 @@ def compose_fundamental_group_maps(
     witnesses are composed through the common middle presentation.
     """
 
+    _require_native_model(request, PresentationMapCompositionRequest, ("request",))
     first, second = request.first, request.second
+    for operand, label in ((first, "first"), (second, "second")):
+        _require_native_model(operand, FundamentalGroupMapResult, (label,))
+        for presentation in (operand.source_presentation, operand.target_presentation):
+            _require_native_model(
+                presentation,
+                FundamentalGroupPresentationResult,
+                (label, "presentation"),
+            )
+            require_canonical_complex_shape(presentation.complex)
     if first.target_presentation != second.source_presentation:
         raise OperationDomainValidationError(
             location=("second", "source_presentation"),

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
+from typing import Never, cast
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.free_algebras import operations
 from jacobian.math.free_algebras._models import (
+    MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
     FreeAlgebraPolynomial,
     FreeAlgebraPolynomialPowerRequest,
     FreeAlgebraTerm,
@@ -25,7 +28,7 @@ OPERATION_ID = "free_algebra.polynomial.power.compute"
 
 def _polynomial(
     alphabet: tuple[str, ...],
-    coefficients: dict[tuple[str, ...], int | Fraction],
+    coefficients: Mapping[tuple[str, ...], int | Fraction],
 ) -> FreeAlgebraPolynomial:
     ordered = sorted(
         coefficients.items(),
@@ -95,13 +98,16 @@ def test_product_allocation_admits_colliding_word_support() -> None:
     assert len(result.terms) == 65
 
 
-def _matrix_add(left, right):
+type RationalMatrix = tuple[tuple[Fraction, ...], ...]
+
+
+def _matrix_add(left: RationalMatrix, right: RationalMatrix) -> RationalMatrix:
     return tuple(
         tuple(left[row][col] + right[row][col] for col in range(2)) for row in range(2)
     )
 
 
-def _matrix_multiply(left, right):
+def _matrix_multiply(left: RationalMatrix, right: RationalMatrix) -> RationalMatrix:
     return tuple(
         tuple(
             sum((left[row][k] * right[k][col] for k in range(2)), Fraction(0))
@@ -111,17 +117,19 @@ def _matrix_multiply(left, right):
     )
 
 
-def _matrix_power(matrix, exponent: int):
-    identity = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+def _matrix_power(matrix: RationalMatrix, exponent: int) -> RationalMatrix:
+    identity: RationalMatrix = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
     result = identity
     for _ in range(exponent):
         result = _matrix_multiply(result, matrix)
     return result
 
 
-def _evaluate(polynomial: FreeAlgebraPolynomial, matrices):
-    identity = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
-    zero = ((Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)))
+def _evaluate(
+    polynomial: FreeAlgebraPolynomial, matrices: Mapping[str, RationalMatrix]
+) -> RationalMatrix:
+    identity: RationalMatrix = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+    zero: RationalMatrix = ((Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)))
     result = zero
     for term in polynomial.terms:
         value = identity
@@ -149,7 +157,7 @@ def test_power_agrees_with_independent_noncommutative_matrix_algebra() -> None:
 
 
 def test_exponent_limit_and_every_product_preflight_before_expansion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     polynomial = _polynomial(("x",), {("x",): 1})
     assert _coefficients(power_polynomial(polynomial, 64)) == {("x",) * 64: Fraction(1)}
@@ -168,7 +176,7 @@ def test_exponent_limit_and_every_product_preflight_before_expansion(
     coefficient_growth = _polynomial(alphabet, terms)
     calls = 0
 
-    def unexpected_expansion(*args, **kwargs):
+    def unexpected_expansion(*args: object, **kwargs: object) -> Never:
         nonlocal calls
         calls += 1
         raise AssertionError("power convolution started before admission")
@@ -180,7 +188,10 @@ def test_exponent_limit_and_every_product_preflight_before_expansion(
 
 
 def test_power_operation_json_and_catalog_result_round_trip() -> None:
-    tool = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+    tool = cast(
+        MathTool[FreeAlgebraPolynomialPowerRequest, FreeAlgebraPolynomial],
+        next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID),
+    )
     request = FreeAlgebraPolynomialPowerRequest.model_validate_json(
         encode_strict_json(tool.examples[0].input), strict=True
     )
@@ -195,3 +206,41 @@ def test_power_operation_json_and_catalog_result_round_trip() -> None:
         ("x", "y"): Fraction(1),
         ("x", "x"): Fraction(1),
     }
+
+
+def test_result_word_length_is_preflighted_before_expansion() -> None:
+    """A product's word length is the sum of its operands' lengths.
+
+    The operand limit admits words up to the result bound, but concatenation
+    adds them. Without a preflight a 33-letter monomial squared passed both
+    operand checks, `multiply_sparse` expanded it to 66 letters, and
+    `FreeAlgebraTerm` raised a pydantic `ValidationError` instead of the
+    operation returning a bounded resource refusal.
+    """
+
+    def _power(word_length: int) -> FreeAlgebraPolynomial:
+        return FreeAlgebraPolynomial(
+            alphabet=("a", "b"),
+            terms=(
+                FreeAlgebraTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                    word=("a",) * word_length,
+                ),
+            ),
+        )
+
+    # 32 + 32 = 64 is exactly the result bound and is admitted
+    admitted = power_polynomial(_power(32), 2)
+    assert all(
+        len(term.word) <= MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH for term in admitted.terms
+    )
+
+    # 33 + 33 = 66 exceeds it and is refused as a resource, not a pydantic error
+    overlong = _power(33)
+    assert FreeAlgebraPolynomialPowerRequest(
+        polynomial=overlong, exponent=2
+    )  # the request model accepts the source
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        power_polynomial(overlong, 2)
+    assert error.value.errors()[0]["type"].endswith("power_result_word_length_budget")
+    assert error.value.errors()[0]["loc"] == ("polynomial",)

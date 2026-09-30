@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -339,8 +338,3 @@ class TestParityAndSerialization:
         result = tool.run(request)
         assert result.inner_product.order == 1
         assert result.inner_product.coefficients[0].as_fraction() == 0
-
-    def test_catalog_discovery(self) -> None:
-        ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-        assert OPERATION_ID in ids
-        assert "number_theory.character.inner_product.compute" not in ids

@@ -6,9 +6,16 @@ from collections.abc import Callable
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
+    MAX_TOPOLOGY_FACES,
+    MAX_TOPOLOGY_FACETS,
+    MAX_TOPOLOGY_VERTICES,
+    FacesInDimension,
     FiniteSimplicialComplex,
     SimplicialComplexRequest,
     _require_request_complex,
@@ -23,7 +30,7 @@ def run_topology_admission[T](
 
     try:
         return admission()
-    except OperationDomainValidationError:
+    except (OperationDomainValidationError, OperationResourceAdmissionError):
         raise
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
@@ -56,6 +63,90 @@ def require_complex_admission(request: SimplicialComplexRequest) -> None:
     run_topology_admission(admit, location=("facets",))
 
 
+def _shape_domain(field: str) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("complex", field),
+        code="topology.complex_shape",
+        message=f"canonical complex {field} has an invalid native shape",
+    )
+
+
+def _shape_sequence(
+    value: object, bound: int, field: str
+) -> tuple[object, ...] | list[object]:
+    if not isinstance(value, (tuple, list)) or type(value) not in (tuple, list):
+        raise _shape_domain(field)
+    if len(value) > bound:
+        raise OperationResourceAdmissionError(
+            location=("complex", field),
+            code="topology.complex_shape_bound",
+            message=f"canonical complex {field} exceeds its {bound}-element envelope",
+        )
+    return value
+
+
+def _shape_labels(value: object, bound: int, field: str) -> None:
+    labels = _shape_sequence(value, bound, field)
+    if any(type(label) is not str for label in labels):
+        raise _shape_domain(field)
+
+
+def require_canonical_complex_shape(value: object) -> None:
+    """Bound every native complex container before recursive dump/decoding.
+
+    This only establishes finite scalar/container shape. Canonical face order,
+    closure and other semantic invariants remain owned by model validation and
+    canonical-complex admission.
+    """
+    if type(value) is not FiniteSimplicialComplex:
+        raise _shape_domain("type")
+    fields = FiniteSimplicialComplex.model_fields
+    if len(value.__dict__) != len(fields) or any(
+        key not in fields for key in value.__dict__
+    ):
+        raise _shape_domain("fields")
+    _shape_labels(value.vertices, MAX_TOPOLOGY_VERTICES, "vertices")
+    facets = _shape_sequence(
+        value.maximal_simplices, MAX_TOPOLOGY_FACETS, "maximal_simplices"
+    )
+    for facet in facets:
+        _shape_labels(facet, MAX_TOPOLOGY_DIMENSION + 1, "facet")
+    groups = _shape_sequence(
+        value.faces_by_dimension, MAX_TOPOLOGY_DIMENSION + 1, "faces_by_dimension"
+    )
+    face_count = 0
+    for group in groups:
+        if (
+            type(group) is not FacesInDimension
+            or len(group.__dict__) != 2
+            or set(group.__dict__) != {"dimension", "faces"}
+            or type(group.dimension) is not int
+        ):
+            raise _shape_domain("face group")
+        faces = _shape_sequence(group.faces, MAX_TOPOLOGY_FACES, "faces")
+        face_count += len(faces)
+        if face_count > MAX_TOPOLOGY_FACES:
+            raise OperationResourceAdmissionError(
+                location=("complex", "faces"),
+                code="topology.complex_shape_bound",
+                message="canonical complex total faces exceed the admitted envelope",
+            )
+        for face in faces:
+            _shape_labels(face, MAX_TOPOLOGY_DIMENSION + 1, "simplex")
+    counts = _shape_sequence(value.f_vector, MAX_TOPOLOGY_DIMENSION + 1, "f_vector")
+    if (
+        any(type(count) is not int for count in counts)
+        or type(value.dimension) is not int
+        or type(value.closure_size) is not int
+    ):
+        raise _shape_domain("face counts")
+    if (
+        not isinstance(value.orientation_convention, str)
+        or type(value.empty_simplex_stored) is not bool
+    ):
+        raise _shape_domain("conventions")
+
+
 def require_canonical_complex_admission(complex_: FiniteSimplicialComplex) -> None:
     """Establish every authored canonical invariant before a consumer runs."""
 
@@ -77,6 +168,7 @@ def require_canonical_complex_admission(complex_: FiniteSimplicialComplex) -> No
 
 __all__ = [
     "require_canonical_complex_admission",
+    "require_canonical_complex_shape",
     "require_complex_admission",
     "run_topology_admission",
 ]

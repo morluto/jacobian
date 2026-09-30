@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.math.logic.automata.transducers.values import (
     FiniteAlphabet,
+    RationalEdge,
     RationalTransducer,
 )
 from jacobian.math.logic.languages.regular.values import DFA
@@ -36,6 +39,33 @@ def _output_edge_advances_language(
             return False
         state = next_state
     return state == target
+
+
+def _admitted_edge_transports(
+    edge_sources: tuple[RestrictOutputEdgeSource, ...],
+    restricted_edges: tuple[RationalEdge, ...],
+) -> Iterator[RestrictOutputEdgeSource]:
+    """Charge and yield edge transports in bounded, cancellable steps.
+
+    Confirming the edge transport replays the output language once per edge,
+    which is admitted-scale work. Charging it against the same envelope the
+    kernel uses, and yielding it in checkpointed steps, means a decode inside a
+    tight or cancelled request is accounted for and interruptible instead of
+    running to completion unchecked.
+    """
+    replay_cells = sum(
+        len(restricted_edges[transport.restricted_edge].output_label)
+        for transport in edge_sources
+    )
+    if replay_cells > MAX_RESTRICT_OUTPUT_WORK:
+        raise _error(
+            "edge_transport_replay_exceeded",
+            "edge-transport replay exceeds the admitted work envelope",
+        )
+    for index, transport in enumerate(edge_sources):
+        if index % 256 == 0:
+            request_checkpoint("during output-restriction edge transport")
+        yield transport
 
 
 class RestrictRationalOutputRequest(StrictModel):
@@ -161,7 +191,7 @@ class RestrictRationalOutputResult(StrictModel):
             (row.source, row.symbol): row.target
             for row in self.output_language.transitions
         }
-        for transport in self.edge_sources:
+        for transport in _admitted_edge_transports(self.edge_sources, restricted_edges):
             restricted_edge = restricted_edges[transport.restricted_edge]
             source_edge = source_edges[transport.source_edge]
             source_state = product_rows[restricted_edge.source]

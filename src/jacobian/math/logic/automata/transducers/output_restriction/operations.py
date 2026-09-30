@@ -31,6 +31,7 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_DFA_ALPHABET,
     MAX_DFA_STATES,
     MAX_DFA_TRANSITIONS,
+    DFATransition,
 )
 
 
@@ -213,9 +214,9 @@ def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]
         )
     delta: dict[tuple[int, int], int] = {}
     for transition in language.transitions:
-        if not all(
-            hasattr(transition, field) for field in ("source", "symbol", "target")
-        ):
+        # As with relation edges, an attribute-only check would admit foreign
+        # mutable rows that are then retained in the result unrevalidated.
+        if not isinstance(transition, DFATransition):
             _fail(
                 "dfa_transition_invalid",
                 "DFA transition rows must be typed transitions",
@@ -253,10 +254,11 @@ def _validate_relation_edges(
     edge_outputs: list[tuple[int, ...]] = []
     label_cells = 0
     for edge_index, edge in enumerate(relation.edges):
-        if not all(
-            hasattr(edge, field)
-            for field in ("source", "target", "input_label", "output_label")
-        ):
+        # An attribute-only check accepts any object with the right fields, and
+        # the relation is retained in the result without nested revalidation, so
+        # a native caller could otherwise smuggle noncanonical mutable rows into
+        # a declared typed result. Require the canonical row type.
+        if not isinstance(edge, RationalEdge):
             _fail("edge_invalid", "transducer rows must be typed rational edges")
         if (
             type(edge.source) is not int

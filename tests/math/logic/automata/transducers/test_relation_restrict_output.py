@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.transducers.output_restriction._models import (
+    MAX_RESTRICT_OUTPUT_WORK,
     RestrictRationalOutputRequest,
     RestrictRationalOutputResult,
 )
@@ -229,3 +231,78 @@ def test_output_restriction_rejects_mismatched_alphabet_context() -> None:
     assert caught.value.errors()[0]["type"] == (
         "rational_transducer.restrict_output.output_context_mismatch"
     )
+
+
+def test_native_transition_rows_must_be_canonical_types() -> None:
+    """An attribute-only check admits foreign mutable rows.
+
+    ``DFA.model_construct`` can hold any object with ``source``/``symbol``/
+    ``target``. Because the DFA is retained in the result without nested
+    revalidation, accepting such a row would put a noncanonical mutable object
+    inside a declared typed result.
+    """
+    # The shape matches the source's output alphabet, so the request reaches
+    # the transition-row check rather than being refused for a size mismatch.
+    forged = DFA.model_construct(
+        state_count=2,
+        alphabet_size=2,
+        initial_state=0,
+        accepting_states=(1,),
+        transitions=tuple(
+            SimpleNamespace(source=state, symbol=symbol, target=state)
+            for state in range(2)
+            for symbol in range(2)
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        restrict_rational_output(_source(), forged, FiniteAlphabet(symbols=("x", "y")))
+    assert (
+        refusal.value.errors()[0]["type"]
+        == "rational_transducer.restrict_output.dfa_transition_invalid"
+    )
+
+
+def test_native_relation_edge_rows_must_be_canonical_types() -> None:
+    """The same hole exists on the relation side, which the result retains."""
+    relation = _source()
+    forged = relation.model_copy(
+        update={
+            "edges": (
+                SimpleNamespace(
+                    source=0, target=1, input_label=(0,), output_label=(0,)
+                ),
+            )
+        }
+    )
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        restrict_rational_output(
+            forged, _output_language(), FiniteAlphabet(symbols=("x", "y"))
+        )
+    assert (
+        refusal.value.errors()[0]["type"]
+        == "rational_transducer.restrict_output.edge_invalid"
+    )
+
+
+def test_edge_transport_replay_is_charged_against_the_admitted_work_envelope() -> None:
+    """The decoder's replay is admitted work, so it is charged before it runs.
+
+    Confirming edge transport replays the output language once per edge. The
+    carriers bound that at roughly 2.1 million steps, which is inside the
+    operation's published envelope, so the charge is what makes the decoder's
+    cost accounted for rather than incidental.
+    """
+    source = _source()
+    language = _output_language()
+    result = restrict_rational_output(
+        source, language, FiniteAlphabet(symbols=("x", "y"))
+    )
+    replay_cells = sum(
+        len(result.restricted.edges[t.restricted_edge].output_label)
+        for t in result.edge_sources
+    )
+    assert replay_cells <= MAX_RESTRICT_OUTPUT_WORK
+
+    # A genuine result still decodes, so the charge refuses nothing legitimate.
+    decoded = RestrictRationalOutputResult.model_validate(result.model_dump())
+    assert decoded.product_states == result.product_states

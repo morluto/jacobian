@@ -1264,7 +1264,29 @@ class _Projection:
                 < stop
             ):
                 continue
+            if isinstance(node, (ast.For, ast.AsyncFor, ast.NamedExpr)) and (
+                self.sequence_reference(node.target, aliases)
+            ):
+                return True
+            if (
+                isinstance(node, ast.withitem)
+                and node.optional_vars is not None
+                and (self.sequence_reference(node.optional_vars, aliases))
+            ):
+                return True
+            if isinstance(node, ast.ExceptHandler) and node.name in aliases:
+                return True
+            if isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)) and (
+                self.sequence_reference(node, aliases)
+            ):
+                return True
             for target, assigned in _assignment_pairs(node):
+                if (
+                    assigned is not None
+                    and self.sequence_reference(assigned, aliases)
+                    and not isinstance(target, ast.Name)
+                ):
+                    return True
                 if (
                     isinstance(target, ast.Name)
                     and isinstance(assigned, ast.Name)
@@ -3695,3 +3717,37 @@ def validate(cls, data):
 """,
             {"provenance"},
         ) == {"provenance"}
+
+
+def test_loop_target_rebinding_sequence_is_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (payload, 0)
+    for result in [(raw, 0)]:
+        pass
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_container_held_sequence_alias_is_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = [payload, 0]
+    holder = [result]
+    holder[0][0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}

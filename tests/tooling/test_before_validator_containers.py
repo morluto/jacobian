@@ -1561,11 +1561,19 @@ class _Projection:
             self.write_bindings,
             key=lambda binding: getattr(binding[0], "lineno", 0),
         ):
-            if (
-                isinstance(target, ast.Name)
-                and assigned is not None
-                and not isinstance(assigned, (ast.Tuple, ast.List, ast.Dict, ast.Set))
-                and self.sequence_reference(assigned, aliases)
+            if assigned is None or isinstance(
+                assigned, (ast.Tuple, ast.List, ast.Dict, ast.Set)
+            ):
+                continue
+            if isinstance(target, ast.Attribute) and self.sequence_reference(
+                assigned, aliases
+            ):
+                # Storing a canonical value in an attribute hands it to code
+                # this projection cannot see writing back through, so the
+                # returned sequence can no longer be proven untouched.
+                return True
+            if isinstance(target, ast.Name) and self.sequence_reference(
+                assigned, aliases
             ):
                 aliases.add(target.id)
         return any(
@@ -1780,6 +1788,16 @@ class _Projection:
                 return min(self.tuple_depth(item, field, seen) for item in appended)
         return max(0, self.tuple_depth(value, field, seen) - 1)
 
+    def unshadowed_builtin(self, name: str) -> bool:
+        """Whether a builtin-spelled name is still the builtin here.
+
+        A module-level ``def dict(...)`` replaces the builtin at runtime, so
+        trusting it by spelling alone certifies a payload that the replacement
+        may have written back as raw JSON.
+        """
+
+        return bool(name) and name not in self.shadowed_names
+
     def projected_call(self, value: ast.Call, field: str, seen: frozenset[int]) -> bool:
         name = getattr(value.func, "id", "")
         if (
@@ -1792,12 +1810,14 @@ class _Projection:
             name == "canonicalize_json_containers"
             or (
                 name == "tuple"
+                and self.unshadowed_builtin(name)
                 and self.tuple_depth(value, field) >= self.array_depth(field)
             )
             or (self.array_depth(field) == 1 and self.normalizes_outer_array(name))
             or self.helper_projects(value, field)
             or (
                 name in {"dict", "cast"}
+                and self.unshadowed_builtin(name)
                 and bool(value.args)
                 and self.projected_return(value.args[-1], field, seen | {id(value)})
             )
@@ -4551,3 +4571,48 @@ def validate(cls, data):
 """,
             {"provenance"},
         ) == {"provenance"}
+
+
+def test_shadowing_a_projection_constructor_is_not_projection_proof() -> None:
+    """A module-level ``dict`` replaces the builtin the tracer would trust."""
+
+    for replacement in ("dict", "cast"):
+        assert _fixture_uncovered(
+            f"""
+def {replacement}(value, *rest):
+    value['provenance'] = raw
+    return value
+
+def pair(payload, raw):
+    return {replacement}(payload), 0
+
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_attribute_stored_canonical_value_is_an_escape() -> None:
+    """A canonical value in an attribute can be written back through unseen."""
+
+    assert _fixture_uncovered(
+        """
+class Holder:
+    pass
+
+def pair(payload, raw):
+    holder = Holder()
+    holder.value = payload
+    holder.value['provenance'] = raw['provenance']
+    return payload, 0
+
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}

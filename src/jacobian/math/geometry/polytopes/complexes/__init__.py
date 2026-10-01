@@ -11,10 +11,11 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
     polytopal_complex_common_refinement,
+    spline_coordinates,
     spline_dimension,
     spline_evaluate,
+    spline_refinement_map,
     spline_space,
-    spline_coordinates,
 )
 
 __all__ = [
@@ -28,8 +29,9 @@ __all__ = [
     "polytopal_complex_affine_transform",
     "polytopal_complex_closure",
     "polytopal_complex_common_refinement",
+    "spline_coordinates",
     "spline_dimension",
     "spline_evaluate",
+    "spline_refinement_map",
     "spline_space",
-    "spline_coordinates",
 ]

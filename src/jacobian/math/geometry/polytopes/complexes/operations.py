@@ -78,10 +78,11 @@ from jacobian.math.geometry.polytopes.complexes._spline import (
     piecewise_polynomial_multiply,
     piecewise_polynomial_scalar_multiply,
     piecewise_polynomial_smoothness,
+    spline_coordinates,
     spline_dimension,
     spline_evaluate,
+    spline_refinement_map,
     spline_space,
-    spline_coordinates,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
 from jacobian.math.geometry.polytopes.values import Vertex
@@ -97,10 +98,11 @@ __all__ = [
     "polytopal_complex_affine_transform",
     "polytopal_complex_closure",
     "polytopal_complex_common_refinement",
+    "spline_coordinates",
     "spline_dimension",
     "spline_evaluate",
+    "spline_refinement_map",
     "spline_space",
-    "spline_coordinates",
 ]
 
 Point = tuple[Fraction, ...]

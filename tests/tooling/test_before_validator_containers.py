@@ -545,6 +545,50 @@ class _Projection:
             if not isinstance(node, ast.AugAssign)
             for target, value in _assignment_pairs(node)
         ]
+        self.loop_controls = [
+            node for node in self.nodes if isinstance(node, (ast.Break, ast.Continue))
+        ]
+        self.unmodeled_bindings: set[str] = set()
+        for node in self.nodes:
+            targets: list[ast.AST] = []
+            if isinstance(node, (ast.For, ast.AsyncFor, ast.NamedExpr)):
+                targets.append(node.target)
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                targets.extend(
+                    item.optional_vars
+                    for item in node.items
+                    if item.optional_vars is not None
+                )
+            elif isinstance(node, (ast.MatchAs, ast.MatchStar, ast.ExceptHandler)):
+                if node.name is not None:
+                    self.unmodeled_bindings.add(node.name)
+            elif isinstance(node, ast.MatchMapping) and node.rest is not None:
+                self.unmodeled_bindings.add(node.rest)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                self.unmodeled_bindings.update(
+                    alias.asname or alias.name.split(".")[0] for alias in node.names
+                )
+            self.unmodeled_bindings.update(
+                part.id
+                for target in targets
+                for part in ast.walk(target)
+                if isinstance(part, ast.Name)
+            )
+        self.local_names = (
+            self.unmodeled_bindings
+            | {
+                node.arg
+                for node in ast.walk(function.args)
+                if isinstance(node, ast.arg)
+            }
+            | {
+                part.id
+                for _, target, _ in self.write_bindings
+                for part in ast.walk(target)
+                if isinstance(part, ast.Name) and isinstance(part.ctx, ast.Store)
+            }
+        )
+        self.shadowed_names = self.local_names | set(functions)
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -683,7 +727,9 @@ class _Projection:
             arguments = {
                 parameter.arg: self.value(argument, seen)
                 for parameter, argument in zip(
-                    helper.args.args, node.args, strict=False
+                    (helper.args.posonlyargs + helper.args.args),
+                    node.args,
+                    strict=False,
                 )
             }
             helper_covered: set[str] = set()
@@ -750,7 +796,9 @@ class _Projection:
             {
                 parameter.arg: self.value(argument, seen)
                 for parameter, argument in zip(
-                    helper.args.args, value.args, strict=False
+                    (helper.args.posonlyargs + helper.args.args),
+                    value.args,
+                    strict=False,
                 )
             },
             set(),
@@ -901,9 +949,11 @@ class _Projection:
 
     @staticmethod
     def is_field_reader(helper: ast.FunctionDef) -> bool:
-        if len(helper.args.args) != 2:
+        if len(helper.args.posonlyargs + helper.args.args) != 2:
             return False
-        receiver, key = (argument.arg for argument in helper.args.args)
+        receiver, key = (
+            argument.arg for argument in (helper.args.posonlyargs + helper.args.args)
+        )
         returns = [
             node.value for node in _own_nodes(helper) if isinstance(node, ast.Return)
         ]
@@ -936,6 +986,28 @@ class _Projection:
     def guard_value(self, test: ast.expr, field: str) -> bool | None:
         """Evaluate only structural guards known for a present JSON array field."""
 
+        guard_symbols = {
+            "isinstance",
+            "type",
+            "len",
+            "dict",
+            "list",
+            "tuple",
+            "set",
+            "frozenset",
+            "str",
+            "int",
+            "float",
+            "bool",
+            "Mapping",
+        }
+        if any(
+            isinstance(node, ast.Name)
+            and node.id in guard_symbols
+            and node.id in self.shadowed_names
+            for node in ast.walk(test)
+        ):
+            return None
         if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
             value = self.guard_value(test.operand, field)
             return None if value is None else not value
@@ -1215,9 +1287,281 @@ class _Projection:
 
         return self.guard_value(test, field) is False
 
+    def guaranteed_bindings(
+        self, value: ast.expr, field: str, seen: frozenset[int] = frozenset()
+    ) -> bool:
+        """Do not infer projection from an assignment on an optional path."""
+
+        if id(value) in seen:
+            return False
+        seen = seen | {id(value)}
+        if isinstance(value, ast.Name) and isinstance(value.ctx, ast.Load):
+            if value.id in self.unmodeled_bindings:
+                return False
+            statement, bound = self.name_binding(value)
+            if statement is not None:
+                return (
+                    bound is not None
+                    and self.execution_guaranteed(statement, field)
+                    and self.guaranteed_bindings(bound, field, seen)
+                )
+        return all(
+            self.guaranteed_bindings(child, field, seen)
+            for child in ast.iter_child_nodes(value)
+            if isinstance(child, ast.expr)
+        )
+
+    def sequence_changed(
+        self, name: str, binding: ast.AST, use: ast.expr, index: int
+    ) -> bool:
+        """Stored sequence elements need an unchanged sequence up to their use."""
+
+        aliases = {name}
+        start = (
+            getattr(binding, "end_lineno", 0),
+            getattr(binding, "end_col_offset", 0),
+        )
+        stop = (use.lineno, use.col_offset)
+        for node in sorted(
+            self.nodes,
+            key=lambda node: (
+                getattr(node, "lineno", 0),
+                getattr(node, "col_offset", 0),
+            ),
+        ):
+            if (
+                not start
+                <= (getattr(node, "lineno", 0), getattr(node, "col_offset", 0))
+                < stop
+            ):
+                continue
+            if isinstance(node, (ast.For, ast.AsyncFor, ast.NamedExpr)) and (
+                self.sequence_reference(node.target, aliases)
+            ):
+                return True
+            if isinstance(node, (ast.With, ast.AsyncWith)) and any(
+                item.optional_vars is not None
+                and self.sequence_reference(item.optional_vars, aliases)
+                for item in node.items
+            ):
+                return True
+            if isinstance(node, ast.ExceptHandler) and node.name in aliases:
+                return True
+            if isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)) and (
+                self.sequence_reference(node, aliases)
+            ):
+                return True
+            for target, assigned in _assignment_pairs(node):
+                if (
+                    assigned is not None
+                    and self.sequence_reference(assigned, aliases)
+                    and not isinstance(target, ast.Name)
+                ):
+                    return True
+                if (
+                    isinstance(target, ast.Name)
+                    and assigned is not None
+                    and self.sequence_reference(assigned, aliases)
+                ):
+                    aliases.add(target.id)
+                if (
+                    isinstance(node, ast.AugAssign)
+                    and isinstance(target, ast.Name)
+                    and target.id in aliases
+                ):
+                    return True
+                if (
+                    isinstance(target, ast.Subscript)
+                    and self.sequence_reference(target.value, aliases)
+                    and not (
+                        isinstance(node, (ast.Assign, ast.AnnAssign))
+                        and isinstance(target.value, ast.Name)
+                        and isinstance(target.slice, ast.Constant)
+                        and isinstance(target.slice.value, int)
+                        and target.slice.value >= 0
+                        and target.slice.value != index
+                    )
+                ):
+                    return True
+            if isinstance(node, ast.Delete) and any(
+                self.sequence_reference(target, aliases) for target in node.targets
+            ):
+                return True
+            if (
+                isinstance(node, ast.Attribute)
+                and self.sequence_reference(node.value, aliases)
+                and node.attr not in {"count", "index", "copy"}
+            ):
+                return True
+            if (
+                isinstance(node, ast.Call)
+                and (
+                    getattr(node.func, "id", "")
+                    not in {"len", "bool", "tuple", "list", "sorted", "iter"}
+                    or getattr(node.func, "id", "") in self.functions
+                )
+                and any(
+                    self.sequence_reference(argument, aliases)
+                    for argument in [
+                        *node.args,
+                        *(keyword.value for keyword in node.keywords),
+                    ]
+                )
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def sequence_reference(value: ast.AST, aliases: set[str]) -> bool:
+        return any(
+            isinstance(part, ast.Name) and part.id in aliases
+            for part in ast.walk(value)
+        )
+
+    def projected_sequence_element(
+        self,
+        value: ast.expr,
+        index: int,
+        field: str,
+        seen: frozenset[int],
+        use: ast.expr | None = None,
+    ) -> bool:
+        if id(value) in seen:
+            return False
+        seen = seen | {id(value)}
+        if isinstance(value, (ast.Tuple, ast.List)):
+            return (
+                0 <= index < len(value.elts)
+                and self.guaranteed_bindings(value.elts[index], field)
+                and self.projected_return(value.elts[index], field, seen)
+            )
+        if isinstance(value, ast.Name):
+            if value.id in self.unmodeled_bindings:
+                return False
+            statement, bound = self.name_binding(value)
+            return (
+                statement is not None
+                and bound is not None
+                and self.execution_guaranteed(statement, field)
+                and not self.sequence_changed(value.id, statement, use or value, index)
+                and self.projected_sequence_element(
+                    bound, index, field, seen, use or value
+                )
+            )
+        if not isinstance(value, ast.Call):
+            return False
+        name = getattr(value.func, "id", "")
+        if (
+            name not in self.functions
+            or name in self.local_names
+            or name in self.stack
+            or any(keyword.arg is None for keyword in value.keywords)
+        ):
+            return False
+        helper = self.functions[name]
+        if any(
+            node is not helper
+            and isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+            )
+            for node in ast.walk(helper)
+        ):
+            # Closure effects are outside this bounded helper analysis.
+            return False
+        arguments = {
+            parameter.arg: argument
+            for parameter, argument in zip(
+                (helper.args.posonlyargs + helper.args.args), value.args, strict=False
+            )
+        }
+        arguments.update(
+            {
+                keyword.arg: keyword.value
+                for keyword in value.keywords
+                if keyword.arg is not None
+            }
+        )
+        projection = _Projection(
+            helper,
+            self.functions,
+            {
+                parameter: self.value(argument)
+                for parameter, argument in arguments.items()
+            },
+            set(),
+            self.stack | {name},
+            self.required_fields,
+            self.shapes,
+        )
+        projection.canonical_arguments = {
+            parameter
+            for parameter, argument in arguments.items()
+            if self.guaranteed_bindings(argument, field)
+            and self.projected_return(argument, field, seen)
+        }
+        if (
+            projection.canonical_argument_escapes()
+            or projection.mutated_after(helper, field)
+            or projection.overwritten_after(helper, field)
+        ):
+            return False
+        returned = [
+            node
+            for node in projection.nodes
+            if isinstance(node, ast.Return)
+            and not projection.impossible_path(node, field)
+        ]
+        return bool(returned) and all(
+            node.value is not None
+            and projection.projected_sequence_element(
+                node.value, index, field, frozenset()
+            )
+            for node in returned
+        )
+
+    def canonical_argument_escapes(self) -> bool:
+        """Only the returned sequence may hold a canonical helper argument."""
+
+        returned_sequences: set[int] = set()
+        for node in self.nodes:
+            if not isinstance(node, ast.Return) or node.value is None:
+                continue
+            value = node.value
+            seen: set[int] = set()
+            while isinstance(value, ast.Name) and id(value) not in seen:
+                seen.add(id(value))
+                _, bound = self.name_binding(value)
+                if bound is None:
+                    break
+                value = bound
+            if isinstance(value, (ast.Tuple, ast.List)):
+                returned_sequences.add(id(value))
+        aliases = set(self.canonical_arguments)
+        for _, target, assigned in sorted(
+            self.write_bindings,
+            key=lambda binding: getattr(binding[0], "lineno", 0),
+        ):
+            if (
+                isinstance(target, ast.Name)
+                and assigned is not None
+                and not isinstance(assigned, (ast.Tuple, ast.List, ast.Dict, ast.Set))
+                and self.sequence_reference(assigned, aliases)
+            ):
+                aliases.add(target.id)
+        return any(
+            isinstance(node, (ast.Tuple, ast.List, ast.Dict, ast.Set))
+            and id(node) not in returned_sequences
+            and self.sequence_reference(node, aliases)
+            for node in self.nodes
+        )
+
     def projected_subscript(
         self, value: ast.Subscript, field: str, seen: frozenset[int]
     ) -> bool:
+        if isinstance(value.slice, ast.Constant) and isinstance(value.slice.value, int):
+            return self.projected_sequence_element(
+                value.value, value.slice.value, field, seen
+            )
         writes = [
             node
             for node in self.nodes
@@ -1270,7 +1614,9 @@ class _Projection:
             {
                 parameter.arg: self.value(argument)
                 for parameter, argument in zip(
-                    helper.args.args, value.args, strict=False
+                    (helper.args.posonlyargs + helper.args.args),
+                    value.args,
+                    strict=False,
                 )
             },
             covered,
@@ -1595,6 +1941,22 @@ class _Projection:
                 return True
         return False
 
+    def loop_can_skip(self, loop: ast.For, node: ast.AST, field: str) -> bool:
+        for control in self.loop_controls:
+            if (
+                control.lineno,
+                control.col_offset,
+            ) >= (getattr(node, "lineno", 0), getattr(node, "col_offset", 0)):
+                continue
+            owner = self.parents.get(control)
+            while owner is not None and not isinstance(
+                owner, (ast.For, ast.While, ast.AsyncFor)
+            ):
+                owner = self.parents.get(owner)
+            if owner is loop and not self.impossible_path(control, field):
+                return True
+        return False
+
     def execution_guaranteed(self, node: ast.AST, field: str) -> bool:
         """Reject unknown branches, skippable loops and exception regions."""
 
@@ -1615,10 +1977,14 @@ class _Projection:
                     return False
             elif isinstance(parent, ast.For):
                 if child in parent.body and not (
-                    isinstance(parent.iter, (ast.Tuple, ast.List)) and parent.iter.elts
+                    isinstance(parent.iter, (ast.Tuple, ast.List))
+                    and any(
+                        not isinstance(element, ast.Starred)
+                        for element in parent.iter.elts
+                    )
                 ):
                     return False
-                if child in parent.orelse:
+                if child in parent.orelse or self.loop_can_skip(parent, node, field):
                     return False
             elif isinstance(parent, (ast.Try, ast.TryStar)):
                 if not (
@@ -1686,7 +2052,9 @@ class _Projection:
         helper = self.functions[name]
         bound = {
             parameter.arg: self.value(argument)
-            for parameter, argument in zip(helper.args.args, call.args, strict=False)
+            for parameter, argument in zip(
+                (helper.args.posonlyargs + helper.args.args), call.args, strict=False
+            )
         }
         bound.update(
             {
@@ -3214,3 +3582,504 @@ def test_annotation_and_projection_form_matrix() -> None:
                 )
                 == expected
             ), (annotation, body)
+
+
+def test_projected_payload_survives_helper_tuple_destructuring() -> None:
+    assert not _fixture_uncovered(
+        """
+def pair(payload):
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized)
+    return normalized
+""",
+        {"provenance"},
+    )
+
+
+def test_helper_element_projection_follows_the_selected_slot() -> None:
+    for returned in ("payload, raw", "[payload, raw]"):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = {returned}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized, raw=data)
+    return normalized
+""",
+            {"provenance"},
+        )
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    return raw, payload
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_helper_element_projection_rejects_mutations_and_raw_paths() -> None:
+    for helper in (
+        "def pair(payload, raw):\n    payload.update({'provenance': raw['provenance']})\n    return payload, 0",
+        "def pair(payload, raw):\n    if raw.get('enabled'):\n        return raw, 0\n    return payload, 0",
+        "def pair(payload, raw):\n    return unknown(payload), 0",
+    ):
+        assert _fixture_uncovered(
+            f"""
+{helper}
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_helper_element_projection_accepts_canonical_return_paths() -> None:
+    assert not _fixture_uncovered(
+        """
+def pair(payload):
+    if payload.get('enabled'):
+        return dict(payload), 1
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized)
+    return normalized
+""",
+        {"provenance"},
+    )
+
+
+def test_conditionally_rebound_helper_tuple_is_not_projection_proof() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (raw, 0)
+    if raw.get('enabled'):
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_helper_element_aliases_require_guaranteed_bindings() -> None:
+    for returned in ("slot, 0", "dict(slot), 0"):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    slot = raw
+    if raw.get('enabled'):
+        slot = payload
+    return {returned}
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_guaranteed_helper_tuple_rebindings_preserve_projection() -> None:
+    for assignment in (
+        "result = (payload, 0)",
+        "if isinstance(payload, dict):\n        result = (payload, 0)",
+    ):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = (raw, 0)
+    {assignment}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        )
+
+
+def test_conditional_raw_helper_tuple_remains_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (payload, 0)
+    if raw.get('enabled'):
+        result = (raw, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_mutated_helper_list_slot_is_not_projected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = [payload, 0]
+    result[0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_early_loop_exit_does_not_guarantee_tuple_binding() -> None:
+    for control in ("break", "continue"):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = (raw, 0)
+    for unused in [1]:
+        if raw.get('enabled'):
+            {control}
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_helper_sequence_mutations_through_aliases_are_rejected() -> None:
+    for mutation in (
+        "alias[0] = raw",
+        "alias[:] = [raw, 0]",
+        "alias.__setitem__(0, raw)",
+        "setter = alias.__setitem__\n    setter(0, raw)",
+        "alias.insert(0, raw)",
+        "alias.reverse()",
+        "unknown_mutator(alias, raw)",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = [payload, 0]
+    alias = result
+    {mutation}
+    return alias
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_unchanged_selected_sequence_slot_remains_supported() -> None:
+    for preparation in ("result[1] = 1", "count = len(result)", "alias = result"):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload):
+    result = [payload, 0]
+    {preparation}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized)
+    return normalized
+""",
+            {"provenance"},
+        )
+
+
+def test_loop_control_after_guaranteed_binding_remains_supported() -> None:
+    for control in ("break", "continue"):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = (raw, 0)
+    for unused in [1]:
+        result = (payload, 0)
+        {control}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        )
+
+
+def test_shared_sequence_elements_and_shadowed_calls_are_not_read_only() -> None:
+    for preparation in (
+        "result = [payload, payload]\n    result[1] |= {'provenance': raw['provenance']}",
+        "result = [payload, 0]\n    len(result, raw)",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def len(values, raw):
+    values[0] = raw
+def pair(payload, raw):
+    {preparation}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_loop_target_rebinding_sequence_is_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (payload, 0)
+    for result in [(raw, 0)]:
+        pass
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_container_held_sequence_alias_is_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = [payload, 0]
+    holder = [result]
+    holder[0][0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_positional_only_helper_arguments_keep_their_order() -> None:
+    for returned, uncovered in (("payload", set()), ("raw", {"provenance"})):
+        assert (
+            _fixture_uncovered(
+                f"""
+def pair(payload, /, raw):
+    return {returned}, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+                {"provenance"},
+            )
+            == uncovered
+        )
+
+
+def test_pattern_capture_invalidates_canonical_helper_parameter() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    match [raw]:
+        case [payload]:
+            pass
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_context_manager_target_invalidates_stored_sequence() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (payload, 0)
+    with context as result:
+        pass
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_compound_sequence_alias_mutations_are_rejected() -> None:
+    for alias in ("result or []", "result if raw else []"):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = [payload, 0]
+    alias = {alias}
+    alias[0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_captured_helper_mutation_is_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    def mutate():
+        payload['provenance'] = raw['provenance']
+    mutate()
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_starred_empty_loop_does_not_guarantee_binding() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (raw, 0)
+    for unused in [*[]]:
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_import_rebindings_invalidate_canonical_parameters() -> None:
+    for statement in (
+        "from elsewhere import raw_payload as payload",
+        "import elsewhere as payload",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    {statement}
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_nonassignment_subscript_targets_invalidate_projection() -> None:
+    for write in (
+        "for payload['provenance'] in [raw['provenance']]:\n        pass",
+        "with context as payload['provenance']:\n        pass",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    {write}
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_shadowed_structural_guard_does_not_guarantee_binding() -> None:
+    assert _fixture_uncovered(
+        """
+def isinstance(value, kind):
+    return False
+def pair(payload, raw):
+    result = (raw, 0)
+    if isinstance(payload, dict):
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_locally_rebound_tuple_helper_is_not_trusted() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    return payload, 0
+def evil(payload, raw):
+    return raw, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    pair = evil
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_container_held_payload_alias_mutation_is_rejected() -> None:
+    for setup, write in (
+        (
+            "holder = {'value': payload}",
+            "holder['value']['provenance'] = raw['provenance']",
+        ),
+        ("holder = [payload]", "holder[0]['provenance'] = raw['provenance']"),
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    {setup}
+    {write}
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}

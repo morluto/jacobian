@@ -236,6 +236,9 @@ class _Projection:
         self.covered = covered
         self.stack = stack
         self.checking_guards = False
+        self.parents = {
+            child: parent for parent in scoped for child in ast.iter_child_nodes(parent)
+        }
 
     def keys(self, node: ast.expr) -> frozenset[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -347,7 +350,8 @@ class _Projection:
                 helper, self.functions, arguments, helper_covered, self.stack | {name}
             )
             result = projection.analyze()
-            self.record(node, helper_covered)
+            if helper_covered and not self.checking_guards:
+                self.record(node, self.destinations(node, helper_covered))
             # Bounded materializers return existing JSON arrays unchanged before
             # entering their iterator path. Preserve that explicit fast path.
             if helper.body and isinstance(helper.body[0], ast.If):
@@ -483,6 +487,135 @@ class _Projection:
                 return equal if isinstance(test.ops[0], ast.Is) else not equal
         return None
 
+    def preserves_payload(self, node: ast.Call) -> bool:
+        previous = self.checking_guards
+        self.checking_guards = True
+        try:
+            return self.value(node) == _WHOLE
+        finally:
+            self.checking_guards = previous
+
+    def destinations(
+        self,
+        node: ast.AST,
+        fields: set[str] | frozenset[str],
+        seen: frozenset[int] = frozenset(),
+    ) -> set[str]:
+        previous = self.checking_guards
+        self.checking_guards = True
+        try:
+            return {
+                field
+                for field in self._destinations(node, fields, seen)
+                if self.execution_guaranteed(node, field)
+            }
+        finally:
+            self.checking_guards = previous
+
+    def _destinations(
+        self,
+        node: ast.AST,
+        fields: set[str] | frozenset[str],
+        seen: frozenset[int] = frozenset(),
+    ) -> set[str]:
+        """Follow a projected expression through aliases to returned mapping keys."""
+
+        if id(node) in seen:
+            return set()
+        parent = self.parents.get(node)
+        if isinstance(parent, ast.Return):
+            return set(fields)
+        if isinstance(parent, (ast.Assign, ast.AnnAssign)):
+            targets = (
+                parent.targets if isinstance(parent, ast.Assign) else [parent.target]
+            )
+            result: set[str] = set()
+            for target in targets:
+                if (
+                    isinstance(target, ast.Subscript)
+                    and self.value(target.value) == _WHOLE
+                ):
+                    result.update(self.keys(target.slice))
+                elif isinstance(target, ast.Name):
+                    for read in self.nodes:
+                        if (
+                            isinstance(read, ast.Name)
+                            and isinstance(read.ctx, ast.Load)
+                            and read.id == target.id
+                            and (read.lineno, read.col_offset)
+                            > (target.lineno, target.col_offset)
+                        ):
+                            result.update(
+                                self.destinations(read, fields, seen | {id(node)})
+                            )
+            return result
+        if isinstance(parent, ast.Dict):
+            for key, value in zip(parent.keys, parent.values, strict=True):
+                if value is node and key is not None:
+                    return set(self.keys(key))
+        if isinstance(parent, (ast.Dict, ast.IfExp)):
+            return self.destinations(parent, fields, seen | {id(node)})
+        if isinstance(parent, ast.Call) and (
+            getattr(parent.func, "id", "") in {"dict", "tuple", "cast"}
+            or (
+                getattr(parent.func, "id", "") in self.functions
+                and self.preserves_payload(parent)
+            )
+        ):
+            return self.destinations(parent, fields, seen | {id(node)})
+        return set()
+
+    def execution_guaranteed(self, node: ast.AST, field: str) -> bool:
+        """Reject unknown branches, skippable loops and exception regions."""
+
+        child = node
+        while (parent := self.parents.get(child)) is not None:
+            if isinstance(parent, (ast.If, ast.IfExp)):
+                body = parent.body if isinstance(parent.body, list) else [parent.body]
+                other = (
+                    parent.orelse
+                    if isinstance(parent.orelse, list)
+                    else [parent.orelse]
+                )
+                required = True if child in body else False if child in other else None
+                if (
+                    required is not None
+                    and self.guard_value(parent.test, field) is not required
+                ):
+                    return False
+            elif isinstance(parent, ast.For):
+                if child in parent.body and not (
+                    isinstance(parent.iter, (ast.Tuple, ast.List)) and parent.iter.elts
+                ):
+                    return False
+                if child in parent.orelse:
+                    return False
+            elif isinstance(parent, (ast.Try, ast.TryStar)):
+                if not (
+                    child in parent.body
+                    and not parent.finalbody
+                    and all(
+                        len(handler.body) == 1
+                        and isinstance(handler.body[0], ast.Raise)
+                        for handler in parent.handlers
+                    )
+                ):
+                    return False
+            elif isinstance(
+                parent,
+                (
+                    ast.While,
+                    ast.AsyncFor,
+                    ast.ExceptHandler,
+                    ast.Match,
+                    ast.With,
+                    ast.AsyncWith,
+                ),
+            ):
+                return False
+            child = parent
+        return True
+
     def record(self, node: ast.AST, fields: set[str] | frozenset[str]) -> None:
         """Unknown conditional execution cannot prove projection coverage."""
 
@@ -491,24 +624,7 @@ class _Projection:
         self.checking_guards = True
         try:
             for field in fields:
-                guaranteed = True
-                for branch in self.nodes:
-                    if not isinstance(branch, ast.If):
-                        continue
-                    for statements, required in (
-                        (branch.body, True),
-                        (branch.orelse, False),
-                    ):
-                        if (
-                            any(
-                                node is part
-                                for statement in statements
-                                for part in ast.walk(statement)
-                            )
-                            and self.guard_value(branch.test, field) is not required
-                        ):
-                            guaranteed = False
-                if guaranteed:
+                if self.execution_guaranteed(node, field):
                     self.covered.add(field)
         finally:
             self.checking_guards = False
@@ -523,7 +639,7 @@ class _Projection:
                     getattr(node.func, "id", "") == "canonicalize_json_containers"
                     and node.args
                 ):
-                    self.record(node, self.value(node.args[0]))
+                    self.record(node, self.destinations(node, self.value(node.args[0])))
                 elif getattr(node.func, "id", "") in self.functions:
                     self.value(node)
             if (
@@ -592,6 +708,33 @@ def _inherited_fields(
     return fields
 
 
+def _inherited_validators(
+    model: ast.ClassDef,
+    classes: dict[str, ast.ClassDef],
+    seen: frozenset[str] = frozenset(),
+) -> list[ast.FunctionDef]:
+    if model.name in seen:
+        return []
+    methods: dict[str, ast.FunctionDef] = {}
+    for base in reversed(model.bases):
+        parent = classes.get(getattr(base, "id", ""))
+        if parent is not None:
+            methods.update(
+                {
+                    method.name: method
+                    for method in _inherited_validators(
+                        parent, classes, seen | {model.name}
+                    )
+                }
+            )
+    for method in model.body:
+        if isinstance(method, ast.FunctionDef):
+            methods.pop(method.name, None)
+            if any(_is_before_validator(item) for item in method.decorator_list):
+                methods[method.name] = method
+    return list(methods.values())
+
+
 def test_before_validators_cover_every_leaf_container_field() -> None:
     """Every declared outer array needs projection, including arrays of models.
 
@@ -624,12 +767,7 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
-            before = [
-                item
-                for item in node.body
-                if isinstance(item, ast.FunctionDef)
-                and any(_is_before_validator(item) for item in item.decorator_list)
-            ]
+            before = _inherited_validators(node, known_classes)
             if not before:
                 continue
             fields = _inherited_fields(node, known_classes)
@@ -953,3 +1091,108 @@ def validate(cls, data):
 """,
         {"provenance"},
     )
+
+
+def test_projected_sources_are_not_credited_to_other_destination_fields() -> None:
+    for statement in (
+        'data["old"] = canonicalize_json_containers(data["provenance"])',
+        'projected = canonicalize_json_containers(data["provenance"]); data["old"] = projected',
+    ):
+        assert _fixture_uncovered(
+            f"""
+def validate(cls, data):
+    {statement}
+    return data
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_skippable_expression_and_loop_projections_do_not_cover_fields() -> None:
+    for body in (
+        'return canonicalize_json_containers(data) if data.get("enabled") else data',
+        'for item in data.get("items", []):\n        data["provenance"] = canonicalize_json_containers(data["provenance"])\n    return data',
+        'while data.get("enabled"):\n        data = canonicalize_json_containers(data)\n        break\n    return data',
+    ):
+        assert _fixture_uncovered(
+            f"def validate(cls, data):\n    {body}\n", {"provenance"}
+        ) == {"provenance"}
+
+
+def test_inherited_validator_covers_new_subclass_fields() -> None:
+    tree = ast.parse("""
+class Base:
+    old: tuple[str, ...]
+    @model_validator(mode='before')
+    def validate(cls, data):
+        data['old'] = canonicalize_json_containers(data['old'])
+        return data
+class Child(Base):
+    provenance: tuple[str, ...]
+class Replaced(Child):
+    @model_validator(mode='before')
+    def validate(cls, data):
+        return canonicalize_json_containers(data)
+""")
+    classes = {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+    fields = set(_inherited_fields(classes["Child"], classes))
+    inherited = _inherited_validators(classes["Child"], classes)
+    assert len(inherited) == 1
+    assert _uncovered_leaf_fields(inherited[0], {}, fields) == {"provenance"}
+    replaced = _inherited_validators(classes["Replaced"], classes)
+    assert len(replaced) == 1
+    assert not _uncovered_leaf_fields(replaced[0], {}, fields)
+
+
+def test_exception_handlers_must_not_return_raw_payload() -> None:
+    for handler, expected in (("return data", {"provenance"}), ("raise", set())):
+        assert (
+            _fixture_uncovered(
+                f"""
+def validate(cls, data):
+    try:
+        return canonicalize_json_containers(data)
+    except ValueError:
+        {handler}
+""",
+                {"provenance"},
+            )
+            == expected
+        )
+
+
+def test_projection_destination_survives_only_payload_preserving_helpers() -> None:
+    assert not _fixture_uncovered(
+        """
+def admit(data):
+    if not isinstance(data, dict):
+        return data
+    return dict(data)
+def validate(cls, data):
+    return admit(canonicalize_json_containers(data))
+""",
+        {"provenance"},
+    )
+    assert _fixture_uncovered(
+        """
+def project(value):
+    return canonicalize_json_containers(value)
+def validate(cls, data):
+    data['old'] = project(data['provenance'])
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_unconditional_projection_with_conditional_destination_is_uncovered() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    projected = canonicalize_json_containers(data['provenance'])
+    if data.get('enabled'):
+        data['provenance'] = projected
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}

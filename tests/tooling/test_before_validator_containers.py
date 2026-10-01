@@ -572,8 +572,23 @@ class _Projection:
                 part.id
                 for target in targets
                 for part in ast.walk(target)
-                if isinstance(part, ast.Name) and isinstance(part.ctx, ast.Store)
+                if isinstance(part, ast.Name)
             )
+        self.shadowed_names = (
+            self.unmodeled_bindings
+            | set(functions)
+            | {
+                node.arg
+                for node in ast.walk(function.args)
+                if isinstance(node, ast.arg)
+            }
+            | {
+                part.id
+                for _, target, _ in self.write_bindings
+                for part in ast.walk(target)
+                if isinstance(part, ast.Name) and isinstance(part.ctx, ast.Store)
+            }
+        )
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -971,6 +986,28 @@ class _Projection:
     def guard_value(self, test: ast.expr, field: str) -> bool | None:
         """Evaluate only structural guards known for a present JSON array field."""
 
+        guard_symbols = {
+            "isinstance",
+            "type",
+            "len",
+            "dict",
+            "list",
+            "tuple",
+            "set",
+            "frozenset",
+            "str",
+            "int",
+            "float",
+            "bool",
+            "Mapping",
+        }
+        if any(
+            isinstance(node, ast.Name)
+            and node.id in guard_symbols
+            and node.id in self.shadowed_names
+            for node in ast.walk(test)
+        ):
+            return None
         if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
             value = self.guard_value(test.operand, field)
             return None if value is None else not value
@@ -3929,3 +3966,41 @@ def validate(cls, data):
 """,
             {"provenance"},
         ) == {"provenance"}
+
+
+def test_nonassignment_subscript_targets_invalidate_projection() -> None:
+    for write in (
+        "for payload['provenance'] in [raw['provenance']]:\n        pass",
+        "with context as payload['provenance']:\n        pass",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    {write}
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_shadowed_structural_guard_does_not_guarantee_binding() -> None:
+    assert _fixture_uncovered(
+        """
+def isinstance(value, kind):
+    return False
+def pair(payload, raw):
+    result = (raw, 0)
+    if isinstance(payload, dict):
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}

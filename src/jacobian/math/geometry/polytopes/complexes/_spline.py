@@ -799,36 +799,18 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
             "only compatible functions can be scaled",
         )
     scalar = request.scalar.as_fraction()
-    scalar_digits = _decimal_digits_upper(scalar.numerator) + _decimal_digits_upper(
-        scalar.denominator
-    )
-    if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("scalar",),
-            code="polytopal_complex.scalar_multiplication_scalar",
-            message="scalar exceeds the admitted rational digit envelope",
-        )
+    # Canonical rationals bound each component separately. Cross-cancel
+    # before pricing products; units add no width and zero emits no term.
     output_digits = 0
-    total_terms = 0
     for piece in function.pieces:
-        terms = piece.polynomial.polynomial.terms
-        total_terms += len(terms)
-        for term in terms:
-            coefficient = term.coefficient.as_fraction()
-            # Bound the reduced product, not the raw cross-product: a
-            # coefficient and scalar that cancel (N scaled by 1/N) or a zero
-            # scalar (whose term disappears) must not be charged for the
-            # intermediate width.
-            product = Fraction(
-                coefficient.numerator * scalar.numerator,
-                coefficient.denominator * scalar.denominator,
+        for term in piece.polynomial.polynomial.terms:
+            widths = _cancelled_component_widths(
+                [term.coefficient.num, scalar.numerator],
+                [term.coefficient.den, scalar.denominator],
             )
-            if product:
-                numerator_digits = _decimal_digits_upper(product.numerator)
-                denominator_digits = _decimal_digits_upper(product.denominator)
-            else:
-                numerator_digits = 1
-                denominator_digits = 1
+            if widths is None:
+                continue
+            numerator_digits, denominator_digits = (max(1, width) for width in widths)
             if (
                 max(numerator_digits, denominator_digits)
                 > MAX_CANONICAL_RATIONAL_DIGITS
@@ -2437,6 +2419,12 @@ def _admit_spline_coordinate_materialization(
             code="polytopal_complex.spline_coordinates_work",
             message="spline membership and basis-coordinate work exceed the admitted envelope",
         )
+    # With no nonzero constraints the canonical nullspace is the identity.
+    # Coordinates are retained source components, and reconstruction only
+    # copies them: neither rational products nor sums can grow. The matrix
+    # work and output bounds above still apply, including for wide identities.
+    if not any(any(row) for row in constraint_rows):
+        return
     reconstruction_digits = width * (
         coordinate_scalar_digits + basis_scalar_digits + len(str(width)) + 2
     )

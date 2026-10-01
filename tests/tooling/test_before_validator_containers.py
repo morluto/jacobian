@@ -2421,7 +2421,6 @@ class _Tables:
 
     texts: dict[str, str]
     classes: dict[tuple[str, str], _ClassRow]
-    funcs: dict[tuple[str, str], int]
     aliases: dict[tuple[str, str], str]
     imports: dict[tuple[str, str], tuple[str, str]]
     validator_sources: dict[tuple[str, str, str], str]
@@ -2533,7 +2532,6 @@ def _build_tables(root: Path) -> _Tables:
     module_set = set(modules)
     texts: dict[str, str] = {}
     classes: dict[tuple[str, str], _ClassRow] = {}
-    funcs: dict[tuple[str, str], int] = {}
     aliases: dict[tuple[str, str], str] = {}
     imports: dict[tuple[str, str], tuple[str, str]] = {}
     validator_sources: dict[tuple[str, str, str], str] = {}
@@ -2557,8 +2555,6 @@ def _build_tables(root: Path) -> _Tables:
                     max_lengths=_declared_max_length_fields(node),
                 )
                 _declared_validator_sources(text, node, module, validator_sources)
-            elif isinstance(node, ast.FunctionDef):
-                funcs[(module, node.name)] = node.lineno
             elif isinstance(node, ast.ImportFrom):
                 for alias in node.names:
                     target = _table_import_target(
@@ -2575,7 +2571,6 @@ def _build_tables(root: Path) -> _Tables:
     return _Tables(
         texts=texts,
         classes=classes,
-        funcs=funcs,
         aliases=aliases,
         imports=imports,
         validator_sources=validator_sources,

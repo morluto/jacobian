@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
     BinarySymmetricMatrix,
@@ -65,7 +65,6 @@ class LoopedGraphDeltaMatroidResult(StrictModel):
 def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
     """Revalidate the canonical carrier and enforce the operation work bound."""
     from pydantic import ValidationError
-    from pydantic_core import PydanticSerializationError
 
     from jacobian.catalog.models import (
         OperationDomainValidationError,
@@ -132,14 +131,22 @@ def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
                 code="graph.looped_graph_invalid",
                 message="graph labels must be bounded canonical strings",
             )
+    # Project the three declared fields with the shared canonical projection
+    # rather than round-tripping the carrier through the serializer. The
+    # preflight above already bounded every container, so this copies only
+    # admitted storage, and a canonical mathematical value must not depend on
+    # an encoding to reach its own canonical form.
     try:
-        canonical = LoopedSimpleGraph.model_validate(graph.model_dump())
+        canonical = LoopedSimpleGraph.model_validate(
+            canonicalize_json_containers(
+                {"vertices": raw_vertices, "edges": raw_edges, "loops": raw_loops}
+            )
+        )
     except (
         ValidationError,
         AttributeError,
         TypeError,
         ValueError,
-        PydanticSerializationError,
     ) as error:
         raise OperationDomainValidationError(
             location=("graph",),

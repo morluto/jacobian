@@ -211,7 +211,13 @@ def _admit_inverse_trace(pair: RSKTableauPair) -> tuple[RSKTableauPair, int]:
             message="expected a canonical RSK tableau pair",
         )
     try:
-        pair = RSKTableauPair.model_validate(pair.model_dump(mode="python"))
+        # ``model_dump`` is load-bearing here: it forces revalidation of a
+        # carrier that ``model_copy(update=...)`` may have forged past
+        # Pydantic. A serializer warning is therefore expected for exactly the
+        # inputs this check exists to refuse.
+        pair = RSKTableauPair.model_validate(
+            pair.model_dump(mode="python", warnings="none")
+        )
         require_semistandard(pair.insertion_tableau)
         require_standard(pair.recording_tableau)
         if any(

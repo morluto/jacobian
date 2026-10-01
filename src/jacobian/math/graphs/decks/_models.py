@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from itertools import combinations, permutations
 from math import comb, factorial
-from typing import Annotated, Any, Self, cast
+from typing import Annotated, Any, Self, cast, get_args, get_origin
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
@@ -1025,7 +1025,17 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_output_bound",
                 "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
-        return _normalize_vertex_iso_profile_request(value)
+        # Derive declared fields from the model so new fields are projected too.
+        # Preflight rejects nested extras before recursive canonicalization;
+        # top-level extras remain opaque for Pydantic to reject.
+        _preflight_profile_container_shapes(value, cls)
+        normalized = _normalize_vertex_iso_profile_request(value)
+        if type(normalized) is not dict:
+            return normalized
+        owned = {
+            key: item for key, item in normalized.items() if key in cls.model_fields
+        }
+        return {**normalized, **canonicalize_json_containers(owned)}
 
 
 class VertexDeckIsomorphismClass(StrictModel):
@@ -1061,7 +1071,14 @@ class VertexDeckIsomorphismProfile(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_tuple_fields(cls, value: Any) -> Any:
-        return _admit_and_normalize_vertex_iso_profile_result(value)
+        # Derive declared fields from the model so new fields are projected too.
+        # Preflight rejects nested extras before recursive canonicalization;
+        # top-level extras remain opaque for Pydantic to reject.
+        admitted = _admit_and_normalize_vertex_iso_profile_result(value, cls)
+        if type(admitted) is not dict:
+            return admitted
+        owned = {key: item for key, item in admitted.items() if key in cls.model_fields}
+        return {**admitted, **canonicalize_json_containers(owned)}
 
     @model_validator(mode="after")
     def require_exact_partition_and_maps(self) -> Self:
@@ -1232,7 +1249,9 @@ def _normalize_vertex_iso_profile_result(value: Any) -> Any:
     return normalized
 
 
-def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
+def _admit_and_normalize_vertex_iso_profile_result(
+    value: Any, model: type[StrictModel]
+) -> Any:
     if type(value) is not dict:
         return value
     dimensions = _vertex_iso_profile_dimensions(
@@ -1274,7 +1293,78 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
     _preflight_vertex_profile_result_rows(value, order)
     _preflight_vertex_profile_family(value.get("family"), order, edge_count)
     _require_exact_profile_wire_integers(value, classes, "vertex")
+    _preflight_profile_container_shapes(value, model)
     return _normalize_vertex_iso_profile_result(value)
+
+
+def _preflight_profile_container_shapes(
+    value: Any, annotation: Any, location: tuple[str | int, ...] = ()
+) -> None:
+    """Walk only declared, axis-bounded containers before recursive projection.
+
+    Scalar validation remains with Pydantic, but a container in a scalar slot
+    must never reach the recursive copier. Call only after the profile's raw
+    axis bounds; the annotations here contain only models, tuples, and scalars.
+    """
+    if isinstance(annotation, type) and issubclass(annotation, StrictModel):
+        if isinstance(value, annotation):
+            return
+        if type(value) is not dict:
+            raise _validation_error(
+                "vertex_iso_profile_container_type", "expected a profile model object"
+            )
+        _reject_profile_extras(value, annotation, location)
+        for name, field in annotation.model_fields.items():
+            if name in value:
+                _preflight_profile_container_shapes(
+                    value[name], field.annotation, (*location, name)
+                )
+        return
+    if get_origin(annotation) is tuple:
+        if type(value) not in (list, tuple):
+            raise _validation_error(
+                "vertex_iso_profile_container_type", "expected a profile sequence"
+            )
+        args = get_args(annotation)
+        if len(args) == 2 and args[1] is Ellipsis:
+            for index, item in enumerate(value):
+                _preflight_profile_container_shapes(item, args[0], (*location, index))
+        else:
+            if len(value) != len(args):
+                raise _validation_error(
+                    "vertex_iso_profile_container_type", "invalid fixed tuple shape"
+                )
+            for index, (item, item_type) in enumerate(zip(value, args, strict=True)):
+                _preflight_profile_container_shapes(item, item_type, (*location, index))
+        return
+    if isinstance(value, (dict, list, tuple)):
+        raise _validation_error(
+            "vertex_iso_profile_scalar_type",
+            "profile scalar slots cannot hold containers",
+        )
+    if annotation is str and type(value) is str and len(value) > MAX_GRAPH_LABEL_BYTES:
+        raise _validation_error(
+            "edge_iso_profile_label_bound",
+            "graph labels exceed the 64-byte scalar bound",
+        )
+
+
+def _reject_profile_extras(
+    value: dict[str, Any], model: type[StrictModel], location: tuple[str | int, ...]
+) -> None:
+    """Refuse a nested extra without copying or traversing its value."""
+    for key in value:
+        if key not in model.model_fields:
+            raise ValidationError.from_exception_data(
+                model.__name__,
+                [
+                    {
+                        "type": "extra_forbidden",
+                        "loc": (*location, key),
+                        "input": value[key],
+                    }
+                ],
+            )
 
 
 def _preflight_vertex_profile_result_rows(value: dict[str, Any], order: int) -> None:
@@ -1337,7 +1427,6 @@ def _preflight_vertex_profile_result_rows(value: dict[str, Any], order: int) -> 
                 "a class representative exceeds the card-order shape bound",
             )
         _preflight_raw_edge_pairs(representative_edges, comb(card_order, 2))
-        _preflight_edge_profile_labels(representative_vertices, representative_edges)
 
 
 def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -> None:
@@ -1374,11 +1463,11 @@ def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -
             graph = card.get("card")
             if type(graph) is not dict:
                 continue
-            for field, maximum in (
+            for graph_field, maximum in (
                 ("vertices", card_order),
                 ("edges", card_pair_count),
             ):
-                entries: Any = graph.get(field)
+                entries: Any = graph.get(graph_field)
                 if type(entries) in (list, tuple) and len(entries) > maximum:
                     raise _validation_error(
                         "vertex_iso_profile_card_shape",

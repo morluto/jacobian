@@ -197,6 +197,12 @@ def _shadowed_assignments(nodes: list[ast.AST]) -> set[int]:
             ):
                 seen.clear()
                 continue
+            reads = {
+                read.id
+                for read in ast.walk(statement)
+                if isinstance(read, ast.Name) and isinstance(read.ctx, ast.Load)
+            }
+            seen = {name: write for name, write in seen.items() if name not in reads}
             if isinstance(statement, ast.Assign):
                 targets: list[ast.expr] = list(statement.targets)
             elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
@@ -229,6 +235,7 @@ class _Projection:
         self.arguments = arguments
         self.covered = covered
         self.stack = stack
+        self.checking_guards = False
 
     def keys(self, node: ast.expr) -> frozenset[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -249,14 +256,13 @@ class _Projection:
         return frozenset()
 
     def binding(self, node: ast.Name, seen: frozenset[str]) -> frozenset[str]:
-        if node.id in seen:
-            return self.arguments.get(node.id, frozenset())
         bindings = [
             part.value
             for part in self.nodes
             if isinstance(part, (ast.Assign, ast.AnnAssign))
             and part.value is not None
-            and part.lineno < node.lineno
+            and (part.value.end_lineno or part.lineno, part.value.end_col_offset or 0)
+            < (node.lineno, node.col_offset)
             and any(
                 isinstance(target, ast.Name) and target.id == node.id
                 for target in (
@@ -336,9 +342,27 @@ class _Projection:
                     helper.args.args, node.args, strict=False
                 )
             }
-            return _Projection(
-                helper, self.functions, arguments, self.covered, self.stack | {name}
-            ).analyze()
+            helper_covered: set[str] = set()
+            projection = _Projection(
+                helper, self.functions, arguments, helper_covered, self.stack | {name}
+            )
+            result = projection.analyze()
+            self.record(node, helper_covered)
+            # Bounded materializers return existing JSON arrays unchanged before
+            # entering their iterator path. Preserve that explicit fast path.
+            if helper.body and isinstance(helper.body[0], ast.If):
+                first = helper.body[0]
+                if len(first.body) == 1 and isinstance(first.body[0], ast.Return):
+                    returned = first.body[0].value
+                    if isinstance(returned, ast.Name):
+                        origin = arguments.get(returned.id, frozenset())
+                        if (
+                            len(origin) == 1
+                            and projection.guard_value(first.test, next(iter(origin)))
+                            is True
+                        ):
+                            return origin
+            return result
         return frozenset()
 
     def value(
@@ -390,6 +414,105 @@ class _Projection:
             if len(live) == previous:
                 return live
 
+    def guard_value(self, test: ast.expr, field: str) -> bool | None:
+        """Evaluate only structural guards known for a present JSON array field."""
+
+        if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+            value = self.guard_value(test.operand, field)
+            return None if value is None else not value
+        if isinstance(test, ast.BoolOp):
+            values = [self.guard_value(part, field) for part in test.values]
+            if isinstance(test.op, ast.And):
+                return (
+                    False
+                    if False in values
+                    else True
+                    if all(value is True for value in values)
+                    else None
+                )
+            return (
+                True
+                if True in values
+                else False
+                if all(value is False for value in values)
+                else None
+            )
+        if (
+            isinstance(test, ast.Call)
+            and getattr(test.func, "id", "") == "isinstance"
+            and len(test.args) == 2
+        ):
+            types = (
+                test.args[1].elts
+                if isinstance(test.args[1], ast.Tuple)
+                else [test.args[1]]
+            )
+            names = {getattr(item, "id", "") for item in types}
+            origin = self.value(test.args[0])
+            if origin == _WHOLE:
+                return bool(names & {"dict", "Mapping"})
+            if origin == frozenset({field}):
+                return "list" in names
+        if isinstance(test, ast.Compare) and len(test.ops) == 1:
+            return self.comparison_guard(test, field)
+        return None
+
+    def comparison_guard(self, test: ast.Compare, field: str) -> bool | None:
+        if (
+            isinstance(test.ops[0], ast.In)
+            and self.keys(test.left) == frozenset({field})
+            and self.value(test.comparators[0]) == _WHOLE
+        ):
+            return True
+        if (
+            isinstance(test.left, ast.Call)
+            and getattr(test.left.func, "id", "") == "type"
+            and len(test.left.args) == 1
+            and isinstance(test.ops[0], (ast.Is, ast.IsNot))
+        ):
+            origin = self.value(test.left.args[0])
+            expected = (
+                "dict"
+                if origin == _WHOLE
+                else "list"
+                if origin == frozenset({field})
+                else None
+            )
+            if expected is not None:
+                equal = getattr(test.comparators[0], "id", "") == expected
+                return equal if isinstance(test.ops[0], ast.Is) else not equal
+        return None
+
+    def record(self, node: ast.AST, fields: set[str] | frozenset[str]) -> None:
+        """Unknown conditional execution cannot prove projection coverage."""
+
+        if self.checking_guards:
+            return
+        self.checking_guards = True
+        try:
+            for field in fields:
+                guaranteed = True
+                for branch in self.nodes:
+                    if not isinstance(branch, ast.If):
+                        continue
+                    for statements, required in (
+                        (branch.body, True),
+                        (branch.orelse, False),
+                    ):
+                        if (
+                            any(
+                                node is part
+                                for statement in statements
+                                for part in ast.walk(statement)
+                            )
+                            and self.guard_value(branch.test, field) is not required
+                        ):
+                            guaranteed = False
+                if guaranteed:
+                    self.covered.add(field)
+        finally:
+            self.checking_guards = False
+
     def analyze(self) -> frozenset[str]:
         live = self.returned_nodes()
         for node in self.nodes:
@@ -400,20 +523,21 @@ class _Projection:
                     getattr(node.func, "id", "") == "canonicalize_json_containers"
                     and node.args
                 ):
-                    self.covered.update(self.value(node.args[0]))
+                    self.record(node, self.value(node.args[0]))
                 elif getattr(node.func, "id", "") in self.functions:
                     self.value(node)
             if (
                 isinstance(node, ast.Assign)
                 and isinstance(node.value, ast.Call)
-                and getattr(node.value.func, "id", "") == "canonicalize_json_containers"
+                and getattr(node.value.func, "id", "")
+                in {"canonicalize_json_containers", "tuple"}
             ):
                 for target in node.targets:
                     if (
                         isinstance(target, ast.Subscript)
                         and self.value(target.value) == _WHOLE
                     ):
-                        self.covered.update(self.keys(target.slice))
+                        self.record(node, self.keys(target.slice))
         returns = [
             self.value(node.value)
             for node in self.nodes
@@ -759,3 +883,73 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+def test_conditional_projection_does_not_cover_raw_return_path() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    if data.get('enabled'):
+        data['provenance'] = canonicalize_json_containers(data['provenance'])
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_projection_guard_must_establish_array_execution() -> None:
+    for condition in (
+        "data.get('enabled')",
+        "not data.get('enabled')",
+        "isinstance(data['provenance'], list) and data.get('enabled')",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def project(data):
+    return canonicalize_json_containers(data)
+def validate(cls, data):
+    if {condition}:
+        return project(data)
+    return data
+""",
+            {"provenance"},
+        ) == {"provenance"}
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    if isinstance(data, dict):
+        axis = data.get('provenance')
+        if isinstance(axis, (list, tuple)):
+            data['provenance'] = canonicalize_json_containers(axis)
+    return data
+""",
+        {"provenance"},
+    )
+
+
+def test_materializer_fast_path_and_used_definitions_remain_visible() -> None:
+    assert not _fixture_uncovered(
+        """
+def materialize(value):
+    if isinstance(value, (list, tuple)):
+        return value
+    return tuple(value)
+def validate(cls, data):
+    axis = data['provenance']
+    axis = materialize(axis)
+    if isinstance(axis, (list, tuple)):
+        data['provenance'] = canonicalize_json_containers(axis)
+    return data
+""",
+        {"provenance"},
+    )
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    retained = normalized
+    normalized = data
+    return retained
+""",
+        {"provenance"},
+    )

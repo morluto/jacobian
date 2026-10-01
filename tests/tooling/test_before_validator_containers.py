@@ -545,6 +545,9 @@ class _Projection:
             if not isinstance(node, ast.AugAssign)
             for target, value in _assignment_pairs(node)
         ]
+        self.loop_controls = [
+            node for node in self.nodes if isinstance(node, (ast.Break, ast.Continue))
+        ]
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -1237,8 +1240,98 @@ class _Projection:
             if isinstance(child, ast.expr)
         )
 
+    def sequence_changed(
+        self, name: str, binding: ast.AST, use: ast.expr, index: int
+    ) -> bool:
+        """Stored sequence elements need an unchanged sequence up to their use."""
+
+        aliases = {name}
+        start = (
+            getattr(binding, "end_lineno", 0),
+            getattr(binding, "end_col_offset", 0),
+        )
+        stop = (use.lineno, use.col_offset)
+        for node in sorted(
+            self.nodes,
+            key=lambda node: (
+                getattr(node, "lineno", 0),
+                getattr(node, "col_offset", 0),
+            ),
+        ):
+            if (
+                not start
+                <= (getattr(node, "lineno", 0), getattr(node, "col_offset", 0))
+                < stop
+            ):
+                continue
+            for target, assigned in _assignment_pairs(node):
+                if (
+                    isinstance(target, ast.Name)
+                    and isinstance(assigned, ast.Name)
+                    and assigned.id in aliases
+                ):
+                    aliases.add(target.id)
+                if (
+                    isinstance(node, ast.AugAssign)
+                    and isinstance(target, ast.Name)
+                    and target.id in aliases
+                ):
+                    return True
+                if (
+                    isinstance(target, ast.Subscript)
+                    and self.sequence_reference(target.value, aliases)
+                    and not (
+                        isinstance(node, (ast.Assign, ast.AnnAssign))
+                        and isinstance(target.value, ast.Name)
+                        and isinstance(target.slice, ast.Constant)
+                        and isinstance(target.slice.value, int)
+                        and target.slice.value >= 0
+                        and target.slice.value != index
+                    )
+                ):
+                    return True
+            if isinstance(node, ast.Delete) and any(
+                self.sequence_reference(target, aliases) for target in node.targets
+            ):
+                return True
+            if (
+                isinstance(node, ast.Attribute)
+                and self.sequence_reference(node.value, aliases)
+                and node.attr not in {"count", "index", "copy"}
+            ):
+                return True
+            if (
+                isinstance(node, ast.Call)
+                and (
+                    getattr(node.func, "id", "")
+                    not in {"len", "bool", "tuple", "list", "sorted", "iter"}
+                    or getattr(node.func, "id", "") in self.functions
+                )
+                and any(
+                    self.sequence_reference(argument, aliases)
+                    for argument in [
+                        *node.args,
+                        *(keyword.value for keyword in node.keywords),
+                    ]
+                )
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def sequence_reference(value: ast.AST, aliases: set[str]) -> bool:
+        return any(
+            isinstance(part, ast.Name) and part.id in aliases
+            for part in ast.walk(value)
+        )
+
     def projected_sequence_element(
-        self, value: ast.expr, index: int, field: str, seen: frozenset[int]
+        self,
+        value: ast.expr,
+        index: int,
+        field: str,
+        seen: frozenset[int],
+        use: ast.expr | None = None,
     ) -> bool:
         if id(value) in seen:
             return False
@@ -1255,7 +1348,10 @@ class _Projection:
                 statement is not None
                 and bound is not None
                 and self.execution_guaranteed(statement, field)
-                and self.projected_sequence_element(bound, index, field, seen)
+                and not self.sequence_changed(value.id, statement, use or value, index)
+                and self.projected_sequence_element(
+                    bound, index, field, seen, use or value
+                )
             )
         if not isinstance(value, ast.Call):
             return False
@@ -1698,6 +1794,22 @@ class _Projection:
                 return True
         return False
 
+    def loop_can_skip(self, loop: ast.For, node: ast.AST, field: str) -> bool:
+        for control in self.loop_controls:
+            if (
+                control.lineno,
+                control.col_offset,
+            ) >= (getattr(node, "lineno", 0), getattr(node, "col_offset", 0)):
+                continue
+            owner = self.parents.get(control)
+            while owner is not None and not isinstance(
+                owner, (ast.For, ast.While, ast.AsyncFor)
+            ):
+                owner = self.parents.get(owner)
+            if owner is loop and not self.impossible_path(control, field):
+                return True
+        return False
+
     def execution_guaranteed(self, node: ast.AST, field: str) -> bool:
         """Reject unknown branches, skippable loops and exception regions."""
 
@@ -1721,7 +1833,7 @@ class _Projection:
                     isinstance(parent.iter, (ast.Tuple, ast.List)) and parent.iter.elts
                 ):
                     return False
-                if child in parent.orelse:
+                if child in parent.orelse or self.loop_can_skip(parent, node, field):
                     return False
             elif isinstance(parent, (ast.Try, ast.TryStar)):
                 if not (
@@ -3464,3 +3576,122 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+def test_mutated_helper_list_slot_is_not_projected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = [payload, 0]
+    result[0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_early_loop_exit_does_not_guarantee_tuple_binding() -> None:
+    for control in ("break", "continue"):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = (raw, 0)
+    for unused in [1]:
+        if raw.get('enabled'):
+            {control}
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_helper_sequence_mutations_through_aliases_are_rejected() -> None:
+    for mutation in (
+        "alias[0] = raw",
+        "alias[:] = [raw, 0]",
+        "alias.__setitem__(0, raw)",
+        "setter = alias.__setitem__\n    setter(0, raw)",
+        "alias.insert(0, raw)",
+        "alias.reverse()",
+        "unknown_mutator(alias, raw)",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = [payload, 0]
+    alias = result
+    {mutation}
+    return alias
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_unchanged_selected_sequence_slot_remains_supported() -> None:
+    for preparation in ("result[1] = 1", "count = len(result)", "alias = result"):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload):
+    result = [payload, 0]
+    {preparation}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized)
+    return normalized
+""",
+            {"provenance"},
+        )
+
+
+def test_loop_control_after_guaranteed_binding_remains_supported() -> None:
+    for control in ("break", "continue"):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = (raw, 0)
+    for unused in [1]:
+        result = (payload, 0)
+        {control}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        )
+
+
+def test_shared_sequence_elements_and_shadowed_calls_are_not_read_only() -> None:
+    for preparation in (
+        "result = [payload, payload]\n    result[1] |= {'provenance': raw['provenance']}",
+        "result = [payload, 0]\n    len(result, raw)",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def len(values, raw):
+    values[0] = raw
+def pair(payload, raw):
+    {preparation}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}

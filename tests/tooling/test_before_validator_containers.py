@@ -87,6 +87,46 @@ def _expand_alias(
     return ast.unparse(Expand().visit(ast.parse(source, mode="eval").body))
 
 
+def _import_path(node: ast.ImportFrom, path: Path, root: Path) -> Path | None:
+    if node.level:
+        directory = path.parent
+        for _ in range(node.level - 1):
+            directory = directory.parent
+        stem = directory.joinpath(*(node.module or "").split("."))
+    else:
+        module = (node.module or "").removeprefix("jacobian.math.")
+        stem = root.joinpath(*module.split("."))
+    candidate = stem.with_suffix(".py")
+    if not candidate.is_file():
+        candidate = stem / "__init__.py"
+    return candidate if candidate.is_file() else None
+
+
+def _module_functions(
+    path: Path,
+    root: Path,
+    trees: dict[Path, ast.Module],
+    cache: dict[Path, dict[str, ast.FunctionDef]],
+) -> dict[str, ast.FunctionDef]:
+    if path in cache:
+        return cache[path]
+    tree = trees[path] if path in trees else ast.parse(path.read_text(encoding="utf-8"))
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    cache[path] = functions
+    for node in tree.body:
+        if (
+            isinstance(node, ast.ImportFrom)
+            and (source := _import_path(node, path, root)) is not None
+        ):
+            imported = _module_functions(source, root, trees, cache)
+            for name in node.names:
+                if name.name in imported:
+                    functions.setdefault(name.asname or name.name, imported[name.name])
+    return functions
+
+
 def _module_aliases(
     path: Path, root: Path, cache: dict[Path, dict[str, set[str]]]
 ) -> dict[str, set[str]]:
@@ -100,20 +140,8 @@ def _module_aliases(
     for node in tree.body:
         if not isinstance(node, ast.ImportFrom):
             continue
-        if node.level:
-            directory = path.parent
-            for _ in range(node.level - 1):
-                directory = directory.parent
-            stem = directory.joinpath(*(node.module or "").split("."))
-        else:
-            module = node.module or ""
-            if module.startswith("jacobian.math."):
-                module = module.removeprefix("jacobian.math.")
-            stem = root.joinpath(*module.split("."))
-        imported_path = stem.with_suffix(".py")
-        if not imported_path.is_file():
-            imported_path = stem / "__init__.py"
-        if not imported_path.is_file():
+        imported_path = _import_path(node, path, root)
+        if imported_path is None:
             continue
         imported = _module_aliases(imported_path, root, cache)
         for name in node.names:
@@ -301,6 +329,7 @@ class _Projection:
         self.covered = covered
         self.stack = stack
         self.required_fields = required_fields
+        self.live_cache: set[ast.AST] | None = None
         self.checking_guards = False
         self.parents = {
             child: parent for parent in scoped for child in ast.iter_child_nodes(parent)
@@ -466,6 +495,8 @@ class _Projection:
     def returned_nodes(self) -> set[ast.AST]:
         """Backward slice from returned expressions and writes into their mappings."""
 
+        if self.live_cache is not None:
+            return self.live_cache
         live = {
             part
             for node in self.nodes
@@ -492,6 +523,7 @@ class _Projection:
                         live.add(node)
                         live.update(ast.walk(node.value))
             if len(live) == previous:
+                self.live_cache = live
                 return live
 
     def guard_value(self, test: ast.expr, field: str) -> bool | None:
@@ -686,16 +718,66 @@ class _Projection:
             )
         return False
 
+    def projected_subscript(
+        self, value: ast.Subscript, field: str, seen: frozenset[int]
+    ) -> bool:
+        writes = [
+            node
+            for node in self.nodes
+            if isinstance(node, ast.Assign) and node.lineno < value.lineno
+        ]
+        for write in sorted(writes, key=lambda item: item.lineno, reverse=True):
+            if any(_write_key(target) == _write_key(value) for target in write.targets):
+                return self.projected_return(write.value, field, seen | {id(value)})
+        return self.projected_return(value.value, field, seen | {id(value)})
+
+    def normalizes_outer_array(self, name: str) -> bool:
+        helper = self.functions.get(name)
+        if helper is None:
+            return False
+        returns = [
+            node.value for node in _own_nodes(helper) if isinstance(node, ast.Return)
+        ]
+        if len(returns) != 1 or not isinstance(returns[0], ast.IfExp):
+            return False
+        expression = returns[0]
+        test = expression.test
+        return (
+            isinstance(expression.orelse, ast.Name)
+            and isinstance(expression.body, ast.Call)
+            and getattr(expression.body.func, "id", "") == "tuple"
+            and len(expression.body.args) == 1
+            and ast.dump(expression.body.args[0]) == ast.dump(expression.orelse)
+            and isinstance(test, ast.Call)
+            and getattr(test.func, "id", "") == "isinstance"
+            and len(test.args) == 2
+            and ast.dump(test.args[0]) == ast.dump(expression.orelse)
+            and getattr(test.args[1], "id", "") == "list"
+        )
+
+    def projected_call(self, value: ast.Call, field: str, seen: frozenset[int]) -> bool:
+        name = getattr(value.func, "id", "")
+        return (
+            name in {"canonicalize_json_containers", "tuple"}
+            or self.normalizes_outer_array(name)
+            or (
+                name in {"dict", "cast"}
+                and bool(value.args)
+                and self.projected_return(value.args[-1], field, seen | {id(value)})
+            )
+        )
+
     def projected_return(
         self, value: ast.expr, field: str, seen: frozenset[int] = frozenset()
     ) -> bool:
         if id(value) in seen:
             return False
+        if isinstance(value, ast.Tuple):
+            return True
+        if isinstance(value, ast.Subscript):
+            return self.projected_subscript(value, field, seen)
         if isinstance(value, ast.Call):
-            if getattr(value.func, "id", "") == "canonicalize_json_containers":
-                return True
-            if getattr(value.func, "id", "") in {"dict", "cast"} and value.args:
-                return self.projected_return(value.args[-1], field, seen | {id(value)})
+            return self.projected_call(value, field, seen)
         if isinstance(value, ast.Dict):
             for key, item in reversed(list(zip(value.keys, value.values, strict=True))):
                 if key is not None and field in self.keys(key):
@@ -829,6 +911,32 @@ class _Projection:
             child = parent
         return True
 
+    def overwritten_after(self, node: ast.AST, field: str) -> bool:
+        """A possibly executed later raw write invalidates earlier projection."""
+
+        location = (getattr(node, "lineno", 0), getattr(node, "col_offset", 0))
+        for write in self.nodes:
+            if (
+                not isinstance(write, (ast.Assign, ast.AnnAssign))
+                or write.value is None
+                or write not in self.returned_nodes()
+            ):
+                continue
+            if (write.lineno, write.col_offset) <= location:
+                continue
+            targets = write.targets if isinstance(write, ast.Assign) else [write.target]
+            for target in targets:
+                if (
+                    isinstance(target, ast.Subscript)
+                    and self.value(target.value) == _WHOLE
+                    and (
+                        not self.keys(target.slice) or field in self.keys(target.slice)
+                    )
+                    and not self.projected_return(write.value, field)
+                ):
+                    return True
+        return False
+
     def record(self, node: ast.AST, fields: set[str] | frozenset[str]) -> None:
         """Unknown conditional execution cannot prove projection coverage."""
 
@@ -837,9 +945,11 @@ class _Projection:
         self.checking_guards = True
         try:
             for field in self.required_fields if "*" in fields else fields:
-                if not self.earlier_raw_return(
-                    node, field
-                ) and self.execution_guaranteed(node, field):
+                if (
+                    not self.earlier_raw_return(node, field)
+                    and self.execution_guaranteed(node, field)
+                    and not self.overwritten_after(node, field)
+                ):
                     self.covered.add(field)
         finally:
             self.checking_guards = False
@@ -988,12 +1098,13 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     unique_classes = {
         name: nodes[0] for name, nodes in definitions.items() if len(nodes) == 1
     }
+    function_cache: dict[Path, dict[str, ast.FunctionDef]] = {}
     for path, tree in trees.items():
         known_classes = {
             **unique_classes,
             **{node.name: node for node in tree.body if isinstance(node, ast.ClassDef)},
         }
-        functions: dict[str, ast.FunctionDef] = {}
+        functions = dict(_module_functions(path, source_root, trees, function_cache))
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 functions.setdefault(node.name, node)
@@ -1518,3 +1629,58 @@ def validate(cls, data):
 """,
         {"provenance"},
     )
+
+
+def test_conditional_clobber_invalidates_projected_destination() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    data['provenance'] = canonicalize_json_containers(data['provenance'])
+    if data.get('enabled'):
+        data['provenance'] = []
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_later_canonical_mapping_writes_preserve_coverage() -> None:
+    for replacement in (
+        "tuple(data['provenance'])",
+        "data['provenance']",
+        "normalize(data['provenance'])",
+    ):
+        assert not _fixture_uncovered(
+            f"""
+def normalize(value):
+    return tuple(value) if isinstance(value, list) else value
+def validate(cls, data):
+    data['provenance'] = canonicalize_json_containers(data['provenance'])
+    if data.get('enabled'):
+        data['provenance'] = {replacement}
+    return data
+""",
+            {"provenance"},
+        )
+
+
+def test_imported_array_normalizer_resolves_by_module(tmp_path: Path) -> None:
+    helper = tmp_path / "helper.py"
+    owner = tmp_path / "owner.py"
+    helper.write_text(
+        "def normalize(value):\n    return tuple(value) if isinstance(value, list) else value\n",
+        encoding="utf-8",
+    )
+    owner.write_text(
+        """
+from helper import normalize as prepare
+def validate(cls, data):
+    data['provenance'] = canonicalize_json_containers(data['provenance'])
+    if data.get('enabled'):
+        data['provenance'] = prepare(data['provenance'])
+    return data
+""",
+        encoding="utf-8",
+    )
+    functions = _module_functions(owner, tmp_path, {}, {})
+    assert not _uncovered_leaf_fields(functions["validate"], functions, {"provenance"})

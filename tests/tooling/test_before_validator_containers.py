@@ -548,6 +548,28 @@ class _Projection:
         self.loop_controls = [
             node for node in self.nodes if isinstance(node, (ast.Break, ast.Continue))
         ]
+        self.unmodeled_bindings: set[str] = set()
+        for node in self.nodes:
+            targets: list[ast.AST] = []
+            if isinstance(node, (ast.For, ast.AsyncFor, ast.NamedExpr)):
+                targets.append(node.target)
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                targets.extend(
+                    item.optional_vars
+                    for item in node.items
+                    if item.optional_vars is not None
+                )
+            elif isinstance(node, (ast.MatchAs, ast.MatchStar, ast.ExceptHandler)):
+                if node.name is not None:
+                    self.unmodeled_bindings.add(node.name)
+            elif isinstance(node, ast.MatchMapping) and node.rest is not None:
+                self.unmodeled_bindings.add(node.rest)
+            self.unmodeled_bindings.update(
+                part.id
+                for target in targets
+                for part in ast.walk(target)
+                if isinstance(part, ast.Name) and isinstance(part.ctx, ast.Store)
+            )
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -686,7 +708,9 @@ class _Projection:
             arguments = {
                 parameter.arg: self.value(argument, seen)
                 for parameter, argument in zip(
-                    helper.args.args, node.args, strict=False
+                    (helper.args.posonlyargs + helper.args.args),
+                    node.args,
+                    strict=False,
                 )
             }
             helper_covered: set[str] = set()
@@ -753,7 +777,9 @@ class _Projection:
             {
                 parameter.arg: self.value(argument, seen)
                 for parameter, argument in zip(
-                    helper.args.args, value.args, strict=False
+                    (helper.args.posonlyargs + helper.args.args),
+                    value.args,
+                    strict=False,
                 )
             },
             set(),
@@ -904,9 +930,11 @@ class _Projection:
 
     @staticmethod
     def is_field_reader(helper: ast.FunctionDef) -> bool:
-        if len(helper.args.args) != 2:
+        if len(helper.args.posonlyargs + helper.args.args) != 2:
             return False
-        receiver, key = (argument.arg for argument in helper.args.args)
+        receiver, key = (
+            argument.arg for argument in (helper.args.posonlyargs + helper.args.args)
+        )
         returns = [
             node.value for node in _own_nodes(helper) if isinstance(node, ast.Return)
         ]
@@ -1227,6 +1255,8 @@ class _Projection:
             return False
         seen = seen | {id(value)}
         if isinstance(value, ast.Name) and isinstance(value.ctx, ast.Load):
+            if value.id in self.unmodeled_bindings:
+                return False
             statement, bound = self.name_binding(value)
             if statement is not None:
                 return (
@@ -1268,10 +1298,10 @@ class _Projection:
                 self.sequence_reference(node.target, aliases)
             ):
                 return True
-            if (
-                isinstance(node, ast.withitem)
-                and node.optional_vars is not None
-                and (self.sequence_reference(node.optional_vars, aliases))
+            if isinstance(node, (ast.With, ast.AsyncWith)) and any(
+                item.optional_vars is not None
+                and self.sequence_reference(item.optional_vars, aliases)
+                for item in node.items
             ):
                 return True
             if isinstance(node, ast.ExceptHandler) and node.name in aliases:
@@ -1365,6 +1395,8 @@ class _Projection:
                 and self.projected_return(value.elts[index], field, seen)
             )
         if isinstance(value, ast.Name):
+            if value.id in self.unmodeled_bindings:
+                return False
             statement, bound = self.name_binding(value)
             return (
                 statement is not None
@@ -1387,7 +1419,9 @@ class _Projection:
         helper = self.functions[name]
         arguments = {
             parameter.arg: argument
-            for parameter, argument in zip(helper.args.args, value.args, strict=False)
+            for parameter, argument in zip(
+                (helper.args.posonlyargs + helper.args.args), value.args, strict=False
+            )
         }
         arguments.update(
             {
@@ -1491,7 +1525,9 @@ class _Projection:
             {
                 parameter.arg: self.value(argument)
                 for parameter, argument in zip(
-                    helper.args.args, value.args, strict=False
+                    (helper.args.posonlyargs + helper.args.args),
+                    value.args,
+                    strict=False,
                 )
             },
             covered,
@@ -1923,7 +1959,9 @@ class _Projection:
         helper = self.functions[name]
         bound = {
             parameter.arg: self.value(argument)
-            for parameter, argument in zip(helper.args.args, call.args, strict=False)
+            for parameter, argument in zip(
+                (helper.args.posonlyargs + helper.args.args), call.args, strict=False
+            )
         }
         bound.update(
             {
@@ -3743,6 +3781,58 @@ def pair(payload, raw):
     result = [payload, 0]
     holder = [result]
     holder[0][0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_positional_only_helper_arguments_keep_their_order() -> None:
+    for returned, uncovered in (("payload", set()), ("raw", {"provenance"})):
+        assert (
+            _fixture_uncovered(
+                f"""
+def pair(payload, /, raw):
+    return {returned}, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+                {"provenance"},
+            )
+            == uncovered
+        )
+
+
+def test_pattern_capture_invalidates_canonical_helper_parameter() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    match [raw]:
+        case [payload]:
+            pass
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_context_manager_target_invalidates_stored_sequence() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (payload, 0)
+    with context as result:
+        pass
     return result
 def validate(cls, data):
     normalized = canonicalize_json_containers(data)

@@ -12,16 +12,21 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialRequest,
     PiecewisePolynomialResult,
+    PiecewisePolynomialScalarMultiplicationRequest,
     PiecewiseSmoothnessRequest,
     PiecewiseSmoothnessResult,
     PolytopalComplexAffineTransformRequest,
     PolytopalComplexAffineTransformResult,
     PolytopalComplexClosureRequest,
     PolytopalComplexClosureResult,
+    SplineCoordinatesRequest,
+    SplineCoordinatesResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
     SplineEvaluationResult,
+    SplineRefinementMapRequest,
+    SplineRefinementMapResult,
     SplineSpaceRequest,
     SplineSpaceResult,
 )
@@ -30,12 +35,15 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     piecewise_polynomial_evaluate,
     piecewise_polynomial_from_maximal_pieces,
     piecewise_polynomial_multiply,
+    piecewise_polynomial_scalar_multiply,
     piecewise_polynomial_smoothness,
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
     polytopal_complex_common_refinement,
+    spline_coordinates,
     spline_dimension,
     spline_evaluate,
+    spline_refinement_map,
     spline_space,
 )
 
@@ -125,6 +133,12 @@ def _run_piecewise_multiply(
     return piecewise_polynomial_multiply(request)
 
 
+def _run_piecewise_scalar_multiply(
+    request: PiecewisePolynomialScalarMultiplicationRequest,
+) -> PiecewisePolynomialResult:
+    return piecewise_polynomial_scalar_multiply(request)
+
+
 def _run_eval(request: Any) -> Any:
     return piecewise_polynomial_evaluate(request.function, request.point)
 
@@ -139,6 +153,18 @@ def _run_spline(request: Any) -> Any:
 
 def _run_spline_eval(request: SplineEvaluationRequest) -> SplineEvaluationResult:
     return spline_evaluate(request)
+
+
+def _run_spline_refinement_map(
+    request: SplineRefinementMapRequest,
+) -> SplineRefinementMapResult:
+    return spline_refinement_map(request)
+
+
+def _run_spline_coordinates(
+    request: SplineCoordinatesRequest,
+) -> SplineCoordinatesResult:
+    return spline_coordinates(request)
 
 
 def _run_spline_dimension(
@@ -465,6 +491,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="piecewise_polynomial.scalar_multiply.compute",
+        title="Scale a compatible piecewise-polynomial function exactly",
+        description=(
+            "Multiply every cell polynomial of one compatible scalar QQ-valued "
+            "piecewise-polynomial function by an exact rational scalar. The "
+            "operation reconstructs the complete shared-face compatibility "
+            "profile and admits coefficient growth and result size before "
+            "materializing products."
+        ),
+        request_type=PiecewisePolynomialScalarMultiplicationRequest,
+        result_type=PiecewisePolynomialResult,
+        run=_run_piecewise_scalar_multiply,
+        tags=(
+            "geometry",
+            "piecewise-polynomial",
+            "scalar-multiplication",
+            "exact-rational",
+        ),
+        discovery_terms=(
+            "scalar multiply piecewise-polynomial function",
+            "rational scalar multiple of a spline",
+        ),
+        examples=(
+            OperationExample(
+                name="scale_constant_segment_piece",
+                description="Scale the constant function on one exact segment by two.",
+                input={
+                    "function": {
+                        "complex": _COMPLEX,
+                        "pieces": [{"cell_id": "M0", "polynomial": _POLY}],
+                        "compatibility": [],
+                        "status": "COMPATIBLE",
+                    },
+                    "scalar": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="piecewise_polynomial.from_maximal_pieces.compute",
         title="Construct an exact compatible piecewise-polynomial function",
         description="Reduce every maximal-cell polynomial difference modulo each shared-face affine ideal and return the complete compatibility profile; pieces must use the complex coordinate ring.",
@@ -505,6 +570,77 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "status": "COMPATIBLE",
                     },
                     "point": {"coordinates": [{"num": "1", "den": "2"}]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polyhedral_complex.spline.refinement_map.compute",
+        title="Map exact spline coefficients through a complex refinement",
+        description=(
+            "Compute the exact coefficient-block injection from a bounded "
+            "rational spline space to a face-to-face refinement with equal "
+            "support. The result retains the common-refinement cell lineage, "
+            "both coefficient axes, the source spline basis, and the refined "
+            "compatibility matrix; every mapped source basis vector is checked "
+            "against the refined constraints."
+        ),
+        request_type=SplineRefinementMapRequest,
+        result_type=SplineRefinementMapResult,
+        run=_run_spline_refinement_map,
+        tags=("geometry", "spline", "refinement", "exact-rational"),
+        discovery_terms=(
+            "spline refinement map",
+            "refine polynomial spline coefficients",
+            "nested spline spaces",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_refinement_of_segment_splines",
+                description=(
+                    "The unit segment refines itself, so its single cell is its "
+                    "own exact coefficient-block parent."
+                ),
+                input={
+                    "coarse": _COMPLEX,
+                    "refined": _COMPLEX,
+                    "degree": 0,
+                    "smoothness": 0,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polyhedral_complex.spline.coordinates.compute",
+        title="Express a piecewise polynomial in an exact spline basis",
+        description=(
+            "Check one supplied cellwise polynomial against the exact degree and "
+            "C^r compatibility conditions, then return its coordinates in the "
+            "canonical nullspace basis together with the source-bound spline "
+            "space. Caller continuity ledgers are recomputed from the pieces."
+        ),
+        request_type=SplineCoordinatesRequest,
+        result_type=SplineCoordinatesResult,
+        run=_run_spline_coordinates,
+        tags=("geometry", "spline", "coordinates", "exact-rational"),
+        discovery_terms=(
+            "piecewise polynomial spline basis coordinates",
+            "express function in spline space",
+            "spline membership and coordinates",
+        ),
+        examples=(
+            OperationExample(
+                name="constant_segment_spline_coordinates",
+                description="Express the constant-one function on a segment in its canonical spline basis.",
+                input={
+                    "function": {
+                        "complex": _COMPLEX,
+                        "pieces": [{"cell_id": "M0", "polynomial": _POLY}],
+                        "compatibility": [],
+                        "status": "COMPATIBLE",
+                    },
+                    "degree": 0,
+                    "smoothness": 0,
                 },
             ),
         ),

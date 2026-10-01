@@ -2408,9 +2408,7 @@ def _admit_spline_coordinate_materialization(
     # there would reject representable constants (for example a one-cell
     # degree-zero space, whose basis is ``[1]``).
     basis_scalar_digits = (
-        1
-        if not constraint_rows
-        else max(1, 2 * determinant_digits + 4)
+        1 if not constraint_rows else max(1, 2 * determinant_digits + 4)
     )
     coordinate_scalar_digits = max(
         (

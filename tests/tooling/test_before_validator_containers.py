@@ -128,14 +128,21 @@ def _module_functions(
 
 
 def _module_aliases(
-    path: Path, root: Path, cache: dict[Path, dict[str, set[str]]]
+    path: Path,
+    root: Path,
+    cache: dict[Path, dict[str, set[str]]],
+    trees: dict[Path, ast.Module] | None = None,
 ) -> dict[str, set[str]]:
     """Resolve explicit imports in their source module before applying local names."""
 
     if path in cache:
         return cache[path]
     cache[path] = {}
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = (
+        trees[path]
+        if trees is not None and path in trees
+        else ast.parse(path.read_text(encoding="utf-8"))
+    )
     aliases: dict[str, set[str]] = {}
     for node in tree.body:
         if not isinstance(node, ast.ImportFrom):
@@ -143,7 +150,7 @@ def _module_aliases(
         imported_path = _import_path(node, path, root)
         if imported_path is None:
             continue
-        imported = _module_aliases(imported_path, root, cache)
+        imported = _module_aliases(imported_path, root, cache, trees)
         for name in node.names:
             if name.name in imported:
                 aliases[name.asname or name.name] = {
@@ -330,6 +337,7 @@ class _Projection:
         self.stack = stack
         self.required_fields = required_fields
         self.live_cache: set[ast.AST] | None = None
+        self.origin_cache: dict[ast.expr, frozenset[str]] = {}
         self.checking_guards = False
         self.parents = {
             child: parent for parent in scoped for child in ast.iter_child_nodes(parent)
@@ -477,6 +485,14 @@ class _Projection:
     def value(
         self, node: ast.expr, seen: frozenset[str] = frozenset()
     ) -> frozenset[str]:
+        if self.checking_guards and node in self.origin_cache:
+            return self.origin_cache[node]
+        result = self._value(node, seen)
+        if self.checking_guards:
+            self.origin_cache[node] = result
+        return result
+
+    def _value(self, node: ast.expr, seen: frozenset[str]) -> frozenset[str]:
         if isinstance(node, ast.Name):
             return self.binding(node, seen)
         if isinstance(node, ast.Subscript) and self.value(node.value, seen) == _WHOLE:
@@ -1090,7 +1106,7 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     cache: dict[Path, dict[str, set[str]]] = {}
     contexts: dict[ast.ClassDef, dict[str, set[str]]] = {}
     for path, tree in trees.items():
-        module_aliases = _module_aliases(path, source_root, cache)
+        module_aliases = _module_aliases(path, source_root, cache, trees)
         for definition in tree.body:
             if isinstance(definition, ast.ClassDef):
                 definitions.setdefault(definition.name, []).append(definition)

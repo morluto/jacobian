@@ -6,6 +6,8 @@ normalizer must bound attacker-controlled rows before copying them.
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 from typing import Any
 
@@ -16,6 +18,7 @@ from jacobian.math.graphs.decks import _models as models_module
 from jacobian.math.graphs.decks._models import (
     EdgeDeckIsomorphismProfile,
     VertexDeckIsomorphismProfile,
+    VertexDeckIsomorphismProfileRequest,
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
@@ -325,3 +328,35 @@ def test_authored_edge_partition_does_not_authenticate_its_quotient(wire: bool) 
     assert recomputed == original
     assert tuple(item.multiplicity for item in recomputed.classes) == (3,)
     assert recomputed.class_indices == (0, 0, 0)
+
+
+# --- container ownership is derived from the model, not a literal list ---
+
+
+@pytest.mark.parametrize(
+    "model",
+    [VertexDeckIsomorphismProfile, VertexDeckIsomorphismProfileRequest],
+)
+def test_before_validator_ownership_is_derived_from_the_model(model: type) -> None:
+    """Ownership must come from the model, never from a hand-written list.
+
+    A literal field list silently loses any field added later, and nothing
+    else in the suite would notice. Deriving the set from ``model_fields``
+    makes a newly declared field canonical by construction.
+    """
+
+    validators = [
+        node
+        for node in ast.walk(ast.parse(inspect.getsource(model)))
+        if isinstance(node, ast.FunctionDef)
+        and node.name.startswith(("preflight_", "normalize_", "admit_"))
+    ]
+    assert validators, "expected the model's before-validator"
+    for node in validators:
+        source = ast.unparse(node)
+        if "canonicalize_json_containers" not in source:
+            continue
+        assert "model_fields" in source, (
+            f"{model.__name__}.{node.name} projects a hand-written field list; "
+            "derive ownership from cls.model_fields so new fields are covered"
+        )

@@ -986,14 +986,6 @@ __all__ = [
 ]
 
 
-_VERTEX_PROFILE_RESULT_FIELDS = (
-    "family",
-    "classes",
-    "class_indices",
-    "vertex_maps",
-)
-
-
 class VertexDeckIsomorphismProfileRequest(StrictModel):
     """Produce exact card-to-class maps for a complete vertex-deletion family."""
 
@@ -1033,16 +1025,17 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_output_bound",
                 "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
-        # Project only the owner-declared ``deck``. A whole-payload projection
-        # would materialize unknown attacker-controlled subtrees before
-        # ``extra="forbid"`` can refuse them.
+        # Canonicalize every declared field, derived from the model itself so a
+        # newly added field cannot escape the projection. Unknown fields are
+        # excluded so ``extra="forbid"`` refuses them without materializing an
+        # attacker-controlled subtree first.
         normalized = _normalize_vertex_iso_profile_request(value)
-        if type(normalized) is not dict or "deck" not in normalized:
+        if type(normalized) is not dict:
             return normalized
-        return {
-            **normalized,
-            "deck": canonicalize_json_containers(normalized["deck"]),
+        owned = {
+            key: item for key, item in normalized.items() if key in cls.model_fields
         }
+        return {**normalized, **canonicalize_json_containers(owned)}
 
 
 class VertexDeckIsomorphismClass(StrictModel):
@@ -1078,16 +1071,14 @@ class VertexDeckIsomorphismProfile(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_tuple_fields(cls, value: Any) -> Any:
-        # Canonicalize the owner-declared fields only, so an unknown field is
-        # refused by ``extra="forbid"`` instead of being materialized first.
+        # Canonicalize every declared field, derived from the model itself so a
+        # newly added field cannot escape the projection. Unknown fields are
+        # excluded so ``extra="forbid"`` refuses them without materializing an
+        # attacker-controlled subtree first.
         admitted = _admit_and_normalize_vertex_iso_profile_result(value)
         if type(admitted) is not dict:
             return admitted
-        owned = {
-            field: admitted[field]
-            for field in _VERTEX_PROFILE_RESULT_FIELDS
-            if field in admitted
-        }
+        owned = {key: item for key, item in admitted.items() if key in cls.model_fields}
         return {**admitted, **canonicalize_json_containers(owned)}
 
     @model_validator(mode="after")

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 
 
@@ -54,18 +53,17 @@ def test_math_before_validators_project_json_arrays_to_canonical_tuples() -> Non
     )
 
 
-_CONTAINER_PARTS = ("tuple[", "list[", "sequence[", "frozenset[", "set[")
-_MAPPING_PARTS = ("dict[", "mapping[", "defaultdict[")
+def _global_type_index(root: Path) -> tuple[set[str], dict[str, set[str]]]:
+    """Every class name plus every module-level ``Name = ...`` alias source."""
 
-
-def _module_aliases(root: Path) -> dict[str, set[str]]:
-    """Every module-level ``Name = ...`` right-hand side, by name."""
-
+    classes: set[str] = set()
     aliases: dict[str, set[str]] = {}
     for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in tree.body:
-            if isinstance(node, ast.Assign) and node.value is not None:
+            if isinstance(node, ast.ClassDef):
+                classes.add(node.name)
+            elif isinstance(node, ast.Assign) and node.value is not None:
                 for target in node.targets:
                     if isinstance(target, ast.Name):
                         aliases.setdefault(target.id, set()).add(
@@ -77,210 +75,266 @@ def _module_aliases(root: Path) -> dict[str, set[str]]:
                 and node.value is not None
             ):
                 aliases.setdefault(node.target.id, set()).add(ast.unparse(node.value))
-    return aliases
+    return classes, aliases
 
 
-def _enforced_container_field(source: str, aliases: dict[str, set[str]]) -> bool:
-    """Whether a field annotation is a sequence container needing projection.
+def _leaf_container_field(
+    source: str, classes: set[str], aliases: dict[str, set[str]]
+) -> bool:
+    """Recognize outer arrays, including arrays of models, through aliases.
 
-    Every tuple/list container must reach strict validation as a tuple, so a
-    before-validator must project each one (or sit under a total projection).
-    Mappings validate from JSON objects directly; arrays nested inside one
-    belong to the nested validator. A bare alias resolving uniquely to a
-    container counts. Anything else is left unenforced rather than guessed at.
+    A bare nested model delegates to its owner; its parent's outer array does
+    not. Unknown and cyclic aliases are left unenforced.
     """
 
-    low = source.lower()
-    if not any(part in low for part in _CONTAINER_PARTS):
-        bare = source.strip()
-        if not re.fullmatch(r"[A-Za-z_]\w*", bare):
-            return False
-        resolved = aliases.get(bare, set())
-        if len(resolved) != 1:
-            return False
-        return _enforced_container_field(next(iter(resolved)), aliases)
-    return not any(part in low for part in _MAPPING_PARTS)
-
-
-def _loop_variables(generators: list[ast.comprehension]) -> set[str]:
-    names: set[str] = set()
-    for generator in generators:
-        for node in ast.walk(generator.target):
-            if isinstance(node, ast.Name):
-                names.add(node.id)
-    return names
-
-
-def _model_fields_drives_keys(node: ast.AST) -> bool:
-    """Whether a comprehension projects exactly the model's declared fields.
-
-    Total-driving shape: the keys come from ``model_fields`` membership, with
-    no narrowing comparison on the loop variable. A filter such as
-    ``if key == "old"`` narrows and does not count, and neither does a mere
-    mention elsewhere.
-    """
-
-    if not isinstance(
-        node, (ast.DictComp, ast.SetComp, ast.ListComp, ast.GeneratorExp)
-    ):
-        return False
-    loop_variables = _loop_variables(node.generators)
-    if not loop_variables:
+    def visit(node: ast.expr, seen: frozenset[str]) -> bool:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return visit(ast.parse(node.value, mode="eval").body, seen)
+        if isinstance(node, ast.Name):
+            definitions = aliases.get(node.id, set())
+            if node.id in seen or len(definitions) != 1:
+                return False
+            return visit(
+                ast.parse(next(iter(definitions)), mode="eval").body,
+                seen | {node.id},
+            )
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return visit(node.left, seen) or visit(node.right, seen)
+        if isinstance(node, ast.Subscript):
+            name = getattr(node.value, "id", getattr(node.value, "attr", ""))
+            if name.lower() in {"tuple", "list", "sequence", "frozenset", "set"}:
+                return True
+            parts = (
+                node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            )
+            if name == "Annotated":
+                return visit(parts[0], seen)
+            if name in {"Optional", "Union"}:
+                return any(visit(part, seen) for part in parts)
         return False
 
-    def mentions_model_fields(item: ast.AST) -> bool:
-        return any(
-            (isinstance(part, ast.Name) and part.id == "model_fields")
-            or (isinstance(part, ast.Attribute) and part.attr == "model_fields")
-            for part in ast.walk(item)
-        )
+    return visit(ast.parse(source, mode="eval").body, frozenset())
 
-    driven = any(
-        mentions_model_fields(generator.iter)
-        or any(mentions_model_fields(part) for part in generator.ifs)
-        for generator in node.generators
+
+_WHOLE = frozenset({"*"})
+
+
+def _model_fields(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "cls"
+        and node.attr == "model_fields"
     )
-    if not driven:
-        return False
-    for generator in node.generators:
-        for condition in generator.ifs:
-            for part in ast.walk(condition):
-                if not isinstance(part, ast.Compare):
-                    continue
-                left_names = {
-                    item.id
-                    for item in ast.walk(part.left)
-                    if isinstance(item, ast.Name)
-                }
-                if not (left_names & loop_variables):
-                    continue
-                if any(isinstance(action, (ast.Eq, ast.NotEq)) for action in part.ops):
-                    return False
-                if any(
-                    isinstance(action, (ast.In, ast.NotIn))
-                    and not mentions_model_fields(part.comparators[0])
-                    for action in part.ops
+
+
+class _Projection:
+    """Bounded syntactic data flow; not a proof of all execution paths."""
+
+    def __init__(
+        self,
+        function: ast.FunctionDef,
+        functions: dict[str, ast.FunctionDef],
+        arguments: dict[str, frozenset[str]],
+        covered: set[str],
+        stack: frozenset[str],
+    ) -> None:
+        self.nodes = list(ast.walk(function))
+        self.functions = functions
+        self.arguments = arguments
+        self.covered = covered
+        self.stack = stack
+
+    def keys(self, node: ast.expr) -> frozenset[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return frozenset({node.value})
+        if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            return frozenset().union(*(self.keys(item) for item in node.elts))
+        if isinstance(node, ast.Name):
+            return frozenset().union(
+                *(
+                    self.keys(part.iter)
+                    for part in self.nodes
+                    if isinstance(part, ast.For)
+                    and isinstance(part.target, ast.Name)
+                    and part.target.id == node.id
+                    and part.lineno < node.lineno <= (part.end_lineno or part.lineno)
+                )
+            )
+        return frozenset()
+
+    def binding(self, node: ast.Name, seen: frozenset[str]) -> frozenset[str]:
+        if node.id in seen:
+            return self.arguments.get(node.id, frozenset())
+        bindings = [
+            part.value
+            for part in self.nodes
+            if isinstance(part, (ast.Assign, ast.AnnAssign))
+            and part.value is not None
+            and part.lineno < node.lineno
+            and any(
+                isinstance(target, ast.Name) and target.id == node.id
+                for target in (
+                    part.targets if isinstance(part, ast.Assign) else [part.target]
+                )
+            )
+        ]
+        if bindings:
+            return self.value(
+                max(bindings, key=lambda item: item.lineno), seen | {node.id}
+            )
+        return self.arguments.get(node.id, frozenset())
+
+    def comprehension(self, node: ast.DictComp, seen: frozenset[str]) -> frozenset[str]:
+        if len(node.generators) != 1:
+            return frozenset()
+        generator = node.generators[0]
+        # {key: data[key] for key in cls.model_fields}, without subset filters.
+        if (
+            not generator.ifs
+            and isinstance(generator.target, ast.Name)
+            and ast.dump(node.key)
+            == ast.dump(generator.target).replace("Store()", "Load()")
+            and isinstance(node.value, ast.Subscript)
+            and ast.dump(node.value.slice) == ast.dump(node.key)
+            and self.value(node.value.value, seen) == _WHOLE
+            and _model_fields(generator.iter)
+        ):
+            return _WHOLE
+        # {key: item for key, item in data.items() if key in cls.model_fields}.
+        if not (
+            isinstance(generator.target, ast.Tuple)
+            and len(generator.target.elts) == 2
+            and ast.dump(node.key)
+            == ast.dump(generator.target.elts[0], include_attributes=False).replace(
+                "Store()", "Load()"
+            )
+            and ast.dump(node.value)
+            == ast.dump(generator.target.elts[1], include_attributes=False).replace(
+                "Store()", "Load()"
+            )
+            and isinstance(generator.iter, ast.Call)
+            and isinstance(generator.iter.func, ast.Attribute)
+            and generator.iter.func.attr == "items"
+            and not generator.iter.args
+            and self.value(generator.iter.func.value, seen) == _WHOLE
+            and len(generator.ifs) == 1
+        ):
+            return frozenset()
+        condition = generator.ifs[0]
+        if (
+            isinstance(condition, ast.Compare)
+            and ast.dump(condition.left) == ast.dump(node.key)
+            and len(condition.ops) == 1
+            and isinstance(condition.ops[0], ast.In)
+            and _model_fields(condition.comparators[0])
+        ):
+            return _WHOLE
+        return frozenset()
+
+    def call(self, node: ast.Call, seen: frozenset[str]) -> frozenset[str]:
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and self.value(node.func.value, seen) == _WHOLE
+            and node.args
+        ):
+            return self.keys(node.args[0])
+        name = getattr(node.func, "id", "")
+        if name in {"dict", "canonicalize_json_containers"} and node.args:
+            return self.value(node.args[0], seen)
+        if name in self.functions and name not in self.stack:
+            helper = self.functions[name]
+            arguments = {
+                parameter.arg: self.value(argument, seen)
+                for parameter, argument in zip(
+                    helper.args.args, node.args, strict=False
+                )
+            }
+            return _Projection(
+                helper, self.functions, arguments, self.covered, self.stack | {name}
+            ).analyze()
+        return frozenset()
+
+    def value(
+        self, node: ast.expr, seen: frozenset[str] = frozenset()
+    ) -> frozenset[str]:
+        if isinstance(node, ast.Name):
+            return self.binding(node, seen)
+        if isinstance(node, ast.Subscript) and self.value(node.value, seen) == _WHOLE:
+            return self.keys(node.slice)
+        if isinstance(node, ast.Dict):
+            result: set[str] = set()
+            for key, item in zip(node.keys, node.values, strict=True):
+                result.update(self.value(item, seen) if key is None else self.keys(key))
+            return frozenset(result)
+        if isinstance(node, ast.DictComp):
+            return self.comprehension(node, seen)
+        if isinstance(node, ast.Call):
+            return self.call(node, seen)
+        return frozenset()
+
+    def analyze(self) -> frozenset[str]:
+        for node in self.nodes:
+            if isinstance(node, ast.Call):
+                if (
+                    getattr(node.func, "id", "") == "canonicalize_json_containers"
+                    and node.args
                 ):
-                    return False
-    return True
+                    self.covered.update(self.value(node.args[0]))
+                elif getattr(node.func, "id", "") in self.functions:
+                    self.value(node)
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Call)
+                and getattr(node.value.func, "id", "") == "canonicalize_json_containers"
+            ):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Subscript)
+                        and self.value(target.value) == _WHOLE
+                    ):
+                        self.covered.update(self.keys(target.slice))
+        returns = [
+            self.value(node.value)
+            for node in self.nodes
+            if isinstance(node, ast.Return) and node.value is not None
+        ]
+        return frozenset.intersection(*returns) if returns else frozenset()
 
 
-def _total_projection_names(function: ast.FunctionDef, params: set[str]) -> set[str]:
-    """Local names bound to a total projection of the validator input."""
-
-    bound = set(params)
-    for _ in range(4):
-        grew = False
-        for node in ast.walk(function):
-            if isinstance(node, ast.Assign):
-                targets: list[ast.expr] = list(node.targets)
-                value: ast.expr | None = node.value
-            elif isinstance(node, ast.AnnAssign):
-                targets, value = [node.target], node.value
-            else:
-                continue
-            if value is None:
-                continue
-            whole = isinstance(value, ast.Name) and value.id in bound
-            if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
-                whole = value.func.id == "dict" and any(
-                    isinstance(argument, ast.Name) and argument.id in bound
-                    for argument in value.args
-                )
-            if isinstance(value, ast.Dict):
-                whole = any(
-                    key is None and isinstance(item, ast.Name) and item.id in bound
-                    for key, item in zip(value.keys, value.values, strict=True)
-                )
-            driven = _model_fields_drives_keys(value)
-            if whole or driven:
-                for target in targets:
-                    if isinstance(target, ast.Name) and target.id not in bound:
-                        bound.add(target.id)
-                        grew = True
-        if not grew:
-            break
-    return bound
-
-
-def _reachable_functions(
-    validator: ast.FunctionDef, functions: dict[str, ast.FunctionDef]
-) -> list[ast.FunctionDef]:
-    """The validator plus the module-local helpers it calls, transitively."""
-
-    group = [validator]
-    seen = {id(validator)}
-    frontier = [validator]
-    while frontier:
-        current = frontier.pop()
-        for call in ast.walk(current):
-            if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
-                target = functions.get(call.func.id)
-                if target is not None and id(target) not in seen:
-                    seen.add(id(target))
-                    group.append(target)
-                    frontier.append(target)
-    return group
-
-
-def _validator_covers_fields(
+def _uncovered_leaf_fields(
     validator: ast.FunctionDef,
     functions: dict[str, ast.FunctionDef],
-    fields: set[str],
+    leaf_fields: set[str],
 ) -> set[str]:
-    """Fields neither under a total projection nor named in reach."""
+    """Trace selections into canonicalization, not admission-only mentions."""
 
-    group = _reachable_functions(validator, functions)
-    params = {argument.arg for argument in validator.args.args}
-    total = False
-    for function in group:
-        bound = _total_projection_names(function, params)
-        for call in ast.walk(function):
-            if not (
-                isinstance(call, ast.Call)
-                and getattr(call.func, "id", None) == "canonicalize_json_containers"
-            ):
-                continue
-            if any(
-                isinstance(argument, ast.Name) and argument.id in bound
-                for argument in call.args
-            ):
-                total = True
-            if any(_model_fields_drives_keys(argument) for argument in call.args):
-                total = True
-    if total:
-        return set()
-    named = {
-        part.value
-        for function in group
-        for part in ast.walk(function)
-        if isinstance(part, ast.Constant) and isinstance(part.value, str)
-    }
-    return fields - named
+    covered: set[str] = set()
+    _Projection(
+        validator,
+        functions,
+        {
+            argument.arg: _WHOLE
+            for argument in validator.args.args
+            if argument.arg != "cls"
+        },
+        covered,
+        frozenset({validator.name}),
+    ).analyze()
+    return set() if "*" in covered else leaf_fields - covered
 
 
-def test_before_validators_cover_every_sequence_container_field() -> None:
-    """A before-validator projection must reach every sequence container field.
+def test_before_validators_cover_every_leaf_container_field() -> None:
+    """Every declared outer array needs projection, including arrays of models.
 
-    ``parse_operation_input`` validates strictly, so a declared array field
-    left as a raw JSON array refuses the whole request with ``tuple_type`` —
-    including the outer array of a nested-model container, whose child
-    validators never run until the parent level validates. Whole-payload and
-    ``cls.model_fields``-driven projections are total by construction; every
-    other field must be named in the validator's reachable projection code.
-    Mappings validate from JSON objects directly and stay exempt. A
-    ``model_fields`` mention only counts when it drives the projected keys
-    through a comprehension membership filter with no narrowing comparison.
-    Naming is deliberately broad: a literal that only reads a field without
-    converting it still counts, because restricting names to
-    canonicalize-flow flags suite-pinned correct code whose conversion
-    happens in hand-rolled tuple steps and leaf delegation. A
-    read-without-convert gap still refuses loudly under strict dispatch, so
-    omission — the realistic regression — is what this gate owns.
+    Bare nested models retain their own admission/canonicalization boundary.
+    Unsupported annotations are left unenforced; textual field mentions never
+    establish projection coverage.
     """
 
     source_root = Path(__file__).parents[2] / "src" / "jacobian" / "math"
-    aliases = _module_aliases(source_root)
+    classes, aliases = _global_type_index(source_root)
     violations: list[str] = []
     for path in sorted(source_root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -300,16 +354,19 @@ def test_before_validators_cover_every_sequence_container_field() -> None:
             if not before:
                 continue
             fields = {
-                item.target.id
+                item.target.id: ast.unparse(item.annotation)
                 for item in node.body
-                if isinstance(item, ast.AnnAssign)
-                and isinstance(item.target, ast.Name)
-                and _enforced_container_field(ast.unparse(item.annotation), aliases)
+                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
             }
-            if not fields:
+            leaf_fields = {
+                name
+                for name, annotation in fields.items()
+                if _leaf_container_field(annotation, classes, aliases)
+            }
+            if not leaf_fields:
                 continue
             for validator in before:
-                uncovered = _validator_covers_fields(validator, functions, fields)
+                uncovered = _uncovered_leaf_fields(validator, functions, leaf_fields)
                 for name in sorted(uncovered):
                     violations.append(
                         f"{path.relative_to(source_root)}:{validator.lineno} "
@@ -317,8 +374,156 @@ def test_before_validators_cover_every_sequence_container_field() -> None:
                     )
 
     assert not violations, (
-        "before-validator projections must reach every sequence container "
-        "field; project the payload, derive ownership from cls.model_fields, "
-        "or name the field in reachable projection code: "
-        + ", ".join(sorted(violations))
+        "before-validator projections must reach every leaf container field; "
+        "project the payload, derive ownership from cls.model_fields, or name "
+        "the field in reachable projection code: " + ", ".join(sorted(violations))
     )
+
+
+def _fixture_uncovered(source: str, fields: set[str]) -> set[str]:
+    tree = ast.parse(source)
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    return _uncovered_leaf_fields(functions["validate"], functions, fields)
+
+
+def test_nested_model_outer_containers_need_projection() -> None:
+    for annotation in (
+        "tuple[Child, ...]",
+        "list[Child]",
+        "tuple[Child, ...] | None",
+        "Children",
+    ):
+        assert _leaf_container_field(
+            annotation, {"Child"}, {"Children": {"tuple[Child, ...]"}}
+        )
+    assert not _leaf_container_field("Child", {"Child"}, {})
+    assert not _leaf_container_field("Cycle", set(), {"Cycle": {"Cycle"}})
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    data['old'] = canonicalize_json_containers(data['old'])
+    return data
+""",
+        {"old", "children"},
+    ) == {"children"}
+
+
+def test_model_fields_mentions_do_not_establish_total_projection() -> None:
+    for statement in (
+        '"model_fields"',
+        "len(cls.model_fields)",
+        'selected = {k: data[k] for k in cls.model_fields if k == "old"}',
+    ):
+        assert _fixture_uncovered(
+            f"""
+def validate(cls, data):
+    {statement}
+    return canonicalize_json_containers({{"old": data["old"]}})
+""",
+            {"old", "provenance"},
+        ) == {"provenance"}
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    selected = {k: data[k] for k in cls.model_fields if k == "old"}
+    return canonicalize_json_containers(selected)
+""",
+        {"provenance"},
+    ) == {"provenance"}
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    selected = {k: data[k] for k in cls.model_fields}
+    return canonicalize_json_containers(selected)
+""",
+        {"old", "provenance"},
+    )
+
+
+def test_admission_mentions_do_not_count_as_projection() -> None:
+    assert _fixture_uncovered(
+        """
+def admit(data):
+    return len(data['provenance']) < 10
+
+def validate(cls, data):
+    assert admit(data)
+    assert len(data['provenance']) < 10
+    data['old'] = canonicalize_json_containers(data['old'])
+    return data
+""",
+        {"old", "provenance"},
+    ) == {"provenance"}
+    assert not _fixture_uncovered(
+        """
+def project(payload):
+    selected = payload.get('provenance')
+    payload['provenance'] = canonicalize_json_containers(selected)
+    return payload
+
+def validate(cls, data):
+    return project(data)
+""",
+        {"provenance"},
+    )
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    normalized = dict(data)
+    for key in ('old', 'provenance'):
+        normalized[key] = canonicalize_json_containers(normalized.get(key))
+    return normalized
+""",
+        {"old", "provenance"},
+    )
+
+
+def test_model_fields_items_projection_requires_exact_membership_filter() -> None:
+    for condition, expected in (
+        ("key in cls.model_fields", set()),
+        ('key in cls.model_fields and key == "old"', {"provenance"}),
+        ('key == "old"', {"provenance"}),
+    ):
+        assert (
+            _fixture_uncovered(
+                f"""
+def validate(cls, data):
+    owned = {{key: item for key, item in data.items() if {condition}}}
+    return canonicalize_json_containers(owned)
+""",
+                {"provenance"},
+            )
+            == expected
+        )
+
+
+def test_unprojected_model_array_fails_strict_json_at_parent() -> None:
+    from typing import Any
+
+    import pytest
+    from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+
+    class Child(BaseModel):
+        model_config = ConfigDict(strict=True)
+        value: int
+
+    class Parent(BaseModel):
+        model_config = ConfigDict(strict=True)
+        children: tuple[Child, ...]
+
+        @model_validator(mode="before")
+        @classmethod
+        def partial(cls, data: Any) -> Any:
+            # Admission sees the field but never canonicalizes its outer array.
+            assert len(data["children"]) == 1
+            return data
+
+    Parent.model_rebuild(_types_namespace={"Child": Child})
+    with pytest.raises(ValidationError) as error:
+        Parent.model_validate_json('{"children":[{"value":1}]}')
+    assert [(item["loc"], item["type"]) for item in error.value.errors()] == [
+        (("children",), "tuple_type")
+    ]
+    assert Parent.model_validate({"children": ({"value": 1},)}).children[0].value == 1

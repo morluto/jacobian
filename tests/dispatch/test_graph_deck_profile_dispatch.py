@@ -59,7 +59,7 @@ def test_strict_dispatch_decodes_the_vertex_iso_profile(wire: bool) -> None:
         VertexDeckIsomorphismProfile,
         json.loads(encoded) if wire else json.loads(json.dumps(profile.model_dump())),
     )
-    assert _raw_lists(decoded) == []
+    assert _raw_lists(decoded.model_dump()) == []
     assert decoded == profile
 
 
@@ -71,5 +71,30 @@ def test_strict_dispatch_decodes_the_vertex_iso_profile_request(wire: bool) -> N
         VertexDeckIsomorphismProfileRequest,
         {"deck": json.loads(payload)},
     )
-    assert _raw_lists(decoded) == []
+    assert _raw_lists(decoded.model_dump()) == []
     assert decoded.deck == family
+
+
+@pytest.mark.parametrize("request_payload", [False, True])
+def test_new_declared_fields_are_canonical_after_strict_json_decode(
+    request_payload: bool,
+) -> None:
+    """A newly declared container field must receive the inherited projection."""
+
+    class ExtendedRequest(VertexDeckIsomorphismProfileRequest):
+        additional_rows: tuple[tuple[int, ...], ...]
+
+    class ExtendedProfile(VertexDeckIsomorphismProfile):
+        additional_rows: tuple[tuple[int, ...], ...]
+
+    profile = vertex_deck_isomorphism_profile(vertex_deletion_family(_source()))
+    payload: dict[str, Any] = (
+        {"deck": profile.family.model_dump(mode="json")}
+        if request_payload
+        else profile.model_dump(mode="json")
+    )
+    payload["additional_rows"] = [[1, 2], [], [3]]
+    owner = ExtendedRequest if request_payload else ExtendedProfile
+    decoded = owner.model_validate_json(json.dumps(payload), strict=True)
+    assert decoded.additional_rows == ((1, 2), (), (3,))
+    assert _raw_lists(decoded.model_dump()) == []

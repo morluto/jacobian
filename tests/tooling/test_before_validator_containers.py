@@ -574,9 +574,8 @@ class _Projection:
                 for part in ast.walk(target)
                 if isinstance(part, ast.Name)
             )
-        self.shadowed_names = (
+        self.local_names = (
             self.unmodeled_bindings
-            | set(functions)
             | {
                 node.arg
                 for node in ast.walk(function.args)
@@ -589,6 +588,7 @@ class _Projection:
                 if isinstance(part, ast.Name) and isinstance(part.ctx, ast.Store)
             }
         )
+        self.shadowed_names = self.local_names | set(functions)
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -1453,6 +1453,7 @@ class _Projection:
         name = getattr(value.func, "id", "")
         if (
             name not in self.functions
+            or name in self.local_names
             or name in self.stack
             or any(keyword.arg is None for keyword in value.keywords)
         ):
@@ -1498,8 +1499,10 @@ class _Projection:
             if self.guaranteed_bindings(argument, field)
             and self.projected_return(argument, field, seen)
         }
-        if projection.mutated_after(helper, field) or projection.overwritten_after(
-            helper, field
+        if (
+            projection.canonical_argument_escapes()
+            or projection.mutated_after(helper, field)
+            or projection.overwritten_after(helper, field)
         ):
             return False
         returned = [
@@ -1514,6 +1517,42 @@ class _Projection:
                 node.value, index, field, frozenset()
             )
             for node in returned
+        )
+
+    def canonical_argument_escapes(self) -> bool:
+        """Only the returned sequence may hold a canonical helper argument."""
+
+        returned_sequences: set[int] = set()
+        for node in self.nodes:
+            if not isinstance(node, ast.Return) or node.value is None:
+                continue
+            value = node.value
+            seen: set[int] = set()
+            while isinstance(value, ast.Name) and id(value) not in seen:
+                seen.add(id(value))
+                _, bound = self.name_binding(value)
+                if bound is None:
+                    break
+                value = bound
+            if isinstance(value, (ast.Tuple, ast.List)):
+                returned_sequences.add(id(value))
+        aliases = set(self.canonical_arguments)
+        for _, target, assigned in sorted(
+            self.write_bindings,
+            key=lambda binding: getattr(binding[0], "lineno", 0),
+        ):
+            if (
+                isinstance(target, ast.Name)
+                and assigned is not None
+                and not isinstance(assigned, (ast.Tuple, ast.List, ast.Dict, ast.Set))
+                and self.sequence_reference(assigned, aliases)
+            ):
+                aliases.add(target.id)
+        return any(
+            isinstance(node, (ast.Tuple, ast.List, ast.Dict, ast.Set))
+            and id(node) not in returned_sequences
+            and self.sequence_reference(node, aliases)
+            for node in self.nodes
         )
 
     def projected_subscript(
@@ -4004,3 +4043,43 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+def test_locally_rebound_tuple_helper_is_not_trusted() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    return payload, 0
+def evil(payload, raw):
+    return raw, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    pair = evil
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_container_held_payload_alias_mutation_is_rejected() -> None:
+    for setup, write in (
+        (
+            "holder = {'value': payload}",
+            "holder['value']['provenance'] = raw['provenance']",
+        ),
+        ("holder = [payload]", "holder[0]['provenance'] = raw['provenance']"),
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    {setup}
+    {write}
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}

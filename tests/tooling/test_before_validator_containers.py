@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 
 def _is_before_validator(decorator: ast.expr) -> bool:
     return (
@@ -41,14 +43,30 @@ def test_math_before_validators_project_json_arrays_to_canonical_tuples() -> Non
     """
 
     source_root = Path(__file__).parents[2] / "src" / "jacobian" / "math"
-    missing = [
-        f"{path.relative_to(source_root)}:{function.lineno}"
-        for path in sorted(source_root.rglob("*.py"))
-        for function in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-        if isinstance(function, ast.FunctionDef)
-        and any(_is_before_validator(item) for item in function.decorator_list)
-        and not _uses_canonical_container_projection(function)
-    ]
+    missing: list[str] = []
+    for path in sorted(source_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # Before-validators are module-level functions or class methods, so
+        # scanning those two levels avoids walking every statement of every
+        # module in the tree.
+        for owner in tree.body:
+            candidates = (
+                owner.body
+                if isinstance(owner, ast.ClassDef)
+                else [owner]
+                if isinstance(owner, ast.FunctionDef)
+                else ()
+            )
+            for function in candidates:
+                if (
+                    isinstance(function, ast.FunctionDef)
+                    and any(
+                        _is_before_validator(item) for item in function.decorator_list
+                    )
+                    and not _uses_canonical_container_projection(function)
+                ):
+                    missing.append(f"{path.relative_to(source_root)}:{function.lineno}")
+        del tree
 
     assert not missing, (
         "mode='before' validators must call canonicalize_json_containers: "
@@ -2846,6 +2864,9 @@ def _table_validator(
     raise AssertionError("validator source did not parse to a function")
 
 
+# Whole-tree static analysis: cost scales with src/jacobian/math, so it cannot
+# live under the uniform 30s lane timeout and stay reliable as the tree grows.
+@pytest.mark.timeout(300)
 def test_before_validators_cover_every_leaf_container_field() -> None:
     """Every declared outer array needs projection, including arrays of models.
 
@@ -2869,7 +2890,7 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     alias_cache: dict[str, dict[str, set[str]]] = {}
     for module in sorted({key[0] for key in classes}):
         function_cache: dict[str, dict[str, ast.FunctionDef]] = {}
-        functions = _table_functions(module, tables, texts, function_cache)
+        functions: dict[str, ast.FunctionDef] | None = None
         for key in classes:
             if key[0] != module:
                 continue
@@ -2884,6 +2905,8 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
             }
             if not leaf_fields:
                 continue
+            if functions is None:
+                functions = _table_functions(module, tables, texts, function_cache)
             shapes = _table_json_shapes(key, tables, unique, scope_cache, alias_cache)
             for entry in before:
                 validator = _table_validator(entry, tables, texts)

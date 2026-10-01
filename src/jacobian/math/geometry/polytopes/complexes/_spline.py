@@ -2629,9 +2629,8 @@ def spline_refinement_map(
             message="combined exact spline rank work exceeds the refinement-map envelope",
         )
     output_digits_bound = (
-        (source_cells_bound + target_cells_bound) * MAX_SPLINE_SCALAR_DIGITS
-        + 4096 * (coarse_width + refined_width)
-    )
+        source_cells_bound + target_cells_bound
+    ) * MAX_SPLINE_SCALAR_DIGITS + 4096 * (coarse_width + refined_width)
     if output_digits_bound > MAX_SPLINE_REFINEMENT_MAP_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("degree",),

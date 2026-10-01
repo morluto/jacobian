@@ -815,12 +815,20 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
         total_terms += len(terms)
         for term in terms:
             coefficient = term.coefficient.as_fraction()
-            numerator_digits = _decimal_digits_upper(
-                coefficient.numerator
-            ) + _decimal_digits_upper(scalar.numerator)
-            denominator_digits = _decimal_digits_upper(
-                coefficient.denominator
-            ) + _decimal_digits_upper(scalar.denominator)
+            # Bound the reduced product, not the raw cross-product: a
+            # coefficient and scalar that cancel (N scaled by 1/N) or a zero
+            # scalar (whose term disappears) must not be charged for the
+            # intermediate width.
+            product = Fraction(
+                coefficient.numerator * scalar.numerator,
+                coefficient.denominator * scalar.denominator,
+            )
+            if product:
+                numerator_digits = _decimal_digits_upper(product.numerator)
+                denominator_digits = _decimal_digits_upper(product.denominator)
+            else:
+                numerator_digits = 1
+                denominator_digits = 1
             if (
                 max(numerator_digits, denominator_digits)
                 > MAX_CANONICAL_RATIONAL_DIGITS
@@ -2394,7 +2402,16 @@ def _admit_spline_coordinate_materialization(
             code="polytopal_complex.spline_coordinates_height",
             message="the canonical spline basis may exceed the exact rational component bound",
         )
-    basis_scalar_digits = max(1, 2 * determinant_digits + 4)
+    # With no interface constraints the nullspace is the full standard basis,
+    # so the recovered coordinates are exactly the source components and no
+    # basis growth is incurred.  Charging the worst-case determinant width
+    # there would reject representable constants (for example a one-cell
+    # degree-zero space, whose basis is ``[1]``).
+    basis_scalar_digits = (
+        1
+        if not constraint_rows
+        else max(1, 2 * determinant_digits + 4)
+    )
     coordinate_scalar_digits = max(
         (
             _decimal_digits_upper(value.numerator)

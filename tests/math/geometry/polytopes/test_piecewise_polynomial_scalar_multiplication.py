@@ -183,12 +183,16 @@ def test_catalog_example_executes_through_the_public_typed_operation():
 
 
 def test_scalar_growth_is_rejected_before_coefficient_expansion(monkeypatch):
-    function = _function(coefficient=10)
-    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)
+    # The bound is charged on the reduced product.  ``_decimal_digits_upper``
+    # is an upper bound: 99 reports 3 digits.  Both factors therefore fit a
+    # limit of 4, but their product 99 * 99 = 9801 reports 5 and is rejected.
+    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 4)
+    function = _function(coefficient=99)
+    scalar = CanonicalRational(num=99, den=1)
 
     with pytest.raises(OperationResourceAdmissionError, match="scaled coefficient"):
         piecewise_polynomial_scalar_multiply(
             PiecewisePolynomialScalarMultiplicationRequest(
-                function=function, scalar=CanonicalRational(num=10, den=1)
+                function=function, scalar=scalar
             )
         )

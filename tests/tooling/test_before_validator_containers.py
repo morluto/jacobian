@@ -128,6 +128,89 @@ def _model_fields(node: ast.expr) -> bool:
     )
 
 
+def _own_nodes(function: ast.FunctionDef) -> list[ast.AST]:
+    """Nodes of one function body, excluding nested scopes.
+
+    Returns, assignments, and calls inside an uncalled nested definition do
+    not belong to the validator's own execution. Nested helpers are still
+    analyzed when a reachable call invokes them; only their uninvoked bodies
+    are out of scope here.
+    """
+
+    scoped: list[ast.AST] = []
+    frontier: list[ast.AST] = [function]
+    while frontier:
+        node = frontier.pop()
+        scoped.append(node)
+        for child in ast.iter_child_nodes(node):
+            if (
+                isinstance(
+                    child,
+                    (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+                )
+                and child is not function
+            ):
+                continue
+            frontier.append(child)
+    return scoped
+
+
+def _shadowed_assignments(nodes: list[ast.AST]) -> set[int]:
+    """Assignments whose write cannot reach any return.
+
+    An earlier write to a name is dead only when a later write to the same
+    name sits in the same straight-line statement list with no return, loop,
+    branch, or exception boundary between them. Anything else keeps all
+    writes: branches may each serve a different return, and loops may skip.
+    """
+
+    parents: dict[int, ast.AST] = {}
+    for node in nodes:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.stmt):
+                parents.setdefault(id(child), node)
+    lists: dict[int, list[ast.stmt]] = {}
+    for node in nodes:
+        if not isinstance(node, ast.stmt):
+            continue
+        parent = parents.get(id(node))
+        if parent is None:
+            continue
+        lists.setdefault(id(parent), []).append(node)
+    dead: set[int] = set()
+    for statements in lists.values():
+        seen: dict[str, ast.stmt] = {}
+        for statement in sorted(statements, key=lambda item: item.lineno):
+            if isinstance(
+                statement,
+                (
+                    ast.Return,
+                    ast.If,
+                    ast.For,
+                    ast.While,
+                    ast.Try,
+                    ast.Match,
+                    ast.With,
+                    ast.AsyncFor,
+                    ast.AsyncWith,
+                ),
+            ):
+                seen.clear()
+                continue
+            if isinstance(statement, ast.Assign):
+                targets: list[ast.expr] = list(statement.targets)
+            elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+                targets = [statement.target]
+            else:
+                continue
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    if target.id in seen:
+                        dead.add(id(seen[target.id]))
+                    seen[target.id] = statement
+    return dead
+
+
 class _Projection:
     """Bounded syntactic data flow; not a proof of all execution paths."""
 
@@ -139,7 +222,9 @@ class _Projection:
         covered: set[str],
         stack: frozenset[str],
     ) -> None:
-        self.nodes = list(ast.walk(function))
+        scoped = _own_nodes(function)
+        dead = _shadowed_assignments(scoped)
+        self.nodes = [node for node in scoped if id(node) not in dead]
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -650,3 +735,27 @@ def validate(cls, data):
 """,
         enforced,
     ) == {"labels"}
+
+
+def test_uncalled_nested_definitions_do_not_establish_coverage() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    def unused():
+        return canonicalize_json_containers(data)
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_overwritten_definitions_do_not_establish_coverage() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized = data
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}

@@ -81,6 +81,7 @@ from jacobian.math.geometry.polytopes.complexes._spline import (
     spline_dimension,
     spline_evaluate,
     spline_space,
+    spline_coordinates,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
 from jacobian.math.geometry.polytopes.values import Vertex
@@ -99,6 +100,7 @@ __all__ = [
     "spline_dimension",
     "spline_evaluate",
     "spline_space",
+    "spline_coordinates",
 ]
 
 Point = tuple[Fraction, ...]

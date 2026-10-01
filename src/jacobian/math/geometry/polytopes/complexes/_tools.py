@@ -19,6 +19,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PolytopalComplexAffineTransformResult,
     PolytopalComplexClosureRequest,
     PolytopalComplexClosureResult,
+    SplineCoordinatesRequest,
+    SplineCoordinatesResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
@@ -36,6 +38,7 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
     polytopal_complex_common_refinement,
+    spline_coordinates,
     spline_dimension,
     spline_evaluate,
     spline_space,
@@ -147,6 +150,12 @@ def _run_spline(request: Any) -> Any:
 
 def _run_spline_eval(request: SplineEvaluationRequest) -> SplineEvaluationResult:
     return spline_evaluate(request)
+
+
+def _run_spline_coordinates(
+    request: SplineCoordinatesRequest,
+) -> SplineCoordinatesResult:
+    return spline_coordinates(request)
 
 
 def _run_spline_dimension(
@@ -552,6 +561,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "status": "COMPATIBLE",
                     },
                     "point": {"coordinates": [{"num": "1", "den": "2"}]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polyhedral_complex.spline.coordinates.compute",
+        title="Express a piecewise polynomial in an exact spline basis",
+        description=(
+            "Check one supplied cellwise polynomial against the exact degree and "
+            "C^r compatibility conditions, then return its coordinates in the "
+            "canonical nullspace basis together with the source-bound spline "
+            "space. Caller continuity ledgers are recomputed from the pieces."
+        ),
+        request_type=SplineCoordinatesRequest,
+        result_type=SplineCoordinatesResult,
+        run=_run_spline_coordinates,
+        tags=("geometry", "spline", "coordinates", "exact-rational"),
+        discovery_terms=(
+            "piecewise polynomial spline basis coordinates",
+            "express function in spline space",
+            "spline membership and coordinates",
+        ),
+        examples=(
+            OperationExample(
+                name="constant_segment_spline_coordinates",
+                description="Express the constant-one function on a segment in its canonical spline basis.",
+                input={
+                    "function": {
+                        "complex": _COMPLEX,
+                        "pieces": [{"cell_id": "M0", "polynomial": _POLY}],
+                        "compatibility": [],
+                        "status": "COMPATIBLE",
+                    },
+                    "degree": 0,
+                    "smoothness": 0,
                 },
             ),
         ),

@@ -14,6 +14,7 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     spline_dimension,
     spline_evaluate,
     spline_space,
+    spline_coordinates,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "spline_dimension",
     "spline_evaluate",
     "spline_space",
+    "spline_coordinates",
 ]

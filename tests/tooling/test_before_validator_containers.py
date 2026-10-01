@@ -53,31 +53,78 @@ def test_math_before_validators_project_json_arrays_to_canonical_tuples() -> Non
     )
 
 
-def _global_type_index(root: Path) -> tuple[set[str], dict[str, set[str]]]:
-    """Every class name plus every module-level ``Name = ...`` alias source."""
-
-    classes: set[str] = set()
+def _declared_aliases(tree: ast.Module) -> dict[str, set[str]]:
     aliases: dict[str, set[str]] = {}
-    for path in sorted(root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in tree.body:
-            if isinstance(node, ast.ClassDef):
-                classes.add(node.name)
-            elif isinstance(node, ast.TypeAlias):
-                aliases.setdefault(node.name.id, set()).add(ast.unparse(node.value))
-            elif isinstance(node, ast.Assign) and node.value is not None:
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        aliases.setdefault(target.id, set()).add(
-                            ast.unparse(node.value)
-                        )
-            elif (
-                isinstance(node, ast.AnnAssign)
-                and isinstance(node.target, ast.Name)
-                and node.value is not None
-            ):
-                aliases.setdefault(node.target.id, set()).add(ast.unparse(node.value))
-    return classes, aliases
+    for node in tree.body:
+        if isinstance(node, ast.TypeAlias):
+            aliases[node.name.id] = {ast.unparse(node.value)}
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    aliases[target.id] = {ast.unparse(node.value)}
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.value is not None
+        ):
+            aliases[node.target.id] = {ast.unparse(node.value)}
+    return aliases
+
+
+def _expand_alias(
+    source: str, aliases: dict[str, set[str]], seen: frozenset[str] = frozenset()
+) -> str:
+    class Expand(ast.NodeTransformer):
+        def visit_Name(self, node: ast.Name) -> ast.expr:
+            definitions = aliases.get(node.id, set())
+            if node.id in seen or len(definitions) != 1:
+                return node
+            return ast.parse(
+                _expand_alias(next(iter(definitions)), aliases, seen | {node.id}),
+                mode="eval",
+            ).body
+
+    return ast.unparse(Expand().visit(ast.parse(source, mode="eval").body))
+
+
+def _module_aliases(
+    path: Path, root: Path, cache: dict[Path, dict[str, set[str]]]
+) -> dict[str, set[str]]:
+    """Resolve explicit imports in their source module before applying local names."""
+
+    if path in cache:
+        return cache[path]
+    cache[path] = {}
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    aliases: dict[str, set[str]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level:
+            directory = path.parent
+            for _ in range(node.level - 1):
+                directory = directory.parent
+            stem = directory.joinpath(*(node.module or "").split("."))
+        else:
+            module = node.module or ""
+            if module.startswith("jacobian.math."):
+                module = module.removeprefix("jacobian.math.")
+            stem = root.joinpath(*module.split("."))
+        imported_path = stem.with_suffix(".py")
+        if not imported_path.is_file():
+            imported_path = stem / "__init__.py"
+        if not imported_path.is_file():
+            continue
+        imported = _module_aliases(imported_path, root, cache)
+        for name in node.names:
+            if name.name in imported:
+                aliases[name.asname or name.name] = {
+                    _expand_alias(value, imported, frozenset({name.name}))
+                    for value in imported[name.name]
+                }
+    aliases.update(_declared_aliases(tree))
+    cache[path] = aliases
+    return aliases
 
 
 def _leaf_container_field(
@@ -244,6 +291,7 @@ class _Projection:
         arguments: dict[str, frozenset[str]],
         covered: set[str],
         stack: frozenset[str],
+        required_fields: frozenset[str] = frozenset(),
     ) -> None:
         scoped = _own_nodes(function)
         dead = _shadowed_assignments(scoped)
@@ -252,6 +300,7 @@ class _Projection:
         self.arguments = arguments
         self.covered = covered
         self.stack = stack
+        self.required_fields = required_fields
         self.checking_guards = False
         self.parents = {
             child: parent for parent in scoped for child in ast.iter_child_nodes(parent)
@@ -354,6 +403,11 @@ class _Projection:
         name = getattr(node.func, "id", "")
         if name in {"dict", "canonicalize_json_containers"} and node.args:
             return self.value(node.args[0], seen)
+        if name == "cast" and len(node.args) == 2:
+            return self.value(node.args[1], seen)
+        if name == "tuple" and node.args:
+            origin = self.value(node.args[0], seen)
+            return frozenset() if origin == _WHOLE else origin
         if name in self.functions and name not in self.stack:
             helper = self.functions[name]
             arguments = {
@@ -364,7 +418,12 @@ class _Projection:
             }
             helper_covered: set[str] = set()
             projection = _Projection(
-                helper, self.functions, arguments, helper_covered, self.stack | {name}
+                helper,
+                self.functions,
+                arguments,
+                helper_covered,
+                self.stack | {name},
+                self.required_fields,
             )
             result = projection.analyze()
             if helper_covered and not self.checking_guards:
@@ -480,6 +539,13 @@ class _Projection:
 
     def comparison_guard(self, test: ast.Compare, field: str) -> bool | None:
         if (
+            isinstance(test.comparators[0], ast.Constant)
+            and test.comparators[0].value is None
+            and isinstance(test.ops[0], (ast.Is, ast.IsNot))
+            and self.value(test.left) in {_WHOLE, frozenset({field})}
+        ):
+            return isinstance(test.ops[0], ast.IsNot)
+        if (
             isinstance(test.ops[0], ast.In)
             and self.keys(test.left) == frozenset({field})
             and self.value(test.comparators[0]) == _WHOLE
@@ -582,6 +648,136 @@ class _Projection:
             return self.destinations(parent, fields, seen | {id(node)})
         return set()
 
+    def refusal_guard(self, test: ast.expr) -> bool:
+        """Recognize type/shape failures that already make strict input invalid."""
+
+        if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+            return (
+                isinstance(test.operand, ast.Call)
+                and getattr(test.operand.func, "id", "") == "isinstance"
+            )
+        if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.Or):
+            return all(self.refusal_guard(value) for value in test.values)
+        if isinstance(test, ast.Compare) and len(test.ops) == 1:
+            if isinstance(test.ops[0], ast.NotIn):
+                return isinstance(test.left, ast.Constant) or (
+                    isinstance(test.left, ast.Call)
+                    and getattr(test.left.func, "id", "") == "type"
+                )
+            if (
+                isinstance(test.left, ast.Call)
+                and getattr(test.left.func, "id", "") == "len"
+            ):
+                bound = test.comparators[0]
+                if (
+                    isinstance(test.ops[0], (ast.Gt, ast.GtE))
+                    and isinstance(bound, ast.Name)
+                    and bound.id.isupper()
+                ):
+                    return True
+            return (
+                isinstance(test.ops[0], ast.IsNot)
+                and isinstance(test.left, ast.Call)
+                and getattr(test.left.func, "id", "") == "type"
+            ) or (
+                isinstance(test.ops[0], ast.Is)
+                and isinstance(test.comparators[0], ast.Constant)
+                and test.comparators[0].value is None
+            )
+        return False
+
+    def projected_return(
+        self, value: ast.expr, field: str, seen: frozenset[int] = frozenset()
+    ) -> bool:
+        if id(value) in seen:
+            return False
+        if isinstance(value, ast.Call):
+            if getattr(value.func, "id", "") == "canonicalize_json_containers":
+                return True
+            if getattr(value.func, "id", "") in {"dict", "cast"} and value.args:
+                return self.projected_return(value.args[-1], field, seen | {id(value)})
+        if isinstance(value, ast.Dict):
+            for key, item in reversed(list(zip(value.keys, value.values, strict=True))):
+                if key is not None and field in self.keys(key):
+                    return isinstance(item, ast.Call) and getattr(
+                        item.func, "id", ""
+                    ) in {"tuple", "canonicalize_json_containers"}
+                if key is None and self.projected_return(
+                    item, field, seen | {id(value)}
+                ):
+                    return True
+        if isinstance(value, ast.Name):
+            writes = [
+                node
+                for node in self.nodes
+                if isinstance(node, ast.Assign) and node.lineno < value.lineno
+            ]
+            for write in sorted(writes, key=lambda item: item.lineno, reverse=True):
+                for target in write.targets:
+                    if isinstance(target, ast.Name) and target.id == value.id:
+                        return self.projected_return(
+                            write.value, field, seen | {id(value)}
+                        )
+                    if (
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == value.id
+                        and field in self.keys(target.slice)
+                    ):
+                        return isinstance(write.value, ast.Call) and getattr(
+                            write.value.func, "id", ""
+                        ) in {"tuple", "canonicalize_json_containers"}
+        return False
+
+    def earlier_raw_return(self, node: ast.AST, field: str) -> bool:
+        for returned in self.nodes:
+            if not isinstance(returned, ast.Return) or returned.lineno >= getattr(
+                node, "lineno", 0
+            ):
+                continue
+            if returned.value is not None and self.projected_return(
+                returned.value, field
+            ):
+                continue
+            child: ast.AST = returned
+            invalid_shape = False
+            while (parent := self.parents.get(child)) is not None:
+                if isinstance(parent, ast.If):
+                    in_body = child in parent.body
+                    known = self.guard_value(parent.test, field)
+                    if known is (not in_body) or (
+                        known is None and in_body and self.refusal_guard(parent.test)
+                    ):
+                        invalid_shape = True
+                    if (
+                        not in_body
+                        and isinstance(parent.test, ast.Call)
+                        and getattr(parent.test.func, "id", "") == "isinstance"
+                    ):
+                        invalid_shape = True
+                if (
+                    isinstance(parent, ast.ExceptHandler)
+                    and getattr(parent.type, "id", "") == "TypeError"
+                ):
+                    region = self.parents.get(parent)
+                    if (
+                        isinstance(region, ast.Try)
+                        and len(region.body) == 1
+                        and isinstance(region.body[0], ast.Assign)
+                    ):
+                        call = region.body[0].value
+                        if (
+                            isinstance(call, ast.Call)
+                            and getattr(call.func, "id", "") == "iter"
+                            and call.args
+                            and self.value(call.args[0]) == frozenset({field})
+                        ):
+                            invalid_shape = True
+                child = parent
+            if not invalid_shape:
+                return True
+        return False
+
     def execution_guaranteed(self, node: ast.AST, field: str) -> bool:
         """Reject unknown branches, skippable loops and exception regions."""
 
@@ -640,8 +836,10 @@ class _Projection:
             return
         self.checking_guards = True
         try:
-            for field in fields:
-                if self.execution_guaranteed(node, field):
+            for field in self.required_fields if "*" in fields else fields:
+                if not self.earlier_raw_return(
+                    node, field
+                ) and self.execution_guaranteed(node, field):
                     self.covered.add(field)
         finally:
             self.checking_guards = False
@@ -697,6 +895,7 @@ def _uncovered_leaf_fields(
         },
         covered,
         frozenset({validator.name}),
+        frozenset(leaf_fields),
     ).analyze()
     return set() if "*" in covered else leaf_fields - covered
 
@@ -705,6 +904,7 @@ def _inherited_fields(
     model: ast.ClassDef,
     classes: dict[str, ast.ClassDef],
     seen: frozenset[str] = frozenset(),
+    contexts: dict[ast.ClassDef, dict[str, set[str]]] | None = None,
 ) -> dict[str, str]:
     """Collect known base declarations, preserving local annotation overrides."""
 
@@ -714,10 +914,20 @@ def _inherited_fields(
     for base in reversed(model.bases):
         parent = classes.get(getattr(base, "id", ""))
         if parent is not None:
-            fields.update(_inherited_fields(parent, classes, seen | {model.name}))
+            fields.update(
+                _inherited_fields(parent, classes, seen | {model.name}, contexts)
+            )
     fields.update(
         {
-            item.target.id: ast.unparse(item.annotation)
+            item.target.id: (
+                ast.unparse(item.annotation)
+                if contexts is None
+                else "tuple[object, ...]"
+                if _leaf_container_field(
+                    ast.unparse(item.annotation), set(), contexts.get(model, {})
+                )
+                else "object"
+            )
             for item in model.body
             if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
         }
@@ -761,18 +971,24 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     """
 
     source_root = Path(__file__).parents[2] / "src" / "jacobian" / "math"
-    classes, aliases = _global_type_index(source_root)
     violations: list[str] = []
     definitions: dict[str, list[ast.ClassDef]] = {}
-    for path in sorted(source_root.rglob("*.py")):
-        for definition in ast.parse(path.read_text(encoding="utf-8")).body:
+    trees = {
+        path: ast.parse(path.read_text(encoding="utf-8"))
+        for path in sorted(source_root.rglob("*.py"))
+    }
+    cache: dict[Path, dict[str, set[str]]] = {}
+    contexts: dict[ast.ClassDef, dict[str, set[str]]] = {}
+    for path, tree in trees.items():
+        module_aliases = _module_aliases(path, source_root, cache)
+        for definition in tree.body:
             if isinstance(definition, ast.ClassDef):
                 definitions.setdefault(definition.name, []).append(definition)
+                contexts[definition] = module_aliases
     unique_classes = {
         name: nodes[0] for name, nodes in definitions.items() if len(nodes) == 1
     }
-    for path in sorted(source_root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+    for path, tree in trees.items():
         known_classes = {
             **unique_classes,
             **{node.name: node for node in tree.body if isinstance(node, ast.ClassDef)},
@@ -787,11 +1003,11 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
             before = _inherited_validators(node, known_classes)
             if not before:
                 continue
-            fields = _inherited_fields(node, known_classes)
+            fields = _inherited_fields(node, known_classes, contexts=contexts)
             leaf_fields = {
                 name
                 for name, annotation in fields.items()
-                if _leaf_container_field(annotation, classes, aliases)
+                if _leaf_container_field(annotation, set(), {})
             }
             if not leaf_fields:
                 continue
@@ -1219,8 +1435,8 @@ def test_pep695_array_aliases_are_enforced(tmp_path: Path) -> None:
     (tmp_path / "models.py").write_text(
         "type Trail = tuple[str, ...]\n", encoding="utf-8"
     )
-    classes, aliases = _global_type_index(tmp_path)
-    assert _leaf_container_field("Trail", classes, aliases)
+    aliases = _module_aliases(tmp_path / "models.py", tmp_path, {})
+    assert _leaf_container_field("Trail", set(), aliases)
     assert _fixture_uncovered(
         """
 def validate(cls, data):
@@ -1242,3 +1458,63 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+def test_earlier_raw_return_cannot_be_covered_by_later_projection() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    if data.get('enabled'):
+        return data
+    return canonicalize_json_containers(data)
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_aliases_resolve_in_declaring_and_importing_modules(tmp_path: Path) -> None:
+    array_module = tmp_path / "arrays.py"
+    scalar_module = tmp_path / "scalars.py"
+    importer = tmp_path / "consumer.py"
+    array_module.write_text(
+        "type Element = str\ntype Trail = tuple[Element, ...]\n", encoding="utf-8"
+    )
+    scalar_module.write_text("type Trail = int\n", encoding="utf-8")
+    importer.write_text(
+        "from arrays import Trail as ImportedTrail\ntype Element = int\n",
+        encoding="utf-8",
+    )
+    cache: dict[Path, dict[str, set[str]]] = {}
+    assert _leaf_container_field(
+        "Trail", set(), _module_aliases(array_module, tmp_path, cache)
+    )
+    assert not _leaf_container_field(
+        "Trail", set(), _module_aliases(scalar_module, tmp_path, cache)
+    )
+    assert _module_aliases(importer, tmp_path, cache)["ImportedTrail"] == {
+        "tuple[str, ...]"
+    }
+
+
+def test_projection_before_early_return_still_covers_each_path() -> None:
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    data = canonicalize_json_containers(data)
+    if data.get('enabled'):
+        return data
+    return data
+""",
+        {"provenance"},
+    )
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    if not isinstance(data, dict):
+        return data
+    if data.get('enabled'):
+        return canonicalize_json_containers(data)
+    return canonicalize_json_containers(data)
+""",
+        {"provenance"},
+    )

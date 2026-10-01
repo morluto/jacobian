@@ -7,6 +7,16 @@ from pathlib import Path
 
 import pytest
 
+# These bounds guard against nontermination, not performance. Each child pays
+# a fresh interpreter plus the product imports it needs, and on a loaded CI
+# runner that cold start runs several times longer than a warm workstation:
+# booting ``Catalog.open()`` measures ~2.5s locally but exceeded 15s in CI, so a
+# 15s bound reported a false failure instead of a regression. Both values stay
+# under the process lane's own per-test bound so the parent still gets to report
+# the child's stderr rather than being killed by pytest-timeout.
+_CATALOG_BOOT_TIMEOUT = 90
+_MATH_IMPORT_TIMEOUT = 60
+
 
 @pytest.mark.parametrize("operation", ["stabilize", "q_reduced"])
 @pytest.mark.parametrize("surface", ["native", "dispatch"])
@@ -46,7 +56,7 @@ assert stabilize(edge, "a", (0,3)).stable == (3,0)
         [sys.executable, "-c", script, operation, surface],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=_CATALOG_BOOT_TIMEOUT,
         check=False,
         env={
             **os.environ,
@@ -97,7 +107,7 @@ assert stabilize(g, labels[0], (0,) * 50).total_firings == 0
         [sys.executable, "-c", script, operation, interrupt],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=_MATH_IMPORT_TIMEOUT,
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
@@ -186,7 +196,7 @@ for power in (1, 30, 1000):
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=_MATH_IMPORT_TIMEOUT,
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
@@ -221,7 +231,7 @@ with request_cancellation(event):
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=_MATH_IMPORT_TIMEOUT,
         check=False,
     )
     assert completed.returncode == 0, completed.stderr

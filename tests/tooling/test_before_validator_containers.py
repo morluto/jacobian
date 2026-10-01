@@ -63,6 +63,8 @@ def _global_type_index(root: Path) -> tuple[set[str], dict[str, set[str]]]:
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
                 classes.add(node.name)
+            elif isinstance(node, ast.TypeAlias):
+                aliases.setdefault(node.name.id, set()).add(ast.unparse(node.value))
             elif isinstance(node, ast.Assign) and node.value is not None:
                 for target in node.targets:
                     if isinstance(target, ast.Name):
@@ -155,11 +157,24 @@ def _own_nodes(function: ast.FunctionDef) -> list[ast.AST]:
     return scoped
 
 
+def _write_key(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return "name:" + node.id
+    if (
+        isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and isinstance(node.slice, ast.Constant)
+        and isinstance(node.slice.value, str)
+    ):
+        return "item:" + node.value.id + ":" + repr(node.slice.value)
+    return None
+
+
 def _shadowed_assignments(nodes: list[ast.AST]) -> set[int]:
     """Assignments whose write cannot reach any return.
 
-    An earlier write to a name is dead only when a later write to the same
-    name sits in the same straight-line statement list with no return, loop,
+    An earlier write to a name or literal mapping key is dead only when a
+    later write to that same location sits in the same straight-line statement list with no return, loop,
     branch, or exception boundary between them. Anything else keeps all
     writes: branches may each serve a different return, and loops may skip.
     """
@@ -198,9 +213,10 @@ def _shadowed_assignments(nodes: list[ast.AST]) -> set[int]:
                 seen.clear()
                 continue
             reads = {
-                read.id
+                _write_key(read)
                 for read in ast.walk(statement)
-                if isinstance(read, ast.Name) and isinstance(read.ctx, ast.Load)
+                if isinstance(read, (ast.Name, ast.Subscript))
+                and isinstance(read.ctx, ast.Load)
             }
             seen = {name: write for name, write in seen.items() if name not in reads}
             if isinstance(statement, ast.Assign):
@@ -210,10 +226,11 @@ def _shadowed_assignments(nodes: list[ast.AST]) -> set[int]:
             else:
                 continue
             for target in targets:
-                if isinstance(target, ast.Name):
-                    if target.id in seen:
-                        dead.add(id(seen[target.id]))
-                    seen[target.id] = statement
+                key = _write_key(target)
+                if key is not None:
+                    if key in seen:
+                        dead.add(id(seen[key]))
+                    seen[key] = statement
     return dead
 
 
@@ -1192,6 +1209,35 @@ def validate(cls, data):
     projected = canonicalize_json_containers(data['provenance'])
     if data.get('enabled'):
         data['provenance'] = projected
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_pep695_array_aliases_are_enforced(tmp_path: Path) -> None:
+    (tmp_path / "models.py").write_text(
+        "type Trail = tuple[str, ...]\n", encoding="utf-8"
+    )
+    classes, aliases = _global_type_index(tmp_path)
+    assert _leaf_container_field("Trail", classes, aliases)
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    data['old'] = canonicalize_json_containers(data['old'])
+    return data
+""",
+        {"old", "audit"},
+    ) == {"audit"}
+
+
+def test_overwritten_mapping_projection_does_not_establish_coverage() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    raw = data['provenance']
+    data['provenance'] = canonicalize_json_containers(raw)
+    data['provenance'] = raw
     return data
 """,
         {"provenance"},

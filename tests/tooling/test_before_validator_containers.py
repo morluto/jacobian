@@ -274,8 +274,42 @@ class _Projection:
             return self.call(node, seen)
         return frozenset()
 
+    def returned_nodes(self) -> set[ast.AST]:
+        """Backward slice from returned expressions and writes into their mappings."""
+
+        live = {
+            part
+            for node in self.nodes
+            if isinstance(node, ast.Return) and node.value is not None
+            for part in ast.walk(node.value)
+        }
+        while True:
+            previous = len(live)
+            names = {part.id for part in live if isinstance(part, ast.Name)}
+            for node in self.nodes:
+                if (
+                    not isinstance(node, (ast.Assign, ast.AnnAssign))
+                    or node.value is None
+                ):
+                    continue
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+                for target in targets:
+                    receiver = (
+                        target.value if isinstance(target, ast.Subscript) else target
+                    )
+                    if isinstance(receiver, ast.Name) and receiver.id in names:
+                        live.add(node)
+                        live.update(ast.walk(node.value))
+            if len(live) == previous:
+                return live
+
     def analyze(self) -> frozenset[str]:
+        live = self.returned_nodes()
         for node in self.nodes:
+            if node not in live:
+                continue
             if isinstance(node, ast.Call):
                 if (
                     getattr(node.func, "id", "") == "canonicalize_json_containers"
@@ -325,6 +359,30 @@ def _uncovered_leaf_fields(
     return set() if "*" in covered else leaf_fields - covered
 
 
+def _inherited_fields(
+    model: ast.ClassDef,
+    classes: dict[str, ast.ClassDef],
+    seen: frozenset[str] = frozenset(),
+) -> dict[str, str]:
+    """Collect known base declarations, preserving local annotation overrides."""
+
+    if model.name in seen:
+        return {}
+    fields: dict[str, str] = {}
+    for base in reversed(model.bases):
+        parent = classes.get(getattr(base, "id", ""))
+        if parent is not None:
+            fields.update(_inherited_fields(parent, classes, seen | {model.name}))
+    fields.update(
+        {
+            item.target.id: ast.unparse(item.annotation)
+            for item in model.body
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
+        }
+    )
+    return fields
+
+
 def test_before_validators_cover_every_leaf_container_field() -> None:
     """Every declared outer array needs projection, including arrays of models.
 
@@ -336,8 +394,20 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     source_root = Path(__file__).parents[2] / "src" / "jacobian" / "math"
     classes, aliases = _global_type_index(source_root)
     violations: list[str] = []
+    definitions: dict[str, list[ast.ClassDef]] = {}
+    for path in sorted(source_root.rglob("*.py")):
+        for definition in ast.parse(path.read_text(encoding="utf-8")).body:
+            if isinstance(definition, ast.ClassDef):
+                definitions.setdefault(definition.name, []).append(definition)
+    unique_classes = {
+        name: nodes[0] for name, nodes in definitions.items() if len(nodes) == 1
+    }
     for path in sorted(source_root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        known_classes = {
+            **unique_classes,
+            **{node.name: node for node in tree.body if isinstance(node, ast.ClassDef)},
+        }
         functions: dict[str, ast.FunctionDef] = {}
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
@@ -353,11 +423,7 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
             ]
             if not before:
                 continue
-            fields = {
-                item.target.id: ast.unparse(item.annotation)
-                for item in node.body
-                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
-            }
+            fields = _inherited_fields(node, known_classes)
             leaf_fields = {
                 name
                 for name, annotation in fields.items()
@@ -527,3 +593,60 @@ def test_unprojected_model_array_fails_strict_json_at_parent() -> None:
         (("children",), "tuple_type")
     ]
     assert Parent.model_validate({"children": ({"value": 1},)}).children[0].value == 1
+
+
+def test_discarded_projection_does_not_cover_returned_payload() -> None:
+    for statement in (
+        'canonicalize_json_containers(data["provenance"])',
+        'unused = canonicalize_json_containers(data["provenance"])',
+        "unused = canonicalize_json_containers(data)",
+        'copy = dict(data); copy["provenance"] = canonicalize_json_containers(data["provenance"])',
+    ):
+        assert _fixture_uncovered(
+            f"""
+def validate(cls, data):
+    {statement}
+    return data
+""",
+            {"provenance"},
+        ) == {"provenance"}
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    projected = canonicalize_json_containers(data['provenance'])
+    data['provenance'] = projected
+    return data
+""",
+        {"provenance"},
+    )
+
+
+def test_inherited_fields_and_local_overrides() -> None:
+    tree = ast.parse("""
+class Base:
+    labels: tuple[str, ...]
+    replaced: tuple[int, ...]
+class Derived(Base):
+    replaced: int
+    own: tuple[int, ...]
+""")
+    classes = {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+    fields = _inherited_fields(classes["Derived"], classes)
+    assert fields == {
+        "labels": "tuple[str, ...]",
+        "replaced": "int",
+        "own": "tuple[int, ...]",
+    }
+    enforced = {
+        name
+        for name, annotation in fields.items()
+        if _leaf_container_field(annotation, set(classes), {})
+    }
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    data['own'] = canonicalize_json_containers(data['own'])
+    return data
+""",
+        enforced,
+    ) == {"labels"}

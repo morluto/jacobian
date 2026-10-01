@@ -88,6 +88,42 @@ def _expand_alias(
     return ast.unparse(Expand().visit(ast.parse(source, mode="eval").body))
 
 
+def _resolved_annotation(source: str, aliases: dict[str, set[str]]) -> ast.expr:
+    """One expanded annotation grammar for field ownership and array depth."""
+
+    class Normalize(ast.NodeTransformer):
+        def __init__(self) -> None:
+            self.quoted: set[str] = set()
+
+        def visit_Constant(self, node: ast.Constant) -> ast.AST:
+            if not isinstance(node.value, str) or node.value in self.quoted:
+                return node
+            self.quoted.add(node.value)
+            try:
+                parsed = ast.parse(_expand_alias(node.value, aliases), mode="eval").body
+            except SyntaxError:
+                return node
+            result = self.visit(parsed)
+            assert isinstance(result, ast.AST)
+            self.quoted.remove(node.value)
+            return result
+
+        def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
+            self.generic_visit(node)
+            name = getattr(node.value, "id", getattr(node.value, "attr", ""))
+            if name.lower() in {"tuple", "list", "sequence", "set", "frozenset"}:
+                node.value = ast.Name(id=name.lower(), ctx=ast.Load())
+            elif name in {"Annotated", "Optional", "Union"}:
+                node.value = ast.Name(id=name, ctx=ast.Load())
+            return node
+
+    result = Normalize().visit(
+        ast.parse(_expand_alias(source, aliases), mode="eval").body
+    )
+    assert isinstance(result, ast.expr)
+    return result
+
+
 def _import_path(node: ast.ImportFrom, path: Path, root: Path) -> Path | None:
     if node.level:
         directory = path.parent
@@ -221,7 +257,7 @@ def _leaf_container_field(
                 return any(visit(part, seen) for part in parts)
         return False
 
-    return visit(ast.parse(source, mode="eval").body, frozenset())
+    return visit(_resolved_annotation(source, aliases), frozenset())
 
 
 _WHOLE = frozenset({"*"})
@@ -340,6 +376,50 @@ def _shadowed_assignments(nodes: list[ast.AST]) -> set[int]:
     return dead
 
 
+def _target_values(
+    target: ast.expr, value: ast.expr | None
+) -> list[tuple[ast.expr, ast.expr | None]]:
+    if isinstance(target, (ast.Tuple, ast.List)):
+        if any(isinstance(child, ast.Starred) for child in target.elts):
+            return [
+                pair for child in target.elts for pair in _target_values(child, None)
+            ]
+        matched = isinstance(value, (ast.Tuple, ast.List)) and len(target.elts) == len(
+            value.elts
+        )
+        pairs: list[tuple[ast.expr, ast.expr | None]] = []
+        for index, child in enumerate(target.elts):
+            item = (
+                value.elts[index]
+                if matched and isinstance(value, (ast.Tuple, ast.List))
+                else ast.copy_location(
+                    ast.Subscript(
+                        value=value, slice=ast.Constant(index), ctx=ast.Load()
+                    ),
+                    value,
+                )
+                if value is not None
+                else None
+            )
+            pairs.extend(_target_values(child, item))
+        return pairs
+    if isinstance(target, ast.Starred):
+        return _target_values(target.value, None)
+    return [(target, value)]
+
+
+def _assignment_pairs(node: ast.AST) -> list[tuple[ast.expr, ast.expr | None]]:
+    if isinstance(node, ast.Assign):
+        return [
+            pair
+            for target in node.targets
+            for pair in _target_values(target, node.value)
+        ]
+    if isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+        return _target_values(node.target, node.value)
+    return []
+
+
 @dataclass
 class _ModelShape:
     types: dict[str, frozenset[str]] = field(default_factory=dict)
@@ -381,15 +461,30 @@ def _json_shapes(
     )
 
     def annotation(node: ast.expr, path: str, seen: frozenset[str]) -> frozenset[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return annotation(ast.parse(node.value, mode="eval").body, path, seen)
         if isinstance(node, ast.Subscript):
-            name = getattr(node.value, "id", "")
+            name = getattr(node.value, "id", getattr(node.value, "attr", ""))
             parts = (
                 node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
             )
             if name == "Annotated":
                 return annotation(parts[0], path, seen)
-            if name in {"tuple", "list", "Sequence", "set", "frozenset"}:
-                shapes.types[path + "[]"] = annotation(parts[0], path + "[]", seen)
+            if name.lower() in {"tuple", "list", "sequence", "set", "frozenset"}:
+                elements = (
+                    [
+                        part
+                        for part in parts
+                        if not (
+                            isinstance(part, ast.Constant) and part.value is Ellipsis
+                        )
+                    ]
+                    if name.lower() == "tuple"
+                    else parts[:1]
+                )
+                shapes.types[path + "[]"] = frozenset().union(
+                    *(annotation(part, path + "[]", seen) for part in elements)
+                )
                 return frozenset({"list"})
             if name in {"Union", "Optional"}:
                 result = frozenset().union(
@@ -420,9 +515,8 @@ def _json_shapes(
         aliases = contexts.get(owner, {})
         shapes.max_lengths.update(_declared_max_lengths(owner, prefix))
         for name, source in _inherited_fields(owner, classes).items():
-            expanded = _expand_alias(source, aliases)
             shapes.types[prefix + name] = annotation(
-                ast.parse(expanded, mode="eval").body, prefix + name, seen
+                _resolved_annotation(source, aliases), prefix + name, seen
             )
 
     visit(model, "", frozenset({model.name}))
@@ -445,6 +539,12 @@ class _Projection:
         scoped = _own_nodes(function)
         dead = _shadowed_assignments(scoped)
         self.nodes = [node for node in scoped if id(node) not in dead]
+        self.write_bindings = [
+            (node, target, value)
+            for node in self.nodes
+            if not isinstance(node, ast.AugAssign)
+            for target, value in _assignment_pairs(node)
+        ]
         self.functions = functions
         self.arguments = arguments
         self.covered = covered
@@ -481,24 +581,37 @@ class _Projection:
             )
         return frozenset()
 
-    def binding(self, node: ast.Name, seen: frozenset[str]) -> frozenset[str]:
+    def name_binding(self, node: ast.Name) -> tuple[ast.AST | None, ast.expr | None]:
         bindings = [
-            part.value
-            for part in self.nodes
-            if isinstance(part, (ast.Assign, ast.AnnAssign))
-            and part.value is not None
-            and (part.value.end_lineno or part.lineno, part.value.end_col_offset or 0)
-            < (node.lineno, node.col_offset)
-            and any(
-                isinstance(target, ast.Name) and target.id == node.id
-                for target in (
-                    part.targets if isinstance(part, ast.Assign) else [part.target]
-                )
+            (statement, value)
+            for statement, target, value in self.write_bindings
+            if isinstance(target, ast.Name)
+            and target.id == node.id
+            and (
+                getattr(statement, "end_lineno", 0),
+                getattr(statement, "end_col_offset", 0),
             )
+            < (node.lineno, node.col_offset)
         ]
-        if bindings:
-            return self.value(
-                max(bindings, key=lambda item: item.lineno), seen | {node.id}
+        return (
+            max(
+                bindings,
+                key=lambda item: (
+                    getattr(item[0], "lineno", 0),
+                    getattr(item[0], "col_offset", 0),
+                ),
+            )
+            if bindings
+            else (None, None)
+        )
+
+    def binding(self, node: ast.Name, seen: frozenset[str]) -> frozenset[str]:
+        statement, value = self.name_binding(node)
+        if statement is not None:
+            return (
+                self.value(value, seen | {node.id})
+                if value is not None
+                else frozenset()
             )
         return self.arguments.get(node.id, frozenset())
 
@@ -613,11 +726,55 @@ class _Projection:
             self.origin_cache[node] = result
         return result
 
+    def sequence_element(
+        self, value: ast.expr, index: int, seen: frozenset[str]
+    ) -> frozenset[str]:
+        if isinstance(value, (ast.Tuple, ast.List)) and 0 <= index < len(value.elts):
+            return self.value(value.elts[index], seen)
+        if isinstance(value, ast.Name):
+            _, bound = self.name_binding(value)
+            return (
+                self.sequence_element(bound, index, seen | {value.id})
+                if bound is not None and value.id not in seen
+                else frozenset()
+            )
+        if not isinstance(value, ast.Call):
+            return frozenset()
+        name = getattr(value.func, "id", "")
+        if name not in self.functions or name in self.stack:
+            return frozenset()
+        helper = self.functions[name]
+        projection = _Projection(
+            helper,
+            self.functions,
+            {
+                parameter.arg: self.value(argument, seen)
+                for parameter, argument in zip(
+                    helper.args.args, value.args, strict=False
+                )
+            },
+            set(),
+            self.stack | {name},
+            self.required_fields,
+            self.shapes,
+        )
+        returned = [
+            projection.sequence_element(node.value, index, frozenset())
+            for node in projection.nodes
+            if isinstance(node, ast.Return) and node.value is not None
+        ]
+        return frozenset.intersection(*returned) if returned else frozenset()
+
     def _value(self, node: ast.expr, seen: frozenset[str]) -> frozenset[str]:
         if isinstance(node, ast.Name):
             return self.binding(node, seen)
-        if isinstance(node, ast.Subscript) and self.value(node.value, seen) == _WHOLE:
-            return self.keys(node.slice)
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.Constant) and isinstance(
+                node.slice.value, int
+            ):
+                return self.sequence_element(node.value, node.slice.value, seen)
+            if self.value(node.value, seen) == _WHOLE:
+                return self.keys(node.slice)
         if isinstance(node, ast.Dict):
             result: set[str] = set()
             for key, item in zip(node.keys, node.values, strict=True):
@@ -649,10 +806,14 @@ class _Projection:
                     or node.value is None
                 ):
                     continue
-                targets = (
-                    node.targets if isinstance(node, ast.Assign) else [node.target]
-                )
-                for target in targets:
+                for target, assigned in _assignment_pairs(node):
+                    if (
+                        isinstance(target, ast.Name)
+                        and isinstance(assigned, ast.Name)
+                        and assigned.id in names
+                    ):
+                        live.add(target)
+                        live.add(node)
                     receiver = (
                         target.value if isinstance(target, ast.Subscript) else target
                     )
@@ -844,9 +1005,12 @@ class _Projection:
             isinstance(test.comparators[0], ast.Constant)
             and test.comparators[0].value is None
             and isinstance(test.ops[0], (ast.Is, ast.IsNot))
-            and self.value(test.left) in {_WHOLE, frozenset({field})}
         ):
-            return isinstance(test.ops[0], ast.IsNot)
+            expected = self.declared_types(test.left, field)
+            if (expected and "NoneType" not in expected) or self.field_refusal_source(
+                test.left, field
+            ):
+                return isinstance(test.ops[0], ast.IsNot)
         if (
             isinstance(test.ops[0], (ast.In, ast.NotIn))
             and self.keys(test.left) == frozenset({field})
@@ -1018,16 +1182,38 @@ class _Projection:
                 )
         return self.destinations(parent, remaining, seen | {id(node)})
 
-    def refusal_guard(self, test: ast.expr, field: str) -> bool:
-        """Only a proved mismatch with declared valid JSON shapes is a refusal."""
+    def field_refusal_source(
+        self, value: ast.expr, field: str, seen: frozenset[int] = frozenset()
+    ) -> bool:
+        if id(value) in seen:
+            return False
+        seen = seen | {id(value)}
+        origin = self.shape_origin(value)
+        if origin == field or (
+            origin is not None and origin.startswith((field + "[]", field + "."))
+        ):
+            return True
+        if isinstance(value, ast.Name):
+            _, bound = self.name_binding(value)
+            return bound is not None and self.field_refusal_source(bound, field, seen)
+        if isinstance(value, ast.Call):
+            helper = self.functions.get(getattr(value.func, "id", ""))
+            if (
+                helper is None
+                or helper.returns is None
+                or "None" not in ast.unparse(helper.returns)
+            ):
+                return False
+            return any(
+                self.field_refusal_source(argument, field, seen)
+                for argument in value.args
+            )
+        return False
 
-        return self.guard_value(test, field) is False or (
-            isinstance(test, ast.Compare)
-            and len(test.ops) == 1
-            and isinstance(test.ops[0], ast.Is)
-            and isinstance(test.comparators[0], ast.Constant)
-            and test.comparators[0].value is None
-        )
+    def refusal_guard(self, test: ast.expr, field: str) -> bool:
+        """Only declared or field-derived shape refusals exempt a raw return."""
+
+        return self.guard_value(test, field) is False
 
     def projected_subscript(
         self, value: ast.Subscript, field: str, seen: frozenset[int]
@@ -1535,18 +1721,16 @@ class _Projection:
         )
 
     def augmented_mutates(self, write: ast.AugAssign, field: str) -> bool:
-        if isinstance(write.target, ast.Name) and self.value(write.target) == _WHOLE:
+        target, assigned = _assignment_pairs(write)[0]
+        assert assigned is not None
+        if isinstance(target, ast.Name) and self.value(target) == _WHOLE:
             return not isinstance(write.op, ast.BitOr) or self.mapping_update_mutates(
-                write.value, field
+                assigned, field
             )
-        if (
-            isinstance(write.target, ast.Subscript)
-            and self.value(write.target.value) == _WHOLE
-        ):
+        if isinstance(target, ast.Subscript) and self.value(target.value) == _WHOLE:
             return (
-                not self.keys(write.target.slice)
-                or field in self.keys(write.target.slice)
-            ) and not self.projected_return(write.value, field)
+                not self.keys(target.slice) or field in self.keys(target.slice)
+            ) and not self.projected_return(assigned, field)
         return False
 
     def mutates_field(self, call: ast.Call, field: str) -> bool:
@@ -1560,20 +1744,11 @@ class _Projection:
     ) -> ast.expr:
         if not isinstance(value, ast.Name) or value.id in seen:
             return value
-        bindings = [
-            node.value
-            for node in self.nodes
-            if isinstance(node, ast.Assign)
-            and node.lineno < value.lineno
-            and any(
-                isinstance(target, ast.Name) and target.id == value.id
-                for target in node.targets
-            )
-        ]
-        if not bindings:
-            return value
-        return self.callable_expression(
-            max(bindings, key=lambda item: item.lineno), seen | {value.id}
+        _, bound = self.name_binding(value)
+        return (
+            self.callable_expression(bound, seen | {value.id})
+            if bound is not None
+            else value
         )
 
     def _mutates_field(self, call: ast.Call, field: str) -> bool:
@@ -1655,8 +1830,7 @@ class _Projection:
                 continue
             if (write.lineno, write.col_offset) <= location:
                 continue
-            targets = write.targets if isinstance(write, ast.Assign) else [write.target]
-            for target in targets:
+            for target, assigned in _assignment_pairs(write):
                 affected = (
                     isinstance(target, ast.Subscript)
                     and self.value(target.value) == _WHOLE
@@ -1675,7 +1849,9 @@ class _Projection:
                         for read in self.nodes
                     )
                 )
-                if affected and not self.projected_return(write.value, field):
+                if affected and (
+                    assigned is None or not self.projected_return(assigned, field)
+                ):
                     return True
         return False
 
@@ -2865,3 +3041,176 @@ def validate(cls, data):
 """,
             {"provenance"},
         )
+
+
+def test_unrelated_none_guard_does_not_exempt_raw_return() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    if data.get('enabled') is None:
+        return data
+    return canonicalize_json_containers(data)
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_qualified_nested_arrays_require_deep_projection() -> None:
+    tree = ast.parse("""
+class Model(StrictModel):
+    matrix: typing.Tuple[typing.Tuple[int, ...], ...]
+""")
+    model = tree.body[0]
+    assert isinstance(model, ast.ClassDef)
+    shapes = _json_shapes(model, {"Model": model}, {})
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    data['matrix'] = tuple(data['matrix'])
+    return data
+""",
+        {"matrix"},
+        shapes,
+    ) == {"matrix"}
+
+
+def test_destructuring_overwrites_invalidate_projection() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, ignored = data, None
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_nested_destructuring_and_destructured_aliases_invalidate() -> None:
+    for operation in (
+        "[normalized, [ignored]] = [data, [None]]",
+        "normalized['provenance'], ignored = data['provenance'], None",
+        "alias, ignored = normalized, None\n    alias.update({'provenance': data['provenance']})",
+        "write, ignored = normalized.update, None\n    write({'provenance': data['provenance']})",
+        "normalized, ignored = unknown(data)",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    {operation}
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_payload_element_from_helper_tuple_reaches_projection() -> None:
+    assert not _fixture_uncovered(
+        """
+def preflight(data):
+    payload = dict(data)
+    return payload, 0
+def validate(cls, data):
+    data, count = preflight(data)
+    return canonicalize_json_containers(data)
+""",
+        {"provenance"},
+    )
+
+
+def test_nested_annotation_wrappers_preserve_required_depth() -> None:
+    for annotation in (
+        "typing.Annotated[typing.Tuple[int, typing.Tuple[int, ...]], marker]",
+        "typing.Optional[typing.Tuple[typing.Tuple[int, ...], ...]]",
+        'typing.Tuple["typing.Tuple[int, ...]", ...]',
+    ):
+        model = ast.parse(
+            f"class Model(StrictModel):\n    matrix: {annotation}\n"
+        ).body[0]
+        assert isinstance(model, ast.ClassDef)
+        assert _fixture_uncovered(
+            """
+def validate(cls, data):
+    data['matrix'] = tuple(data['matrix'])
+    return data
+""",
+            {"matrix"},
+            _json_shapes(model, {"Model": model}, {}),
+        ) == {"matrix"}
+
+
+def test_none_refusal_requires_field_dependency() -> None:
+    assert not _fixture_uncovered(
+        """
+def validate(cls, data):
+    if data['provenance'] is None:
+        return data
+    return canonicalize_json_containers(data)
+""",
+        {"provenance"},
+    )
+    assert _fixture_uncovered(
+        """
+def optional_result(data) -> tuple | None:
+    return None if data.get('enabled') is None else ()
+def validate(cls, data):
+    result = optional_result(data)
+    if result is None:
+        return data
+    return canonicalize_json_containers(data)
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_annotation_and_projection_form_matrix() -> None:
+    annotations = (
+        ("", "tuple[tuple[int, ...], ...]"),
+        ("", "typing.Tuple[typing.Tuple[int, ...], ...]"),
+        ("", "t.Annotated[t.Optional[t.Tuple[t.Tuple[int, ...], ...]], marker]"),
+        ("Rows = typing.Tuple[int, ...]\nMatrix = typing.Tuple[Rows, ...]\n", "Matrix"),
+        ("Rows = tuple[int, ...]\n", '"typing.Tuple[Rows, ...]"'),
+        ("type Rows = typing.Tuple[int, ...]\n", "typing.Tuple[Rows, ...]"),
+    )
+    forms: tuple[tuple[str, set[str]], ...] = (
+        ("return canonicalize_json_containers(data)", set()),
+        ("data['matrix'] = tuple(data['matrix'])\n    return data", {"matrix"}),
+        (
+            "normalized = canonicalize_json_containers(data)\n    if data.get('enabled') is None:\n        return data\n    return normalized",
+            {"matrix"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    normalized, ignored = data, None\n    return normalized",
+            {"matrix"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    normalized |= {'matrix': data['matrix']}\n    return normalized",
+            {"matrix"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    normalized.update({'matrix': data['matrix']})\n    return normalized",
+            {"matrix"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    alias, ignored = normalized, None\n    alias['matrix'] = data['matrix']\n    return normalized",
+            {"matrix"},
+        ),
+    )
+    for prefix, annotation in annotations:
+        tree = ast.parse(
+            f"{prefix}class Model(StrictModel):\n    matrix: {annotation}\n"
+        )
+        model = tree.body[-1]
+        assert isinstance(model, ast.ClassDef)
+        aliases = _declared_aliases(tree)
+        assert _leaf_container_field(annotation, set(), aliases)
+        shapes = _json_shapes(model, {"Model": model}, {model: aliases})
+        assert "list" in shapes.types["matrix[]"]
+        for body, expected in forms:
+            assert (
+                _fixture_uncovered(
+                    f"def validate(cls, data):\n    {body}\n", {"matrix"}, shapes
+                )
+                == expected
+            ), (annotation, body)

@@ -1215,6 +1215,28 @@ class _Projection:
 
         return self.guard_value(test, field) is False
 
+    def guaranteed_bindings(
+        self, value: ast.expr, field: str, seen: frozenset[int] = frozenset()
+    ) -> bool:
+        """Do not infer projection from an assignment on an optional path."""
+
+        if id(value) in seen:
+            return False
+        seen = seen | {id(value)}
+        if isinstance(value, ast.Name) and isinstance(value.ctx, ast.Load):
+            statement, bound = self.name_binding(value)
+            if statement is not None:
+                return (
+                    bound is not None
+                    and self.execution_guaranteed(statement, field)
+                    and self.guaranteed_bindings(bound, field, seen)
+                )
+        return all(
+            self.guaranteed_bindings(child, field, seen)
+            for child in ast.iter_child_nodes(value)
+            if isinstance(child, ast.expr)
+        )
+
     def projected_sequence_element(
         self, value: ast.expr, index: int, field: str, seen: frozenset[int]
     ) -> bool:
@@ -1222,13 +1244,18 @@ class _Projection:
             return False
         seen = seen | {id(value)}
         if isinstance(value, (ast.Tuple, ast.List)):
-            return 0 <= index < len(value.elts) and self.projected_return(
-                value.elts[index], field, seen
+            return (
+                0 <= index < len(value.elts)
+                and self.guaranteed_bindings(value.elts[index], field)
+                and self.projected_return(value.elts[index], field, seen)
             )
         if isinstance(value, ast.Name):
-            _, bound = self.name_binding(value)
-            return bound is not None and self.projected_sequence_element(
-                bound, index, field, seen
+            statement, bound = self.name_binding(value)
+            return (
+                statement is not None
+                and bound is not None
+                and self.execution_guaranteed(statement, field)
+                and self.projected_sequence_element(bound, index, field, seen)
             )
         if not isinstance(value, ast.Call):
             return False
@@ -1266,7 +1293,8 @@ class _Projection:
         projection.canonical_arguments = {
             parameter
             for parameter, argument in arguments.items()
-            if self.projected_return(argument, field, seen)
+            if self.guaranteed_bindings(argument, field)
+            and self.projected_return(argument, field, seen)
         }
         if projection.mutated_after(helper, field) or projection.overwritten_after(
             helper, field
@@ -3364,3 +3392,75 @@ def validate(cls, data):
 """,
         {"provenance"},
     )
+
+
+def test_conditionally_rebound_helper_tuple_is_not_projection_proof() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (raw, 0)
+    if raw.get('enabled'):
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_helper_element_aliases_require_guaranteed_bindings() -> None:
+    for returned in ("slot, 0", "dict(slot), 0"):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    slot = raw
+    if raw.get('enabled'):
+        slot = payload
+    return {returned}
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_guaranteed_helper_tuple_rebindings_preserve_projection() -> None:
+    for assignment in (
+        "result = (payload, 0)",
+        "if isinstance(payload, dict):\n        result = (payload, 0)",
+    ):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = (raw, 0)
+    {assignment}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        )
+
+
+def test_conditional_raw_helper_tuple_remains_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (payload, 0)
+    if raw.get('enabled'):
+        result = (raw, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}

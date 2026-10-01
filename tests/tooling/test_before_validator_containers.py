@@ -1215,9 +1215,84 @@ class _Projection:
 
         return self.guard_value(test, field) is False
 
+    def projected_sequence_element(
+        self, value: ast.expr, index: int, field: str, seen: frozenset[int]
+    ) -> bool:
+        if id(value) in seen:
+            return False
+        seen = seen | {id(value)}
+        if isinstance(value, (ast.Tuple, ast.List)):
+            return 0 <= index < len(value.elts) and self.projected_return(
+                value.elts[index], field, seen
+            )
+        if isinstance(value, ast.Name):
+            _, bound = self.name_binding(value)
+            return bound is not None and self.projected_sequence_element(
+                bound, index, field, seen
+            )
+        if not isinstance(value, ast.Call):
+            return False
+        name = getattr(value.func, "id", "")
+        if (
+            name not in self.functions
+            or name in self.stack
+            or any(keyword.arg is None for keyword in value.keywords)
+        ):
+            return False
+        helper = self.functions[name]
+        arguments = {
+            parameter.arg: argument
+            for parameter, argument in zip(helper.args.args, value.args, strict=False)
+        }
+        arguments.update(
+            {
+                keyword.arg: keyword.value
+                for keyword in value.keywords
+                if keyword.arg is not None
+            }
+        )
+        projection = _Projection(
+            helper,
+            self.functions,
+            {
+                parameter: self.value(argument)
+                for parameter, argument in arguments.items()
+            },
+            set(),
+            self.stack | {name},
+            self.required_fields,
+            self.shapes,
+        )
+        projection.canonical_arguments = {
+            parameter
+            for parameter, argument in arguments.items()
+            if self.projected_return(argument, field, seen)
+        }
+        if projection.mutated_after(helper, field) or projection.overwritten_after(
+            helper, field
+        ):
+            return False
+        returned = [
+            node
+            for node in projection.nodes
+            if isinstance(node, ast.Return)
+            and not projection.impossible_path(node, field)
+        ]
+        return bool(returned) and all(
+            node.value is not None
+            and projection.projected_sequence_element(
+                node.value, index, field, frozenset()
+            )
+            for node in returned
+        )
+
     def projected_subscript(
         self, value: ast.Subscript, field: str, seen: frozenset[int]
     ) -> bool:
+        if isinstance(value.slice, ast.Constant) and isinstance(value.slice.value, int):
+            return self.projected_sequence_element(
+                value.value, value.slice.value, field, seen
+            )
         writes = [
             node
             for node in self.nodes
@@ -3214,3 +3289,78 @@ def test_annotation_and_projection_form_matrix() -> None:
                 )
                 == expected
             ), (annotation, body)
+
+
+def test_projected_payload_survives_helper_tuple_destructuring() -> None:
+    assert not _fixture_uncovered(
+        """
+def pair(payload):
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized)
+    return normalized
+""",
+        {"provenance"},
+    )
+
+
+def test_helper_element_projection_follows_the_selected_slot() -> None:
+    for returned in ("payload, raw", "[payload, raw]"):
+        assert not _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = {returned}
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized, raw=data)
+    return normalized
+""",
+            {"provenance"},
+        )
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    return raw, payload
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_helper_element_projection_rejects_mutations_and_raw_paths() -> None:
+    for helper in (
+        "def pair(payload, raw):\n    payload.update({'provenance': raw['provenance']})\n    return payload, 0",
+        "def pair(payload, raw):\n    if raw.get('enabled'):\n        return raw, 0\n    return payload, 0",
+        "def pair(payload, raw):\n    return unknown(payload), 0",
+    ):
+        assert _fixture_uncovered(
+            f"""
+{helper}
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_helper_element_projection_accepts_canonical_return_paths() -> None:
+    assert not _fixture_uncovered(
+        """
+def pair(payload):
+    if payload.get('enabled'):
+        return dict(payload), 1
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, metadata = pair(normalized)
+    return normalized
+""",
+        {"provenance"},
+    )

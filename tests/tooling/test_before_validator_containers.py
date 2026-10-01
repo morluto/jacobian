@@ -564,6 +564,10 @@ class _Projection:
                     self.unmodeled_bindings.add(node.name)
             elif isinstance(node, ast.MatchMapping) and node.rest is not None:
                 self.unmodeled_bindings.add(node.rest)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                self.unmodeled_bindings.update(
+                    alias.asname or alias.name.split(".")[0] for alias in node.names
+                )
             self.unmodeled_bindings.update(
                 part.id
                 for target in targets
@@ -1319,8 +1323,8 @@ class _Projection:
                     return True
                 if (
                     isinstance(target, ast.Name)
-                    and isinstance(assigned, ast.Name)
-                    and assigned.id in aliases
+                    and assigned is not None
+                    and self.sequence_reference(assigned, aliases)
                 ):
                     aliases.add(target.id)
                 if (
@@ -1417,6 +1421,15 @@ class _Projection:
         ):
             return False
         helper = self.functions[name]
+        if any(
+            node is not helper
+            and isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+            )
+            for node in ast.walk(helper)
+        ):
+            # Closure effects are outside this bounded helper analysis.
+            return False
         arguments = {
             parameter.arg: argument
             for parameter, argument in zip(
@@ -1888,7 +1901,11 @@ class _Projection:
                     return False
             elif isinstance(parent, ast.For):
                 if child in parent.body and not (
-                    isinstance(parent.iter, (ast.Tuple, ast.List)) and parent.iter.elts
+                    isinstance(parent.iter, (ast.Tuple, ast.List))
+                    and any(
+                        not isinstance(element, ast.Starred)
+                        for element in parent.iter.elts
+                    )
                 ):
                     return False
                 if child in parent.orelse or self.loop_can_skip(parent, node, field):
@@ -3841,3 +3858,74 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+def test_compound_sequence_alias_mutations_are_rejected() -> None:
+    for alias in ("result or []", "result if raw else []"):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    result = [payload, 0]
+    alias = {alias}
+    alias[0] = raw
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_captured_helper_mutation_is_rejected() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    def mutate():
+        payload['provenance'] = raw['provenance']
+    mutate()
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_starred_empty_loop_does_not_guarantee_binding() -> None:
+    assert _fixture_uncovered(
+        """
+def pair(payload, raw):
+    result = (raw, 0)
+    for unused in [*[]]:
+        result = (payload, 0)
+    return result
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_import_rebindings_invalidate_canonical_parameters() -> None:
+    for statement in (
+        "from elsewhere import raw_payload as payload",
+        "import elsewhere as payload",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def pair(payload, raw):
+    {statement}
+    return payload, 0
+def validate(cls, data):
+    normalized = canonicalize_json_containers(data)
+    normalized, count = pair(normalized, data)
+    return normalized
+""",
+            {"provenance"},
+        ) == {"provenance"}

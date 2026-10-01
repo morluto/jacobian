@@ -455,6 +455,8 @@ class _Projection:
         self.origin_cache: dict[ast.expr, frozenset[str]] = {}
         self.projection_cache: dict[tuple[ast.expr, str], bool] = {}
         self.path_cache: dict[tuple[ast.AST, str], bool] = {}
+        self.effect_cache: dict[tuple[ast.Call, str], bool] = {}
+        self.canonical_arguments: set[str] = set()
         self.checking_guards = False
         self.return_filter: ast.Return | None = None
         self.parents = {
@@ -1107,6 +1109,11 @@ class _Projection:
         if id(value) in seen:
             return 0
         seen = seen | {id(value)}
+        if isinstance(value, ast.IfExp):
+            return min(
+                self.tuple_depth(value.body, field, seen),
+                self.tuple_depth(value.orelse, field, seen),
+            )
         if isinstance(value, ast.Tuple):
             return (
                 100
@@ -1127,11 +1134,23 @@ class _Projection:
                 return max(0, self.tuple_depth(value.func.value, field, seen) - 1)
             if name == "tuple" and value.args:
                 return 1 + self.element_depth(value.args[0], field, seen)
+            if value.args and self.normalizes_outer_array(name):
+                return max(1, self.tuple_depth(value.args[0], field, seen))
         return 0
 
     def name_tuple_depth(
         self, value: ast.Name, field: str, seen: frozenset[int]
     ) -> int:
+        ancestor: ast.AST = value
+        while (parent := self.parents.get(ancestor)) is not None:
+            if isinstance(parent, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
+                for generator in parent.generators:
+                    if (
+                        isinstance(generator.target, ast.Name)
+                        and generator.target.id == value.id
+                    ):
+                        return max(0, self.tuple_depth(generator.iter, field, seen) - 1)
+            ancestor = parent
         for part in sorted(
             self.nodes, key=lambda part: getattr(part, "lineno", 0), reverse=True
         ):
@@ -1158,7 +1177,7 @@ class _Projection:
                 and part.lineno < value.lineno <= (part.end_lineno or part.lineno)
             ):
                 return max(0, self.tuple_depth(part.iter, field, seen) - 1)
-        return 0
+        return 100 if value.id in self.canonical_arguments else 0
 
     def element_depth(self, value: ast.expr, field: str, seen: frozenset[int]) -> int:
         if isinstance(value, (ast.GeneratorExp, ast.SetComp, ast.ListComp)):
@@ -1288,7 +1307,7 @@ class _Projection:
                         return self.projected_return(
                             write.value, field, seen | {id(value)}
                         )
-        return False
+        return isinstance(value, ast.Name) and value.id in self.canonical_arguments
 
     def block_exits(self, statements: list[ast.stmt], field: str) -> bool:
         for statement in statements:
@@ -1441,12 +1460,131 @@ class _Projection:
             child = parent
         return True
 
+    def helper_mutates(self, call: ast.Call, field: str) -> bool:
+        arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
+        if not any(self.value(argument) == _WHOLE for argument in arguments):
+            return False
+        name = getattr(call.func, "id", "")
+        if name in {
+            "canonicalize_json_containers",
+            "dict",
+            "tuple",
+            "cast",
+            "isinstance",
+            "type",
+            "len",
+            "bool",
+            "set",
+            "frozenset",
+            "list",
+            "sorted",
+            "iter",
+            "all",
+            "any",
+            "str",
+            "repr",
+            "min",
+            "max",
+        }:
+            return False
+        if (
+            isinstance(call.func, ast.Attribute)
+            and call.func.attr == "model_validate"
+            and getattr(call.func.value, "id", "") in self.shapes.model_names
+        ):
+            return False
+        if name not in self.functions or name in self.stack:
+            return True
+        if any(keyword.arg is None for keyword in call.keywords):
+            return True
+        helper = self.functions[name]
+        bound = {
+            parameter.arg: self.value(argument)
+            for parameter, argument in zip(helper.args.args, call.args, strict=False)
+        }
+        bound.update(
+            {
+                keyword.arg: self.value(keyword.value)
+                for keyword in call.keywords
+                if keyword.arg is not None
+            }
+        )
+        projection = _Projection(
+            helper,
+            self.functions,
+            bound,
+            set(),
+            self.stack | {name},
+            self.required_fields,
+            self.shapes,
+        )
+        projection.canonical_arguments = {
+            name for name, origin in bound.items() if origin == _WHOLE
+        }
+        return projection.mutated_after(helper, field) or projection.overwritten_after(
+            helper, field
+        )
+
+    def mapping_update_mutates(self, value: ast.expr, field: str) -> bool:
+        if not isinstance(value, ast.Dict):
+            return True
+        return any(
+            (key is None or not self.keys(key) or field in self.keys(key))
+            and not self.projected_return(item, field)
+            for key, item in zip(value.keys, value.values, strict=True)
+        )
+
+    def augmented_mutates(self, write: ast.AugAssign, field: str) -> bool:
+        if isinstance(write.target, ast.Name) and self.value(write.target) == _WHOLE:
+            return not isinstance(write.op, ast.BitOr) or self.mapping_update_mutates(
+                write.value, field
+            )
+        if (
+            isinstance(write.target, ast.Subscript)
+            and self.value(write.target.value) == _WHOLE
+        ):
+            return (
+                not self.keys(write.target.slice)
+                or field in self.keys(write.target.slice)
+            ) and not self.projected_return(write.value, field)
+        return False
+
     def mutates_field(self, call: ast.Call, field: str) -> bool:
+        key = (call, field)
+        if key not in self.effect_cache:
+            self.effect_cache[key] = self._mutates_field(call, field)
+        return self.effect_cache[key]
+
+    def callable_expression(
+        self, value: ast.expr, seen: frozenset[str] = frozenset()
+    ) -> ast.expr:
+        if not isinstance(value, ast.Name) or value.id in seen:
+            return value
+        bindings = [
+            node.value
+            for node in self.nodes
+            if isinstance(node, ast.Assign)
+            and node.lineno < value.lineno
+            and any(
+                isinstance(target, ast.Name) and target.id == value.id
+                for target in node.targets
+            )
+        ]
+        if not bindings:
+            return value
+        return self.callable_expression(
+            max(bindings, key=lambda item: item.lineno), seen | {value.id}
+        )
+
+    def _mutates_field(self, call: ast.Call, field: str) -> bool:
+        resolved = self.callable_expression(call.func)
+        if resolved is not call.func:
+            call = ast.Call(func=resolved, args=call.args, keywords=call.keywords)
         if (
             not isinstance(call.func, ast.Attribute)
             or self.value(call.func.value) != _WHOLE
         ):
-            return False
+            return self.helper_mutates(call, field)
         method = call.func.attr
         if method in {"get", "keys", "values", "items", "copy"}:
             return False
@@ -1460,15 +1598,9 @@ class _Projection:
                 for keyword in call.keywords
             ):
                 return True
-            for argument in call.args:
-                if not isinstance(argument, ast.Dict):
-                    return True
-                for key, value in zip(argument.keys, argument.values, strict=True):
-                    if (
-                        key is None or not self.keys(key) or field in self.keys(key)
-                    ) and not self.projected_return(value, field):
-                        return True
-            return False
+            return any(
+                self.mapping_update_mutates(argument, field) for argument in call.args
+            )
         if method in {"__setitem__", "setdefault"} and len(call.args) == 2:
             return (
                 not self.keys(call.args[0]) or field in self.keys(call.args[0])
@@ -1476,24 +1608,49 @@ class _Projection:
         return True
 
     def mutated_after(self, node: ast.AST, field: str) -> bool:
-        location = (getattr(node, "lineno", 0), getattr(node, "col_offset", 0))
+        location = (
+            getattr(node, "lineno", 0)
+            if isinstance(node, ast.FunctionDef)
+            else (getattr(node, "end_lineno", None) or getattr(node, "lineno", 0)),
+            getattr(node, "col_offset", 0)
+            if isinstance(node, ast.FunctionDef)
+            else (
+                getattr(node, "end_col_offset", None) or getattr(node, "col_offset", 0)
+            ),
+        )
         return any(
-            isinstance(call, ast.Call)
-            and (call.lineno, call.col_offset) > location
-            and not self.impossible_path(call, field)
-            and self.mutates_field(call, field)
-            for call in self.nodes
+            isinstance(write, (ast.Call, ast.AugAssign))
+            and (write.lineno, write.col_offset) > location
+            and not self.impossible_path(write, field)
+            and (
+                self.mutates_field(write, field)
+                if isinstance(write, ast.Call)
+                else self.augmented_mutates(write, field)
+            )
+            for write in self.nodes
         )
 
     def overwritten_after(self, node: ast.AST, field: str) -> bool:
         """A possibly executed later raw write invalidates earlier projection."""
 
-        location = (getattr(node, "lineno", 0), getattr(node, "col_offset", 0))
+        location = (
+            getattr(node, "lineno", 0)
+            if isinstance(node, ast.FunctionDef)
+            else (getattr(node, "end_lineno", None) or getattr(node, "lineno", 0)),
+            getattr(node, "col_offset", 0)
+            if isinstance(node, ast.FunctionDef)
+            else (
+                getattr(node, "end_col_offset", None) or getattr(node, "col_offset", 0)
+            ),
+        )
         for write in self.nodes:
             if (
                 not isinstance(write, (ast.Assign, ast.AnnAssign))
                 or write.value is None
-                or write not in self.returned_nodes()
+                or (
+                    not isinstance(node, ast.FunctionDef)
+                    and write not in self.returned_nodes()
+                )
             ):
                 continue
             if (write.lineno, write.col_offset) <= location:
@@ -2610,3 +2767,101 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+def test_helper_side_effects_invalidate_incoming_projection() -> None:
+    for final in ("return restore(data, raw)", "restore(data, raw)\n    return data"):
+        assert _fixture_uncovered(
+            f"""
+def restore(data, raw):
+    data.update({{'provenance': raw}})
+    return data
+def validate(cls, data):
+    raw = data['provenance']
+    data = canonicalize_json_containers(data)
+    {final}
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_augmented_union_invalidates_projection() -> None:
+    assert _fixture_uncovered(
+        """
+def validate(cls, data):
+    raw = data['provenance']
+    data = canonicalize_json_containers(data)
+    data |= {'provenance': raw}
+    return data
+""",
+        {"provenance"},
+    ) == {"provenance"}
+
+
+def test_transitive_and_discarded_helper_mutations_are_visible() -> None:
+    for operation in (
+        "alias['provenance'] = raw",
+        "alias |= {'provenance': raw}",
+        "write = alias.update\n    write({'provenance': raw})",
+        "unknown_mutator(alias, raw)",
+    ):
+        assert _fixture_uncovered(
+            f"""
+def mutate(data, raw):
+    alias = data
+    {operation}
+def forward(data, raw):
+    mutate(data, raw=raw)
+    return data
+def validate(cls, data):
+    raw = data['provenance']
+    data = canonicalize_json_containers(data)
+    forward(data, raw)
+    return data
+""",
+            {"provenance"},
+        ) == {"provenance"}
+
+
+def test_pure_helpers_and_preprojection_mutations_preserve_coverage() -> None:
+    assert not _fixture_uncovered(
+        """
+def mutate(data):
+    data['provenance'] = []
+    return data
+def validate(cls, data):
+    return canonicalize_json_containers(mutate(data))
+""",
+        {"provenance"},
+    )
+    assert not _fixture_uncovered(
+        """
+def preserve(data):
+    copied = dict(data)
+    copied['provenance'] = tuple(copied['provenance'])
+    copied |= {'enabled': True}
+    return copied
+def validate(cls, data):
+    data = canonicalize_json_containers(data)
+    return preserve(data)
+""",
+        {"provenance"},
+    )
+
+
+def test_safe_augmented_mapping_writes_remain_supported() -> None:
+    for update in (
+        "{'enabled': True}",
+        "{'provenance': canonicalize_json_containers(raw)}",
+    ):
+        assert not _fixture_uncovered(
+            f"""
+def validate(cls, data):
+    raw = data['provenance']
+    data = canonicalize_json_containers(data)
+    alias = data
+    alias |= {update}
+    return data
+""",
+            {"provenance"},
+        )

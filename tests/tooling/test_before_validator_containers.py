@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ast
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 
 def _is_before_validator(decorator: ast.expr) -> bool:
@@ -2371,6 +2373,479 @@ def _inherited_validators(
     return list(methods.values())
 
 
+def _table_module_key(path: Path, root: Path) -> str:
+    return path.relative_to(root).as_posix()
+
+
+def _table_import_target(
+    module: str, level: int, name: str | None, modules: set[str]
+) -> str | None:
+    """Resolve an import to a scanned module key, mirroring _import_path."""
+
+    parts = module.split("/")[:-1]
+    if level:
+        if level - 1 > len(parts):
+            return None
+        base = "/".join(parts[: len(parts) - (level - 1)] if level > 1 else parts)
+        remainder = f"{base}/{name}" if name else base
+    else:
+        remainder = (name or "").removeprefix("jacobian.math.").replace(".", "/")
+    candidate = f"{remainder}.py"
+    if candidate in modules:
+        return candidate
+    candidate = f"{remainder}/__init__.py"
+    return candidate if candidate in modules else None
+
+
+@dataclass(frozen=True)
+class _Tables:
+    """String-only indexes; parsed trees are discarded per module."""
+
+    texts: dict[str, str]
+    classes: dict[tuple[str, str], _ClassRow]
+    funcs: dict[tuple[str, str], int]
+    aliases: dict[tuple[str, str], str]
+    imports: dict[tuple[str, str], tuple[str, str]]
+    validator_sources: dict[tuple[str, str, str], str]
+
+
+@dataclass(frozen=True)
+class _ClassRow:
+    bases: tuple[str, ...]
+    fields: dict[str, str]
+    validators: dict[str, int]
+    methods: dict[str, dict[str, object]]
+    lineno: int
+    max_lengths: dict[str, str]
+
+
+def _base_names(node: ast.ClassDef) -> list[str]:
+    """Direct base names, ignoring subscripts and attribute roots."""
+
+    names: list[str] = []
+    for base in node.bases:
+        current = base
+        while isinstance(current, ast.Subscript):
+            current = current.value
+        name = getattr(current, "id", getattr(current, "attr", ""))
+        if name:
+            names.append(name)
+    return names
+
+
+def _declared_fields(node: ast.ClassDef) -> dict[str, str]:
+    return {
+        item.target.id: ast.unparse(item.annotation)
+        for item in node.body
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
+    }
+
+
+def _declared_max_length_fields(node: ast.ClassDef) -> dict[str, str]:
+    return {
+        item.target.id: ast.dump(keyword.value)
+        for item in node.body
+        if isinstance(item, ast.AnnAssign)
+        and isinstance(item.target, ast.Name)
+        and isinstance(item.value, ast.Call)
+        and getattr(item.value.func, "id", "") == "Field"
+        for keyword in item.value.keywords
+        if keyword.arg == "max_length"
+    }
+
+
+def _declared_methods(node: ast.ClassDef) -> dict[str, dict[str, object]]:
+    return {
+        item.name: {
+            "lineno": item.lineno,
+            "before": any(
+                _is_before_validator(decorator) for decorator in item.decorator_list
+            ),
+        }
+        for item in node.body
+        if isinstance(item, ast.FunctionDef)
+    }
+
+
+def _declared_validator_sources(
+    text: str, node: ast.ClassDef, module: str, into: dict[tuple[str, str, str], str]
+) -> None:
+    """Retain before-validator bodies as source so they need no re-parse."""
+
+    for item in node.body:
+        if isinstance(item, ast.FunctionDef) and any(
+            _is_before_validator(decorator) for decorator in item.decorator_list
+        ):
+            segment = ast.get_source_segment(text, item)
+            if segment is not None:
+                into[(module, node.name, item.name)] = segment
+
+
+def _module_alias_declarations(node: ast.AST) -> dict[str, str]:
+    """Alias sources declared by one top-level statement."""
+
+    if isinstance(node, ast.TypeAlias):
+        return {node.name.id: ast.unparse(node.value)}
+    if isinstance(node, ast.Assign) and node.value is not None:
+        source = ast.unparse(node.value)
+        return {
+            target.id: source for target in node.targets if isinstance(target, ast.Name)
+        }
+    if (
+        isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.value is not None
+    ):
+        return {node.target.id: ast.unparse(node.value)}
+    return {}
+
+
+def _build_tables(root: Path) -> _Tables:
+    """String-only indexes; parsed trees are discarded per module.
+
+    Retaining every parsed module costs two orders of magnitude more than the
+    source and crashes memory-constrained CI workers on the tree-wide gate.
+    Everything below is strings and line numbers; validator and helper bodies
+    are re-parsed transiently per module and discarded afterwards.
+    """
+
+    modules = sorted(
+        _table_module_key(path, root) for path in sorted(root.rglob("*.py"))
+    )
+    module_set = set(modules)
+    texts: dict[str, str] = {}
+    classes: dict[tuple[str, str], _ClassRow] = {}
+    funcs: dict[tuple[str, str], int] = {}
+    aliases: dict[tuple[str, str], str] = {}
+    imports: dict[tuple[str, str], tuple[str, str]] = {}
+    validator_sources: dict[tuple[str, str, str], str] = {}
+    for module in modules:
+        text = (root / module).read_text(encoding="utf-8")
+        texts[module] = text
+        tree = ast.parse(text)
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                methods = _declared_methods(node)
+                classes[(module, node.name)] = _ClassRow(
+                    bases=tuple(_base_names(node)),
+                    fields=_declared_fields(node),
+                    validators={
+                        name: cast(int, info["lineno"])
+                        for name, info in methods.items()
+                        if info["before"]
+                    },
+                    methods=methods,
+                    lineno=node.lineno,
+                    max_lengths=_declared_max_length_fields(node),
+                )
+                _declared_validator_sources(text, node, module, validator_sources)
+            elif isinstance(node, ast.FunctionDef):
+                funcs[(module, node.name)] = node.lineno
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    target = _table_import_target(
+                        module, node.level, node.module, module_set
+                    )
+                    if target is not None:
+                        imports[(module, alias.asname or alias.name)] = (
+                            target,
+                            alias.name,
+                        )
+            for declared, source in _module_alias_declarations(node).items():
+                aliases[(module, declared)] = source
+        del tree
+    return _Tables(
+        texts=texts,
+        classes=classes,
+        funcs=funcs,
+        aliases=aliases,
+        imports=imports,
+        validator_sources=validator_sources,
+    )
+
+
+def _table_scope(
+    module: str,
+    tables: _Tables,
+    unique: dict[str, tuple[str, str]],
+    cache: dict[str, dict[str, tuple[str, str]]],
+) -> dict[str, tuple[str, str]]:
+    """Name -> ``(module, name)`` visible in ``module``.
+
+    Globally unique names rank lowest, then explicit imports, then local
+    definitions, mirroring the previous ``unique_classes`` + module scope.
+    """
+
+    if module in cache:
+        return cache[module]
+    classes = tables.classes
+    imports = tables.imports
+    scope: dict[str, tuple[str, str]] = dict(unique)
+    for (owner, alias), (target, original) in imports.items():
+        if owner != module:
+            continue
+        if (target, original) in classes:
+            scope.setdefault(alias, (target, original))
+    for key in classes:
+        if key[0] == module:
+            scope[key[1]] = key
+    cache[module] = scope
+    return scope
+
+
+def _table_aliases(
+    module: str,
+    tables: _Tables,
+    cache: dict[str, dict[str, set[str]]],
+) -> dict[str, set[str]]:
+    """Resolved alias sources for ``module``, imports before local names."""
+
+    if module in cache:
+        return cache[module]
+    cache[module] = {}
+    imports = tables.imports
+    declared = tables.aliases
+    aliases: dict[str, set[str]] = {}
+    for (owner, alias), (target, original) in imports.items():
+        if owner != module:
+            continue
+        imported = _table_aliases(target, tables, cache)
+        if original in imported:
+            aliases[alias] = {
+                _expand_alias(value, imported, frozenset({original}))
+                for value in imported[original]
+            }
+    for (owner, name), source in declared.items():
+        if owner == module:
+            aliases[name] = {source}
+    cache[module] = aliases
+    return aliases
+
+
+def _table_inherited_fields(
+    key: tuple[str, str],
+    tables: _Tables,
+    scopes: dict[str, dict[str, tuple[str, str]]],
+    aliases: dict[str, dict[str, set[str]]],
+    unique: dict[str, tuple[str, str]],
+    scope_cache: dict[str, dict[str, tuple[str, str]]],
+    raw: bool = False,
+    seen: frozenset[str] = frozenset(),
+) -> dict[str, str]:
+    """Declared fields along the MRO, subclass declarations winning."""
+
+    module, name = key
+    if name in seen:
+        return {}
+    row = tables.classes.get(key)
+    if row is None:
+        return {}
+    scope = _table_scope(module, tables, unique, scope_cache)
+    fields: dict[str, str] = {}
+    for base in row.bases:
+        parent = scope.get(base)
+        if parent is not None:
+            fields.update(
+                _table_inherited_fields(
+                    parent,
+                    tables,
+                    scopes,
+                    aliases,
+                    unique,
+                    scope_cache,
+                    raw,
+                    seen | {name},
+                )
+            )
+    if raw:
+        fields.update(row.fields)
+        return fields
+    local = _table_aliases(module, tables, aliases)
+    for declared, source in row.fields.items():
+        fields[declared] = (
+            "tuple[object, ...]"
+            if _leaf_container_field(source, set(), local)
+            else "object"
+        )
+    return fields
+
+
+def _table_inherited_validators(
+    key: tuple[str, str],
+    tables: _Tables,
+    unique: dict[str, tuple[str, str]],
+    scope_cache: dict[str, dict[str, tuple[str, str]]],
+    seen: frozenset[str] = frozenset(),
+) -> list[tuple[str, str, str]]:
+    """``(module, class, method)`` for before-validators Pydantic inherits."""
+
+    module, name = key
+    if name in seen:
+        return []
+    row = tables.classes.get(key)
+    if row is None:
+        return []
+    scope = _table_scope(module, tables, unique, scope_cache)
+    methods: dict[str, tuple[str, str, str]] = {}
+    for base in reversed(row.bases):
+        parent = scope.get(base)
+        if parent is None:
+            continue
+        for entry in _table_inherited_validators(
+            parent, tables, unique, scope_cache, seen | {name}
+        ):
+            methods[entry[2]] = entry
+    for method, info in row.methods.items():
+        methods.pop(method, None)
+        if info["before"]:
+            methods[method] = (module, name, method)
+    return list(methods.values())
+
+
+def _table_json_shapes(
+    key: tuple[str, str],
+    tables: _Tables,
+    unique: dict[str, tuple[str, str]],
+    scope_cache: dict[str, dict[str, tuple[str, str]]],
+    alias_cache: dict[str, dict[str, set[str]]],
+) -> _ModelShape:
+    """Known JSON shapes of declared fields, including nested model fields."""
+
+    classes = tables.classes
+    scope = _table_scope(key[0], tables, unique, scope_cache)
+    shapes = _ModelShape(
+        model_names=frozenset(
+            name
+            for (module, name), row in classes.items()
+            if any(base in {"StrictModel", "BaseModel"} for base in row.bases)
+        )
+    )
+
+    def annotation(node: ast.expr, path: str, seen: frozenset[str]) -> frozenset[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return annotation(ast.parse(node.value, mode="eval").body, path, seen)
+        if isinstance(node, ast.Subscript):
+            name = getattr(node.value, "id", getattr(node.value, "attr", ""))
+            parts = (
+                node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            )
+            if name == "Annotated":
+                return annotation(parts[0], path, seen)
+            if name.lower() in {"tuple", "list", "sequence", "set", "frozenset"}:
+                elements = (
+                    [
+                        part
+                        for part in parts
+                        if not (
+                            isinstance(part, ast.Constant) and part.value is Ellipsis
+                        )
+                    ]
+                    if name.lower() == "tuple"
+                    else parts[:1]
+                )
+                shapes.types[path + "[]"] = frozenset().union(
+                    *(annotation(part, path + "[]", seen) for part in elements)
+                )
+                return frozenset({"list"})
+            if name in {"Union", "Optional"}:
+                result = frozenset().union(
+                    *(annotation(part, path, seen) for part in parts)
+                )
+                return result | ({"NoneType"} if name == "Optional" else set())
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return annotation(node.left, path, seen) | annotation(
+                node.right, path, seen
+            )
+        if isinstance(node, ast.Constant) and node.value is None:
+            return frozenset({"NoneType"})
+        name = getattr(node, "id", "")
+        primitive = {
+            "StrictInt": "int",
+            "StrictBool": "bool",
+            "StrictStr": "str",
+            "StrictFloat": "float",
+        }.get(name, name)
+        if primitive in {"int", "bool", "str", "float"}:
+            return frozenset({primitive})
+        owner = scope.get(name)
+        if owner is not None and name not in seen:
+            visit(owner, path + ".", seen | {name})
+            return frozenset({"dict"})
+        return frozenset()
+
+    def visit(owner: tuple[str, str], prefix: str, seen: frozenset[str]) -> None:
+        row = classes.get(owner)
+        if row is None:
+            return
+        local = _table_aliases(owner[0], tables, alias_cache)
+        for declared, source in row.max_lengths.items():
+            shapes.max_lengths[prefix + declared] = source
+        for declared, source in _table_inherited_fields(
+            owner, tables, {}, {}, unique, scope_cache, raw=True
+        ).items():
+            shapes.types[prefix + declared] = annotation(
+                _resolved_annotation(source, local), prefix + declared, seen
+            )
+
+    visit(key, "", frozenset({key[1]}))
+    return shapes
+
+
+def _table_functions(
+    module: str,
+    tables: _Tables,
+    texts: dict[str, str],
+    cache: dict[str, dict[str, ast.FunctionDef]],
+) -> dict[str, ast.FunctionDef]:
+    """Callable names visible in ``module``; bodies parsed transiently.
+
+    Local definitions at any depth win over imports, matching the previous
+    ``_module_functions`` plus ``ast.walk`` fill-in. The cache holds only the
+    working set for the module under analysis and is dropped with it.
+    """
+
+    if module in cache:
+        return cache[module]
+    tree = ast.parse(texts[module])
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    imports = tables.imports
+    for (owner, alias), (target, original) in imports.items():
+        if owner != module:
+            continue
+        if target not in cache:
+            imported_tree = ast.parse(texts[target])
+            cache[target] = {
+                node.name: node
+                for node in imported_tree.body
+                if isinstance(node, ast.FunctionDef)
+            }
+        imported = cache[target]
+        if original in imported:
+            functions.setdefault(alias, imported[original])
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            functions.setdefault(node.name, node)
+    cache[module] = functions
+    return functions
+
+
+def _table_validator(
+    entry: tuple[str, str, str],
+    tables: _Tables,
+    texts: dict[str, str],
+) -> ast.FunctionDef:
+    """Parse one before-validator from its retained source segment."""
+
+    source = tables.validator_sources[entry]
+    tree = ast.parse(textwrap.dedent(source))
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            return node
+    raise AssertionError("validator source did not parse to a function")
+
+
 def test_before_validators_cover_every_leaf_container_field() -> None:
     """Every declared outer array needs projection, including arrays of models.
 
@@ -2381,51 +2856,27 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
 
     source_root = Path(__file__).parents[2] / "src" / "jacobian" / "math"
     violations: list[str] = []
-    definitions: dict[str, list[ast.ClassDef]] = {}
-    trees = {
-        path: ast.parse(path.read_text(encoding="utf-8"))
-        for path in sorted(source_root.rglob("*.py"))
-    }
-    cache: dict[Path, dict[str, set[str]]] = {}
-    contexts: dict[ast.ClassDef, dict[str, set[str]]] = {}
-    for path, tree in trees.items():
-        module_aliases = _module_aliases(path, source_root, cache, trees)
-        for definition in tree.body:
-            if isinstance(definition, ast.ClassDef):
-                definitions.setdefault(definition.name, []).append(definition)
-                contexts[definition] = module_aliases
-    unique_classes = {
-        name: nodes[0] for name, nodes in definitions.items() if len(nodes) == 1
-    }
-    function_cache: dict[Path, dict[str, ast.FunctionDef]] = {}
-    class_cache: dict[Path, dict[str, ast.ClassDef]] = {}
-    scopes = {
-        node: {
-            **unique_classes,
-            **_module_classes(path, source_root, trees, class_cache),
-        }
-        for path, tree in trees.items()
-        for node in tree.body
-        if isinstance(node, ast.ClassDef)
-    }
-    for path, tree in trees.items():
-        known_classes = {
-            **unique_classes,
-            **_module_classes(path, source_root, trees, class_cache),
-        }
-        functions = dict(_module_functions(path, source_root, trees, function_cache))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                functions.setdefault(node.name, node)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
+    tables = _build_tables(source_root)
+    texts = tables.texts
+    classes = tables.classes
+    counts: dict[str, int] = {}
+    first: dict[str, tuple[str, str]] = {}
+    for key in classes:
+        counts[key[1]] = counts.get(key[1], 0) + 1
+        first.setdefault(key[1], key)
+    unique = {name: key for name, key in first.items() if counts[name] == 1}
+    scope_cache: dict[str, dict[str, tuple[str, str]]] = {}
+    alias_cache: dict[str, dict[str, set[str]]] = {}
+    for module in sorted({key[0] for key in classes}):
+        function_cache: dict[str, dict[str, ast.FunctionDef]] = {}
+        functions = _table_functions(module, tables, texts, function_cache)
+        for key in classes:
+            if key[0] != module:
                 continue
-            before = _inherited_validators(node, known_classes, scopes=scopes)
+            before = _table_inherited_validators(key, tables, unique, scope_cache)
             if not before:
                 continue
-            fields = _inherited_fields(
-                node, known_classes, contexts=contexts, scopes=scopes
-            )
+            fields = _table_inherited_fields(key, tables, {}, {}, unique, scope_cache)
             leaf_fields = {
                 name
                 for name, annotation in fields.items()
@@ -2433,17 +2884,16 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
             }
             if not leaf_fields:
                 continue
-            for validator in before:
+            shapes = _table_json_shapes(key, tables, unique, scope_cache, alias_cache)
+            for entry in before:
+                validator = _table_validator(entry, tables, texts)
                 uncovered = _uncovered_leaf_fields(
-                    validator,
-                    functions,
-                    leaf_fields,
-                    _json_shapes(node, known_classes, contexts),
+                    validator, functions, leaf_fields, shapes
                 )
                 for name in sorted(uncovered):
                     violations.append(
-                        f"{path.relative_to(source_root)}:{validator.lineno} "
-                        f"{node.name}.{name} is never projected"
+                        f"{module}:{classes[entry[:2]].validators[entry[2]]} "
+                        f"{key[1]}.{name} is never projected"
                     )
 
     assert not violations, (

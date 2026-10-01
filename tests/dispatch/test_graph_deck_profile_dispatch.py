@@ -14,7 +14,6 @@ import pytest
 
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.graphs.decks._models import (
-    SimpleUndirectedGraph,
     VertexDeckIsomorphismProfile,
     VertexDeckIsomorphismProfileRequest,
 )
@@ -22,6 +21,7 @@ from jacobian.math.graphs.decks.operations import (
     vertex_deck_isomorphism_profile,
     vertex_deletion_family,
 )
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _source() -> SimpleUndirectedGraph:

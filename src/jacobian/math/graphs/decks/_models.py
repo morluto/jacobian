@@ -6,7 +6,7 @@ from itertools import combinations, permutations
 from math import comb, factorial
 from typing import Annotated, Any, Self, cast
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
@@ -1011,7 +1011,7 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_bound",
                 "vertex-deck isomorphism profile supports at most 10 source vertices",
             )
-        _preflight_vertex_profile_family(deck, order, source_edges)
+        _preflight_vertex_profile_family(deck, order, source_edges, "deck")
         _, total_work, output_cells = _vertex_iso_profile_resource_estimates(
             order, source_edges, order
         )
@@ -1025,10 +1025,9 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_output_bound",
                 "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
-        # Canonicalize every declared field, derived from the model itself so a
-        # newly added field cannot escape the projection. Unknown fields are
-        # excluded so ``extra="forbid"`` refuses them without materializing an
-        # attacker-controlled subtree first.
+        # Derive declared fields from the model so new fields are projected too.
+        # Preflight rejects nested extras before recursive canonicalization;
+        # top-level extras remain opaque for Pydantic to reject.
         normalized = _normalize_vertex_iso_profile_request(value)
         if type(normalized) is not dict:
             return normalized
@@ -1071,10 +1070,9 @@ class VertexDeckIsomorphismProfile(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_tuple_fields(cls, value: Any) -> Any:
-        # Canonicalize every declared field, derived from the model itself so a
-        # newly added field cannot escape the projection. Unknown fields are
-        # excluded so ``extra="forbid"`` refuses them without materializing an
-        # attacker-controlled subtree first.
+        # Derive declared fields from the model so new fields are projected too.
+        # Preflight rejects nested extras before recursive canonicalization;
+        # top-level extras remain opaque for Pydantic to reject.
         admitted = _admit_and_normalize_vertex_iso_profile_result(value)
         if type(admitted) is not dict:
             return admitted
@@ -1290,9 +1288,27 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
             "vertex-deck isomorphism profile exceeds its materialization-cell bound",
         )
     _preflight_vertex_profile_result_rows(value, order)
-    _preflight_vertex_profile_family(value.get("family"), order, edge_count)
+    _preflight_vertex_profile_family(value.get("family"), order, edge_count, "family")
     _require_exact_profile_wire_integers(value, classes, "vertex")
     return _normalize_vertex_iso_profile_result(value)
+
+
+def _reject_profile_extras(
+    value: dict[str, Any], model: type[StrictModel], location: tuple[str | int, ...]
+) -> None:
+    """Refuse a nested extra without copying or traversing its value."""
+    for key in value:
+        if key not in model.model_fields:
+            raise ValidationError.from_exception_data(
+                model.__name__,
+                [
+                    {
+                        "type": "extra_forbidden",
+                        "loc": (*location, key),
+                        "input": value[key],
+                    }
+                ],
+            )
 
 
 def _preflight_vertex_profile_result_rows(value: dict[str, Any], order: int) -> None:
@@ -1329,9 +1345,10 @@ def _preflight_vertex_profile_result_rows(value: dict[str, Any], order: int) -> 
     classes: Any = value.get("classes")
     if type(classes) not in (list, tuple):
         return
-    for item in cast(list[Any] | tuple[Any, ...], classes):
+    for index, item in enumerate(cast(list[Any] | tuple[Any, ...], classes)):
         if type(item) is not dict:
             continue
+        _reject_profile_extras(item, VertexDeckIsomorphismClass, ("classes", index))
         indices: Any = item.get("card_indices")
         if type(indices) in (list, tuple) and len(indices) > card_count:
             raise _validation_error(
@@ -1341,6 +1358,9 @@ def _preflight_vertex_profile_result_rows(value: dict[str, Any], order: int) -> 
         representative: Any = item.get("representative")
         if type(representative) is not dict:
             continue
+        _reject_profile_extras(
+            representative, SimpleUndirectedGraph, ("classes", index, "representative")
+        )
         representative_vertices: Any = representative.get("vertices")
         representative_edges: Any = representative.get("edges")
         if (
@@ -1358,10 +1378,13 @@ def _preflight_vertex_profile_result_rows(value: dict[str, Any], order: int) -> 
         _preflight_edge_profile_labels(representative_vertices, representative_edges)
 
 
-def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -> None:
+def _preflight_vertex_profile_family(
+    family: Any, order: int, edge_count: int, field: str
+) -> None:
     """Bound all retained source axes before the family normalizer copies them."""
     if type(family) is not dict:
         return
+    _reject_profile_extras(family, VertexDeletionFamily, (field,))
     pair_count = comb(order, 2)
     card_order = max(order - 1, 0)
     card_pair_count = comb(card_order, 2)
@@ -1372,6 +1395,7 @@ def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -
         )
     source = family.get("source")
     if type(source) is dict:
+        _reject_profile_extras(source, SimpleUndirectedGraph, (field, "source"))
         _preflight_raw_edge_pairs(source.get("edges"), pair_count)
     cards: Any = family.get("cards")
     if type(cards) in (list, tuple):
@@ -1380,9 +1404,10 @@ def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -
                 "vertex_iso_profile_card_count",
                 "a complete vertex family must contain one card per source vertex",
             )
-        for card in cards:
+        for index, card in enumerate(cards):
             if type(card) is not dict:
                 continue
+            _reject_profile_extras(card, SourceBoundVertexCard, (field, "cards", index))
             retained: Any = card.get("retained_vertices")
             if type(retained) in (list, tuple) and len(retained) > card_order:
                 raise _validation_error(
@@ -1392,11 +1417,14 @@ def _preflight_vertex_profile_family(family: Any, order: int, edge_count: int) -
             graph = card.get("card")
             if type(graph) is not dict:
                 continue
-            for field, maximum in (
+            _reject_profile_extras(
+                graph, SimpleUndirectedGraph, (field, "cards", index, "card")
+            )
+            for graph_field, maximum in (
                 ("vertices", card_order),
                 ("edges", card_pair_count),
             ):
-                entries: Any = graph.get(field)
+                entries: Any = graph.get(graph_field)
                 if type(entries) in (list, tuple) and len(entries) > maximum:
                     raise _validation_error(
                         "vertex_iso_profile_card_shape",

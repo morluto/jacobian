@@ -26,10 +26,10 @@ from jacobian.math.number_theory.prime_affine_forms._interval import (
 from jacobian.math.number_theory.prime_affine_forms._kernel import (
     interval_match_summary,
     interval_matches,
+    iter_wheel_rows,
     local_bad_residues,
     local_factor_from_bad_count,
     wheel_modulus,
-    wheel_rows,
 )
 from jacobian.math.number_theory.prime_affine_forms._local_factors import (
     FinitePrimeTupleFactorProduct,
@@ -280,16 +280,18 @@ def enumerate_residue_wheel(
     """Materialize every permitted CRT residue of a supplied compact wheel."""
 
     _run_admission(lambda: _admit_wheel_enumeration(wheel))
-    rows = wheel_rows(wheel.source, wheel.primes)
+    # Build each final row directly from the kernel iterator. Sorting these
+    # models preserves canonical residue order without a second complete
+    # collection of (residue, component-tuple) intermediates. The components
+    # retain the local tables' canonical integer objects, including >256.
+    rows = [
+        PrimeTupleWheelResidueRow(residue=residue, components=components)
+        for residue, components in iter_wheel_rows(wheel.source, wheel.primes)
+    ]
+    rows.sort(key=lambda row: row.residue)
     return PrimeTupleResidueWheelEnumeration.model_construct(
         wheel=wheel,
-        residues=tuple(
-            PrimeTupleWheelResidueRow(
-                residue=residue,
-                components=components,
-            )
-            for residue, components in rows
-        ),
+        residues=tuple(rows),
     )
 
 

@@ -8,6 +8,8 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.graphs.polynomials._models import (
+    MAX_GRAPH_POLYNOMIAL_EDGES,
+    MAX_GRAPH_POLYNOMIAL_VERTICES,
     GraphPolynomialRequest,
     GraphPolynomialResult,
     MatchingPolynomialRequest,
@@ -83,6 +85,13 @@ _PATH_TREE_EXAMPLE: dict[str, Any] = {
     }
 }
 
+_EXACT_GRAPH_ENVELOPE = (
+    " The computation admits at most "
+    f"{MAX_GRAPH_POLYNOMIAL_VERTICES} vertices and "
+    f"{MAX_GRAPH_POLYNOMIAL_EDGES} edges, independently of the shared graph "
+    "value's larger encoding envelope."
+)
+
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
@@ -90,7 +99,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute the Tutte polynomial",
         description="Compute the exact Tutte polynomial T_G(x, y) of a finite simple "
         "graph using NetworkX, with structural exponent pairs on the ordered "
-        "variable axis (x, y).",
+        "variable axis (x, y)." + _EXACT_GRAPH_ENVELOPE,
         request_type=GraphPolynomialRequest,
         result_type=GraphPolynomialResult,
         run=_run_tutte,
@@ -107,7 +116,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graph.polynomial.chromatic.compute",
         title="Compute the chromatic polynomial",
         description="Compute the exact chromatic polynomial chi_G(x) of a finite simple "
-        "graph using NetworkX.",
+        "graph using NetworkX." + _EXACT_GRAPH_ENVELOPE,
         request_type=GraphPolynomialRequest,
         result_type=GraphPolynomialResult,
         run=_run_chromatic,
@@ -124,7 +133,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graph.polynomial.flow.compute",
         title="Compute the flow polynomial",
         description="Compute the exact nowhere-zero flow polynomial F_G(x) of a finite "
-        "simple graph, derived from the Tutte polynomial.",
+        "simple graph, derived from the Tutte polynomial." + _EXACT_GRAPH_ENVELOPE,
         request_type=GraphPolynomialRequest,
         result_type=GraphPolynomialResult,
         run=_run_flow,

@@ -8,6 +8,10 @@ from pydantic import Field, WithJsonSchema
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    SimpleUndirectedGraphInput,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_EDGES,
     SimpleUndirectedGraph,
@@ -19,7 +23,7 @@ MAX_DELETION_ORDER = MAX_SIMPLE_GRAPH_EDGES
 def _edge_deletion_graph_schema() -> JsonSchemaValue:
     """Describe the shared graph axis and the operation's work-sensitive bound."""
 
-    schema = SimpleUndirectedGraph.model_json_schema()
+    schema = simple_graph_input_schema()
     schema["description"] = (
         "A finite simple graph on Jacobian's canonical graph axis. The profile "
         "operation admits requests by retained label characters, deletion-row "
@@ -29,8 +33,8 @@ def _edge_deletion_graph_schema() -> JsonSchemaValue:
 
 
 EdgeDeletionGraph = Annotated[
-    SimpleUndirectedGraph,
-    WithJsonSchema(_edge_deletion_graph_schema()),
+    SimpleUndirectedGraphInput,
+    WithJsonSchema(_edge_deletion_graph_schema(), mode="validation"),
 ]
 
 

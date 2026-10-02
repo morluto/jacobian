@@ -14,11 +14,23 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.polynomials._bezout_kernel import (
+    MAX_BEZOUT_SOURCE_COEFFICIENT_DIGITS,
+    bounded_bezout,
+    require_bezout_source_shape,
+)
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
     symbols_for_variables,
+)
+from jacobian.math.polynomials._gcd_verification import verify_gcd_relation
+from jacobian.math.polynomials._invariant_admission import (
+    InvariantPlan,
+    discriminant_plan,
+    require_invariant_source,
+    resultant_plan,
 )
 from jacobian.math.polynomials._models import (
     _MAX_DISCRIMINANT_DEGREE,
@@ -28,7 +40,8 @@ from jacobian.math.polynomials._models import (
     _MAX_GROEBNER_COEFFICIENT_DIGITS,
     _MAX_GROEBNER_EXPONENT,
     _MAX_INVARIANT_TERMS,
-    _MAX_SQUARE_FREE_EXPONENT,
+    _MAX_SQUARE_FREE_GENERAL_EXPONENT,
+    _MAX_SQUARE_FREE_MULTIPLICITY,
     _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM,
     MAX_GROEBNER_GENERATORS,
     PolynomialBezoutIdentity,
@@ -52,9 +65,12 @@ from jacobian.math.polynomials._multiply_kernel import (
     rational_polynomial_multiply as multiply,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
     RationalFunction,
     RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     require_polynomial_budget,
 )
 
@@ -234,6 +250,8 @@ def _run_admission[ResultT](admission: Callable[[], ResultT]) -> ResultT:
 
 
 def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
+    require_bezout_source_shape(left)
+    require_bezout_source_shape(right)
     if left.variables != right.variables:
         raise _validation_error("polynomials must use the same ordered variables")
     if len(left.variables) != 1:
@@ -243,6 +261,7 @@ def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
             polynomial,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_GCD_DEGREE,
+            maximum_coefficient_digits=MAX_BEZOUT_SOURCE_COEFFICIENT_DIGITS,
         )
     if not left.polynomial.terms and not right.polynomial.terms:
         raise _validation_error(
@@ -254,7 +273,9 @@ def _admit_resultant(
     left: RationalPolynomial,
     right: RationalPolynomial,
     elimination_variable: str,
-) -> None:
+) -> InvariantPlan | None:
+    require_invariant_source(left)
+    require_invariant_source(right)
     if left.variables != right.variables:
         raise _validation_error("polynomials must use the same ordered variables")
     if elimination_variable not in left.variables:
@@ -287,17 +308,20 @@ def _admit_resultant(
     ):
         raise _validation_error("resultant scalar exceeds the canonical digit budget")
 
+    return None if univariate else resultant_plan(left, right, index)
 
-def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
+
+def _admit_discriminant(
+    polynomial: RationalPolynomial, variable: str
+) -> InvariantPlan | None:
+    require_invariant_source(polynomial)
     if variable not in polynomial.variables:
         raise _validation_error(
             "discriminant variable must belong to the declared ring"
         )
     univariate = len(polynomial.variables) == 1
     maximum_exponent = (
-        _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM
-        if univariate
-        else _MAX_SQUARE_FREE_EXPONENT
+        _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM if univariate else _MAX_DISCRIMINANT_DEGREE
     )
     require_polynomial_budget(
         polynomial,
@@ -317,6 +341,12 @@ def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
         raise _validation_error(
             "discriminant scalar exceeds the canonical digit budget"
         )
+
+    return (
+        None
+        if univariate
+        else discriminant_plan(polynomial, polynomial.variables.index(variable))
+    )
 
 
 def _coefficient_bounds(polynomial: RationalPolynomial) -> tuple[int, int]:
@@ -394,11 +424,65 @@ def _discriminant_component_digit_bound(polynomial: RationalPolynomial) -> int:
     return max(1, numerator_digits, denominator_result_digits)
 
 
-def _admit_square_free(polynomial: RationalPolynomial) -> None:
+def _admit_square_free(polynomial: RationalPolynomial) -> int:
+    """Return the safe exponent dilation for the admitted backend source."""
+
+    if not isinstance(polynomial, RationalPolynomial):
+        raise _validation_error("square-free source must be a RationalPolynomial")
+    terms = polynomial.polynomial.terms
+    if len(terms) == 1 and any(
+        exponent > _MAX_SQUARE_FREE_MULTIPLICITY for exponent in terms[0].exponents
+    ):
+        # A monomial has each variable as a factor with precisely its exponent
+        # as multiplicity. Refuse before asking a kernel for an unencodable value.
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.square_free_multiplicity_budget",
+            message="monomial factor multiplicity exceeds the square-free limit of 64",
+        )
+    if (
+        len(polynomial.variables) == 1
+        and len(terms) == 2
+        and terms[1].exponents == (0,)
+    ):
+        require_polynomial_budget(
+            polynomial,
+            maximum_terms=2,
+            maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
+        )
+        # a*x^n+b (a*b != 0) is square-free: its derivative is a*n*x^(n-1)
+        # and zero is not a root. Decompose a*t+b and lift t -> x^n instead
+        # of allocating a degree-n dense backend polynomial. The backend sees
+        # two coefficients at degree one. Monic normalization b/a has at most
+        # 512-digit components; reconstruction by a needs at most 768 digits
+        # before rational cancellation. Lifting preserves the product identity,
+        # two-term support and the source axis.
+        # Thus n is a representation bound only, independent of kernel work.
+        return terms[0].exponents[0]
     require_polynomial_budget(
         polynomial,
         maximum_terms=_MAX_GCD_TERMS,
-        maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
+        maximum_exponent=_MAX_SQUARE_FREE_GENERAL_EXPONENT,
+    )
+    return 1
+
+
+def _lift_square_free_polynomial(
+    polynomial: RationalPolynomial, dilation: int
+) -> RationalPolynomial:
+    if dilation == 1:
+        return polynomial
+    return RationalPolynomial(
+        variables=polynomial.variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=term.coefficient,
+                    exponents=(term.exponents[0] * dilation,),
+                )
+                for term in polynomial.polynomial.terms
+            )
+        ),
     )
 
 
@@ -497,17 +581,14 @@ def polynomial_gcd(
     """Compute the monic GCD and Bézout identity of two canonical polynomials."""
 
     _run_admission(lambda: _admit_gcd(left, right))
-    left_sympy = rational_polynomial_to_sympy(left)
-    right_sympy = rational_polynomial_to_sympy(right)
-    left_multiplier, right_multiplier, gcd = gcdex(left_sympy, right_sympy)
-    variables = left.variables
+    left_multiplier, right_multiplier, common = bounded_bezout(left, right)
     return PolynomialGcdResult(
         left=left,
         right=right,
-        gcd=_result_polynomial(gcd, variables),
+        gcd=common,
         bezout=PolynomialBezoutIdentity(
-            left_multiplier=_result_polynomial(left_multiplier, variables),
-            right_multiplier=_result_polynomial(right_multiplier, variables),
+            left_multiplier=left_multiplier,
+            right_multiplier=right_multiplier,
         ),
     )
 
@@ -519,7 +600,7 @@ def polynomial_resultant(
 ) -> PolynomialResultantResult:
     """Compute the exact resultant in one declared canonical ring variable."""
 
-    _run_admission(lambda: _admit_resultant(left, right, elimination_variable))
+    plan = _run_admission(lambda: _admit_resultant(left, right, elimination_variable))
     variables = left.variables
     if len(variables) == 1:
         left_flint = _flint_univariate(left)
@@ -533,21 +614,13 @@ def polynomial_resultant(
                 value=_canonical_rational_from_flint(value)
             ),
         )
-    elimination_index = variables.index(elimination_variable)
-    generator = symbols_for_variables(variables)[elimination_index]
-    value = resultant(
-        rational_polynomial_to_sympy(left),
-        rational_polynomial_to_sympy(right),
-        generator,
-    )
-    remaining_variables = tuple(
-        variable for variable in variables if variable != elimination_variable
-    )
+    if plan is None:
+        raise RuntimeError("multivariate invariant admission did not provide a plan")
     return PolynomialResultantResult(
         left=left,
         right=right,
         elimination_variable=elimination_variable,
-        resultant=_invariant_value(value, remaining_variables),
+        resultant=PolynomialValue(value=plan.execute()),
     )
 
 
@@ -556,7 +629,7 @@ def polynomial_discriminant(
 ) -> PolynomialDiscriminantResult:
     """Compute the exact discriminant in one canonical ring variable."""
 
-    _run_admission(lambda: _admit_discriminant(polynomial, variable))
+    plan = _run_admission(lambda: _admit_discriminant(polynomial, variable))
     variables = polynomial.variables
     if len(variables) == 1:
         flint_polynomial = _flint_univariate(polynomial)
@@ -576,14 +649,12 @@ def polynomial_discriminant(
                 value=_canonical_rational_from_flint(value)
             ),
         )
-    variable_index = variables.index(variable)
-    generator = symbols_for_variables(variables)[variable_index]
-    value = discriminant(rational_polynomial_to_sympy(polynomial), generator)
-    remaining_variables = tuple(name for name in variables if name != variable)
+    if plan is None:
+        raise RuntimeError("multivariate invariant admission did not provide a plan")
     return PolynomialDiscriminantResult(
         polynomial=polynomial,
         variable=variable,
-        discriminant=_invariant_value(value, remaining_variables),
+        discriminant=PolynomialValue(value=plan.execute()),
     )
 
 
@@ -592,21 +663,42 @@ def polynomial_square_free_decomposition(
 ) -> PolynomialSquareFreeDecompositionResult:
     """Compute the canonical square-free decomposition of a polynomial."""
 
-    _run_admission(lambda: _admit_square_free(polynomial))
-    source = rational_polynomial_to_sympy(polynomial)
+    dilation = _run_admission(lambda: _admit_square_free(polynomial))
+    backend_source = polynomial
+    if dilation != 1:
+        leading, constant = polynomial.polynomial.terms
+        backend_source = RationalPolynomial(
+            variables=polynomial.variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=leading.coefficient, exponents=(1,)
+                    ),
+                    constant,
+                )
+            ),
+        )
+    source = rational_polynomial_to_sympy(backend_source)
     coefficient, canonical_factors, reconstructed = square_free_decomposition(source)
     factors = tuple(
         PolynomialSquareFreeFactor(
-            factor=_result_polynomial(factor, polynomial.variables),
+            factor=_lift_square_free_polynomial(
+                _result_polynomial(factor, polynomial.variables), dilation
+            ),
             multiplicity=multiplicity,
         )
         for factor, multiplicity in sorted(canonical_factors, key=lambda item: item[1])
     )
+    lifted_reconstruction = _lift_square_free_polynomial(
+        _result_polynomial(reconstructed, polynomial.variables), dilation
+    )
+    if lifted_reconstruction != polynomial:
+        raise RuntimeError("square-free exponent lifting did not reconstruct input")
     return PolynomialSquareFreeDecompositionResult._from_kernel(
         polynomial=polynomial,
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
-        reconstructed=_result_polynomial(reconstructed, polynomial.variables),
+        reconstructed=lifted_reconstruction,
     )
 
 
@@ -644,8 +736,6 @@ def verify_polynomial_gcd(claim: PolynomialGcdResult) -> bool:
     Resource refusal during bounded candidate replay propagates rather than
     returning a mathematical negative.
     """
-
-    from jacobian.math.polynomials._gcd_verification import verify_gcd_relation
 
     return verify_gcd_relation(claim)
 

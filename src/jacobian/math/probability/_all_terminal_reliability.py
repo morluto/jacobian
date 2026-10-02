@@ -14,7 +14,7 @@ from jacobian.catalog.models import (
     MathTool,
     OperationExample,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.probability.all_terminal_reliability import (
     AllTerminalReliabilityResult,
     all_terminal_reliability,
@@ -38,7 +38,7 @@ class AllTerminalReliabilityRequest(StrictModel):
         }
     )
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Nonempty canonical simple undirected graph with at most 20 edges. "
             "Isolated declared vertices participate in the all-terminal event. "

@@ -12,6 +12,26 @@ from sympy import QQ, Poly, Rational, Symbol
 _PROTOCOL_VERSION = 1
 
 
+def _parse_scalar_integer(text: str) -> int:
+    """Decode bounded private scalar metadata without host decimal limits."""
+
+    negative = text.startswith("-")
+    digits = text[1:] if negative else text
+    if (
+        not digits
+        or len(digits) > 32768
+        or any(character < "0" or character > "9" for character in digits)
+        or (len(digits) > 1 and digits[0] == "0")
+        or (negative and digits == "0")
+    ):
+        raise ValueError("malformed SCALE integer")
+    value = 0
+    for offset in range(0, len(digits), 9):
+        chunk = digits[offset : offset + 9]
+        value = value * 10 ** len(chunk) + int(chunk)
+    return -value if negative else value
+
+
 def _polynomial(records: list[Any], symbols: tuple[Any, ...]) -> Any:
     coefficients: dict[tuple[int, ...], Any] = {}
     variable_count = len(symbols)
@@ -96,7 +116,9 @@ def _apply_operation(
             or len(arguments) != 1
         ):
             raise ValueError("malformed SCALE node")
-        return cache[arguments[0]].mul_ground(QQ(int(scalar[0]), int(scalar[1])))
+        return cache[arguments[0]].mul_ground(
+            QQ(_parse_scalar_integer(scalar[0]), _parse_scalar_integer(scalar[1]))
+        )
     if operation == "MULTIPLY":
         if len(arguments) != 2:
             raise ValueError("malformed MULTIPLY node")

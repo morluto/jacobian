@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from math import comb
+from sys import int_info
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
@@ -49,7 +50,13 @@ MAX_STEINER_RESULT_ALLOCATION_UNITS = 1_048_576
 _MAX_STEINER_EXACT_COVER_WORK_UNITS = 256 * 100_000 * 64
 _MAX_STEINER_INTERMEDIATE_UNITS = 8_192
 
-_MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
+# Point/block byte-array construction plus bounded integer-limb intersections,
+# popcounts, and output positions. These units replace repeated subset-tuple
+# enumeration; they are not the old per-block combination count. Limits are
+# expressed in 30-bit-word equivalents; _profile_work_limit scales them for
+# narrower Python integer limbs so platform representation does not narrow
+# the admitted mathematical cases.
+_MAX_CONTAINMENT_TOTAL_WORK_UNITS = 8_000_000
 _MAX_TRADE_TOTAL_WORK_UNITS = 5_000_000
 
 
@@ -692,11 +699,32 @@ def _profile_work_units(
 ) -> int:
     points, blocks = _containment_axes(incidence)
     subset_count = _subset_count(len(points), order)
-    generated_block_subsets = sum(_subset_count(len(block), order) for block in blocks)
-    canonicalization_units = len(points) * len(blocks) + sum(map(len, blocks))
-    return canonicalization_units + max(1, order) * (
-        subset_count + generated_block_subsets
+    source_units = len(points) + len(blocks) + sum(map(len, blocks))
+    if order == 0 or subset_count == 0:
+        return source_units + subset_count
+    eligible_blocks = tuple(block for block in blocks if len(block) >= order)
+    block_count = len(eligible_blocks)
+    byte_count = (block_count + 7) // 8
+    word_count = (block_count + int_info.bits_per_digit - 1) // int_info.bits_per_digit
+    # Zero-filled byte arrays, one byte update per membership, then one linear
+    # conversion per point. The subset loop needs at most t-1 intersections
+    # and one popcount, each on at most word_count Python-integer limbs.
+    indexing_units = (
+        len(points) * (byte_count + word_count)
+        + sum(map(len, eligible_blocks))
+        + block_count
     )
+    # Include tuple coordinates, histogram/summary passes and result assembly.
+    output_units = subset_count * (order * (1 + word_count) + 6)
+    histogram_rows = min(subset_count, block_count + 1)
+    histogram_sort_units = histogram_rows * histogram_rows.bit_length()
+    return source_units + indexing_units + output_units + histogram_sort_units
+
+
+def _profile_work_limit(base_limit: int) -> int:
+    """Price actual limbs against a portable 30-bit-equivalent work limit."""
+
+    return base_limit * ((30 + int_info.bits_per_digit - 1) // int_info.bits_per_digit)
 
 
 def _require_containment_profile_admitted(
@@ -717,7 +745,7 @@ def _require_containment_profile_admitted(
         )
 
     total_work = _profile_work_units(incidence, order)
-    if total_work > _MAX_CONTAINMENT_TOTAL_WORK_UNITS:
+    if total_work > _profile_work_limit(_MAX_CONTAINMENT_TOTAL_WORK_UNITS):
         raise IncidenceStructureAdmissionError(
             "containment_work_budget_exceeded",
             "containment profile exceeds the execution work budget",
@@ -790,7 +818,7 @@ def _require_incidence_trade_admitted(
         _profile_work_units(left, order) + _profile_work_units(right, order)
         for order in range(1, max_order + 1)
     )
-    if work_per_pass > _MAX_TRADE_TOTAL_WORK_UNITS:
+    if work_per_pass > _profile_work_limit(_MAX_TRADE_TOTAL_WORK_UNITS):
         raise IncidenceStructureAdmissionError(
             "trade_work_budget_exceeded",
             "trade comparison exceeds the execution work budget",

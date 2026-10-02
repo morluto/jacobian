@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from math import lcm
+from math import gcd, lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -32,6 +32,8 @@ from jacobian.math.matrices.canonical_forms._models import (
     MAX_CANONICAL_FORM_DIMENSION,
     MAX_CANONICAL_FORM_SCALAR_DIGITS,
     MAX_CENTRALIZER_OUTPUT_DIGIT_WORK,
+    MAX_CENTRALIZER_OUTPUT_ENTRIES,
+    MAX_CENTRALIZER_PRESOLVE_DIGIT_WORK,
     MAX_CENTRALIZER_RREF_WORK,
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK,
@@ -1051,7 +1053,7 @@ def decide_similarity(left: RationalMatrix, right: RationalMatrix) -> Similarity
 def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
     """Return a complete exact basis of the centralizer {X : AX = XA}."""
 
-    _admit_square(matrix)
+    _admit_centralizer_source(matrix)
     n = len(matrix.entries)
     entries = _matrix_entries(matrix)
     diagonal = tuple(entries[index][index] for index in range(n))
@@ -1070,6 +1072,11 @@ def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
         basis = _centralizer_two_by_two_basis(matrix, entries)
         return CentralizerResult._from_kernel(matrix=matrix, dimension=2, basis=basis)
     if is_diagonal:
+        multiplicities: dict[Fraction, int] = {}
+        for value in diagonal:
+            multiplicities[value] = multiplicities.get(value, 0) + 1
+        basis_count = sum(size * size for size in multiplicities.values())
+        _admit_centralizer_output_entries(n, basis_count)
         if is_scalar:
             # A scalar matrix has the full matrix algebra as its centralizer.
             basis = _centralizer_matrix_units(n)
@@ -1089,6 +1096,15 @@ def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
             matrix=matrix, dimension=len(basis), basis=basis
         )
 
+    if n > MAX_CANONICAL_FORM_DIMENSION:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.work",
+            message=(
+                "general centralizer systems are bounded to "
+                f"order {MAX_CANONICAL_FORM_DIMENSION}"
+            ),
+        )
     rows = _centralizer_system(entries)
     _admit_centralizer_system(rows, n)
     vectors = _centralizer_nullspace(rows)
@@ -1135,26 +1151,134 @@ def _centralizer_matrix_units(
     return tuple(units)
 
 
+def _admit_centralizer_source(matrix: RationalMatrix) -> None:
+    """Bound source inspection without a neighboring canonical-form order cap."""
+
+    if not isinstance(matrix, RationalMatrix):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.domain_invalid",
+            message="centralizer requires a RationalMatrix over QQ",
+        )
+    n = matrix.row_count
+    if n == 0 or n != matrix.column_count:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.shape_mismatch",
+            message="centralizer requires a nonempty square matrix",
+        )
+    # Every centralizer has dimension at least n (over QQ as well), so even
+    # the smallest dense basis stores n^3 cells. This also bounds source scans.
+    _admit_centralizer_output_entries(n, n)
+    if any(
+        canonical_rational_component_digits(value) > MAX_CANONICAL_FORM_SCALAR_DIGITS
+        for row in matrix.entries
+        for value in row
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.source_height",
+            message=(
+                "centralizer source components exceed the "
+                f"{MAX_CANONICAL_FORM_SCALAR_DIGITS}-digit bound"
+            ),
+        )
+
+
+def _admit_centralizer_output_entries(dimension: int, basis_count: int) -> None:
+    if dimension * dimension * basis_count > MAX_CENTRALIZER_OUTPUT_ENTRIES:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.output",
+            message=(
+                "centralizer dense basis exceeds the "
+                f"{MAX_CENTRALIZER_OUTPUT_ENTRIES:,}-entry allocation bound"
+            ),
+        )
+
+
+def _charge_centralizer_presolve(work: int, amount: int) -> int:
+    work += amount
+    if work > MAX_CENTRALIZER_PRESOLVE_DIGIT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.presolve",
+            message=(
+                "centralizer primitive-row reduction exceeds the "
+                f"{MAX_CENTRALIZER_PRESOLVE_DIGIT_WORK:,}-unit digit-work bound"
+            ),
+        )
+    return work
+
+
 def _centralizer_system(
     entries: tuple[tuple[Fraction, ...], ...],
-) -> tuple[tuple[CanonicalRational, ...], ...]:
-    """Build the row-major commutator system without invoking generic nullspace."""
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Build primitive integer equations with the same commutator kernel.
+
+    Only diagonal differences require new rational arithmetic during assembly.
+    Each row is cleared and divided by its integer content before estimating
+    RREF work or determinant minors. All presolve costs remain source-priced.
+    """
 
     n = len(entries)
-    rows: list[tuple[CanonicalRational, ...]] = []
-    # Kronecker system (I(x)A - A^T(x)I) vec(X) = 0, row-major vec.
+    source_digits = max(
+        max(
+            _integer_decimal_digits(value.numerator),
+            _integer_decimal_digits(value.denominator),
+        )
+        for row in entries
+        for value in row
+    )
+    # Dense zero allocation plus n^2 differences of source components. Each
+    # difference can have 2*d+1 numerator digits and 2*d denominator digits.
+    work = _charge_centralizer_presolve(0, n**4 + n**2 * (2 * source_digits + 1) ** 2)
+    rows: list[tuple[Fraction, ...]] = []
     for i in range(n):
         for j in range(n):
-            row: list[CanonicalRational] = []
+            row = [Fraction(0)] * (n * n)
             for k in range(n):
-                for ell in range(n):
-                    value = Fraction(0)
-                    if j == ell:
-                        value += entries[i][k]
-                    if i == k:
-                        value -= entries[ell][j]
-                    row.append(CanonicalRational.from_fraction(value))
-            rows.append(tuple(row))
+                row[k * n + j] = entries[i][k]
+                if k != j:
+                    row[i * n + k] = -entries[k][j]
+            row[i * n + j] = entries[i][i] - entries[j][j]
+            nonzero = tuple(value for value in row if value)
+            denominator = 1
+            for value in nonzero:
+                # Price the product before lcm; any gcd cancellation can only
+                # reduce this bound. No unbounded common denominator is built.
+                digits = _decimal_digit_upper_bound(
+                    denominator.bit_length() + value.denominator.bit_length()
+                )
+                work = _charge_centralizer_presolve(work, digits**2)
+                denominator = lcm(denominator, value.denominator)
+            largest_bits = max(
+                (
+                    abs(value.numerator).bit_length()
+                    + denominator.bit_length()
+                    - value.denominator.bit_length()
+                    + 1
+                    for value in nonzero
+                ),
+                default=1,
+            )
+            digits = _decimal_digit_upper_bound(
+                max(largest_bits, denominator.bit_length())
+            )
+            # Denominator quotient, multiplication, gcd, and exact division;
+            # charge the larger cleared-component or common-denominator width.
+            work = _charge_centralizer_presolve(work, 4 * len(nonzero) * digits**2)
+            cleared = tuple(
+                value.numerator * (denominator // value.denominator) if value else 0
+                for value in row
+            )
+            content = gcd(*cleared)
+            rows.append(
+                tuple(
+                    Fraction(value // content) if content else Fraction(0)
+                    for value in cleared
+                )
+            )
     return tuple(rows)
 
 
@@ -1167,13 +1291,13 @@ def _decimal_digit_upper_bound(bits: int) -> int:
 
 
 def _admit_centralizer_system(
-    rows: tuple[tuple[CanonicalRational, ...], ...], dimension: int
+    rows: tuple[tuple[Fraction, ...], ...], dimension: int
 ) -> None:
     """Admit derived RREF work and the exact basis height before FLINT."""
 
     system_axis = dimension * dimension
     scalar_digits = max(
-        (canonical_rational_component_digits(value) for row in rows for value in row),
+        (_integer_decimal_digits(value.numerator) for row in rows for value in row),
         default=1,
     )
     work = system_axis * system_axis * system_axis * scalar_digits
@@ -1187,33 +1311,25 @@ def _admit_centralizer_system(
             ),
         )
 
-    # Bound a minor with Hadamard's inequality after clearing each row's
-    # denominators.  The sparse row norm is materially tighter than charging
-    # every derived column, while remaining a sound bound for arbitrary input.
-    row_numerator_bits: list[int] = []
-    row_denominator_bits: list[int] = []
+    # Primitive rows are integral. By Cramer's rule each fundamental free-
+    # column coefficient is a ratio of rank-sized minors. Hadamard bounds both
+    # numerator and denominator by the same product of row norms; denominators
+    # from the source play no role after the kernel-preserving row scaling.
+    row_norm_bits: list[int] = []
     for row in rows:
-        fractions = tuple(value.as_fraction() for value in row)
-        denominator = lcm(*(value.denominator for value in fractions))
-        cleared = tuple(
-            abs(value.numerator) * (denominator // value.denominator)
-            for value in fractions
-        )
-        largest = max(cleared, default=0)
-        nonzero_count = sum(value != 0 for value in cleared)
+        largest = max((abs(value.numerator) for value in row), default=0)
+        nonzero_count = sum(value != 0 for value in row)
         norm_bits = (nonzero_count.bit_length() + 1) // 2 if nonzero_count else 0
-        row_numerator_bits.append(largest.bit_length() + norm_bits)
-        row_denominator_bits.append(denominator.bit_length())
-    rank_bound = system_axis
-    numerator_bits = sum(sorted(row_numerator_bits, reverse=True)[:rank_bound])
-    denominator_bits = sum(sorted(row_denominator_bits, reverse=True)[:rank_bound])
-    output_digits = _decimal_digit_upper_bound(numerator_bits + denominator_bits)
+        row_norm_bits.append(largest.bit_length() + norm_bits)
+    # The identity commutes, so rank is at most n^2 - 1.
+    minor_bits = sum(sorted(row_norm_bits, reverse=True)[: system_axis - 1])
+    output_digits = _decimal_digit_upper_bound(minor_bits)
     if output_digits > MAX_CANONICAL_FORM_SCALAR_DIGITS:
         raise OperationResourceAdmissionError(
             location=("matrix",),
             code="matrix.centralizer.output",
             message=(
-                "centralizer basis components exceed the canonical "
+                "centralizer basis components exceed the "
                 f"{MAX_CANONICAL_FORM_SCALAR_DIGITS}-digit result bound"
             ),
         )
@@ -1230,14 +1346,13 @@ def _admit_centralizer_system(
 
 
 def _centralizer_nullspace(
-    rows: tuple[tuple[CanonicalRational, ...], ...],
+    rows: tuple[tuple[Fraction, ...], ...],
 ) -> tuple[tuple[Fraction, ...], ...]:
     """Compute fundamental free-column nullspace vectors through FLINT."""
 
     from jacobian.math.matrices._flint import rational_rref
 
-    rational_rows = tuple(tuple(value.as_fraction() for value in row) for row in rows)
-    reduced, rank = rational_rref(rational_rows)
+    reduced, rank = rational_rref(rows)
     pivots = tuple(
         next(column for column, value in enumerate(row) if value)
         for row in reduced[:rank]

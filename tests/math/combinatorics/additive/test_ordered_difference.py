@@ -191,14 +191,16 @@ class TestOrderedDifferenceProfile:
         assert seen == {(i, j) for i in range(n) for j in range(n) if i != j}
 
     def test_result_rejects_later_collision_as_first_witness(self) -> None:
-        """The witness must be pairs[0] of the first sorted repeated entry,
-        not a designated pair from any later repeated entry."""
+        """The witness selects the first two pairs of the first repeated entry."""
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
         result = _run_ordered(req)
         payload = result.model_dump(mode="json")
         repeated = [e for e in payload["entries"] if int(e["multiplicity"]) > 1]
         assert len(repeated) >= 2
-        payload["first_collision"] = repeated[-1]["pairs"][0]
+        payload["first_collision"] = {
+            "difference": repeated[-1]["difference"],
+            "pairs": repeated[-1]["pairs"][:2],
+        }
         forged = OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
         assert not verify_ordered_difference_profile(forged)
 
@@ -225,24 +227,34 @@ class TestOrderedDifferenceProfile:
     ) -> None:
         result = _run_ordered(_request((0, 0), (1, 0), (0, 1), (1, 1)))
         assert result.first_collision is not None
-        forged_pair = result.first_collision.model_copy(update={"right_index": True})
-        forged = result.model_copy(update={"first_collision": forged_pair})
+        forged_pair = result.first_collision.pairs[0].model_copy(
+            update={"right_index": True}
+        )
+        collision = result.first_collision.model_copy(
+            update={"pairs": (forged_pair, result.first_collision.pairs[1])}
+        )
+        forged = result.model_copy(update={"first_collision": collision})
 
         assert not verify_ordered_difference_profile(forged)
 
-    def test_first_collision_is_canonical_minimum_pair(self) -> None:
-        """The witness must equal the lexicographic minimum pair of the
-        first sorted repeated-difference entry."""
+    def test_first_collision_is_canonical_minimum_two_pairs(self) -> None:
+        """The witness includes the first difference and its first two pairs."""
         req = _request((0, 0), (1, 0), (0, 1), (1, 1), (3, 2))
         result = _run_ordered(req)
         assert result.has_repeated_difference
         first_repeated = next(e for e in result.entries if e.multiplicity > 1)
-        minimum = min((p.left_index, p.right_index) for p in first_repeated.pairs)
+        expected = tuple(
+            (p.left_index, p.right_index) for p in first_repeated.pairs[:2]
+        )
         assert result.first_collision is not None
+        assert result.first_collision.difference == first_repeated.difference
         assert (
-            result.first_collision.left_index,
-            result.first_collision.right_index,
-        ) == minimum
+            tuple(
+                (pair.left_index, pair.right_index)
+                for pair in result.first_collision.pairs
+            )
+            == expected
+        )
 
     def test_request_coordinate_bound_enforced_before_integer_conversion(self) -> None:
         """A seven-digit coordinate must fail the domain digit bound on the

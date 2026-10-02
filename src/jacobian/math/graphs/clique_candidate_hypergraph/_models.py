@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_EDGES,
     MAX_SIMPLE_GRAPH_VERTICES,
@@ -174,7 +175,7 @@ class CliqueCandidateHypergraphResult(StrictModel):
 class AllCliqueCandidatesRequest(StrictModel):
     """Request every nontrivial clique as an edge-resource candidate family."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
 
 __all__ = [

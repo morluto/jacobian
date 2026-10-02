@@ -10,6 +10,10 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    SimpleUndirectedGraphInput,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.coloring._models import (
     MAX_SOLVER_CONFLICT_BUDGET,
 )
@@ -29,7 +33,7 @@ MAX_INDUCED_LEDGER_CONFLICTS = 600_000_000
 
 
 def _induced_graph_schema() -> JsonSchemaValue:
-    schema = SimpleUndirectedGraph.model_json_schema()
+    schema = simple_graph_input_schema()
     schema["description"] = (
         "A finite simple graph on Jacobian's canonical axis. The induced deletion "
         "profile admits requests with at most 8 vertices (256 subsets) and checks "
@@ -39,8 +43,8 @@ def _induced_graph_schema() -> JsonSchemaValue:
 
 
 InducedDeletionGraph = Annotated[
-    SimpleUndirectedGraph,
-    WithJsonSchema(_induced_graph_schema()),
+    SimpleUndirectedGraphInput,
+    WithJsonSchema(_induced_graph_schema(), mode="validation"),
 ]
 
 

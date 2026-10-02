@@ -6,6 +6,12 @@ from pydantic import WithJsonSchema
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    ColoredUndirectedGraphInput,
+    SimpleUndirectedGraphInput,
+    colored_graph_input_schema,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     ColoredUndirectedGraph,
@@ -22,20 +28,31 @@ def _bounded_graph_schema(
     maximum: int,
     description: str,
 ) -> JsonSchemaValue:
-    schema = graph_type.model_json_schema()
+    schema = (
+        colored_graph_input_schema()
+        if graph_type is ColoredUndirectedGraph
+        else simple_graph_input_schema()
+    )
     schema["description"] = description
-    definition = schema.get("$defs", {}).get("SimpleUndirectedGraph")
+    definition = schema.get("$defs", {}).get("_UnorientedSimpleGraph")
     if definition is None:
         definition = schema
     definition["properties"]["vertices"]["maxItems"] = maximum
-    if "SimpleUndirectedGraph" in schema.get("$defs", {}):
-        schema["properties"]["graph"] = definition
+    if "_UnorientedSimpleGraph" in schema.get("$defs", {}):
+        schema["properties"]["graph"] = {
+            **definition,
+            **{
+                key: value
+                for key, value in schema["properties"]["graph"].items()
+                if key != "$ref"
+            },
+        }
         del schema["$defs"]
     return schema
 
 
 RainbowPatternGraph = Annotated[
-    SimpleUndirectedGraph,
+    SimpleUndirectedGraphInput,
     WithJsonSchema(
         _bounded_graph_schema(
             SimpleUndirectedGraph,
@@ -44,11 +61,12 @@ RainbowPatternGraph = Annotated[
                 "A pattern graph within the canonical simple-graph vertex bound; "
                 "admission uses exact work and retained-label bounds."
             ),
-        )
+        ),
+        mode="validation",
     ),
 ]
 RainbowHostGraph = Annotated[
-    ColoredUndirectedGraph,
+    ColoredUndirectedGraphInput,
     WithJsonSchema(
         _bounded_graph_schema(
             ColoredUndirectedGraph,
@@ -58,7 +76,8 @@ RainbowHostGraph = Annotated[
                 "bound and with a total edge coloring; admission uses exact work "
                 "and retained-label bounds."
             ),
-        )
+        ),
+        mode="validation",
     ),
 ]
 

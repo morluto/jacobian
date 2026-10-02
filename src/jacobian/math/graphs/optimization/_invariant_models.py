@@ -8,6 +8,7 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.optimization._models import (
     OptimizationSearchStep,
     OptimizationStatus,
@@ -27,7 +28,7 @@ def _require_invariant_graph_order(graph: SimpleUndirectedGraph) -> None:
 
 
 class GraphInvariantRequest(StrictModel):
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_supported_order(self) -> Self:
@@ -36,7 +37,7 @@ class GraphInvariantRequest(StrictModel):
 
 
 class GraphMaximumMatchingRequest(StrictModel):
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_supported_order(self) -> Self:

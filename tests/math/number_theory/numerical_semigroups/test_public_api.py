@@ -21,7 +21,6 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "number_theory.numerical_semigroup.factorization_distance_matrix.compute",
         "number_theory.numerical_semigroup.betti_elements.compute",
         "number_theory.numerical_semigroup.minimal_presentation.compute",
-        "number_theory.numerical_semigroup.presentation_binomials.compute",
         "number_theory.numerical_semigroup.presentation_degree_profile.compute",
         "number_theory.numerical_semigroup.delta_set.compute",
         "number_theory.numerical_semigroup.catenary_degree.compute",
@@ -69,7 +68,10 @@ def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the numerical_semigroups public API."""
     expected = (
         "FactorizationGraph",
+        "MinimalPresentationRelation",
         "NumericalSemigroup",
+        "RelationBinomial",
+        "RelationBinomialsResult",
         "apery_set",
         "belongs",
         "elasticity",
@@ -82,6 +84,7 @@ def test_exact_public_api_symbols() -> None:
         "factorization_lengths",
         "factorizations",
         "minimal_generating_system",
+        "relation_binomials",
         "verify_elasticity",
         "verify_element_elasticity",
         "verify_summary",

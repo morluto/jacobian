@@ -11,6 +11,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.graphs._input import (
+    IndexedSimpleUndirectedGraphInput,
+    SimpleUndirectedGraphInput,
+)
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
@@ -146,7 +150,24 @@ MAX_GRAPH_POLYNOMIAL_EDGES = 24
 class GraphPolynomialRequest(StrictModel):
     """Request a Tutte, chromatic, or flow polynomial on a tractable graph."""
 
-    graph: IndexedSimpleUndirectedGraph
+    graph: IndexedSimpleUndirectedGraphInput = Field(
+        description=(
+            "Graph for an exact Tutte, chromatic, or flow polynomial. "
+            "This operation admits at most "
+            f"{MAX_GRAPH_POLYNOMIAL_VERTICES} vertices and "
+            f"{MAX_GRAPH_POLYNOMIAL_EDGES} edges. These are computation limits, "
+            "not limits of the shared graph value; larger graphs require an "
+            "applicable backend with a wider admitted envelope."
+        ),
+        # Conjoin request-local limits with the canonical graph reference;
+        # neither its reusable definition nor owner-side admission changes.
+        json_schema_extra={
+            "properties": {
+                "vertex_count": {"maximum": MAX_GRAPH_POLYNOMIAL_VERTICES},
+                "edges": {"maxItems": MAX_GRAPH_POLYNOMIAL_EDGES},
+            }
+        },
+    )
 
 
 MAX_MATCHING_VERTICES = 16
@@ -156,7 +177,7 @@ MAX_MATCHING_EDGES = 48
 class MatchingPolynomialRequest(StrictModel):
     """Request a matching polynomial on a graph this recurrence can exhaust."""
 
-    graph: IndexedSimpleUndirectedGraph
+    graph: IndexedSimpleUndirectedGraphInput
 
 
 class TreeIndependencePolynomialRequest(StrictModel):
@@ -180,7 +201,7 @@ class TreeIndependencePolynomialRequest(StrictModel):
         }
     )
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical finite simple undirected graph. It may contain at most "
             f"{MAX_INDEPENDENCE_POLYNOMIAL_VERTICES} vertices and must be a "

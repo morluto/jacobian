@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_EDGES,
     MAX_SIMPLE_GRAPH_VERTICES,
@@ -41,7 +42,7 @@ class EdgeCliquePartitionRequest(StrictModel):
     they cover their edges twice and fail as an invalid partition.
     """
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     parts: tuple[PartitionPart, ...] = Field(
         max_length=MAX_PARTITION_PARTS,
         description=(

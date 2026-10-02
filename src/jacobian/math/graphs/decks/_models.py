@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
@@ -89,7 +90,7 @@ class AnonymousGraphCardMultisetRequest(StrictModel):
     """Unordered finite multiset input; card_order disambiguates the empty case."""
 
     card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
-    cards: tuple[SimpleUndirectedGraph, ...] = Field(
+    cards: tuple[SimpleUndirectedGraphInput, ...] = Field(
         max_length=MAX_ANONYMOUS_CARD_CLASSES,
         description=(
             "An unordered list of simple graphs, each with exactly card_order "
@@ -221,7 +222,7 @@ class AnonymousGraphCardMultiset(StrictModel):
 class VertexDeckRequest(StrictModel):
     """Compute the complete source-bound vertex-deletion family of a graph."""
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Simple graph with at most 64 vertices; aggregate retained card edges "
             "must fit the 130000-edge complete-family output envelope."
@@ -439,7 +440,7 @@ class VertexDeckAnonymousMultisetRequest(StrictModel):
 class EdgeDeckRequest(StrictModel):
     """Compute one card for each source edge deletion."""
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Simple graph whose edge-deletion cards have aggregate output at most "
             "130000 retained edge entries (the bound is |E| * max(|E|-1, 0))."
@@ -674,7 +675,7 @@ class VertexDeckInducedSubgraphCountRequest(StrictModel):
     """Count an induced pattern from a complete vertex deck."""
 
     deck: UnlabelledVertexDeck
-    pattern: SimpleUndirectedGraph
+    pattern: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_proper_pattern(self) -> Self:
@@ -777,7 +778,7 @@ class VertexDeckSubgraphCountRequest(StrictModel):
     """Count ordinary (not necessarily induced) copies of a proper pattern."""
 
     deck: UnlabelledVertexDeck
-    pattern: SimpleUndirectedGraph
+    pattern: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_proper_pattern(self) -> Self:

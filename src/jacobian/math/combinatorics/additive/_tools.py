@@ -4,6 +4,7 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.additive._models import (
+    _MAX_COORDINATE_DIGITS,
     _MAX_DIMENSION,
     _MAX_VECTOR_SET_SIZE,
     AdditiveEnergyRequest,
@@ -345,9 +346,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute the ordered-difference profile of a set in Z^d",
         description="Given a finite set A in Z^d, return r_{A-A}(v) = |{(x,y) in A^2 : "
         "x != y, x - y = v}| for every nonzero difference v, preserving every "
-        f"ordered source pair. Inputs are bounded: 1<=d<={_MAX_DIMENSION}, each coordinate "
-        f"at most 6 digits in magnitude, vectors distinct and equal-length, set "
-        f"size at most {_MAX_VECTOR_SET_SIZE}.  A Sidon decision, additive "
+        f"ordered source pair. Inputs use 1<=d<={_MAX_DIMENSION}, with each source coordinate "
+        f"at most {_MAX_COORDINATE_DIGITS} digits in magnitude. Vectors must be distinct and "
+        f"share one dimension; their norms may differ. Set size is 1..{_MAX_VECTOR_SET_SIZE}. "
+        f"Derived differences may have {_MAX_COORDINATE_DIGITS + 1} digits per coordinate. "
+        "A Sidon decision, additive "
         "energy, or collision count is a cheap projection of this complete profile.",
         request_type=OrderedDifferenceProfileRequest,
         result_type=OrderedDifferenceProfileResult,
@@ -356,7 +359,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="three_vectors",
-                description="Compute the ordered-difference profile for {(0,0), (1,0), (0,1)}; "
+                description="Compute the ordered-difference profile for mixed-norm vectors {(0,0), (1,0), (0,1)}; "
                 "vectors must be non-empty, distinct, share the same dimension "
                 f"1..{_MAX_DIMENSION}, each coordinate is at most 6 digits in magnitude, and at "
                 f"most {_MAX_VECTOR_SET_SIZE} vectors are accepted.",

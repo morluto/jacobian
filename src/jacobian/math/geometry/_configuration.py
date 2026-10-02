@@ -117,14 +117,14 @@ CONFIGURATION_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="geometry.points.circumradius_profile.compute",
-        title="Compute circumradius data for all triples",
+        title="Compute squared circumradius data for all triples",
         description="Given a bounded rational planar point configuration (3..32 points, each "
         "coordinate at most 256 digits, worst-case profile size "
         "C(n,3)*(80*max_digits+80) characters within the 8,000,000-character "
         "output budget) return the complete circumradius squared for every unordered "
         "triple, with explicit degenerate (collinear) disposition. Each entry includes "
         "the source-labelled triple indices and the exact rational squared "
-        "circumradius.",
+        "circumradius. Concyclic quadruples are allowed; general position is not checked.",
         request_type=CircumradiusProfileRequest,
         result_type=CircumradiusProfileResult,
         run=circumradius_profile,

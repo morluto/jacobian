@@ -279,7 +279,11 @@ class GenericFiberCertificate(StrictModel):
 
     ``basis_from_source[i][j]`` is the coefficient multiplying source
     generator ``F_i-t_i`` in basis polynomial ``j``. Thus
-    ``basis = source_generators * basis_from_source``.
+    ``basis = source_generators * basis_from_source``. The basis need not be
+    monic, reduced, or irredundant. For a finite nonempty fiber,
+    ``standard_monomials`` is the complete ascending LEX complement of the
+    leading ideal; for an empty or positive-dimensional fiber it is empty.
+    The named consumer checks these mathematical relations; decoding is structural.
     """
 
     target_parameters: tuple[PolynomialVariable, ...] = Field(
@@ -406,27 +410,6 @@ GenericDegreeOutcome = Literal[
     "NOT_DOMINANT",
     "DOMINANT_NOT_GENERICALLY_FINITE",
 ]
-
-
-def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
-    """Report whether the certificate basis presents the constant-one ideal."""
-
-    if len(certificate.basis) != 1 or len(certificate.basis[0].terms) != 1:
-        return False
-    term = certificate.basis[0].terms[0]
-    if term.source_exponents != (0,) * len(certificate.source_variable_order):
-        return False
-    constant = (0,) * len(certificate.target_parameters)
-    numerator = term.coefficient.numerator.terms
-    denominator = term.coefficient.denominator.terms
-    return (
-        len(numerator) == 1
-        and len(denominator) == 1
-        and numerator[0].exponents == constant
-        and denominator[0].exponents == constant
-        and numerator[0].coefficient.as_fraction() == 1
-        and denominator[0].coefficient.as_fraction() == 1
-    )
 
 
 class GenericDegreeResult(StrictModel):

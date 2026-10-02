@@ -9,6 +9,11 @@ from tests.math.number_theory.numerical_semigroups._support import (
 )
 
 from jacobian.canonical import encode_strict_json
+from jacobian.math.number_theory.numerical_semigroups import (
+    MinimalPresentationRelation,
+    RelationBinomialsResult,
+    relation_binomials,
+)
 from jacobian.math.number_theory.numerical_semigroups._element_invariant_models import (
     ElementCatenaryDegreeRequest,
     ElementCatenaryDegreeResult,
@@ -42,8 +47,6 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
 from jacobian.math.number_theory.numerical_semigroups._presentation_models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
-    PresentationBinomialsRequest,
-    PresentationBinomialsResult,
 )
 from jacobian.math.number_theory.numerical_semigroups._tools import (
     TOOLS,
@@ -59,7 +62,6 @@ from jacobian.math.number_theory.numerical_semigroups._tools import (
     compute_factorization_lengths,
     compute_factorizations,
     compute_minimal_presentation,
-    compute_presentation_binomials,
 )
 
 
@@ -166,7 +168,7 @@ class TestFactorizations:
             MinimalPresentationResult,
             {"betti_elements": (), "relations": ()},
         ),
-        (PresentationBinomialsResult, {"binomials": ()}),
+        (RelationBinomialsResult, {"binomials": ()}),
         (
             DeltaSetResult,
             {"delta_set": (), "periodicity_bound": 0, "checked_through": 0},
@@ -520,29 +522,22 @@ class TestMinimalPresentation:
             )
 
 
-class TestPresentationBinomials:
-    def test_binomials_accept_relations_on_the_normalized_axis(self) -> None:
+class TestRelationBinomials:
+    def test_actual_presentation_relations_keep_the_producer_axis(self) -> None:
         presentation = compute_minimal_presentation(
             MinimalPresentationRequest(generators=(8, 5, 3))
         )
-        result = compute_presentation_binomials(
-            PresentationBinomialsRequest(
-                generators=(3, 8, 5), relations=presentation.relations
-            )
+        result = relation_binomials(
+            presentation.minimal_generators, presentation.relations
         )
-
         assert result.minimal_generators == (3, 5)
         assert result.binomials[0].left_exponents == (5, 0)
         assert result.binomials[0].right_exponents == (0, 3)
 
     def test_binomials_3_5(self) -> None:
-        req = PresentationBinomialsRequest.model_validate(
-            {
-                "generators": (3, 5),
-                "relations": [{"first": [5, 0], "second": [0, 3]}],
-            }
+        result = relation_binomials(
+            (3, 5), (MinimalPresentationRelation(first=(5, 0), second=(0, 3)),)
         )
-        result = compute_presentation_binomials(req)
         assert len(result.binomials) == 1
         b = result.binomials[0]
         assert b.left_coefficient == 1
@@ -551,35 +546,22 @@ class TestPresentationBinomials:
         assert b.right_exponents == (0, 3)
 
     def test_binomials_4_6_9(self) -> None:
-        req = PresentationBinomialsRequest.model_validate(
-            {
-                "generators": (4, 6, 9),
-                "relations": [
-                    {"first": [3, 0, 0], "second": [0, 2, 0]},
-                    {"first": [0, 3, 0], "second": [0, 0, 2]},
-                ],
-            }
+        result = relation_binomials(
+            (4, 6, 9),
+            (
+                MinimalPresentationRelation(first=(3, 0, 0), second=(0, 2, 0)),
+                MinimalPresentationRelation(first=(0, 3, 0), second=(0, 0, 2)),
+            ),
         )
-        result = compute_presentation_binomials(req)
         assert len(result.binomials) == 2
 
-    def test_binomials_rejects_empty_relations(self) -> None:
-        result = compute_presentation_binomials(
-            PresentationBinomialsRequest.model_validate(
-                {"generators": (1,), "relations": []}
-            )
-        )
-        assert result.binomials == ()
+    def test_binomials_accept_empty_relation_family(self) -> None:
+        assert relation_binomials((1,), ()).binomials == ()
 
     def test_binomials_reject_nonrelations(self) -> None:
-        with operation_domain_error():
-            compute_presentation_binomials(
-                PresentationBinomialsRequest.model_validate(
-                    {
-                        "generators": (3, 5),
-                        "relations": ({"first": (1, 0), "second": (0, 1)},),
-                    }
-                )
+        with pytest.raises(ValueError, match="same semigroup degree"):
+            relation_binomials(
+                (3, 5), (MinimalPresentationRelation(first=(1, 0), second=(0, 1)),)
             )
 
 
@@ -647,7 +629,6 @@ class TestGeneratorEnvelopeIsSchemaVisible:
             FactorizationGraphComputeRequest,
             FactorizationLengthsComputeRequest,
             MinimalPresentationRequest,
-            PresentationBinomialsRequest,
         ):
             schema = model.model_json_schema()
             description = schema["properties"]["generators"]["description"]
@@ -678,7 +659,6 @@ class TestGeneratorEnvelopeIsSchemaVisible:
         tools = {tool.operation_id: tool for tool in TOOLS}
         for operation_id in (
             "number_theory.numerical_semigroup.factorizations.compute",
-            "number_theory.numerical_semigroup.presentation_binomials.compute",
         ):
             assert f"each at most {MAX_GENERATOR}" in tools[operation_id].description
         for operation_id in ("number_theory.numerical_semigroup.elasticity.compute",):

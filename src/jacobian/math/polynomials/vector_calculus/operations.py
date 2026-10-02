@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from fractions import Fraction
 
 import sympy
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -21,6 +27,7 @@ from jacobian.math.polynomials.values import RationalPolynomial
 from jacobian.math.polynomials.vector_calculus._models import (
     _MAX_COEFFICIENT_DIGITS,
     _MAX_TERMS,
+    _MAX_VECTOR_COEFFICIENT_DIGIT_WORK,
     ScalarResult,
     VectorResult,
     _require_field_polynomial,
@@ -53,30 +60,58 @@ def _admit_field_polynomial(
     *,
     label: str,
     location: tuple[str | int, ...],
+    maximum_coefficient_digits: int = _MAX_COEFFICIENT_DIGITS,
 ) -> None:
     """Apply the field polynomial envelope with a precise source location."""
 
     _run_admission(
-        lambda: _require_field_polynomial(polynomial, label=label),
+        lambda: _require_field_polynomial(
+            polynomial,
+            label=label,
+            maximum_coefficient_digits=maximum_coefficient_digits,
+        ),
         location=location,
     )
 
 
-def _require_dense_scalar_derivative_budget(polynomial: RationalPolynomial) -> None:
-    """Bound one scalar polynomial assembled from all its partials.
+def _require_scalar_derivative_budget(
+    polynomial: RationalPolynomial,
+    *,
+    order: int,
+    axes: Iterable[int],
+) -> None:
+    """Bound the union of surviving partial supports before symbolic expansion.
 
-    The Laplacian and a directional derivative collect partials into one
-    polynomial, so their independent terms can remain distinct.  Keep their
-    existing conservative envelope separate from the gradient's vector-valued
-    support accounting.
+    The validated source has <=256 terms, <=8 axes and total degree <=64,
+    so both this scan and the kernel have <=2,048 derivative contributions.
+    Lowering the exponent on a fixed axis is injective: one output monomial
+    collects at most eight coefficients, regardless of the source term count.
+    The support union accounts for collisions; cancellation can only shrink it.
+
+    Source and direction rational components have <=128 digits. A second
+    derivative scales by <=64*63, so its sums have <10**1029 numerator and
+    denominator magnitude. Weighted first partials multiply two such rationals
+    and an exponent <=64; eight contributions have magnitude <10**2051 in
+    each component. The same common-denominator bounds cover intermediates,
+    comfortably within the canonical rational carrier's 32,768-digit limit.
+    Work and coefficient growth are thus bounded independently of this output
+    support check, including requests whose many partials share monomials.
     """
 
-    if len(polynomial.polynomial.terms) * len(polynomial.variables) > _MAX_TERMS:
-        raise OperationDomainValidationError(
-            location=("polynomial",),
-            code="polynomial_vector_calc.derivative_term_budget",
-            message="scalar-field derivatives exceed the result-term budget",
-        )
+    support: set[tuple[int, ...]] = set()
+    for axis in axes:
+        for term in polynomial.polynomial.terms:
+            if term.exponents[axis] < order:
+                continue
+            exponents = list(term.exponents)
+            exponents[axis] -= order
+            support.add(tuple(exponents))
+            if len(support) > _MAX_TERMS:
+                raise OperationDomainValidationError(
+                    location=("polynomial",),
+                    code="polynomial_vector_calc.derivative_term_budget",
+                    message="scalar-field derivatives exceed the result-term budget",
+                )
 
 
 def _gradient_term_counts(polynomial: RationalPolynomial) -> tuple[int, ...]:
@@ -101,7 +136,6 @@ def _admit_scalar_field(polynomial: RationalPolynomial) -> None:
         label="scalar field",
         location=("polynomial",),
     )
-    _require_dense_scalar_derivative_budget(polynomial)
 
 
 def _admit_gradient(polynomial: RationalPolynomial) -> None:
@@ -140,6 +174,7 @@ def _admit_vector_field(components: tuple[RationalPolynomial, ...]) -> None:
             component,
             label="vector-field component",
             location=("components", index),
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
         )
         if component.variables != variables:
             raise OperationDomainValidationError(
@@ -152,6 +187,64 @@ def _admit_vector_field(components: tuple[RationalPolynomial, ...]) -> None:
             location=("components",),
             code="polynomial_vector_calc.derivative_term_budget",
             message="vector-field derivatives exceed the result-term budget",
+        )
+
+    coefficient_digits = 0
+    for component in components:
+        for term in component.polynomial.terms:
+            coefficient_digits += len(
+                format_canonical_integer(abs(term.coefficient.num))
+            )
+            coefficient_digits += len(format_canonical_integer(term.coefficient.den))
+            if coefficient_digits > _MAX_VECTOR_COEFFICIENT_DIGIT_WORK:
+                raise OperationResourceAdmissionError(
+                    location=("components",),
+                    code="polynomial_vector_calc.coefficient_work_budget",
+                    message="vector-field coefficients exceed the aggregate digit-work budget",
+                )
+
+
+def _require_vector_derivative_output(
+    components: tuple[RationalPolynomial, ...],
+    partials: Iterable[tuple[int, int, int]],
+) -> None:
+    """Admit one result polynomial before symbolic conversion or expansion.
+
+    A partial is (component index, axis index, sign). Differentiation is
+    injective on each axis, so a result coefficient collects at most eight
+    contributions for divergence, or two for curl. With aggregate source
+    numerator/denominator width B, their unreduced common denominator has at
+    most B digits and their signed numerator at most B+3: exponent <=64 adds
+    two digits and summing <=8 terms adds one. Fraction's intermediate cross
+    products obey the same bound. There are <=256 contributions per result
+    (<=512 over the curl vector), so exact collision admission is bounded too.
+
+    Collecting these small coefficient groups admits common denominators and
+    cancellations even at the canonical ceiling. This is an output preflight;
+    the maintained symbolic kernel still owns the polynomial differentiation.
+    """
+
+    coefficients: dict[tuple[int, ...], Fraction] = {}
+    for component, axis, sign in partials:
+        for term in components[component].polynomial.terms:
+            exponent = term.exponents[axis]
+            if not exponent:
+                continue
+            exponents = list(term.exponents)
+            exponents[axis] -= 1
+            key = tuple(exponents)
+            coefficients[key] = coefficients.get(key, Fraction()) + (
+                sign * exponent * term.coefficient.as_fraction()
+            )
+    limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    if any(
+        abs(value.numerator) >= limit or value.denominator >= limit
+        for value in coefficients.values()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("components",),
+            code="polynomial_vector_calc.derivative_coefficient_bound",
+            message="vector-field derivative exceeds the canonical coefficient bound",
         )
 
 
@@ -187,6 +280,9 @@ def gradient(polynomial: RationalPolynomial) -> VectorResult:
 def divergence(components: tuple[RationalPolynomial, ...]) -> ScalarResult:
     _admit_vector_field(components)
     variables = components[0].variables
+    _require_vector_derivative_output(
+        components, ((axis, axis, 1) for axis in range(len(variables)))
+    )
     expression = sum(
         sympy.diff(component, variable)
         for component, variable in zip(
@@ -212,6 +308,12 @@ def curl(components: tuple[RationalPolynomial, ...]) -> VectorResult:
             code="polynomial_vector_calc.curl_dimensions",
             message="curl requires exactly three variables and components",
         )
+    for partials in (
+        ((2, 1, 1), (1, 2, -1)),
+        ((0, 2, 1), (2, 0, -1)),
+        ((1, 0, 1), (0, 1, -1)),
+    ):
+        _require_vector_derivative_output(components, partials)
     x, y, z = symbols_for_variables(variables)
     fx, fy, fz = _expressions(components)
     return VectorResult._from_kernel(
@@ -227,6 +329,7 @@ def curl(components: tuple[RationalPolynomial, ...]) -> VectorResult:
 def laplacian(polynomial: RationalPolynomial) -> ScalarResult:
     _admit_scalar_field(polynomial)
     variables = polynomial.variables
+    _require_scalar_derivative_budget(polynomial, order=2, axes=range(len(variables)))
     expression = rational_polynomial_to_sympy(polynomial).as_expr()
     laplacian = sum(
         sympy.diff(expression, variable, 2)
@@ -243,6 +346,12 @@ def directional_derivative(
     direction: tuple[CanonicalRational, ...],
 ) -> ScalarResult:
     _admit_scalar_field(polynomial)
+    if len(direction) != len(polynomial.variables):
+        raise OperationDomainValidationError(
+            location=("direction",),
+            code="polynomial_vector_calc.direction_length",
+            message="direction vector length must match the polynomial axis",
+        )
     for index, coordinate in enumerate(direction):
         try:
             require_bounded_rational(
@@ -256,6 +365,11 @@ def directional_derivative(
                 code="polynomial_vector_calc.direction_coordinate_bound",
                 message=str(exc),
             ) from exc
+    _require_scalar_derivative_budget(
+        polynomial,
+        order=1,
+        axes=(index for index, coordinate in enumerate(direction) if coordinate.num),
+    )
     variables = polynomial.variables
     expression = rational_polynomial_to_sympy(polynomial).as_expr()
     gradient = (

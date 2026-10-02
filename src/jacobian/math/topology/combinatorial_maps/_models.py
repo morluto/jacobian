@@ -8,6 +8,7 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.multigraph._models import LooplessMultigraph
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.values import SparseRationalMatrix
@@ -156,7 +157,7 @@ class OrientableEmbeddingCheckRequest(StrictModel):
     only the orientable convention and has no nonorientable candidate to reject.
     """
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     rotations: tuple[tuple[int, ...], ...]
 
 
@@ -711,10 +712,11 @@ class SignedEmbeddingCheckRequest(StrictModel):
         }
     )
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "The connected simple graph being embedded. Vertices keep their "
-            "labels; edges are canonical label-ordered pairs."
+            "labels; either edge endpoint order is accepted. Pair normalization "
+            "preserves the vertex, edge, rotation and sign axes."
         ),
     )
     rotations: tuple[tuple[int, ...], ...] = Field(
@@ -782,7 +784,7 @@ class RotationSystemFindRequest(StrictModel):
         }
     )
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description="The connected simple graph to embed.",
     )
     max_genus: int = Field(
@@ -972,7 +974,7 @@ class RotationSystemFindResult(StrictModel):
 class MinimumGenusRequest(StrictModel):
     """Search all admitted rotation systems for the exact minimum genus."""
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Connected simple graph; the exact search envelope admits at most "
             f"{MAX_EMBEDDING_VERTICES} vertices and {MAX_EMBEDDING_EDGES} edges."

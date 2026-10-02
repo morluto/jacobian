@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, WithJsonSchema, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
+from jacobian.math.number_theory._integer_input import IntegerInputEncoding
 from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
 from jacobian.math.number_theory._models import BoundedInteger
 
@@ -35,13 +36,30 @@ class PrimorialRequest(StrictModel):
     request derives its own conservative ceiling from the digit bound.
     """
 
-    n: StrictInt = Field(ge=1, le=_MAX_PRIMORIAL_N)
+    n: Annotated[
+        int,
+        IntegerInputEncoding(
+            max_digits=len(str(_MAX_PRIMORIAL_N)), minimum=1, maximum=_MAX_PRIMORIAL_N
+        ),
+    ] = Field(
+        description="Integer n in [1, 1001], as a canonical decimal string or JSON integer."
+    )
 
 
 class PreviousPrimeRequest(StrictModel):
     """One bounded integer n >= 3 for previous-prime queries."""
 
-    n: StrictInt = Field(ge=3, le=MAX_SAFE_INTEGER)
+    n: Annotated[
+        int,
+        IntegerInputEncoding(
+            max_digits=len(str(MAX_SAFE_INTEGER)), minimum=3, maximum=MAX_SAFE_INTEGER
+        ),
+    ] = Field(
+        description=(
+            f"Integer n in [3, {MAX_SAFE_INTEGER}], as a canonical decimal string "
+            "or JSON integer."
+        )
+    )
 
 
 PrimorialInteger = Annotated[

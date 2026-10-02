@@ -26,9 +26,13 @@ from jacobian.math.optimization._general_models import (
     RationalLinearConstraint,
     RationalLinearObjective,
     RationalLinearProgramVariable,
+    _prepare_raw_general_program,
 )
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_PROGRAM_CONSTRAINTS,
+    MAX_LINEAR_PROGRAM_VARIABLES,
     StandardFormRationalLinearProgram,
+    _prepare_raw_program,
     _prepare_raw_rational_vector,
 )
 
@@ -47,10 +51,18 @@ class RationalLinearOptimalityCandidate(StrictModel):
     """
 
     program: LinearProgram
-    primal_candidate: tuple[CanonicalRational, ...] = Field(max_length=32)
-    constraint_dual: tuple[CanonicalRational, ...] = Field(max_length=64)
-    lower_bound_dual: tuple[CanonicalRational, ...] = Field(max_length=32)
-    upper_bound_dual: tuple[CanonicalRational, ...] = Field(max_length=32)
+    primal_candidate: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_LINEAR_PROGRAM_VARIABLES
+    )
+    constraint_dual: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_LINEAR_PROGRAM_CONSTRAINTS
+    )
+    lower_bound_dual: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_LINEAR_PROGRAM_VARIABLES
+    )
+    upper_bound_dual: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_LINEAR_PROGRAM_VARIABLES
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -59,16 +71,26 @@ class RationalLinearOptimalityCandidate(StrictModel):
             return value
         prepared = dict(value)
         for field, limit in (
-            ("primal_candidate", 32),
-            ("constraint_dual", 64),
-            ("lower_bound_dual", 32),
-            ("upper_bound_dual", 32),
+            ("primal_candidate", MAX_LINEAR_PROGRAM_VARIABLES),
+            ("constraint_dual", MAX_LINEAR_PROGRAM_CONSTRAINTS),
+            ("lower_bound_dual", MAX_LINEAR_PROGRAM_VARIABLES),
+            ("upper_bound_dual", MAX_LINEAR_PROGRAM_VARIABLES),
         ):
             prepared[field] = _prepare_raw_rational_vector(
                 prepared.get(field),
                 maximum_length=limit,
                 label=field,
                 maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            )
+        program = prepared.get("program")
+        if isinstance(program, Mapping):
+            prepared["program"] = (
+                _prepare_raw_general_program(program)
+                if "constraints" in program
+                or isinstance(
+                    program.get("objective"), (Mapping, RationalLinearObjective)
+                )
+                else _prepare_raw_program(program)
             )
         return canonicalize_json_containers(prepared)
 
@@ -114,9 +136,21 @@ class RationalLinearOptimalityResult(StrictModel):
     primal_objective: CanonicalRational
     dual_objective: CanonicalRational
     objective_gap: CanonicalRational
-    primal_residuals: tuple[CanonicalRational, ...] = Field(max_length=64)
-    stationarity_residuals: tuple[CanonicalRational, ...] = Field(max_length=32)
+    primal_residuals: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_LINEAR_PROGRAM_CONSTRAINTS
+    )
+    stationarity_residuals: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_LINEAR_PROGRAM_VARIABLES
+    )
     failed_conditions: tuple[str, ...] = Field(max_length=8)
+
+    @model_validator(mode="after")
+    def require_residual_axes(self) -> Self:
+        if len(self.primal_residuals) != len(self.candidate.constraint_dual) or len(
+            self.stationarity_residuals
+        ) != len(self.candidate.primal_candidate):
+            raise ValueError("optimality residuals must match the retained source axes")
+        return self
 
 
 def _general_source(program: LinearProgram) -> GeneralFormRationalLinearProgram:
@@ -188,12 +222,12 @@ def _admit(
     if (
         result_digits > MAX_CANONICAL_RATIONAL_DIGITS
         or retained_digits > 8 * 1024 * 1024
-        or scalar_updates > 20_000
+        or scalar_updates > 100_000
     ):
         raise OperationResourceAdmissionError(
             location=("program",),
             code="optimization.linear.optimality_check_bound",
-            message=f"candidate check predicts {scalar_updates} scalar updates, {result_digits} rational digits and {retained_digits} retained scalar digits; limits 20000, {MAX_CANONICAL_RATIONAL_DIGITS}, 8388608",
+            message=f"candidate check predicts {scalar_updates} scalar updates, {result_digits} rational digits and {retained_digits} retained scalar digits; limits 100000, {MAX_CANONICAL_RATIONAL_DIGITS}, 8388608",
         )
 
 

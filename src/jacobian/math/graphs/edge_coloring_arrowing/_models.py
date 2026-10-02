@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.coloring._models import EdgeColoringAssignment
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_EDGES,
@@ -88,8 +89,8 @@ def _permutation_upper_bound(n: int, k: int) -> int:
 class EdgeColoringArrowingRequest(StrictModel):
     """Decide whether a host graph arrows a tuple of target graphs."""
 
-    host_graph: SimpleUndirectedGraph
-    targets: tuple[SimpleUndirectedGraph, ...] = Field(max_length=MAX_TARGET_COUNT)
+    host_graph: SimpleUndirectedGraphInput
+    targets: tuple[SimpleUndirectedGraphInput, ...] = Field(max_length=MAX_TARGET_COUNT)
 
 
 class EdgeColoringArrowingResult(StrictModel):

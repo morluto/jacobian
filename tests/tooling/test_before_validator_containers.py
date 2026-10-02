@@ -2844,17 +2844,19 @@ def _table_functions(
         node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
     }
     imports = tables.imports
+    # Imported top-level functions are a partial scope, never a complete cache entry.
+    import_scopes: dict[str, dict[str, ast.FunctionDef]] = {}
     for (owner, alias), (target, original) in imports.items():
         if owner != module:
             continue
-        if target not in cache:
+        if target not in import_scopes:
             imported_tree = ast.parse(texts[target])
-            cache[target] = {
+            import_scopes[target] = {
                 node.name: node
                 for node in imported_tree.body
                 if isinstance(node, ast.FunctionDef)
             }
-        imported = cache[target]
+        imported = import_scopes[target]
         if original in imported:
             functions.setdefault(alias, imported[original])
     for node in ast.walk(tree):
@@ -2905,7 +2907,6 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     alias_cache: dict[str, dict[str, set[str]]] = {}
     for module in sorted({key[0] for key in classes}):
         function_cache: dict[str, dict[str, ast.FunctionDef]] = {}
-        functions: dict[str, ast.FunctionDef] | None = None
         for key in classes:
             if key[0] != module:
                 continue
@@ -2920,11 +2921,11 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
             }
             if not leaf_fields:
                 continue
-            if functions is None:
-                functions = _table_functions(module, tables, texts, function_cache)
             shapes = _table_json_shapes(key, tables, unique, scope_cache, alias_cache)
             for entry in before:
                 validator = _table_validator(entry, tables, texts)
+                # Inherited methods retain their defining module globals.
+                functions = _table_functions(entry[0], tables, texts, function_cache)
                 uncovered = _uncovered_leaf_fields(
                     validator, functions, leaf_fields, shapes
                 )
@@ -4072,6 +4073,57 @@ def test_annotation_and_projection_form_matrix() -> None:
             ), (annotation, body)
 
 
+def test_shared_annotation_interpretation_reaches_three_level_consumers() -> None:
+    """One interpretation must agree across detector, depth index and checker."""
+    annotations = (
+        ("", "tuple[tuple[tuple[int, ...], ...], ...]"),
+        (
+            "Row = typing.Tuple[int, ...]\nPlane = typing.Tuple[Row, ...]\nCube = typing.Tuple[Plane, ...]\n",
+            'typing.Annotated["Cube", marker]',
+        ),
+        (
+            "type Row = t.Tuple[int, ...]\ntype Plane = t.Tuple[Row, ...]\n",
+            '"t.Tuple[Plane, ...]"',
+        ),
+    )
+    forms: tuple[tuple[str, set[str]], ...] = (
+        ("return canonicalize_json_containers(data)", set()),
+        (
+            "data['payload'] = tuple(tuple(row) for row in data['payload'])\n    return data",
+            {"payload"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    if data.get('enabled') is None:\n        return data\n    return normalized",
+            {"payload"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    [normalized, [ignored]] = [data, [None]]\n    return normalized",
+            {"payload"},
+        ),
+    )
+    for prefix, annotation in annotations:
+        tree = ast.parse(
+            f"{prefix}class Model(StrictModel):\n    payload: {annotation}\n    enabled: bool | None = None\n"
+        )
+        model = tree.body[-1]
+        assert isinstance(model, ast.ClassDef)
+        aliases = _declared_aliases(tree)
+        assert _leaf_container_field(annotation, set(), aliases)
+        shapes = _json_shapes(model, {"Model": model}, {model: aliases})
+        assert all(
+            shapes.types["payload" + "[]" * depth] == frozenset({"list"})
+            for depth in range(3)
+        )
+        assert shapes.types["payload[][][]"] == frozenset({"int"})
+        for body, expected in forms:
+            assert (
+                _fixture_uncovered(
+                    f"def validate(cls, data):\n    {body}\n", {"payload"}, shapes
+                )
+                == expected
+            ), (annotation, body)
+
+
 def test_projected_payload_survives_helper_tuple_destructuring() -> None:
     assert not _fixture_uncovered(
         """
@@ -4616,3 +4668,120 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+@pytest.mark.parametrize("base_projects", [False, True])
+@pytest.mark.parametrize("override", [False, True])
+def test_inherited_validator_helpers_use_defining_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    base_projects: bool,
+    override: bool,
+) -> None:
+    """A subclass cannot hide or supply its inherited validator's globals."""
+
+    base_return = "canonicalize_json_containers(data)" if base_projects else "data"
+    child_return = "data" if base_projects else "canonicalize_json_containers(data)"
+    (tmp_path / "base.py").write_text(
+        f"""
+def project(data):
+    return {base_return}
+
+class Base(StrictModel):
+    @model_validator(mode='before')
+    def validate(cls, data):
+        return project(data)
+""",
+        encoding="utf-8",
+    )
+    override_source = (
+        "    @model_validator(mode='before')\n"
+        "    def validate(cls, data):\n"
+        "        return project(data)\n"
+        if override
+        else ""
+    )
+    (tmp_path / "child.py").write_text(
+        f"""
+from base import Base as ImportedBase
+
+def project(data):
+    return {child_return}
+
+class Child(ImportedBase):
+    entries: tuple[tuple[int, ...], ...]
+{override_source}
+""",
+        encoding="utf-8",
+    )
+    tables = _build_tables(tmp_path)
+    monkeypatch.setitem(globals(), "_build_tables", lambda root: tables)
+    if base_projects != override:
+        test_before_validators_cover_every_leaf_container_field()
+    else:
+        with pytest.raises(AssertionError, match=r"Child\.entries is never projected"):
+            test_before_validators_cover_every_leaf_container_field()
+
+
+@pytest.mark.parametrize("base_first", [False, True])
+@pytest.mark.parametrize("projects", [False, True])
+def test_function_scope_cache_retains_imported_validator_helpers(
+    tmp_path: Path, base_first: bool, projects: bool
+) -> None:
+    """Looking up an importer must not replace a later owner's full scope."""
+
+    result = "canonicalize_json_containers(data)" if projects else "data"
+    (tmp_path / "helpers.py").write_text(
+        f"def project(data):\n    return {result}\n", encoding="utf-8"
+    )
+    (tmp_path / "base.py").write_text(
+        "from helpers import project\n"
+        "class Base(StrictModel):\n"
+        "    entries: tuple[int, ...]\n"
+        "    @model_validator(mode='before')\n"
+        "    def validate(cls, data):\n"
+        "        return project(data)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "child.py").write_text(
+        "from base import Base\n"
+        "def project(data):\n"
+        "    return canonicalize_json_containers(data)\n"
+        "class Child(Base):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    tables = _build_tables(tmp_path)
+    cache: dict[str, dict[str, ast.FunctionDef]] = {}
+    order = ("base.py", "child.py") if base_first else ("child.py", "base.py")
+    for module in order:
+        _table_functions(module, tables, tables.texts, cache)
+    validator = _table_validator(("base.py", "Base", "validate"), tables, tables.texts)
+    uncovered = _uncovered_leaf_fields(
+        validator, _table_functions("base.py", tables, tables.texts, cache), {"entries"}
+    )
+    assert uncovered == (set() if projects else {"entries"})
+
+
+def test_inherited_partial_projection_keeps_new_subclass_fields_uncovered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "base.py").write_text(
+        "def project(data):\n"
+        "    data['entries'] = canonicalize_json_containers(data['entries'])\n"
+        "    return data\n"
+        "class Base(StrictModel):\n"
+        "    entries: tuple[int, ...]\n"
+        "    @model_validator(mode='before')\n"
+        "    def validate(cls, data):\n"
+        "        return project(data)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "child.py").write_text(
+        "from base import Base\nclass Child(Base):\n    extra: tuple[int, ...]\n",
+        encoding="utf-8",
+    )
+    tables = _build_tables(tmp_path)
+    monkeypatch.setitem(globals(), "_build_tables", lambda root: tables)
+    with pytest.raises(AssertionError, match=r"Child\.extra is never projected"):
+        test_before_validators_cover_every_leaf_container_field()

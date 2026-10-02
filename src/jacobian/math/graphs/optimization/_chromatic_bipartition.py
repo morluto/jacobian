@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.optimization._budget import remaining_ms
 from jacobian.math.graphs.optimization._chromatic_kernel import (
     build_simple_graph,
@@ -33,7 +34,7 @@ MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS = 1_000_000
 class ChromaticBipartitionRequest(StrictModel):
     """Decide whether both sides of a vertex bipartition meet chromatic thresholds."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     s: StrictInt = Field(ge=1, le=32)
     t: StrictInt = Field(ge=1, le=32)
     resource_budget: ChromaticNumberBudget = Field(

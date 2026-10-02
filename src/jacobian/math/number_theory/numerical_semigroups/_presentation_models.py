@@ -121,23 +121,8 @@ class PresentationDegreeProfileResult(StrictModel):
         return self
 
 
-class PresentationBinomialsRequest(StrictModel):
-    """Convert a minimal presentation to sparse binomial form."""
-
-    generators: tuple[ExactInteger, ...] = Field(
-        min_length=1,
-        max_length=MAX_GENERATORS,
-        description=(
-            "Positive generators with gcd 1. "
-            + _GENERAL_GENERATOR_ENVELOPE
-            + "The presentation may be reordered or redundant; relation coordinates must use its increasing minimal generator axis."
-        ),
-    )
-    relations: tuple[MinimalPresentationRelation, ...]
-
-
-class PresentationBinomial(StrictModel):
-    """One sparse binomial (aX - bX) arising from a presentation relation."""
+class RelationBinomial(StrictModel):
+    """The two signed monomials of one supplied homogeneous relation."""
 
     left_coefficient: ExactInteger = Field(
         default=1, ge=1, le=1, json_schema_extra={"const": "1"}
@@ -149,13 +134,17 @@ class PresentationBinomial(StrictModel):
     right_exponents: tuple[int, ...]
 
 
-class PresentationBinomialsResult(StrictModel):
-    """Presentation converted to sparse binomials."""
+class RelationBinomialsResult(StrictModel):
+    """Native relation encoding; no kernel-generation or minimality claim.
+
+    The ordered minimal-generator axis gives the weights of the exponent
+    coordinates. The family may be empty, redundant, or incomplete.
+    """
 
     minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
-    binomials: tuple[PresentationBinomial, ...]
+    binomials: tuple[RelationBinomial, ...]
 
     @model_validator(mode="after")
     def require_canonical_axis_and_homogeneous_binomials(self) -> Self:
@@ -193,7 +182,6 @@ __all__ = [
     "MinimalPresentationRelation",
     "MinimalPresentationRequest",
     "MinimalPresentationResult",
-    "PresentationBinomial",
-    "PresentationBinomialsRequest",
-    "PresentationBinomialsResult",
+    "RelationBinomial",
+    "RelationBinomialsResult",
 ]

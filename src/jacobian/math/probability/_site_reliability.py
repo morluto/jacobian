@@ -22,6 +22,7 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
@@ -107,6 +108,14 @@ class GraphSiteReliabilitySource(StrictModel):
                 "site reliability terminals must be two distinct graph vertices"
             )
         return self
+
+
+class GraphSiteReliabilityRequest(GraphSiteReliabilitySource):
+    """JSON graph spelling for an ordinary site-reliability source request."""
+
+    graph: SimpleUndirectedGraphInput = Field(
+        description=GraphSiteReliabilitySource.model_fields["graph"].description
+    )
 
 
 class GraphSiteReliabilityState(StrictModel):
@@ -421,7 +430,7 @@ SITE_CONNECTION_PROBABILITY_OPERATION = MathTool(
         "terminals are open and lie in one connected component of the open "
         "induced subgraph, together with the complete canonical state ledger."
     ),
-    request_type=GraphSiteReliabilitySource,
+    request_type=GraphSiteReliabilityRequest,
     result_type=GraphSiteReliabilityResult,
     run=compute_site_connection_probability,
     tags=("probability", "reliability", "site-percolation", "exact"),

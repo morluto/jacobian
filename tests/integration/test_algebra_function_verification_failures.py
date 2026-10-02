@@ -272,7 +272,7 @@ EXPANDED_CASES: tuple[tuple[str, str, str, str], ...] = (
         "polynomial.compute.gcd",
         "polynomials.operations",
         "verify_polynomial_gcd",
-        "polynomial_gcd",
+        "verify_gcd_relation",
     ),
     (
         "polynomial.compute.resultant",

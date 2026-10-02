@@ -77,7 +77,14 @@ catalog example does not establish a newly widened boundary. In parallel work,
 assign one writer per path and review the combined final diff before validation.
 
 During edits, run the changed owner's tests first, including relevant composition
-tests when the change crosses owners. Use the existing focused commands:
+tests when the change crosses owners. Use `make test-focused` or
+`make handoff-scoped` (with `PATHS` for static checks); `make quick-scoped` omits
+type checking. Do not reconstruct an owner-wide or broad `pytest -n N` command.
+Before choosing math concurrency, follow the
+[math worker and host budget policy](docs/reference/testing-strategy.md#math-workers-and-host-budget):
+set `MATH_WORKERS` deliberately for broad math runs, with `1` or `0` as the
+conservative fallback when memory or concurrent solver load is uncertain.
+Use the existing focused commands:
 
 ```sh
 make test-focused LANE=tooling TESTS=tests/tooling/test_affected_validation.py
@@ -153,8 +160,8 @@ On macOS, read the
 troubleshooting a source-build failure from `uv sync --locked --dev`.
 
 For focused test syntax and specialist lanes, use the
-[testing strategy](docs/reference/testing-strategy.md). Default `uv run pytest`
-omits process and MCP trees; those boundaries have named Make targets.
+[testing strategy](docs/reference/testing-strategy.md). Use named Make targets
+for process and MCP boundaries; default pytest collection omits those trees.
 
 ### Parallel agents sharing a checkout
 

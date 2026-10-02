@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import IndexedSimpleUndirectedGraphInput
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 # ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ class GraphicalityCheckResult(StrictModel):
 
 class RealizationCheckRequest(StrictModel):
     sequence: DegreeSequence
-    graph: IndexedSimpleUndirectedGraph
+    graph: IndexedSimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:

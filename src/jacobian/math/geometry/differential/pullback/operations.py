@@ -34,10 +34,6 @@ from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     canonical_locus_guards,
 )
-from jacobian.math.polynomials._conversions import (
-    sparse_rational_polynomial_from_sympy,
-    sparse_rational_polynomial_to_sympy,
-)
 from jacobian.math.polynomials.rational_functions.values import (
     MAX_RATIONAL_MAP_COMPONENTS,
     RationalFunctionMap,
@@ -45,7 +41,6 @@ from jacobian.math.polynomials.rational_functions.values import (
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     RationalFunction,
-    SparseRationalPolynomial,
     require_canonical_rational_function,
 )
 
@@ -227,22 +222,16 @@ def pullback_metric(
             code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
             message="a required metric denominator or chart guard vanishes identically after substitution",
         )
-    if not plan.determinant.scalar:
-        raise OperationDomainValidationError(
-            location=("metric",),
-            code="differential_geometry.rational_metric.pullback.singular_metric",
-            message="metric determinant vanishes identically after substitution",
-        )
+    # A structural zero determinant is passed as node zero to the worker.
+    # Expanded chart guards must be checked first to preserve undefinedness.
     axis = map_value.source_variables
-    unique_values = tuple(dict.fromkeys((*plan.output, *plan.guards)))
+    unique_values = tuple(dict.fromkeys(plan.output))
     evaluation = evaluate_admitted_dag(
         plan.dag.nodes,
         axis,
         fractions=tuple(plan.fractions[value] for value in unique_values),
-        determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
-        undefined_numerators=tuple(
-            dict.fromkeys(plan.fractions[value][0] for value in plan.guards[:-1])
-        ),
+        determinants=plan.locus_factors,
+        undefined_numerators=plan.undefined_factors,
         deadline=deadline,
         owner="rational metric pullback",
     )
@@ -260,34 +249,7 @@ def pullback_metric(
         )
     components = evaluation.fractions
     normalized = dict(zip(unique_values, components, strict=True))
-    for value in plan.guards[:-1]:
-        if not normalized[value].numerator.terms:
-            raise OperationDomainValidationError(
-                location=("metric",),
-                code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
-                message="a required metric denominator or chart guard vanishes identically after substitution",
-            )
-    if not normalized[plan.determinant].numerator.terms:
-        raise OperationDomainValidationError(
-            location=("metric",),
-            code="differential_geometry.rational_metric.pullback.singular_metric",
-            message="metric determinant vanishes identically after substitution",
-        )
-    guarded: list[SparseRationalPolynomial] = []
-    for guard_index, value in enumerate(plan.guards):
-        if guard_index % 64 == 0:
-            request_checkpoint("during pullback guard normalization")
-        numerator = normalized[value].numerator
-        if not numerator.terms:
-            continue
-        guarded.append(
-            sparse_rational_polynomial_from_sympy(
-                sparse_rational_polynomial_to_sympy(numerator, axis).monic(),
-                axis,
-                maximum_terms=256,
-            )
-        )
-    guards = tuple(guarded)
+    guards = evaluation.determinants
     request_checkpoint("after pullback guard normalization")
     output = tuple(normalized[value] for value in plan.output)
     guard_polynomials = tuple(guards)

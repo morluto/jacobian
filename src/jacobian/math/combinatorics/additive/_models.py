@@ -640,6 +640,7 @@ __all__ = [
     "MultisetSumRepresentationProfileRequest",
     "MultisetSumRepresentationProfileResult",
     "MultisetSumWindow",
+    "OrderedDifferenceCollision",
     "OrderedDifferenceEntry",
     "OrderedDifferencePair",
     "OrderedDifferenceProfileRequest",
@@ -676,6 +677,26 @@ class OrderedDifferencePair(StrictModel):
 
     left_index: int = Field(ge=0)
     right_index: int = Field(ge=0)
+
+
+class OrderedDifferenceCollision(StrictModel):
+    """Two distinct source pairs claiming one common nonzero difference.
+
+    Decoding checks shape and pair order, not the source-bound arithmetic.
+    """
+
+    difference: IntegerVector
+    pairs: tuple[OrderedDifferencePair, OrderedDifferencePair]
+
+    @model_validator(mode="after")
+    def require_canonical_pair_order(self) -> Self:
+        keys = tuple((pair.left_index, pair.right_index) for pair in self.pairs)
+        if any(left == right for left, right in keys) or keys[0] >= keys[1]:
+            raise _validation_error(
+                "collision_pair_order",
+                "collision requires two distinct nonreflexive source pairs in lexicographic order",
+            )
+        return self
 
 
 class OrderedDifferenceEntry(StrictModel):
@@ -722,7 +743,14 @@ class OrderedDifferenceProfileResult(StrictModel):
     max_multiplicity: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
     entries: tuple[OrderedDifferenceEntry, ...] = Field(default=())
     has_repeated_difference: bool = False
-    first_collision: OrderedDifferencePair | None = None
+    first_collision: OrderedDifferenceCollision | None = Field(
+        default=None,
+        description=(
+            "Selected repeated-difference claim: the lexicographically first repeated "
+            "difference and its first two lexicographically ordered source pairs. "
+            "Pairs may share a source index. Null when no difference repeats."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_vectors(self) -> Self:
@@ -758,6 +786,24 @@ class OrderedDifferenceProfileResult(StrictModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def require_collision_axes(self) -> Self:
+        if self.first_collision is not None:
+            if len(self.first_collision.difference.coordinates) != self.dimension:
+                raise _validation_error(
+                    "collision_axes",
+                    "collision difference must match the source dimension",
+                )
+            if any(
+                pair.left_index >= self.set_size or pair.right_index >= self.set_size
+                for pair in self.first_collision.pairs
+            ):
+                raise _validation_error(
+                    "collision_indices",
+                    "collision indices must belong to the source set",
+                )
+        return self
+
     @classmethod
     def _from_kernel(
         cls,
@@ -769,7 +815,7 @@ class OrderedDifferenceProfileResult(StrictModel):
         max_multiplicity: int,
         entries: tuple[OrderedDifferenceEntry, ...],
         has_repeated_difference: bool,
-        first_collision: OrderedDifferencePair | None,
+        first_collision: OrderedDifferenceCollision | None,
     ) -> Self:
         return cls.model_construct(
             vectors=vectors,

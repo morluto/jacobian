@@ -8,6 +8,7 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import GraphVertexLabel as GraphVertex
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -34,7 +35,7 @@ def _require_distance_matrix_order(graph: SimpleUndirectedGraph) -> None:
 class GraphDistanceMatrixRequest(StrictModel):
     """One complete graph input for an exact distance matrix."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_supported_order(self) -> Self:

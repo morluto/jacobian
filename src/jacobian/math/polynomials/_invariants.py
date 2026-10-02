@@ -187,7 +187,13 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
     MathTool(
         operation_id="polynomial.compute.square_free_decomposition",
         title="Compute a square-free decomposition",
-        description="Decompose a bounded polynomial over QQ into monic square-free factors.",
+        description=(
+            "Decompose a bounded polynomial over QQ into monic square-free factors. "
+            "Univariate a*x^n+b with nonzero a and b supports every canonical "
+            "exponent n up to 32768; general sources retain the exponent-64 "
+            "envelope. Coefficient components have at most 256 digits and "
+            "returned multiplicities at most 64."
+        ),
         request_type=PolynomialSquareFreeRequest,
         result_type=PolynomialSquareFreeDecompositionResult,
         run=_run_square_free,

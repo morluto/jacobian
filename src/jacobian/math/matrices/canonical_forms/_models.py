@@ -26,6 +26,11 @@ MAX_CANONICAL_FORM_SCALAR_DIGITS = 256
 # generic linear-algebra axis limit.
 MAX_CENTRALIZER_RREF_WORK = 2_000_000_000
 MAX_CENTRALIZER_OUTPUT_DIGIT_WORK = 20_000_000
+# Bound dense basis allocation independently of scalar height and wire bytes.
+MAX_CENTRALIZER_OUTPUT_ENTRIES = 262_144
+# Source scanning, commutator assembly, denominator clearing and row content
+# removal have their own exact-arithmetic envelope, before reduced RREF work.
+MAX_CENTRALIZER_PRESOLVE_DIGIT_WORK = 1_000_000_000
 
 # A Horner pass performs ``degree`` dense n-by-n products. The retained
 # conservative envelope charges the producer pass and its source-bound
@@ -230,6 +235,23 @@ class SquareMatrixRequest(StrictModel):
     """One square rational matrix bounded for canonical-form computation."""
 
     matrix: RationalMatrix
+
+
+class CentralizerRequest(StrictModel):
+    """A square rational matrix with regime-specific centralizer admission."""
+
+    matrix: RationalMatrix = Field(
+        description=(
+            "Nonempty square matrix over QQ with components through 256 digits. "
+            "Diagonal basis allocation is bounded directly: for equal-entry "
+            "block sizes m_i, order^2 * sum(m_i^2) must be at most "
+            f"{MAX_CENTRALIZER_OUTPUT_ENTRIES:,} stored scalar entries. "
+            "For example, scalar order 17 and distinct diagonal order 32 are "
+            "admitted. General matrices remain bounded to order 16, with "
+            "bounded primitive-row commutator reduction before exact RREF "
+            "work and result-height admission."
+        )
+    )
 
 
 class MinimalPolynomialResult(StrictModel):
@@ -485,6 +507,7 @@ __all__ = [
     "MAX_MATRIX_POLYNOMIAL_DIGIT_WORK",
     "MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK",
     "MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS",
+    "CentralizerRequest",
     "CentralizerResult",
     "InvariantFactorEntry",
     "InvariantFactorProfileResult",

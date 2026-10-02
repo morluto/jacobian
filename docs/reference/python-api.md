@@ -266,3 +266,29 @@ runtime raise `jacobian.backends.BackendUnavailableError`, with `backend`,
 `required_version`, `detail`, and `installation` attributes. No runtime is
 automatically installed. See [backend requirements](../how-to/backend-requirements.md)
 for versions, operation coverage, and deployment instructions.
+
+## Numerical-semigroup relation encoding
+
+`jacobian.math.number_theory.numerical_semigroups.relation_binomials` is a
+native-only conversion of supplied homogeneous factorization relations to
+signed monomial pairs. Its `RelationBinomialsResult` retains the ordered
+minimal-generator axis. Pass that canonical, strictly increasing axis
+explicitly; the helper does not reorder generators or reinterpret relation
+coordinates. The axis has at most 20 generators, each at most 500, bounding
+the check that the supplied axis is minimal. Empty, redundant, and incomplete
+relation families are valid inputs. Their conversion establishes neither generation of the toric kernel
+nor minimality of a presentation.
+
+For example, given a result from
+`number_theory.numerical_semigroup.minimal_presentation.compute`, pass its
+`minimal_generators` and `relations` to `relation_binomials`. Native callers can
+construct individual pairs with the exported `MinimalPresentationRelation`;
+the class name does not certify that a supplied family is a presentation.
+
+The pre-stable public operation
+`number_theory.numerical_semigroup.presentation_binomials.compute` and its
+request/result names were removed. It only projected relation coordinates to
+fixed-coefficient monomials and did not validate a presentation. There is no
+replacement catalog alias: use the native conversion for this projection, or
+retain the existing minimal-presentation operation when the presentation itself
+is required.

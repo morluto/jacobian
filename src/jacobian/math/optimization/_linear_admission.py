@@ -16,6 +16,8 @@ from jacobian._execution import (
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization._models import (
     MAX_LINEAR_PROGRAM_BACKEND_STATES,
+    MAX_LINEAR_SOLVER_CONSTRAINTS,
+    MAX_LINEAR_SOLVER_VARIABLES,
     StandardFormRationalLinearProgram,
     _active_equations,
     _has_trivial_inconsistent_row,
@@ -23,6 +25,16 @@ from jacobian.math.optimization._models import (
 )
 
 LINEAR_PROGRAM_WALL_SECONDS = 600
+
+
+def admit_solver_shape(variables: int, rows: int) -> None:
+    """Keep optimization search separate from the shared source carrier."""
+    if variables > MAX_LINEAR_SOLVER_VARIABLES or rows > MAX_LINEAR_SOLVER_CONSTRAINTS:
+        raise OperationResourceAdmissionError(
+            location=("program",),
+            code="optimization.linear.solver_shape_bound",
+            message=f"Exact LP search admits at most {MAX_LINEAR_SOLVER_VARIABLES} source variables and {MAX_LINEAR_SOLVER_CONSTRAINTS} source rows; received {variables} variables and {rows} rows. Larger supplied primal-dual pairs can use check_linear_optimality within its separate arithmetic envelope.",
+        )
 
 
 @contextmanager
@@ -91,12 +103,14 @@ def _component_state_bound(rows: int, columns: int) -> int:
 def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAdmission:
     """Admit canonical input and complete exact certificate representation.
 
-    The model owns fixed dimension, source-height, and matrix-cardinality limits.
+    The model owns carrier dimensions, source height, and matrix cardinality.
+    This boundary separately owns the smaller solver source dimensions.
     PPL does not enumerate bases, but its primal, dual, and Farkas polyhedra still
     have a finite combinatorial state envelope. Admission bounds that envelope
     before constructing backend polyhedra; the worker deadline is only a safety
     limit inside already-admitted work.
     """
+    admit_solver_shape(len(program.variables), len(program.rhs))
     columns = tuple(
         j
         for j in range(len(program.variables))

@@ -9,8 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.matrices._analysis_input import AnalysisRationalMatrixInput
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
+    EmbeddedRealSimpleNumberFieldMatrix,
     ExactRealMatrix,
     RationalMatrix,
     SparseRationalMatrix,
@@ -153,7 +155,7 @@ class SymmetricMatrixRequest(StrictModel):
         }
     )
 
-    matrix: ExactRealMatrix = Field(
+    matrix: AnalysisRationalMatrixInput | EmbeddedRealSimpleNumberFieldMatrix = Field(
         description=(
             "Canonical materialized matrix over QQ or one selected real simple-"
             "number-field embedding. It must be square and symmetric. The carrier "

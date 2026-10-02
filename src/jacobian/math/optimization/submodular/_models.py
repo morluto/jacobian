@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -51,48 +51,104 @@ def _require_source_subset(
 class SetFunctionEntry(StrictModel):
     """One set-function value: f(S) for a subset S of the ground set."""
 
-    subset: tuple[int, ...] = Field(default=())
+    subset: tuple[int, ...] = Field(
+        default=(),
+        description=(
+            "A subset of {0, ..., ground_set_size - 1}, with no repeated elements. "
+            "Element order is irrelevant; [] denotes the empty subset."
+        ),
+    )
     value: CanonicalRational
 
 
 class SetFunction(StrictModel):
-    """A finite set function f: 2^N -> Q given as a table."""
+    """A rational-valued function on every subset of {0, ..., n - 1}.
 
-    ground_set_size: int = Field(ge=0, le=MAX_GROUND_SET)
-    entries: tuple[SetFunctionEntry, ...] = Field(min_length=1)
+    Its complete table has exactly 2^n entries, covering every subset exactly
+    once, including the empty subset. Table rows and subset elements may appear
+    in any order; reordered elements still denote the same subset.
+    """
+
+    ground_set_size: int = Field(
+        ge=0,
+        le=MAX_GROUND_SET,
+        description=(
+            "Size n of the ground set {0, ..., n - 1}. The table must contain "
+            "exactly 2^n entries; n=0 requires one entry for the empty subset."
+        ),
+    )
+    entries: tuple[SetFunctionEntry, ...] = Field(
+        min_length=1,
+        max_length=1 << MAX_GROUND_SET,
+        description=(
+            "Exactly 2^ground_set_size entries, one for every subset of the ground "
+            "set, including []. Each subset must appear exactly once, regardless "
+            "of its element order. Rows may appear in any order."
+        ),
+        examples=[
+            [
+                {"subset": [], "value": {"num": "0", "den": "1"}},
+                {"subset": [0], "value": {"num": "1", "den": "1"}},
+            ]
+        ],
+    )
 
     @model_validator(mode="after")
     def require_complete_table(self) -> Self:
-        expected = 1 << self.ground_set_size
-        if len(self.entries) != expected:
+        # Keep after-model validation: nested existing native values must still
+        # recheck the table invariant, including model_copy-authored claims.
+        try:
+            self._require_complete_entries()
+        except PydanticCustomError as error:
+            raise ValidationError.from_exception_data(
+                type(self).__name__,
+                [{"type": error, "loc": ("entries",), "input": self.entries}],
+            ) from error
+        return self
+
+    def _require_complete_entries(self) -> None:
+        entries = self.entries
+        ground_set_size = self.ground_set_size
+        expected = 1 << ground_set_size
+        if len(entries) != expected:
             raise _validation_error(
                 "table_entry_count_mismatch",
-                "set function table must contain exactly one value per subset",
+                f"expected {expected} entries for ground_set_size={ground_set_size}, "
+                f"received {len(entries)}; include exactly one value for every subset",
             )
-        seen: set[tuple[int, ...]] = set()
-        for entry in self.entries:
+        seen: dict[int, int] = {}
+        duplicate: tuple[int, int] | None = None
+        for index, entry in enumerate(entries):
             if len(entry.subset) != len(set(entry.subset)):
                 raise _validation_error(
-                    "subset_elements_not_unique", "subset elements must be unique"
+                    "subset_elements_not_unique",
+                    f"entries[{index}].subset elements must be unique",
                 )
-            for elem in entry.subset:
-                if not (0 <= elem < self.ground_set_size):
-                    raise _validation_error(
-                        "subset_element_out_of_range",
-                        "subset elements must be in 0..ground_set_size-1",
-                    )
-            key = tuple(sorted(entry.subset))
-            if key in seen:
+            if any(not 0 <= elem < ground_set_size for elem in entry.subset):
                 raise _validation_error(
-                    "table_subsets_not_unique", "set function subsets must be unique"
+                    "subset_element_out_of_range",
+                    f"entries[{index}].subset elements must be in 0..ground_set_size-1",
                 )
-            seen.add(key)
-        if len(seen) != expected:
+            mask = sum(1 << elem for elem in entry.subset)
+            if mask in seen:
+                if duplicate is None:
+                    duplicate = (seen[mask], index)
+            else:
+                seen[mask] = index
+        if duplicate is not None:
+            # A duplicate in a correctly sized table guarantees a missing subset.
+            # Report one bounded concrete correction, without guessing its value.
+            missing_mask = next(mask for mask in range(expected) if mask not in seen)
+            missing = [
+                elem for elem in range(ground_set_size) if missing_mask & (1 << elem)
+            ]
+            first, repeated = duplicate
             raise _validation_error(
-                "table_missing_subset",
-                "set function table must contain every subset of the ground set",
+                "table_subsets_not_unique",
+                f"entries[{repeated}] repeats the subset in entries[{first}]; "
+                f"supply a value for missing subset {missing} instead of a duplicate. "
+                "Every subset must appear exactly once",
             )
-        return self
 
 
 class SetFunctionEvalRequest(StrictModel):

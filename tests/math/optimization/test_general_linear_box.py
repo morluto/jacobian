@@ -10,14 +10,16 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.optimization import general_linear_program
 from jacobian.math.optimization import operations as standard_solver
 from jacobian.math.optimization._general_models import (
-    MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
     MAX_GENERAL_RATIONAL_INPUT_DIGITS,
     GeneralFormRationalLinearProgram,
     GeneralRationalLinearProgramResult,
     RationalLinearConstraint,
     RationalObjectiveSense,
 )
-from jacobian.math.optimization._models import RationalLinearProgramResult
+from jacobian.math.optimization._models import (
+    MAX_LINEAR_SOLVER_VARIABLES,
+    RationalLinearProgramResult,
+)
 
 
 def _program(
@@ -90,7 +92,7 @@ def test_malformed_trusted_standard_result_fails_without_claiming_mathematics(
         general_linear_program(program)
 
 
-@pytest.mark.parametrize("size", [4, MAX_GENERAL_LINEAR_PROGRAM_VARIABLES])
+@pytest.mark.parametrize("size", [4, MAX_LINEAR_SOLVER_VARIABLES])
 def test_independent_box_is_admitted_through_the_source_variable_limit(
     size: int,
 ) -> None:
@@ -208,7 +210,7 @@ def test_zero_objective_with_free_and_one_sided_coordinates_is_optimal() -> None
 
 
 def test_box_exact_objective_retains_growth_beyond_source_scalar_limit() -> None:
-    size = MAX_GENERAL_LINEAR_PROGRAM_VARIABLES
+    size = MAX_LINEAR_SOLVER_VARIABLES
     large = 10 ** (MAX_GENERAL_RATIONAL_INPUT_DIGITS - 1)
     endpoints = [Fraction(1, large + 2 * i + 1) for i in range(size)]
     coefficients = [Fraction(1, large + 2 * (size + i) + 1) for i in range(size)]

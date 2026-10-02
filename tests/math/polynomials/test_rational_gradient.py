@@ -180,7 +180,7 @@ def test_monomial_denominator_near_exponent_boundary() -> None:
     result = _identity(_monomial_source(("x", "y"), (0, 64), (63, 0)))
     assert result.partial_derivatives[0].denominator.terms[0].exponents == (64, 0)
     with pytest.raises(OperationResourceAdmissionError, match="exponent"):
-        gradient(_monomial_source(("x", "y"), (0, 64), (64, 0)))
+        gradient(_monomial_source(("x", "y"), (0, 64), (128, 0)))
 
 
 def test_true_output_coefficient_boundary() -> None:

@@ -1,12 +1,19 @@
 """Partial symmetric rational matrices and their chordal completions."""
 
 from itertools import combinations
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    GraphValueInputEncoding,
+    IndexedSimpleUndirectedGraphInput,
+)
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.matrices._analysis_input import AnalysisRationalInput
+from jacobian.math.matrices._rational_input import RationalValueInputEncoding
 from jacobian.math.matrices.values import RationalMatrix, SparseRationalMatrixEntry
 
 
@@ -35,8 +42,45 @@ class PartialSymmetricRationalMatrix(StrictModel):
         return self
 
 
+class _SpecifiedRationalEntryInput(SparseRationalMatrixEntry):
+    value: AnalysisRationalInput
+
+
+_SpecifiedRationalEntry = Annotated[
+    SparseRationalMatrixEntry,
+    RationalValueInputEncoding(SparseRationalMatrixEntry, _SpecifiedRationalEntryInput),
+]
+
+
+class _PartialSymmetricRationalMatrixInput(PartialSymmetricRationalMatrix):
+    graph: IndexedSimpleUndirectedGraphInput
+    specified_entries: tuple[_SpecifiedRationalEntry, ...] = Field(
+        max_length=66560,
+        description="Row-major specified diagonals and graph edges, including explicit "
+        "zeros. Rational values normalize from JSON ratios with at most 32768 digits "
+        "per raw component and nonzero denominators; coordinates are never reordered.",
+    )
+
+    @field_validator("specified_entries", mode="before")
+    @classmethod
+    def bound_raw_entries(cls, value: Any) -> Any:
+        if isinstance(value, (list, tuple)) and len(value) > 66560:
+            raise PydanticCustomError(
+                "matrix.budget_exceeded", "too many specified entries"
+            )
+        return tuple(value) if isinstance(value, list) else value
+
+
+PartialSymmetricRationalMatrixInput = Annotated[
+    PartialSymmetricRationalMatrix,
+    GraphValueInputEncoding(
+        PartialSymmetricRationalMatrix, _PartialSymmetricRationalMatrixInput
+    ),
+]
+
+
 class ChordalPSDCompletionRequest(StrictModel):
-    matrix: PartialSymmetricRationalMatrix
+    matrix: PartialSymmetricRationalMatrixInput
 
 
 class CompletedChordalPSDCompletion(StrictModel):

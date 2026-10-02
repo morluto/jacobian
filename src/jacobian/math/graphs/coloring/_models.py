@@ -10,6 +10,13 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.graphs._input import (
+    GraphValueInputEncoding,
+    IndexedSimpleUndirectedGraphInput,
+    SimpleUndirectedGraphInput,
+    indexed_graph_input_schema,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     IndexedSimpleUndirectedGraph,
@@ -60,10 +67,14 @@ def _require_indexed_coloring_graph(graph: IndexedSimpleUndirectedGraph) -> None
         )
 
 
-def _indexed_coloring_graph_schema() -> JsonSchemaValue:
+def _indexed_coloring_graph_schema(*, request: bool = False) -> JsonSchemaValue:
     """Project the coloring envelope onto the shared indexed graph value."""
 
-    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema = (
+        indexed_graph_input_schema()
+        if request
+        else IndexedSimpleUndirectedGraph.model_json_schema()
+    )
     schema["description"] = (
         "An integer-indexed simple undirected graph accepted by the coloring "
         f"operations: at most {MAX_COLORING_VERTICES} vertices and at most "
@@ -80,11 +91,20 @@ IndexedColoringGraph = Annotated[
     WithJsonSchema(_indexed_coloring_graph_schema()),
 ]
 
+IndexedColoringGraphInput = Annotated[
+    IndexedSimpleUndirectedGraphInput,
+    WithJsonSchema(_indexed_coloring_graph_schema(request=True), mode="validation"),
+]
 
-def _edge_coloring_graph_schema() -> JsonSchemaValue:
+
+def _edge_coloring_graph_schema(*, request: bool = False) -> JsonSchemaValue:
     """Project the edge-coloring input bounds onto the shared graph schema."""
 
-    schema = SimpleUndirectedGraph.model_json_schema()
+    schema = (
+        simple_graph_input_schema()
+        if request
+        else SimpleUndirectedGraph.model_json_schema()
+    )
     schema["description"] = (
         "A simple undirected graph accepted by the edge-coloring operations: "
         f"at most {MAX_COLORING_VERTICES} vertices, at most "
@@ -99,6 +119,12 @@ def _edge_coloring_graph_schema() -> JsonSchemaValue:
 EdgeColoringGraph = Annotated[
     SimpleUndirectedGraph,
     WithJsonSchema(_edge_coloring_graph_schema()),
+]
+
+
+EdgeColoringGraphInput = Annotated[
+    SimpleUndirectedGraphInput,
+    WithJsonSchema(_edge_coloring_graph_schema(request=True), mode="validation"),
 ]
 
 
@@ -163,7 +189,7 @@ def _require_coloring_sequence(
 class KColorabilityRequest(StrictModel):
     """Decide whether a bounded simple graph admits a proper ``k``-coloring."""
 
-    graph: IndexedColoringGraph
+    graph: IndexedColoringGraphInput
     colors: int = Field(ge=1, le=MAX_COLORING_COLORS)
     solver_conflicts: int = Field(
         default=DEFAULT_SOLVER_CONFLICT_BUDGET,
@@ -273,7 +299,7 @@ class PrecoloringEdgeRepairRequest(StrictModel):
     vertex axis; dense graphs are bounded by the shared coloring edge bound.
     """
 
-    graph: IndexedColoringGraph
+    graph: IndexedColoringGraphInput
     colors: int = Field(ge=1, le=MAX_COLORING_COLORS)
     fixed_colors: tuple[tuple[int, int], ...] = Field(
         default=(),
@@ -445,7 +471,7 @@ def _require_k_colorability_negative_shape(result: KColorabilityResult) -> None:
 class MaximalIndependentSetRequest(StrictModel):
     """One canonical candidate set in a bounded simple graph."""
 
-    graph: IndexedColoringGraph
+    graph: IndexedColoringGraphInput
     candidate_set: tuple[int, ...] = Field(max_length=MAX_COLORING_VERTICES)
 
     @model_validator(mode="after")
@@ -588,7 +614,7 @@ def _require_positive_witness(result: EdgeKColorabilityResult) -> None:
 class EdgeKColorabilityRequest(StrictModel):
     """Decide whether a simple graph admits a proper ``k``-edge-coloring."""
 
-    graph: EdgeColoringGraph
+    graph: EdgeColoringGraphInput
     colors: StrictInt = Field(ge=1, le=MAX_COLORING_COLORS)
     solver_conflicts: StrictInt = Field(
         default=DEFAULT_SOLVER_CONFLICT_BUDGET,
@@ -654,10 +680,20 @@ class EdgeKColorabilityResult(StrictModel):
         return self
 
 
+class _EdgeColoringAssignmentInput(EdgeColoringAssignment):
+    graph: EdgeColoringGraphInput
+
+
+EdgeColoringAssignmentInput = Annotated[
+    EdgeColoringAssignment,
+    GraphValueInputEncoding(EdgeColoringAssignment, _EdgeColoringAssignmentInput),
+]
+
+
 class EdgeColoringCheckRequest(StrictModel):
     """Validate one source-bound edge-to-color assignment as a proper coloring."""
 
-    assignment: EdgeColoringAssignment
+    assignment: EdgeColoringAssignmentInput
 
 
 class EdgeColoringCheckResult(StrictModel):
@@ -751,7 +787,7 @@ class ListCapacityEdgeColoringRequest(StrictModel):
     unsatisfiable.
     """
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     palette: tuple[OpaqueLabel, ...] = Field(
         description="Finite color palette with unique nonempty labels."
     )

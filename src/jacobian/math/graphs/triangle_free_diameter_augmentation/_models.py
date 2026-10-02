@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 TriangleFreeDiameterAugmentationStatus = Literal[
@@ -26,7 +27,7 @@ class TriangleFreeDiameterAugmentationBudget(StrictModel):
 class TriangleFreeDiameterAugmentationRequest(StrictModel):
     """One connected triangle-free graph and target diameter."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     target_diameter: StrictInt = Field(ge=1, le=12)
     resource_budget: TriangleFreeDiameterAugmentationBudget = Field(
         default_factory=TriangleFreeDiameterAugmentationBudget

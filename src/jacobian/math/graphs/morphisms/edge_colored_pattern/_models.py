@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import ColoredUndirectedGraphInput
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 
@@ -28,13 +29,13 @@ class EdgeColoredPatternRequest(StrictModel):
     edge, with colors allowed to repeat) and the empty vertex coloring.
     """
 
-    pattern: ColoredUndirectedGraph = Field(
+    pattern: ColoredUndirectedGraphInput = Field(
         description=(
             "Pattern graph. The total edge coloring assigns one color to every "
             "edge, and vertex colors must be empty."
         ),
     )
-    host: ColoredUndirectedGraph = Field(
+    host: ColoredUndirectedGraphInput = Field(
         description=(
             "Host graph. The total edge coloring assigns one color to every "
             "edge, and vertex colors must be empty."

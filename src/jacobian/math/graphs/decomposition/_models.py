@@ -16,6 +16,10 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    IndexedSimpleUndirectedGraphInput,
+    indexed_graph_input_schema,
+)
 from jacobian.math.graphs.multigraph._models import MAX_EDGES, LooplessMultigraph
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -41,6 +45,11 @@ _DecompositionGraph = Annotated[
     AfterValidator(_require_decomposition_graph),
 ]
 
+_DecompositionGraphInput = Annotated[
+    IndexedSimpleUndirectedGraphInput,
+    AfterValidator(_require_decomposition_graph),
+]
+
 
 def _require_block_cut_graph(
     graph: IndexedSimpleUndirectedGraph,
@@ -56,7 +65,7 @@ def _require_block_cut_graph(
 
 
 def _block_cut_graph_schema() -> JsonSchemaValue:
-    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema = indexed_graph_input_schema()
     schema["description"] = (
         "A finite simple indexed graph accepted by block-cut decomposition: "
         f"at most {MAX_BLOCK_CUT_TREE_VERTICES} vertices."
@@ -69,9 +78,9 @@ def _block_cut_graph_schema() -> JsonSchemaValue:
 
 
 _BlockCutGraph = Annotated[
-    IndexedSimpleUndirectedGraph,
+    IndexedSimpleUndirectedGraphInput,
     AfterValidator(_require_block_cut_graph),
-    WithJsonSchema(_block_cut_graph_schema()),
+    WithJsonSchema(_block_cut_graph_schema(), mode="validation"),
 ]
 
 
@@ -94,7 +103,7 @@ class BlockCutTreeResult(StrictModel):
 
 
 class BridgeBlockRequest(StrictModel):
-    graph: _DecompositionGraph
+    graph: _DecompositionGraphInput
 
 
 class BridgeBlockResult(StrictModel):
@@ -112,7 +121,7 @@ class BridgeBlockResult(StrictModel):
 
 
 class EarDecompositionRequest(StrictModel):
-    graph: _DecompositionGraph
+    graph: _DecompositionGraphInput
 
 
 class EarDecompositionResult(StrictModel):
@@ -140,7 +149,7 @@ class EarDecompositionResult(StrictModel):
 
 
 class BiconnectedComponentsRequest(StrictModel):
-    graph: _DecompositionGraph
+    graph: _DecompositionGraphInput
 
 
 class BiconnectedComponentsResult(StrictModel):
@@ -165,7 +174,7 @@ class SPQRTreeRequest(StrictModel):
     at most ``C(64, 2) = 2016`` edges.
     """
 
-    graph: _DecompositionGraph = Field(
+    graph: _DecompositionGraphInput = Field(
         description=(
             "Finite simple undirected source graph. A positive SPQR tree uses"
             " the biconnected, at-least-three-vertices convention."

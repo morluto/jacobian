@@ -1,6 +1,6 @@
 ---
 name: audit-public-operation-contracts
-description: Audit a Jacobian operation’s mathematical contract, boundedness, exact results, and composition.
+description: Design or audit a Jacobian operation’s mathematical contract, boundedness, exact results, and composition.
 ---
 
 # Audit Public Operation Contracts
@@ -9,6 +9,31 @@ Determine whether an operation is a bounded, truthful, composable mathematical
 instrument. Record the revision, operation IDs, inspected scope, and whether the
 request includes implementation. Audit-only work does not authorize repository
 or external mutations.
+
+## Design before implementation
+
+Before adding a public operation or library abstraction, apply the
+[vocabulary audit](../audit-mathematical-vocabulary/SKILL.md) to the proposed
+boundary. Keep concise evidence in the existing issue or PR, reusing what is
+already established rather than creating a mandatory review form:
+
+- State the exact mathematical postcondition and essential hypotheses.
+- Name the nearest existing operation or composition and the specific result
+  it cannot supply. Give a smallest separating example and a nearby case the
+  proposal deliberately does not solve.
+- Walk one input through its canonical result to an intended consumer. Decide
+  only relevant questions about source identity, multiplicity, ordering,
+  empty or degenerate carriers, finite versus infinite solution sets, and one
+  witness versus exhaustive output.
+- Choose the appropriate disposition: public operation, native-only function,
+  shared representation, private helper, regression fixture, or caller reasoning.
+  A composition or no-gap finding is a successful outcome, not a reason to
+  manufacture another operation.
+
+A justified boundary has one stable mathematical result, not a whole-proof API,
+assurance wrapper, workflow state, or compatibility metadata. Keep the existing
+composition and scale-first obligations below; a separating example motivates
+investigation but does not establish an admitted implementation.
 
 ## Trace the contract
 
@@ -25,6 +50,29 @@ for a backend boundary, consult the
 [backend contract](../../../docs/reference/mathematical-backends.md).
 Record applicable evidence in the requested audit or existing issue/PR
 description; do not create a universal review form.
+
+## Follow shared interpretations through their consumers
+
+When changing field/domain recognition, shape resolution, codec parsing or
+canonical conversion, identify the semantic owner and trace the actual callers
+that rely on its interpretation. Do not infer every possible producer-consumer
+pair from annotations. Similar-looking code may have different mathematical
+meanings: share an implementation when semantics are genuinely identical, or
+state and test a legitimate contextual difference instead of forcing reuse.
+
+Run the same owner-local fixture through the relevant recognizer, resolver and
+consumer, with a useful accepted case and an invalid case that stays rejected.
+Cover alternate supported spellings, aliases/qualified forms, nesting and
+empty/zero/singleton cases only where they belong to that contract. For static
+checks, include binding and scope: unrelated guards, reassignment, destructured
+names and shadowing must not falsely establish the required property.
+
+For example, the three-level annotation fixture in
+`tests/tooling/test_before_validator_containers.py` checks container recognition,
+nested shape resolution and the projection consumer together, including shallow
+projection, unrelated-guard and destructured-rebinding controls. Keep this at the
+owner boundary; add no duplicate runtime validation layer, generic ledger,
+transport abstraction or catalog-wide generated matrix.
 
 ## Probe the plausible failures
 
@@ -49,6 +97,32 @@ investigation, read [scale and backends](references/scale-and-backends.md).
 Audit what the contract unnecessarily excludes as well as what it unsafely
 accepts. Preserve the motivating request and exact invariant; a fast but weaker
 result is not a scale improvement.
+
+## Check a justified transformation
+
+For a changed mathematical owner, choose a relevant invariant or equivariance
+and derive its expected effect before writing the test. Relabelling may preserve
+a scalar invariant while transporting indexed witnesses; row permutations must
+preserve the intended set or multiset semantics. Translation preserves planar
+squared circumradii, while scaling by nonzero c multiplies them by c². Translation
+preserves repeated differences; an invertible linear coordinate map transports
+their values and preserves their multiplicities. These are examples, not a
+requirement that every operation support every transformation. State when the
+transformation changes the problem or leaves the admitted domain.
+
+Use the actual source and an independent defining-identity check, alongside the
+relation between transformed outputs. Include a negative control for an invalid
+invariance assumption or lost source indices/multiplicities. For a transformation
+or encoding operation, check that source identities, hypotheses and the intended
+relation survive the map: correct solver execution on the encoded problem does
+not establish that the mathematical model was valid.
+
+Keep these tests with the affected owner. Do not introduce a catalog-wide matrix,
+generic assurance fields, or repeated expensive verification during result
+construction. A concrete example is
+`tests/math/combinatorics/additive/test_difference_profile_equivariance.py`:
+affine coordinate changes and source permutations are checked against exact
+source subtraction, with stale-index and noninjective-map controls.
 
 ## Establish the finding and finish
 

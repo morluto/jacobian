@@ -343,10 +343,8 @@ class TestEdgeColoringRequestSchema:
         assert "124992 incident-edge constraints" in decide_graph["description"]
 
         check_schema = EdgeColoringCheckRequest.model_json_schema()
-        assignment = check_schema["$defs"]["EdgeColoringAssignment"]
-        assert check_schema["properties"]["assignment"]["$ref"] == (
-            "#/$defs/EdgeColoringAssignment"
-        )
+        reference = check_schema["properties"]["assignment"]["$ref"]
+        assignment = check_schema["$defs"][reference.rsplit("/", 1)[1]]
         assert assignment["properties"]["graph"] == decide_graph
 
     def test_sparse_graph_just_past_the_old_vertex_cap_is_admitted(self) -> None:

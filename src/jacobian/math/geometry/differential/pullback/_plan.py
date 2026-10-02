@@ -10,6 +10,11 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.geometry.differential.metrics._dag import ONE, ZERO, Dag, Expression
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
+from jacobian.math.geometry.differential.pullback._locus import (
+    PullbackDag,
+    admit_locus_factor,
+    select_locus_factors,
+)
 from jacobian.math.polynomials.rational_functions._bounds import (
     FractionBound,
     _polynomial_admission_work_units,
@@ -43,10 +48,12 @@ class Plan:
     determinant: Expression
     guards: tuple[Expression, ...]
     fractions: dict[Expression, tuple[int, int]]
+    locus_factors: tuple[int, ...]
+    undefined_factors: tuple[int, ...]
 
 
 def _substitute(
-    dag: Dag, value: SparseRationalPolynomial, inner: tuple[Expression, ...]
+    dag: PullbackDag, value: SparseRationalPolynomial, inner: tuple[Expression, ...]
 ) -> Expression:
     result = ZERO
     powers: dict[tuple[int, int], Expression] = {}
@@ -57,21 +64,23 @@ def _substitute(
             for degree in range(1, exponent + 1):
                 key = (axis, degree)
                 if key not in powers:
-                    powers[key] = dag.multiply(power, inner[axis])
+                    powers[key] = dag.multiply_checked(power, inner[axis])
                 power = powers[key]
-            part = dag.multiply(part, power)
+            part = dag.multiply_checked(part, power)
         result = dag.add(result, part)
     return result
 
 
-def _determinant(dag: Dag, entries: tuple[Expression, ...], n: int) -> Expression:
+def _determinant(
+    dag: PullbackDag, entries: tuple[Expression, ...], n: int
+) -> Expression:
     terms = []
     for permutation in permutations(range(n)):
         inversions = sum(
             permutation[i] > permutation[j] for i in range(n) for j in range(i + 1, n)
         )
         terms.append(
-            dag.multiply(
+            dag.multiply_checked(
                 Expression(Fraction((-1) ** inversions)),
                 *(entries[i * n + j] for i, j in enumerate(permutation)),
             )
@@ -89,7 +98,7 @@ def build_plan(
             "source dimension must lie in the rational-function carrier and "
             "the metric axis must have between 1 and 4 coordinates",
         )
-    dag = Dag(n, reject=reject, label="rational metric pullback")
+    dag = PullbackDag(n, reject=reject, label="rational metric pullback")
     # Metric components are authored on the target axis. Reserve their raw
     # parsing, backend conversion, and canonical recognition before any
     # substituted DAG node can be evaluated.
@@ -142,7 +151,7 @@ def build_plan(
         (
             value
             if not component_guards[i].scalar
-            else dag.multiply(value, dag.inverse(component_guards[i]))
+            else dag.multiply_checked(value, dag.inverse(component_guards[i]))
         )
         for i, value in enumerate(substitutions)
     )
@@ -151,7 +160,7 @@ def build_plan(
     output = tuple(
         dag.add(
             *(
-                dag.multiply(
+                dag.multiply_checked(
                     jacobian[i * n + a], substitutions[i * m + j], jacobian[j * n + b]
                 )
                 for i in range(m)
@@ -166,7 +175,7 @@ def build_plan(
         for guard in metric.tensor.retained_nonzero_denominators
     )
     guards = tuple(map_denominators) + component_guards + inherited + (determinant,)
-    values = tuple(dict.fromkeys((*output, *guards)))
+    values = tuple(dict.fromkeys(output))
     sizes = {value: dag.admit_output(value) for value in values}
     fractions = {
         value: (
@@ -175,12 +184,26 @@ def build_plan(
         )
         for value in values
     }
-    # Cancellation may change each denominator polynomial. Count distinct full
-    # expressions, not merely shared raw denominator factors, as in curvature.
-    guard_values = {value for value in guards if value.numerator}
+    # Products are nonzero iff each distinct factor is nonzero. Scalar
+    # contents and multiplicities add no locus obligation. Keep denominator
+    # factors explicitly so a canceled presentation cannot erase undefinedness.
+    undefined_factors = tuple(
+        sorted(
+            {
+                index
+                for value in guards[:-1]
+                for index in (*value.numerator, *value.denominator)
+            }
+            | set(determinant.denominator)
+        )
+    )
     output_denominators = {value for value in output if value.denominator}
-    if len(guard_values | output_denominators) > 768:
-        reject("locus", "complete pullback locus exceeds 768 guards")
+    locus_factors = select_locus_factors(
+        dag, guards, determinant, undefined_factors, len(output_denominators)
+    )
+    locus_sizes = [
+        admit_locus_factor(dag, index) for index in locus_factors if index != 0
+    ]
 
     def source_allocation(
         polynomial: SparseRationalPolynomial, dimension: int
@@ -210,10 +233,8 @@ def build_plan(
         for polynomial in (value.numerator, value.denominator)
     ]
     # The result repeats its complete locus in the tensor and profile fields.
-    # A whole admitted fraction bounds its monic numerator/denominator guard.
-    locus = [sizes[value] for value in guard_values] + [
-        sizes[value] for value in output_denominators
-    ]
+    # Output fractions also bound their normalized denominator guards.
+    locus = locus_sizes + [sizes[value] for value in output_denominators]
     allocations = source + [sizes[value] for value in output] + 2 * locus
     terms, bits, coordinates = (sum(row[i] for row in allocations) for i in range(3))
     coordinates += (n + m) * (
@@ -233,6 +254,8 @@ def build_plan(
         determinant,
         guards,
         fractions,
+        locus_factors,
+        undefined_factors,
     )
 
 

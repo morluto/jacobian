@@ -62,8 +62,8 @@ OperationCursor = Annotated[
         max_length=128,
         pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
         description=(
-            "Opaque continuation cursor from a prior call with the same need and "
-            "namespace. The page limit may change between calls."
+            "Opaque continuation cursor from a prior call with the same query, namespace, "
+            "and search_mode. The page limit may change between calls."
         ),
     ),
 ]

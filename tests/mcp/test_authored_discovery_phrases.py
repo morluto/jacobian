@@ -33,7 +33,7 @@ def test_live_authored_phrase_discovery_and_selected_example_execution() -> None
                 ("solve Ax=b", "linear.rational_solution.compute"),
             )
             for query, owner in queries:
-                # Omit limit and search_mode: the ordinary five-result precise page.
+                # Omit limit and search_mode: the ordinary ten-result precise query page.
                 found = await client.call_tool("math.find", {"query": query})
                 assert not found.is_error
                 assert found.structured_content is not None

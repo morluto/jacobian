@@ -290,8 +290,9 @@ target:
 
 The metadata-only authored-phrase recall probe is
 `uv run python tools/discovery_phrase_recall.py --output phrase-recall.json`.
-Its default five-result page matches ordinary `math.find`; `--limit` can select
-another supported page size. The report groups case/whitespace-equivalent
+Its default five-result cutoff is stricter than the ordinary MCP `math.find`
+query page, which defaults to ten results; `--limit` can select another
+supported page size. The report groups case/whitespace-equivalent
 phrases, retains their authored spellings and distinct owners, and records each
 owner's first-page rank and aggregate recall. It does not execute operations or
 measure mathematical correctness or agent selection. The catalog conformance

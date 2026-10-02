@@ -45,6 +45,7 @@ from jacobian.math.polynomials._models import (
     PolynomialSquareFreeFactor,
     PolynomialValue,
     _degree,
+    _irreducible_factor_sort_key,
     _validation_error,
 )
 from jacobian.math.polynomials._multiply_kernel import (
@@ -606,26 +607,6 @@ def polynomial_square_free_decomposition(
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
         reconstructed=_result_polynomial(reconstructed, polynomial.variables),
-    )
-
-
-def _irreducible_factor_sort_key(
-    record: PolynomialIrreducibleFactor,
-) -> tuple[int, int, tuple[tuple[tuple[int, ...], str, str], ...]]:
-    return (
-        record.multiplicity,
-        max(
-            (sum(term.exponents) for term in record.factor.polynomial.terms),
-            default=0,
-        ),
-        tuple(
-            (
-                term.exponents,
-                format_canonical_integer(term.coefficient.num),
-                format_canonical_integer(term.coefficient.den),
-            )
-            for term in record.factor.polynomial.terms
-        ),
     )
 
 

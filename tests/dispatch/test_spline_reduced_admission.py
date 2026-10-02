@@ -72,13 +72,28 @@ def _constant(value: Fraction) -> PiecewisePolynomialResult:
 
 @pytest.mark.parametrize("public", [False, True], ids=["native", "dispatch"])
 @pytest.mark.parametrize(
-    "case", ["cancel", "reverse_cancel", "zero", "unit", "wide_scalar"]
+    "case",
+    [
+        "cancel",
+        "reverse_cancel",
+        "zero",
+        "unit",
+        "wide_scalar",
+        "double",
+        "negative_double",
+        "half_reciprocal",
+        "boundary_product",
+    ],
 )
 def test_scalar_multiplication_admits_reduced_boundary(
     large_integer: int, public: bool, case: str
 ) -> None:
     n = large_integer
     coefficient, scalar, expected = {
+        "double": (Fraction(n), Fraction(2), Fraction(2 * n)),
+        "negative_double": (Fraction(-n), Fraction(2), Fraction(-2 * n)),
+        "half_reciprocal": (Fraction(1, n), Fraction(1, 2), Fraction(1, 2 * n)),
+        "boundary_product": (Fraction(5 * n - 1), Fraction(2), Fraction(10 * n - 2)),
         "cancel": (Fraction(n), Fraction(1, n), Fraction(1)),
         "reverse_cancel": (Fraction(1, n), Fraction(-n), Fraction(-1)),
         "zero": (Fraction(n), Fraction(0), Fraction(0)),
@@ -149,11 +164,14 @@ def test_unit_basis_coordinates_admit_canonical_boundary(
 
 
 @pytest.mark.parametrize("reciprocal", [False, True])
+@pytest.mark.parametrize("near_boundary", [False, True])
 def test_uncancelled_scalar_growth_still_refuses_oversized_components(
-    large_integer: int, reciprocal: bool
+    large_integer: int, reciprocal: bool, near_boundary: bool
 ) -> None:
-    value = Fraction(1, large_integer) if reciprocal else Fraction(large_integer)
-    scalar = Fraction(1, 10) if reciprocal else Fraction(10)
+    component = 5 * large_integer if near_boundary else large_integer
+    factor = 2 if near_boundary else 10
+    value = Fraction(1, component) if reciprocal else Fraction(component)
+    scalar = Fraction(1, factor) if reciprocal else Fraction(factor)
     with pytest.raises(OperationResourceAdmissionError, match="scaled coefficient"):
         piecewise_polynomial_scalar_multiply(
             PiecewisePolynomialScalarMultiplicationRequest(

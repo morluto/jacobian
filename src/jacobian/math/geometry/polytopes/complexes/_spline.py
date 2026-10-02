@@ -804,13 +804,19 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
     output_digits = 0
     for piece in function.pieces:
         for term in piece.polynomial.polynomial.terms:
-            widths = _cancelled_component_widths(
-                [term.coefficient.num, scalar.numerator],
-                [term.coefficient.den, scalar.denominator],
-            )
-            if widths is None:
+            if not scalar or not term.coefficient.num:
                 continue
-            numerator_digits, denominator_digits = (max(1, width) for width in widths)
+            coefficient_value = term.coefficient
+            numerator_gcd = gcd(abs(coefficient_value.num), scalar.denominator)
+            denominator_gcd = gcd(coefficient_value.den, abs(scalar.numerator))
+            numerator_digits = _scalar_product_component_width(
+                coefficient_value.num // numerator_gcd,
+                scalar.numerator // denominator_gcd,
+            )
+            denominator_digits = _scalar_product_component_width(
+                coefficient_value.den // denominator_gcd,
+                scalar.denominator // numerator_gcd,
+            )
             if (
                 max(numerator_digits, denominator_digits)
                 > MAX_CANONICAL_RATIONAL_DIGITS
@@ -2039,6 +2045,23 @@ def _scaled_component_width(value: int) -> int:
     if magnitude == 1:
         return 0
     return decimal_digit_width(magnitude)
+
+
+def _scalar_product_component_width(left: int, right: int) -> int:
+    """Admit a nonzero reduced component without forming an oversized product.
+
+    Two nonunit factors have either d1+d2-1 or d1+d2 decimal digits.
+    Only when that interval straddles the cap is an exact threshold comparison
+    needed. Dividing the largest allowed component by one factor decides
+    admission without allocating the product. Unit factors add no width.
+    """
+    upper = max(1, _scaled_component_width(left) + _scaled_component_width(right))
+    limit = MAX_CANONICAL_RATIONAL_DIGITS
+    if upper <= limit or upper - 1 > limit:
+        return upper
+    if abs(left) <= (10**limit - 1) // abs(right):
+        return limit
+    return upper
 
 
 def _cancelled_component_widths(

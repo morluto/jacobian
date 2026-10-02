@@ -197,6 +197,23 @@ class PolynomialIrreducibleFactor(StrictModel):
     multiplicity: int = Field(ge=1, le=_MAX_GCD_DEGREE)
 
 
+def _irreducible_factor_sort_key(
+    record: PolynomialIrreducibleFactor,
+) -> tuple[int, int, tuple[tuple[tuple[int, ...], int, int], ...]]:
+    """Order factor records by integer components, never their wire spellings."""
+    return (
+        record.multiplicity,
+        max(
+            (sum(term.exponents) for term in record.factor.polynomial.terms),
+            default=0,
+        ),
+        tuple(
+            (term.exponents, term.coefficient.num, term.coefficient.den)
+            for term in record.factor.polynomial.terms
+        ),
+    )
+
+
 class PolynomialFactorizationResult(StrictModel):
     """A kernel-produced exact univariate factorization over ``QQ``.
 
@@ -226,29 +243,7 @@ class PolynomialFactorizationResult(StrictModel):
             for factor in self.factors
         ):
             raise _validation_error("irreducible factors must use the source ring")
-        ordered = tuple(
-            sorted(
-                self.factors,
-                key=lambda record: (
-                    record.multiplicity,
-                    max(
-                        (
-                            sum(term.exponents)
-                            for term in record.factor.polynomial.terms
-                        ),
-                        default=0,
-                    ),
-                    tuple(
-                        (
-                            term.exponents,
-                            term.coefficient.num,
-                            term.coefficient.den,
-                        )
-                        for term in record.factor.polynomial.terms
-                    ),
-                ),
-            )
-        )
+        ordered = tuple(sorted(self.factors, key=_irreducible_factor_sort_key))
         if self.factors != ordered:
             raise _validation_error(
                 "irreducible factors must be ordered by multiplicity, degree, "

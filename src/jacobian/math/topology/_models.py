@@ -7,6 +7,7 @@ from itertools import combinations, pairwise
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
+    ConfigDict,
     Field,
     StrictInt,
     StringConstraints,
@@ -239,10 +240,33 @@ def simplicial_complex_request_from_value(
 
 
 class FacesInDimension(StrictModel):
-    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    """Canonical faces of one dimension, ordered lexicographically by labels.
+
+    Each face has exactly dimension + 1 vertices in sorted vertex-label order.
+    Faces are unique, and the outer list is in lexicographic face order.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"dimension": 1, "faces": [["a", "b"], ["a", "c"], ["b", "c"]]}
+            ]
+        }
+    )
+
+    dimension: StrictInt = Field(
+        ge=0,
+        le=MAX_TOPOLOGY_DIMENSION,
+        description="Common face dimension; each face has exactly dimension + 1 vertices.",
+    )
     faces: tuple[Simplex, ...] = Field(
         min_length=1,
         max_length=MAX_TOPOLOGY_FACES,
+        description=(
+            "Each face has exactly dimension + 1 vertices in sorted "
+            "lexicographic vertex-label order. Faces must be unique, and this "
+            "outer list must be lexicographically ordered by the face tuples."
+        ),
     )
 
     @model_validator(mode="after")

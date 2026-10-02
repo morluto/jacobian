@@ -10,7 +10,10 @@ import sympy
 from sympy import Poly, Symbol, expand
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.polynomials._models import (
     MAX_GRAPH_POLYNOMIAL_EDGES,
     MAX_GRAPH_POLYNOMIAL_VERTICES,
@@ -138,22 +141,39 @@ def _build_graph(
     matching: bool = False,
 ) -> nx.Graph[int]:
     if matching:
-        max_vertices, max_edges = MAX_MATCHING_VERTICES, MAX_MATCHING_EDGES
-        label = "matching polynomial"
-        code = "graph.matching_polynomial.exact_computation_envelope"
+        if (
+            graph.vertex_count > MAX_MATCHING_VERTICES
+            or len(graph.edges) > MAX_MATCHING_EDGES
+        ):
+            raise OperationDomainValidationError(
+                location=("graph",),
+                code="graph.matching_polynomial.exact_computation_envelope",
+                message="matching polynomial graph exceeds its exact computation envelope",
+            )
     else:
-        max_vertices, max_edges = (
-            MAX_GRAPH_POLYNOMIAL_VERTICES,
-            MAX_GRAPH_POLYNOMIAL_EDGES,
-        )
-        label = "graph polynomial"
-        code = "graph.polynomial.exact_computation_envelope"
-    if graph.vertex_count > max_vertices or len(graph.edges) > max_edges:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code=code,
-            message=f"{label} graph exceeds its exact computation envelope",
-        )
+        if graph.vertex_count > MAX_GRAPH_POLYNOMIAL_VERTICES:
+            raise OperationResourceAdmissionError(
+                location=("graph", "vertex_count"),
+                code="graph.polynomial.vertex_count_limit",
+                message=(
+                    "graph polynomial exact computation envelope admits at most "
+                    f"{MAX_GRAPH_POLYNOMIAL_VERTICES} vertices; received "
+                    f"{graph.vertex_count}. Submit a graph with vertex_count <= "
+                    f"{MAX_GRAPH_POLYNOMIAL_VERTICES} and endpoints in "
+                    "0..vertex_count-1, or use a backend admitting the original graph."
+                ),
+            )
+        if len(graph.edges) > MAX_GRAPH_POLYNOMIAL_EDGES:
+            raise OperationResourceAdmissionError(
+                location=("graph", "edges"),
+                code="graph.polynomial.edge_count_limit",
+                message=(
+                    "graph polynomial exact computation envelope admits at most "
+                    f"{MAX_GRAPH_POLYNOMIAL_EDGES} edges; received {len(graph.edges)}. "
+                    f"Submit a graph with at most {MAX_GRAPH_POLYNOMIAL_EDGES} edges, "
+                    "or use a backend admitting the original graph."
+                ),
+            )
     g: nx.Graph[int] = nx.Graph()
     g.add_nodes_from(range(graph.vertex_count))
     g.add_edges_from(graph.edges)

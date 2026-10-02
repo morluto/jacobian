@@ -126,3 +126,27 @@ class TestMatchingPolynomial:
         d = _terms_to_dict(result)
         assert d.get(3) == 1
         assert d.get(1) == -2
+
+
+def test_exact_graph_polynomial_admission_accepts_both_inclusive_limits() -> None:
+    from itertools import combinations
+
+    from jacobian.math.graphs.polynomials.operations import _build_graph
+
+    # Admission is shared by chromatic, Tutte, and flow. Their existing
+    # exponential kernels are intentionally unchanged by this visibility fix.
+    graph = IndexedSimpleUndirectedGraph(
+        vertex_count=12,
+        edges=(*combinations(range(7), 2), (0, 7), (0, 8), (0, 9)),
+    )
+    admitted = _build_graph(graph)
+    assert admitted.number_of_nodes() == 12
+    assert admitted.number_of_edges() == 24
+    assert set(admitted.edges) == set(graph.edges)
+
+
+def test_matching_keeps_its_separate_larger_envelope() -> None:
+    req = MatchingPolynomialRequest(
+        graph=IndexedSimpleUndirectedGraph(vertex_count=16, edges=())
+    )
+    assert _terms_to_dict(_run_matching(req)) == {16: 1}

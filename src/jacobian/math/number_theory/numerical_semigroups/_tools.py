@@ -45,8 +45,6 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
 from jacobian.math.number_theory.numerical_semigroups._presentation_models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
-    PresentationBinomialsRequest,
-    PresentationBinomialsResult,
     PresentationDegreeProfileRequest,
     PresentationDegreeProfileResult,
 )
@@ -71,7 +69,6 @@ from jacobian.math.number_theory.numerical_semigroups.operations import (
     global_elasticity,
     membership,
     minimal_presentation,
-    presentation_binomials,
     presentation_degree_profile,
     summary,
 )
@@ -265,18 +262,6 @@ def compute_minimal_presentation(
     )
 
 
-def compute_presentation_binomials(
-    request: PresentationBinomialsRequest,
-) -> PresentationBinomialsResult:
-    return _run_native(
-        "presentation_binomials",
-        ("generators", "relations"),
-        lambda: presentation_binomials(
-            _generators(request.generators), request.relations
-        ),
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="number_theory.numerical_semigroup.summary.compute",
@@ -447,31 +432,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="presentation_degrees_3_5",
                 description="Compute presentation degrees for <3,5>; the minimal axis is positive and gcd one.",
                 input={"generators": ["3", "5"]},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="number_theory.numerical_semigroup.presentation_binomials.compute",
-        title="Convert presentation to sparse binomials",
-        description="Normalize a positive gcd-one generator presentation (general-path generators each at most "
-        f"{MAX_GENERATOR}; a presentation containing 1 uses the constant-size free-semigroup path) "
-        "to its minimal axis, validate relations against that "
-        "axis, and convert each relation (u,v) to the toric binomial X^u-X^v "
-        "with coefficients 1 and -1.",
-        request_type=PresentationBinomialsRequest,
-        result_type=PresentationBinomialsResult,
-        run=compute_presentation_binomials,
-        tags=("number-theory", "numerical-semigroup", "exact"),
-        examples=(
-            OperationExample(
-                name="binomials_3_5",
-                description="Sparse binomials of <3,5>.",
-                input={
-                    "generators": ["3", "5"],
-                    "relations": [
-                        {"first": [5, 0], "second": [0, 3]},
-                    ],
-                },
             ),
         ),
     ),

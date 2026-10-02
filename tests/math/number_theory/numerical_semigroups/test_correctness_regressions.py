@@ -10,6 +10,7 @@ from tests.math.number_theory.numerical_semigroups._support import (
     operation_domain_error,
 )
 
+from jacobian.math.number_theory.numerical_semigroups import relation_binomials
 from jacobian.math.number_theory.numerical_semigroups._element_invariant_models import (
     ElementCatenaryDegreeRequest,
     ElementDeltaSetRequest,
@@ -28,7 +29,6 @@ from jacobian.math.number_theory.numerical_semigroups._global_invariant_models i
 from jacobian.math.number_theory.numerical_semigroups._presentation_models import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
-    PresentationBinomialsRequest,
 )
 from jacobian.math.number_theory.numerical_semigroups._tools import (
     compute_betti_elements,
@@ -41,7 +41,6 @@ from jacobian.math.number_theory.numerical_semigroups._tools import (
     compute_factorization_graph,
     compute_factorizations,
     compute_minimal_presentation,
-    compute_presentation_binomials,
 )
 
 
@@ -245,17 +244,12 @@ def test_global_elasticity_has_an_exact_attaining_witness() -> None:
     assert (result.smallest_generator, result.largest_generator) == (4, 9)
 
 
-def test_presentation_binomials_replay_to_zero() -> None:
+def test_relation_binomials_replay_to_zero() -> None:
     generators = (4, 6, 9)
     presentation = compute_minimal_presentation(
         MinimalPresentationRequest(generators=generators)
     )
-    result = compute_presentation_binomials(
-        PresentationBinomialsRequest(
-            generators=generators,
-            relations=presentation.relations,
-        )
-    )
+    result = relation_binomials(presentation.minimal_generators, presentation.relations)
     for binomial in result.binomials:
         left_degree = sum(
             exponent * generator

@@ -43,6 +43,7 @@ from jacobian.math.number_theory.numerical_semigroups._global_invariant_models i
 )
 from jacobian.math.number_theory.numerical_semigroups._models import (
     MAX_ELEMENT,
+    MAX_GENERATORS,
     MAX_GLOBAL_BETTI_ELEMENT,
     MAX_GLOBAL_DELTA_CHECK,
     MAX_GRAPH_FACTORIZATIONS,
@@ -52,9 +53,9 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
 from jacobian.math.number_theory.numerical_semigroups._presentation_models import (
     MinimalPresentationRelation,
     MinimalPresentationResult,
-    PresentationBinomial,
-    PresentationBinomialsResult,
     PresentationDegreeProfileResult,
+    RelationBinomial,
+    RelationBinomialsResult,
 )
 from jacobian.math.number_theory.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryResult,
@@ -554,33 +555,64 @@ def presentation_degree_profile(
     )
 
 
-def presentation_binomials(
+def relation_binomials(
     generators: tuple[int, ...],
     relations: tuple[MinimalPresentationRelation, ...],
-) -> PresentationBinomialsResult:
-    """Convert homogeneous relations on a canonical axis to binomials."""
+) -> RelationBinomialsResult:
+    """Encode supplied homogeneous relations as signed monomial pairs.
+
+    This native-only projection does not establish a presentation, kernel
+    generation, or minimality of the relation family. Empty and incomplete
+    families are valid. Generators must already be the increasing minimal
+    axis: coordinates are never reordered or reinterpreted by normalization.
+    """
+    if (
+        not isinstance(generators, tuple)
+        or not 1 <= len(generators) <= MAX_GENERATORS
+        or any(type(value) is not int for value in generators)
+    ):
+        raise ValueError("generators must be a bounded tuple of positive integers")
+    _require_positive_bounded_generators(generators)
     values = _generators(generators)
+    if not isinstance(relations, tuple):
+        raise ValueError("relations must be a tuple of factorization relations")
     for relation in relations:
-        if len(relation.first) != len(values) or len(relation.second) != len(values):
+        if not isinstance(relation, MinimalPresentationRelation):
+            raise ValueError("each relation must be a factorization relation value")
+        first = getattr(relation, "first", None)
+        second = getattr(relation, "second", None)
+        if (
+            not isinstance(first, tuple)
+            or not isinstance(second, tuple)
+            or len(first) != len(values)
+            or len(second) != len(values)
+        ):
             raise ValueError(
                 "relation coordinates must match the minimal generating system"
             )
+        if any(
+            type(coordinate) is not int or coordinate < 0
+            for coordinate in (*first, *second)
+        ):
+            raise ValueError("relation coordinates must be nonnegative integers")
+        if first == second:
+            raise ValueError("relation factorizations must be distinct")
         first_degree = sum(
             coordinate * generator
-            for coordinate, generator in zip(relation.first, values, strict=True)
+            for coordinate, generator in zip(first, values, strict=True)
         )
         second_degree = sum(
             coordinate * generator
-            for coordinate, generator in zip(relation.second, values, strict=True)
+            for coordinate, generator in zip(second, values, strict=True)
         )
         if first_degree != second_degree:
             raise ValueError(
                 "relation factorizations must have the same semigroup degree"
             )
-    return PresentationBinomialsResult(
+    return RelationBinomialsResult(
         minimal_generators=values,
         binomials=tuple(
-            PresentationBinomial(
+            RelationBinomial(
                 left_exponents=tuple(relation.first),
                 right_exponents=tuple(relation.second),
             )
@@ -652,8 +684,8 @@ __all__ = [
     "membership",
     "minimal_generating_system",
     "minimal_presentation",
-    "presentation_binomials",
     "presentation_degree_profile",
+    "relation_binomials",
     "summary",
     "verify_elasticity",
     "verify_element_elasticity",

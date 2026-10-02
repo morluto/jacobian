@@ -88,7 +88,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="simple_2x2_best_response",
-                description="The first row has worst-case payoff 0 and the second row has worst-case payoff 2.",
+                description="Both rows have worst-case payoff 0; the tie selects the first row (index 0).",
                 input=GAME_EXAMPLE,
             ),
         ),

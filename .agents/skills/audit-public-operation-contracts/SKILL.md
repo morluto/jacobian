@@ -26,6 +26,29 @@ for a backend boundary, consult the
 Record applicable evidence in the requested audit or existing issue/PR
 description; do not create a universal review form.
 
+## Follow shared interpretations through their consumers
+
+When changing field/domain recognition, shape resolution, codec parsing or
+canonical conversion, identify the semantic owner and trace the actual callers
+that rely on its interpretation. Do not infer every possible producer-consumer
+pair from annotations. Similar-looking code may have different mathematical
+meanings: share an implementation when semantics are genuinely identical, or
+state and test a legitimate contextual difference instead of forcing reuse.
+
+Run the same owner-local fixture through the relevant recognizer, resolver and
+consumer, with a useful accepted case and an invalid case that stays rejected.
+Cover alternate supported spellings, aliases/qualified forms, nesting and
+empty/zero/singleton cases only where they belong to that contract. For static
+checks, include binding and scope: unrelated guards, reassignment, destructured
+names and shadowing must not falsely establish the required property.
+
+For example, the three-level annotation fixture in
+`tests/tooling/test_before_validator_containers.py` checks container recognition,
+nested shape resolution and the projection consumer together, including shallow
+projection, unrelated-guard and destructured-rebinding controls. Keep this at the
+owner boundary; add no duplicate runtime validation layer, generic ledger,
+transport abstraction or catalog-wide generated matrix.
+
 ## Probe the plausible failures
 
 Use small deterministic reproductions to test the suspected mechanism:

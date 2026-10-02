@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.graphs._input import IndexedSimpleUndirectedGraphInput
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.matrices._analysis_input import AnalysisRationalMatrixInput
 from jacobian.math.matrices.values import RationalMatrix
 
 
@@ -17,7 +18,7 @@ class ChordalPSDRequest(StrictModel):
     Extra graph edges are allowed; matrix zeros remain specified zeros.
     """
 
-    matrix: RationalMatrix
+    matrix: AnalysisRationalMatrixInput
     graph: IndexedSimpleUndirectedGraphInput
 
 

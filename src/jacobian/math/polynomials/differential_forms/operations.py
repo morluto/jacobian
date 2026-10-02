@@ -46,9 +46,12 @@ MAX_WEDGE_DIGIT_WORK = 100_000_000
 # Keep the complete serialized result inside the 10 MiB canonical output
 # envelope rather than only per-component term and digit caps.
 MAX_WEDGE_OUTPUT_DIGITS = 4_000_000
+_COEFFICIENT_MAGNITUDE_LIMIT = 10**MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
 
 
-def _integer_decimal_digits(value: int) -> int:
+def _integer_decimal_digit_bound(value: int) -> int:
+    """Conservative work proxy, not an exact coefficient-carrier cutoff."""
+
     magnitude = abs(value)
     if magnitude < 10:
         return 1
@@ -58,8 +61,8 @@ def _integer_decimal_digits(value: int) -> int:
 def _rational_height_digits(value: CanonicalRational) -> int:
     numerator, denominator = value.as_integer_ratio()
     return max(
-        _integer_decimal_digits(abs(numerator)),
-        _integer_decimal_digits(denominator),
+        _integer_decimal_digit_bound(abs(numerator)),
+        _integer_decimal_digit_bound(denominator),
     )
 
 
@@ -95,9 +98,7 @@ def _bounded_fraction_add(current: Fraction, value: Fraction) -> Fraction:
     if not value:
         return current
     total = current + value
-    if _integer_decimal_digits(total.denominator) > (
-        MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
-    ):
+    if total.denominator >= _COEFFICIENT_MAGNITUDE_LIMIT:
         _coefficient_budget()
     return total
 
@@ -467,8 +468,8 @@ def _admit_component(
             )
         numerator, denominator = term_coefficient.as_integer_ratio()
         if (
-            _rational_height_digits(term_coefficient)
-            > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+            abs(numerator) >= _COEFFICIENT_MAGNITUDE_LIMIT
+            or denominator >= _COEFFICIENT_MAGNITUDE_LIMIT
         ):
             raise OperationDomainValidationError(
                 location=(*location, "components", "coefficient"),

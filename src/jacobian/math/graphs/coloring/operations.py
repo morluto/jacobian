@@ -241,17 +241,12 @@ def precoloring_edge_repair(
         coloring = tuple(
             dict(fixed_colors).get(vertex, 0) for vertex in range(graph.vertex_count)
         )
-        return PrecoloringEdgeRepairResult(
+        return PrecoloringEdgeRepairResult._from_kernel(
             graph=graph,
             colors=colors,
             fixed_colors=fixed_colors,
             solver_conflicts=solver_conflicts,
-            status="OPTIMAL",
-            repaired_edge_count=0,
-            coloring=VertexColoringAssignment(
-                graph=graph, colors=colors, coloring=coloring
-            ),
-            repaired_edge_indices=(),
+            coloring=coloring,
         )
     outcome, solved_coloring = run_coloring_worker(
         "precoloring_edge_repair",
@@ -262,23 +257,12 @@ def precoloring_edge_repair(
     )
     if outcome != "optimal" or solved_coloring is None:
         raise RuntimeError("checked edge-repair worker returned an impossible outcome")
-    coloring = solved_coloring
-    repaired = tuple(
-        index
-        for index, (left, right) in enumerate(graph.edges)
-        if coloring[left] == coloring[right]
-    )
-    return PrecoloringEdgeRepairResult(
+    return PrecoloringEdgeRepairResult._from_kernel(
         graph=graph,
         colors=colors,
         fixed_colors=fixed_colors,
         solver_conflicts=solver_conflicts,
-        status="OPTIMAL",
-        repaired_edge_count=len(repaired),
-        coloring=VertexColoringAssignment(
-            graph=graph, colors=colors, coloring=coloring
-        ),
-        repaired_edge_indices=repaired,
+        coloring=solved_coloring,
     )
 
 

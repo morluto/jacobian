@@ -25,6 +25,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials._elementary_kernel import rational_polynomial_evaluate
 from jacobian.math.polynomials.maps._models import (
     _MAX_COMPOSITION_DEGREE,
     MAX_GENERIC_DEGREE_AGGREGATE_TERMS,
@@ -79,11 +80,21 @@ def _run_admission(admission: Callable[[], object]) -> None:
 
 
 def _admit_evaluation(polynomial: RationalPolynomial, point: VariablePoint) -> None:
-    require_map_polynomial(polynomial, label="evaluation polynomial")
-    if point.variables != polynomial.variables:
+    if (
+        not polynomial.variables
+        or point.variables != polynomial.variables
+        or len(point.values) != len(polynomial.variables)
+    ):
         raise _validation_error(
             "evaluation point must use the polynomial's complete ordered axis"
         )
+    if len(polynomial.variables) == 1:
+        # The existing scalar evaluator owns this regime's source and output
+        # admission. Its degree-127/256-digit envelope contains every old
+        # one-axis map case (degree <=64, hence <=65 distinct terms, and
+        # 128-digit coefficients). No map-admission cap is needed here.
+        return
+    require_map_polynomial(polynomial, label="evaluation polynomial")
     numerator_digits, denominator_digits = rational_evaluation_component_digit_bounds(
         polynomial,
         point.values,
@@ -320,6 +331,10 @@ def evaluate_polynomial(
     """Evaluate one exact polynomial at its complete ordered rational point."""
 
     _run_admission(lambda: _admit_evaluation(polynomial, point))
+    if len(polynomial.variables) == 1:
+        return EvalResult(
+            value=rational_polynomial_evaluate(polynomial, point.values[0]).value
+        )
     backend_polynomial = rational_polynomial_to_sympy(polynomial)
     substitutions = dict(
         zip(

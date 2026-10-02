@@ -15,7 +15,7 @@
         "boundary": "Provides exact polynomial factorization."
       },
       {
-        "operation_id": "polynomial.rational.compute.evaluate",
+        "operation_id": "polynomial.map.evaluate",
         "availability": "AVAILABLE",
         "boundary": "Evaluates one rational polynomial at an exact point."
       }

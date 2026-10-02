@@ -106,13 +106,40 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.map.evaluate",
         title="Evaluate a polynomial at a rational point",
-        description="Evaluate a canonical rational polynomial at a complete ordered "
-        "rational point.",
+        description="Evaluate a canonical QQ polynomial at a complete ordered rational "
+        "point. Univariate inputs admit degree 127 with 256-digit coefficient "
+        "components; inputs on two to eight axes admit 256 terms, total degree "
+        "64, and 128-digit coefficient components. Exact result components must "
+        "fit the source-derived 32,768-digit bound.",
         request_type=EvalRequest,
         result_type=EvalResult,
         run=_evaluate,
         tags=("polynomial", "evaluation", "exact"),
         examples=(
+            OperationExample(
+                name="rational_evaluate_x2_plus_one",
+                description="Evaluate x^2 + 1 at 2; the point must declare the same "
+                "ordered axis (x) as the polynomial.",
+                input={
+                    "polynomial": _polynomial("x", (1, 2), (1, 0)),
+                    "point": {
+                        "variables": ["x"],
+                        "values": [{"num": "2", "den": "1"}],
+                    },
+                },
+            ),
+            OperationExample(
+                name="renamed_univariate_degree_65",
+                description="Evaluate t^65 at -1; the one-axis regime admits "
+                "degree at most 127 and retains the declared variable t.",
+                input={
+                    "polynomial": _polynomial("t", (1, 65)),
+                    "point": {
+                        "variables": ["t"],
+                        "values": [{"num": "-1", "den": "1"}],
+                    },
+                },
+            ),
             OperationExample(
                 name="simple_eval",
                 description="Evaluate x^2 + 2y at x=3, y=1.",

@@ -18,30 +18,31 @@ def test_identity_component_bounds_and_square_overflow_through_mcp() -> None:
             num=1, den=10 ** (MAX_CANONICAL_RATIONAL_DIGITS // 2)
         )
         async with Client(create_server(), raise_exceptions=False) as client:
-            for operation_id in (
-                "polynomial.rational.compute.evaluate",
-                "polynomial.map.evaluate",
-            ):
+            for variables in (["x"], ["x", "y"]):
                 for exponent, point in ((1, identity_point), (2, overflow_point)):
                     wire_point = point.model_dump(mode="json")
                     payload = {
                         "polynomial": {
-                            "variables": ["x"],
+                            "variables": variables,
                             "polynomial": {
                                 "terms": [
                                     {
                                         "coefficient": {"num": "1", "den": "1"},
-                                        "exponents": [exponent],
+                                        "exponents": [exponent]
+                                        + [0] * (len(variables) - 1),
                                     }
                                 ]
                             },
                         },
-                        "point": wire_point
-                        if operation_id == "polynomial.rational.compute.evaluate"
-                        else {"variables": ["x"], "values": [wire_point]},
+                        "point": {
+                            "variables": variables,
+                            "values": [wire_point]
+                            + [{"num": "0", "den": "1"}] * (len(variables) - 1),
+                        },
                     }
                     result = await client.call_tool(
-                        "math.run", {"operation_id": operation_id, "payload": payload}
+                        "math.run",
+                        {"operation_id": "polynomial.map.evaluate", "payload": payload},
                     )
                     if exponent == 1:
                         assert not result.is_error

@@ -8,7 +8,7 @@ from math import prod
 from typing import TYPE_CHECKING
 
 from sympy import isprime, primerange
-from sympy.ntheory.modular import crt
+from sympy.ntheory.modular import crt1, crt2
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -68,25 +68,42 @@ def wheel_modulus(primes: tuple[int, ...]) -> int:
     return prod(primes, start=1)
 
 
-def wheel_rows(
+def iter_wheel_rows(
     source: PrimeAffineTuple, primes: tuple[int, ...]
-) -> tuple[tuple[int, tuple[int, ...]], ...]:
-    """Enumerate CRT rows after distinct-prime and output preflight."""
+) -> Iterator[tuple[int, tuple[int, ...]]]:
+    """Yield checked CRT rows after distinct-prime and output preflight.
+
+    Reuse the maintained backend's setup for fixed moduli and stream the
+    cartesian component order. The consumer sorts its final canonical rows
+    by residue; the kernel retains no complete intermediate row collection.
+    Never scan the possibly enormous product modulus to obtain sorted rows.
+    """
 
     if not primes:
-        return ((0, ()),)
+        yield 0, ()
+        return
+    local_sets: list[tuple[int, ...]] = []
+    for prime in primes:
+        local = valid_residues(source, prime)
+        if not local:
+            return
+        local_sets.append(local)
+    if len(primes) == 1:
+        for residue in local_sets[0]:
+            yield residue, (residue,)
+        return
+
     expected_modulus = wheel_modulus(primes)
-    local_sets = tuple(valid_residues(source, prime) for prime in primes)
-    if any(not residues for residues in local_sets):
-        return ()
-    rows: list[tuple[int, tuple[int, ...]]] = []
+    modulus, factors, inverses = crt1(primes)
+    if int(modulus) != expected_modulus:
+        raise RuntimeError("CRT setup failed its defining modulus invariant")
     for components in product(*local_sets):
-        combined = crt(primes, components, symmetric=False, check=False)
-        if combined is None:  # Pairwise-distinct primes make this unreachable.
-            raise RuntimeError("CRT failed for pairwise-distinct prime moduli")
-        residue, modulus = (int(combined[0]), int(combined[1]))
+        combined = crt2(primes, components, modulus, factors, inverses, symmetric=False)
+        residue, returned_modulus = int(combined[0]), int(combined[1])
+        # Replay against the original cartesian components, not values
+        # reconstructed from the backend residue itself.
         if (
-            modulus != expected_modulus
+            returned_modulus != expected_modulus
             or not 0 <= residue < expected_modulus
             or any(
                 residue % prime != component
@@ -94,8 +111,7 @@ def wheel_rows(
             )
         ):
             raise RuntimeError("CRT result failed its defining congruence invariant")
-        rows.append((residue, tuple(components)))
-    return tuple(sorted(rows))
+        yield residue, components
 
 
 def iter_interval_values(
@@ -160,6 +176,7 @@ __all__ = [
     "interval_matches",
     "is_positive_prime",
     "iter_interval_values",
+    "iter_wheel_rows",
     "local_bad_residues",
     "local_counts",
     "local_factor_from_bad_count",
@@ -167,5 +184,4 @@ __all__ = [
     "translated_tuple",
     "valid_residues",
     "wheel_modulus",
-    "wheel_rows",
 ]

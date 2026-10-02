@@ -55,6 +55,10 @@ Use “operation” or “math tool,” not “product” or “provider,” for
 
 ## Read for the change
 
+Before implementing a public operation or library abstraction, use the
+[operation-contract design pass](.agents/skills/audit-public-operation-contracts/SKILL.md#design-before-implementation)
+to compare the proposed boundary with existing composition.
+
 Use the relevant sections; these links are not a prerequisite reading stack.
 
 | Change | Authority |

@@ -40,8 +40,8 @@ def _operation_match_response(
                 stage="operation_discovery",
                 message="The operation discovery cursor is not in this result set.",
                 hint=(
-                    "Restart matching without a cursor, or reuse the same need and "
-                    "namespace that produced next_cursor. The limit may change."
+                    "Restart matching without a cursor, or reuse the same query, namespace, "
+                    "and search_mode that produced next_cursor. The limit may change."
                 ),
             ),
         )

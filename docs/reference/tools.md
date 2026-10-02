@@ -88,7 +88,15 @@ Use `math.find` with `query` and a short description of the local result needed.
 Its compact matches retain `catalog_resource` as an explicit pointer to the bulk
 catalog export. Then call `math.find` with `operation_id` to obtain the selected
 operation's exact input/output schemas and valid examples. Provide exactly one of
-`query` and `operation_id`; `namespace`, `limit`, and `cursor` are search-only.
+`query` and `operation_id`; `namespace`, `limit`, `cursor`, and `search_mode` are
+search-only.
+
+Search defaults to `search_mode: "precise"` for applicability filtering; use
+`"broad"` for lexical recall. When continuing with `next_cursor`, keep `query`,
+`namespace`, and `search_mode` unchanged. Only `limit` may change. An
+`INVALID_CURSOR` response can be recovered by restoring those original search
+settings, or by restarting the new search mode without a cursor. Cursors remain
+opaque; do not edit or construct them.
 
 ## Form a payload from an inspected contract
 

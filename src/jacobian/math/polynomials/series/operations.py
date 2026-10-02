@@ -14,11 +14,20 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.polynomials.series._flint import inverse_backend as _inverse_backend
+from jacobian.math.polynomials.series._flint import (
+    divide_backend as _divide_backend,
+)
+from jacobian.math.polynomials.series._flint import (
+    inverse_backend as _inverse_backend,
+)
+from jacobian.math.polynomials.series._flint import (
+    product_residual_backend as _product_residual_backend,
+)
 from jacobian.math.polynomials.series._flint import (
     reversion_backend as _reversion_backend,
 )
@@ -227,26 +236,6 @@ def power(series: TruncatedSeries, exponent: int) -> SeriesPowerResult:
 # ---------------------------------------------------------------------------
 
 
-def _inverse_coefficients(series: TruncatedSeries) -> list[Fraction]:
-    """Return inverse coefficients after the caller admits the operation."""
-
-    n = series.truncation_order
-    a = _series_fractions(series)
-    if a[0] == 0:
-        raise ValueError("series with zero constant term is not a unit")
-    inverse = [Fraction(0)] * n
-    inverse[0] = Fraction(1) / a[0]
-    if not any(a[1:]):
-        return inverse
-    for degree in range(1, n):
-        recurrence_sum = sum(
-            (a[index] * inverse[degree - index] for index in range(1, degree + 1)),
-            start=Fraction(),
-        )
-        inverse[degree] = -inverse[0] * recurrence_sum
-    return inverse
-
-
 def inverse(series: TruncatedSeries) -> SeriesInverseResult:
     """Compute the multiplicative inverse of a series modulo x^N.
 
@@ -256,10 +245,27 @@ def inverse(series: TruncatedSeries) -> SeriesInverseResult:
     _run_admission(lambda: admit_native_inverse(series))
     n = series.truncation_order
     inv, residual = _inverse_backend(tuple(_series_fractions(series)))
-    return SeriesInverseResult._from_kernel(
+    result = SeriesInverseResult._from_kernel(
         source=series,
         result=_series_result(series.variable, n, inv),
         residual_coefficients=tuple(_wire(c) for c in residual),
+    )
+    request_checkpoint("after exact series inverse construction")
+    return result
+
+
+def _zero_ledger(values: tuple[CanonicalRational, ...], order: int) -> bool:
+    return (
+        type(values) is tuple
+        and len(values) == order
+        and all(
+            type(value) is CanonicalRational
+            and type(getattr(value, "num", None)) is int
+            and type(getattr(value, "den", None)) is int
+            and value.num == 0
+            and value.den == 1
+            for value in values
+        )
     )
 
 
@@ -269,19 +275,24 @@ def verify_inverse(claim: SeriesInverseResult) -> bool:
         admit_native_inverse(claim.source)
     except OperationResourceAdmissionError:
         raise
-    except (TypeError, ValueError):
+    except (AttributeError, OperationDomainValidationError, TypeError, ValueError):
         return False
-    if (
-        claim.source.variable != claim.result.variable
-        or claim.source.truncation_order != claim.result.truncation_order
+    from ._unit_bounds import admit_replay
+
+    if not _zero_ledger(
+        getattr(claim, "residual_coefficients", ()), claim.source.truncation_order
     ):
         return False
-    product = _cauchy_convolve(
-        _series_fractions(claim.source),
-        _series_fractions(claim.result),
-        claim.source.truncation_order,
+    try:
+        admit_replay(claim.source, claim.result)
+    except OperationResourceAdmissionError:
+        raise
+    except (AttributeError, OperationDomainValidationError, TypeError, ValueError):
+        return False
+    product = _product_residual_backend(
+        tuple(_series_fractions(claim.source)),
+        tuple(_series_fractions(claim.result)),
     )
-    product[0] -= Fraction(1)
     return (
         all(value == 0 for value in product)
         and tuple(_wire(value) for value in product) == claim.residual_coefficients
@@ -299,19 +310,17 @@ def divide(
     """Compute Q = A / B mod x^N where b_0 != 0."""
     _run_admission(lambda: admit_native_divide(numerator, denominator))
     n = numerator.truncation_order
-    a = _series_fractions(numerator)
-    b = _series_fractions(denominator)
-
-    b_inv = _inverse_coefficients(denominator)
-    q = _cauchy_convolve(a, b_inv, n)
-    bq = _cauchy_convolve(b, q, n)
-    residual = [bq[i] - a[i] for i in range(n)]
-    return SeriesDivideResult._from_kernel(
+    q, residual = _divide_backend(
+        tuple(_series_fractions(numerator)), tuple(_series_fractions(denominator))
+    )
+    result = SeriesDivideResult._from_kernel(
         numerator=numerator,
         denominator=denominator,
         quotient=_series_result(numerator.variable, n, q),
         residual_coefficients=tuple(_wire(c) for c in residual),
     )
+    request_checkpoint("after exact series quotient construction")
+    return result
 
 
 def verify_divide(claim: SeriesDivideResult) -> bool:
@@ -320,25 +329,26 @@ def verify_divide(claim: SeriesDivideResult) -> bool:
         admit_native_divide(claim.numerator, claim.denominator)
     except OperationResourceAdmissionError:
         raise
-    except (TypeError, ValueError):
+    except (AttributeError, OperationDomainValidationError, TypeError, ValueError):
         return False
-    if not (
-        claim.numerator.variable
-        == claim.denominator.variable
-        == claim.quotient.variable
-        and claim.numerator.truncation_order
-        == claim.denominator.truncation_order
-        == claim.quotient.truncation_order
+    from ._unit_bounds import admit_replay
+
+    if not _zero_ledger(
+        getattr(claim, "residual_coefficients", ()), claim.numerator.truncation_order
     ):
         return False
-    residual = _cauchy_convolve(
-        _series_fractions(claim.denominator),
-        _series_fractions(claim.quotient),
-        claim.numerator.truncation_order,
-    )
-    numerator = _series_fractions(claim.numerator)
+    try:
+        admit_replay(claim.denominator, claim.quotient, claim.numerator)
+    except OperationResourceAdmissionError:
+        raise
+    except (AttributeError, OperationDomainValidationError, TypeError, ValueError):
+        return False
     differences = tuple(
-        left - right for left, right in zip(residual, numerator, strict=True)
+        _product_residual_backend(
+            tuple(_series_fractions(claim.denominator)),
+            tuple(_series_fractions(claim.quotient)),
+            tuple(_series_fractions(claim.numerator)),
+        )
     )
     return (
         all(value == 0 for value in differences)
@@ -434,7 +444,7 @@ def verify_reversion(claim: SeriesReversionResult) -> bool:
         admit_native_reversion(claim.source)
     except OperationResourceAdmissionError:
         raise
-    except (TypeError, ValueError):
+    except (AttributeError, OperationDomainValidationError, TypeError, ValueError):
         return False
     if (
         claim.source.variable != claim.result.variable

@@ -236,7 +236,10 @@ TOOLS = (
         title="Invert a truncated formal power series",
         description=(
             "Compute the multiplicative inverse B(x) of A(x) modulo x^N, requiring "
-            "a_0 != 0.  Returns the exact product residual A*B - 1."
+            "a_0 != 0. Returns the exact product residual A*B - 1. "
+            "Admits order up to 2048 when coefficient, complete intermediate, "
+            "work and retained-storage bounds fit; constant sources retain their "
+            "linear-time order-25280 envelope."
         ),
         request_type=SeriesInverseRequest,
         result_type=SeriesInverseResult,
@@ -272,7 +275,9 @@ TOOLS = (
         title="Divide two truncated formal power series",
         description=(
             "Compute the exact quotient Q = A/B modulo x^N, requiring b_0 != 0. "
-            "Returns the exact residual B*Q - A."
+            "Returns the exact residual B*Q - A. Admits order up to 2048 when "
+            "coefficient, complete intermediate, work and retained-storage bounds "
+            "fit; constant denominators retain the linear-time order-25280 envelope."
         ),
         request_type=SeriesDivideRequest,
         result_type=SeriesDivideResult,

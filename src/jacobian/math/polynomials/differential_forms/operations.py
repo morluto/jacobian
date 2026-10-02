@@ -901,7 +901,7 @@ def interior_product(
     field: PolynomialVectorField,
     form: PolynomialDifferentialForm,
 ) -> PolynomialDifferentialForm:
-    """Contract a polynomial form with a polynomial vector field."""
+    """Contract a form; scalar contraction is represented by degree-zero zero."""
 
     execution_deadline(WEDGE_WALL_SECONDS)
     form = _admit_form(form, location=("form",))
@@ -1032,6 +1032,10 @@ def lie_derivative(
     form = _admit_form(form, location=("form",))
     field = _admit_vector_field(field, form.variables, location=("field",))
     first = interior_product(field, exterior_derivative(form))
+    if not int(form.degree):
+        # i_X(f) vanishes in degree -1. Standalone contraction represents it
+        # as degree-zero zero, whose derivative has the wrong grade here.
+        return first
     second = exterior_derivative(interior_product(field, form))
     return _add_forms(first, second)
 

@@ -347,7 +347,7 @@ TOOLS = (
             OperationExample(
                 name="lie_of_x_dx",
                 description=(
-                    "Differentiate x dx along partial_x to get dx; the field must share the form axis."
+                    "Differentiate x dx along x partial_x to get 2x dx; the field must share the form axis."
                 ),
                 input={"field": _PARTIAL_X, "form": _DX},
             ),

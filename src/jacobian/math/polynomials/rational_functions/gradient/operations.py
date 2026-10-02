@@ -50,6 +50,7 @@ from jacobian.math.polynomials.rational_functions.gradient._models import (
     RationalFunctionGradient,
 )
 from jacobian.math.polynomials.values import (
+    MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT,
     RationalFunction,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -114,10 +115,23 @@ def _recognize_source(source: RationalFunction, deadline: float | None = None) -
         or len(source.denominator.terms) == 1
     ):
         try:
-            require_canonical_rational_function(source)
+            # These cases use sparse valuations, not backend GCD expansion.
+            # Recognize the complete source carrier; the consuming operation
+            # separately admits derivative/substitution output growth.
+            require_canonical_rational_function(
+                source, maximum_exponent=MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT
+            )
         except PydanticCustomError as exc:
             raise OperationDomainValidationError(
                 location=(), code=exc.type, message=exc.message()
+            ) from exc
+        except ValueError as exc:
+            # Direct native values can bypass the canonical model's shape
+            # budgets. Keep those malformed-source failures structured too.
+            raise OperationDomainValidationError(
+                location=(),
+                code="rational_function.source_admission",
+                message=str(exc),
             ) from exc
         return
     recognition = recognize_canonical_rational_functions(
@@ -144,7 +158,7 @@ def _prepare_monomial_gradient(
     """Differentiate finite Laurent support without a dense polynomial expansion.
 
     The canonical carrier bounds this phase by 8*256 coefficient scalings of
-    at most 128-digit rationals by integers of magnitude <=64. Exact valuation
+    at most 128-digit rationals by integers of magnitude <=128. Exact valuation
     normalization only shifts the unchanged surviving support. All component
     supports, exponents and scalar sizes are checked before result construction.
     """

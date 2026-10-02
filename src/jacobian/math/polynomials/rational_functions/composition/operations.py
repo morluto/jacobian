@@ -660,6 +660,15 @@ def compose_maps(  # noqa: C901
     for component in inner.components:
         denominator = component.denominator
         if denominator.terms and any(denominator.terms[0].exponents):
+            if any(
+                exponent > ledger.limits.result_exponent
+                for term in denominator.terms
+                for exponent in term.exponents
+            ):
+                _reject(
+                    "guard_exponent",
+                    "retained inner denominator exceeds the construction-guard exponent bound",
+                )
             guard = RationalPolynomial(
                 variables=inner.source_variables,
                 polynomial=denominator,

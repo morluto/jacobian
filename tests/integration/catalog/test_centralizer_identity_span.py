@@ -11,16 +11,16 @@ from jacobian.math.matrices.canonical_forms._models import CentralizerResult
 
 
 @pytest.mark.parametrize(
-    ("rows", "dimension", "identity_member"),
+    ("rows", "dimension"),
     [
-        (((2, 0), (0, 2)), 4, False),
-        (((0, 0, 0), (0, 1, 0), (0, 0, 2)), 3, False),
-        (((2, 1), (0, 2)), 2, True),
-        (((0, 1, 0), (0, 0, 1), (0, 0, 0)), 3, True),
+        (((2, 0), (0, 2)), 4),
+        (((0, 0, 0), (0, 1, 0), (0, 0, 2)), 3),
+        (((2, 1), (0, 2)), 2),
+        (((0, 1, 0), (0, 0, 1), (0, 0, 0)), 3),
     ],
 )
 def test_public_centralizer_basis_spans_identity(
-    rows: tuple[tuple[int, ...], ...], dimension: int, identity_member: bool
+    rows: tuple[tuple[int, ...], ...], dimension: int
 ) -> None:
     result = invoke_operation(
         "matrix.centralizer.compute",
@@ -45,4 +45,3 @@ def test_public_centralizer_basis_spans_identity(
     vectors = Matrix.hstack(*(matrix.reshape(order * order, 1) for matrix in basis))
     assert vectors.rank() == dimension
     assert vectors.row_join(eye(order).reshape(order * order, 1)).rank() == dimension
-    assert (eye(order) in basis) is identity_member

@@ -12,7 +12,10 @@ from sympy import nextprime
 from tests.integration.linear._support import linear_validation_error
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.optimization import general_linear_program
 from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramRequest,
@@ -339,18 +342,19 @@ def test_general_lp_admits_the_full_one_sided_variable_envelope() -> None:
 
 
 def test_general_lp_rejects_variables_beyond_the_public_envelope() -> None:
+    # The shared carrier admits 128 variables at request time; the
+    # independent 32-variable solver envelope refuses at solve time.
     variables = [_variable(f"x{index}", q(0)) for index in range(33)]
-    with linear_validation_error():
-        GeneralRationalLinearProgramRequest.model_validate(
-            {
-                "program": _program(
-                    variables=variables,
-                    sense="MINIMIZE",
-                    objective=[q(1) for _ in variables],
-                    constraints=[],
-                )
-            }
-        )
+    program = _program(
+        variables=variables,
+        sense="MINIMIZE",
+        objective=[q(1) for _ in variables],
+        constraints=[],
+    )
+    GeneralRationalLinearProgramRequest.model_validate({"program": program})
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _run(program)
+    assert error.value.errors()[0]["type"] == "optimization.linear.solver_shape_bound"
 
 
 def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> None:
@@ -401,18 +405,19 @@ def test_general_lp_admits_sixty_four_trivial_equalities_within_the_row_envelope
 
 
 def test_general_lp_rejects_constraints_beyond_the_public_row_envelope() -> None:
+    # The shared carrier admits 1024 rows at request time; the independent
+    # 64-row solver envelope refuses at solve time.
     constraints = [_row(f"row_{index}", [q(1)], "EQ", q(0)) for index in range(65)]
-    with linear_validation_error():
-        GeneralRationalLinearProgramRequest.model_validate(
-            {
-                "program": _program(
-                    variables=[_variable("x", q(0))],
-                    sense="MINIMIZE",
-                    objective=[q(1)],
-                    constraints=constraints,
-                )
-            }
-        )
+    program = _program(
+        variables=[_variable("x", q(0))],
+        sense="MINIMIZE",
+        objective=[q(1)],
+        constraints=constraints,
+    )
+    GeneralRationalLinearProgramRequest.model_validate({"program": program})
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _run(program)
+    assert error.value.errors()[0]["type"] == "optimization.linear.solver_shape_bound"
 
 
 def test_general_lp_presolves_one_variable_equality_program() -> None:

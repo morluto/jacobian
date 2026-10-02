@@ -367,8 +367,8 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="matrix.centralizer.compute",
         title="Compute an exact centralizer basis",
-        description="Return a complete basis of {X : AX = XA} as a nullspace of "
-        "I(x)A - A^T(x)I; the basis always contains the identity.",
+        description="Return a complete exact basis of the centralizer {X : AX = XA}. "
+        "The identity lies in the span of the returned basis but need not be a basis member.",
         request_type=SquareMatrixRequest,
         result_type=CentralizerResult,
         run=_run_centralizer,

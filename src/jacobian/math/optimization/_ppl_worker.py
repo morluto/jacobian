@@ -16,8 +16,8 @@ from jacobian.canonical import (
     parse_canonical_integer,
 )
 from jacobian.math.optimization._models import (
-    MAX_LINEAR_PROGRAM_CONSTRAINTS,
-    MAX_LINEAR_PROGRAM_VARIABLES,
+    MAX_LINEAR_SOLVER_CONSTRAINTS,
+    MAX_LINEAR_SOLVER_VARIABLES,
 )
 from jacobian.math.optimization._ppl import ExactLinearOutcome, solve_standard_form
 
@@ -71,12 +71,12 @@ def _decode_program(payload: Any) -> _StandardFormData:
     )
     if (
         not isinstance(objective_value, list)
-        or len(objective_value) > MAX_LINEAR_PROGRAM_VARIABLES
+        or len(objective_value) > MAX_LINEAR_SOLVER_VARIABLES
     ):
         raise ValueError("PPL worker objective has invalid dimension")
     if (
         not isinstance(rhs_value, list)
-        or len(rhs_value) > MAX_LINEAR_PROGRAM_CONSTRAINTS
+        or len(rhs_value) > MAX_LINEAR_SOLVER_CONSTRAINTS
     ):
         raise ValueError("PPL worker rhs has invalid dimension")
     if not isinstance(coefficients_value, list) or len(coefficients_value) != len(
@@ -107,7 +107,7 @@ def _decode(payload: Any) -> tuple[_StandardFormData, ...]:
     if (
         not isinstance(programs_value, list)
         or not programs_value
-        or len(programs_value) > MAX_LINEAR_PROGRAM_VARIABLES
+        or len(programs_value) > MAX_LINEAR_SOLVER_VARIABLES
     ):
         raise ValueError("PPL worker program batch has invalid size")
     programs = tuple(_decode_program(program) for program in programs_value)
@@ -115,9 +115,9 @@ def _decode(payload: Any) -> tuple[_StandardFormData, ...]:
     equations = sum(len(rhs) for _objective, _coefficients, rhs in programs)
     cells = sum(len(objective) * len(rhs) for objective, _coefficients, rhs in programs)
     if (
-        variables > MAX_LINEAR_PROGRAM_VARIABLES
-        or equations > MAX_LINEAR_PROGRAM_CONSTRAINTS
-        or cells > MAX_LINEAR_PROGRAM_VARIABLES * MAX_LINEAR_PROGRAM_CONSTRAINTS
+        variables > MAX_LINEAR_SOLVER_VARIABLES
+        or equations > MAX_LINEAR_SOLVER_CONSTRAINTS
+        or cells > MAX_LINEAR_SOLVER_VARIABLES * MAX_LINEAR_SOLVER_CONSTRAINTS
     ):
         raise ValueError("PPL worker aggregate batch dimensions are invalid")
     return programs

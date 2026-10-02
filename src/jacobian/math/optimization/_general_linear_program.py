@@ -24,6 +24,7 @@ from jacobian.math.optimization._general_normalization import (
 )
 from jacobian.math.optimization._linear_admission import (
     admit_linear_program,
+    admit_solver_shape,
     linear_execution,
 )
 from jacobian.math.optimization._models import RationalLinearProgramResult
@@ -658,8 +659,9 @@ def _box_program_result(
 ) -> GeneralRationalLinearProgramResult | None:
     """Solve independent source intervals with linear work and exact certificates.
 
-    Source validation establishes nonempty intervals, n <= 32, and D <= 128
-    digits per rational component. Endpoints and multipliers retain D digits;
+    Source validation establishes nonempty intervals and D <= 128 digits per
+    rational component; solver admission establishes n <= 32.
+    Endpoints and multipliers retain D digits;
     slacks need at most 2D+1. Summing n endpoint/coefficient products needs at
     most 2nD + ceil(log10(n)) + 1 digits, below the canonical rational limit.
     No normalized variables, basis enumeration, or solver launch is needed.
@@ -752,6 +754,7 @@ def _general_linear_program(
 ) -> GeneralRationalLinearProgramResult:
     from jacobian.math.optimization.operations import _linear_program_admitted
 
+    admit_solver_shape(len(program.variables), len(program.constraints))
     if (box_result := _box_program_result(program)) is not None:
         return box_result
     if (presolved := _one_variable_interval_result(program)) is not None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from fractions import Fraction
 from math import factorial
 from typing import Any, Literal, Self
@@ -19,8 +19,11 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.optimization._arithmetic import rational_dot
 
 MAX_RATIONAL_DIGITS = 128
-MAX_LINEAR_PROGRAM_VARIABLES = 32
-MAX_LINEAR_PROGRAM_CONSTRAINTS = 64
+MAX_LINEAR_PROGRAM_VARIABLES = 128
+MAX_LINEAR_SOLVER_VARIABLES = 32
+MAX_LINEAR_PROGRAM_CONSTRAINTS = 1024
+MAX_LINEAR_PROGRAM_COEFFICIENTS = 16_384
+MAX_LINEAR_SOLVER_CONSTRAINTS = 64
 MAX_LINEAR_PROGRAM_VARIABLE_NAME_LENGTH = 64
 MAX_LINEAR_PROGRAM_BACKEND_STATES = 1_000_000
 _INTERMEDIATE_SCALAR_DIGITS = "standard_intermediate_scalar_digits"
@@ -71,6 +74,11 @@ def _bound_raw_rational(
             raise ValueError(f"{label} exceeds the {maximum_digits}-digit bound")
 
 
+def _require_raw_container(value: object, *, label: str) -> None:
+    if value is not None and not isinstance(value, (list, tuple)):
+        raise ValueError(f"{label} must be a bounded list or tuple")
+
+
 def _bound_raw_rational_vector(
     value: object,
     *,
@@ -80,6 +88,7 @@ def _bound_raw_rational_vector(
 ) -> None:
     """Bound one raw LP vector before recursive model construction."""
 
+    _require_raw_container(value, label=label)
     if not isinstance(value, (list, tuple)):
         return
     if len(value) > maximum_length:
@@ -106,6 +115,14 @@ def _prepare_raw_rational_vector(
     return tuple(value) if isinstance(value, list) else value
 
 
+def _bound_coefficient_cells(rows: Iterable[object]) -> None:
+    cells = sum(len(row) for row in rows if isinstance(row, (list, tuple)))
+    if cells > MAX_LINEAR_PROGRAM_COEFFICIENTS:
+        raise ValueError(
+            f"linear-program coefficients exceed the {MAX_LINEAR_PROGRAM_COEFFICIENTS}-entry bound"
+        )
+
+
 def _prepare_raw_program(
     value: object,
     *,
@@ -116,6 +133,7 @@ def _prepare_raw_program(
     if not isinstance(value, Mapping):
         return value
     variables = value.get("variables")
+    _require_raw_container(variables, label="linear-program variables")
     if isinstance(variables, (list, tuple)):
         if len(variables) > MAX_LINEAR_PROGRAM_VARIABLES:
             raise ValueError(
@@ -144,6 +162,7 @@ def _prepare_raw_program(
         label="rational linear-program rhs",
     )
     rows = value.get("coefficients")
+    _require_raw_container(rows, label="linear-program coefficient rows")
     if not isinstance(rows, (list, tuple)):
         return value
     if len(rows) > MAX_LINEAR_PROGRAM_CONSTRAINTS:
@@ -151,6 +170,7 @@ def _prepare_raw_program(
             "linear-program coefficient rows exceed the "
             f"{MAX_LINEAR_PROGRAM_CONSTRAINTS}-row bound"
         )
+    _bound_coefficient_cells(rows)
     prepared_rows = tuple(
         _prepare_raw_rational_vector(
             row,
@@ -377,9 +397,10 @@ class StandardFormRationalLinearProgram(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_program(cls, value: object, info: ValidationInfo) -> object:
-        value = canonicalize_json_containers(value)
         try:
-            return _prepare_raw_program(value, maximum_digits=_scalar_digit_cap(info))
+            return canonicalize_json_containers(
+                _prepare_raw_program(value, maximum_digits=_scalar_digit_cap(info))
+            )
         except ValueError as error:
             raise _validation_error("raw_input_bound", str(error)) from error
 
@@ -400,6 +421,7 @@ class StandardFormRationalLinearProgram(StrictModel):
                 "variable_identifier",
                 "linear-program variable names must be identifiers",
             )
+        _bound_coefficient_cells(self.coefficients)
         width = len(self.variables)
         if len(self.objective) != width:
             raise _validation_error(
@@ -480,7 +502,6 @@ class RationalLinearProgramResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
-        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         try:
@@ -532,7 +553,7 @@ class RationalLinearProgramResult(StrictModel):
                 maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
                 label="rational linear-program dual objective",
             )
-            return prepared
+            return canonicalize_json_containers(prepared)
         except ValueError as error:
             raise _validation_error("raw_result_bound", str(error)) from error
 

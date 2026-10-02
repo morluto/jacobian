@@ -20,6 +20,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials._division_bounds import admit_univariate_division
 from jacobian.math.polynomials.multivariate import _factor_backend
 from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionResult,
@@ -120,6 +121,8 @@ def _admit_division(left: RationalPolynomial, right: RationalPolynomial) -> None
     _admit_pair(left, right, minimum_variables=1)
     if not right.polynomial.terms:
         raise _validation_error("divisor polynomial must be nonzero")
+    if len(left.variables) == 1:
+        admit_univariate_division(left, right)
 
 
 def _admit_factor(polynomial: RationalPolynomial) -> None:
@@ -281,12 +284,19 @@ def multivariate_division(
     quotient_ring, remainder_ring = left_ring.div(right_ring)
 
     # Convert back to ``Poly`` for the canonical sparse wire contract.
-    quotient_poly = _to_poly(quotient_ring, symbols)
-    remainder_poly = _to_poly(remainder_ring, symbols)
+    if len(variables) == 1:
+        from sympy import Poly
+
+        quotient_poly = Poly.from_dict(dict(quotient_ring), symbols, domain=QQ)
+        remainder_poly = Poly.from_dict(dict(remainder_ring), symbols, domain=QQ)
+        reconstructs = quotient_ring * right_ring + remainder_ring == left_ring
+    else:
+        quotient_poly = _to_poly(quotient_ring, symbols)
+        remainder_poly = _to_poly(remainder_ring, symbols)
+        reconstructs = quotient_poly * right_poly + remainder_poly == left_poly
 
     # Verify the exact reconstruction: left == quotient * right + remainder.
-    reconstruction = quotient_poly * right_poly + remainder_poly
-    if reconstruction != left_poly:
+    if not reconstructs:
         raise MultivariateOutputBudgetError(
             "multivariate division reconstruction failed"
         )
@@ -531,7 +541,6 @@ def verify_multivariate_division(claim: MultivariateDivisionResult) -> bool:
     if not isinstance(claim, MultivariateDivisionResult):
         return False
     try:
-        _admit_division(claim.left, claim.right)
         expected = multivariate_division(claim.left, claim.right, claim.monomial_order)
         return (
             expected.quotient == claim.quotient

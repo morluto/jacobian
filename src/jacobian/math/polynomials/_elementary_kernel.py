@@ -23,6 +23,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
+from jacobian.math.polynomials._division_bounds import admit_univariate_division
 from jacobian.math.polynomials._models import (
     _MAX_ELEMENTARY_DEGREE,
     _MAX_GCD_TERMS,
@@ -194,6 +195,8 @@ def _admit_division(left: RationalPolynomial, right: RationalPolynomial) -> None
             maximum_exponent=_MAX_ELEMENTARY_DEGREE,
         )
 
+    admit_univariate_division(left, right)
+
 
 def _admit_partial_fractions(
     numerator: RationalPolynomial, denominator: RationalPolynomial
@@ -349,6 +352,23 @@ def integer_polynomial_shift(
     )
 
 
+def _classical_division(left: Any, right: Any) -> tuple[Any, Any, Any]:
+    """Use the maintained sparse division algorithm priced by owner admission."""
+    from sympy import QQ, Poly
+    from sympy.polys.rings import ring
+
+    ring_value = ring(left.gens, QQ)[0]
+    numerator = ring_value.from_dict(dict(left.terms()))
+    denominator = ring_value.from_dict(dict(right.terms()))
+    quotient, remainder = numerator.div(denominator)
+    quotient_poly = Poly.from_dict(dict(quotient.terms()), left.gens, domain=QQ)
+    remainder_poly = Poly.from_dict(dict(remainder.terms()), left.gens, domain=QQ)
+    reconstruction = Poly.from_dict(
+        dict(quotient * denominator + remainder), left.gens, domain=QQ
+    )
+    return quotient_poly, remainder_poly, reconstruction
+
+
 def rational_polynomial_division(
     left: RationalPolynomial, right: RationalPolynomial
 ) -> RationalPolynomialDivisionResult:
@@ -357,7 +377,7 @@ def rational_polynomial_division(
     _run_admission(lambda: _admit_division(left, right))
     left_backend = rational_polynomial_to_sympy(left)
     right_backend = rational_polynomial_to_sympy(right)
-    quotient, remainder, reconstruction = polynomials.divide(
+    quotient, remainder, reconstruction = _classical_division(
         left_backend, right_backend
     )
     variables = left.variables

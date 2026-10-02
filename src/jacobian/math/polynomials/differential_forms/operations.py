@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
+from itertools import combinations
+
+from pydantic import ValidationError
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
@@ -637,6 +641,10 @@ def wedge(
 
 
 MAX_CALCULUS_TERM_PAIRS = 1_000_000
+# Up to eight alternating factors need a larger coupled work envelope than
+# one binary wedge; support and retained scalar height remain independently bounded.
+MAX_PULLBACK_PRESOLVE_DIGIT_WORK = 100_000_000_000
+MAX_PULLBACK_PRESOLVE_STORAGE_DIGITS = 16_000_000
 
 
 def _calculus_budget(
@@ -676,7 +684,62 @@ def _admit_map(value: object, *, location: tuple[str, ...]) -> PolynomialMap:
             code="differential_form.map_type",
             message="a pullback map must be a polynomial map value",
         )
-    return value
+    try:
+        # Bound native containers before materialization. In particular, the
+        # dimensional-zero shortcut must not certify malformed map objects.
+        axes = (value.source_variables, value.target_variables)
+        if any(
+            not isinstance(axis, tuple)
+            or len(axis) > MAX_POLYNOMIAL_VARIABLES
+            or any(type(name) is not str or len(name) > 32 for name in axis)
+            for axis in axes
+        ):
+            raise ValueError("invalid map axes")
+        if not isinstance(value.images, tuple) or len(value.images) != len(
+            value.target_variables
+        ):
+            raise ValueError("invalid image count")
+        for image in value.images:
+            request_checkpoint("during pullback map admission")
+            if (
+                not isinstance(image, RationalPolynomial)
+                or type(image.domain) is not str
+                or image.domain != "QQ"
+                or image.variables != value.source_variables
+                or not isinstance(image.polynomial, SparseRationalPolynomial)
+                or not isinstance(image.polynomial.terms, tuple)
+                or len(image.polynomial.terms) > MAX_DIFFERENTIAL_FORM_TERMS
+            ):
+                raise ValueError("invalid map image")
+            for term in image.polynomial.terms:
+                if (
+                    not isinstance(term, RationalPolynomialTerm)
+                    or not isinstance(term.exponents, tuple)
+                    or len(term.exponents) != len(value.source_variables)
+                    or any(
+                        type(e) is not int
+                        or not 0 <= e <= MAX_DIFFERENTIAL_FORM_EXPONENT
+                        for e in term.exponents
+                    )
+                    or not isinstance(term.coefficient, CanonicalRational)
+                ):
+                    raise ValueError("invalid image term")
+                if any(
+                    type(scalar) is not int
+                    or scalar.bit_length()
+                    > 4 * MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+                    for scalar in (term.coefficient.num, term.coefficient.den)
+                ):
+                    raise ValueError("invalid image coefficient")
+        # Structural revalidation enforces exact decimal heights, reduced
+        # coefficients, term ordering and axes; it performs no substitution.
+        return PolynomialMap.model_validate(value.model_dump())
+    except (ValidationError, ValueError, TypeError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.map_shape",
+            message="pullback requires a canonical bounded polynomial map",
+        ) from exc
 
 
 def _partial_terms(
@@ -706,6 +769,7 @@ def _add_monomials(
     sign: int,
     *,
     location: tuple[str, ...],
+    presolve: _PullbackPresolveBudget | None = None,
 ) -> None:
     """Fold signed monomials into a form aggregate with a term-count preflight."""
 
@@ -718,6 +782,16 @@ def _add_monomials(
             "differential_form.calculus.term_budget",
             "exterior-calculus monomial support exceeds the bounded work envelope",
         )
+    retained_digits = 0
+    if presolve is not None:
+        presolve.charge_pairs(
+            sum(len(values) for values in aggregate.values()), location=location
+        )
+        retained_digits = sum(
+            presolve.height(value)
+            for values in aggregate.values()
+            for value in values.values()
+        )
     for exponents, value in monomials.items():
         if any(exponent > MAX_DIFFERENTIAL_FORM_EXPONENT for exponent in exponents):
             raise _calculus_budget(
@@ -725,7 +799,17 @@ def _add_monomials(
                 "differential_form.calculus.exponent_budget",
                 "exterior-calculus exponents exceed the bounded output envelope",
             )
-        combined = terms.get(exponents, Fraction()) + sign * value
+        current = terms.get(exponents, Fraction())
+        combined = (
+            presolve.add(current, sign * value, location=location)
+            if presolve is not None
+            else current + sign * value
+        )
+        if presolve is not None:
+            retained_digits += (presolve.height(combined) if combined else 0) - (
+                presolve.height(current) if current else 0
+            )
+            presolve.check_storage(retained_digits, location=location)
         if combined:
             terms[exponents] = combined
         elif exponents in terms:
@@ -737,6 +821,7 @@ def _poly_mul(
     right: dict[tuple[int, ...], Fraction],
     *,
     location: tuple[str, ...],
+    presolve: _PullbackPresolveBudget | None = None,
 ) -> dict[tuple[int, ...], Fraction]:
     """Multiply sparse monomial dictionaries with a pair-count preflight."""
 
@@ -750,6 +835,7 @@ def _poly_mul(
         )
     product: dict[tuple[int, ...], Fraction] = {}
     completed = 0
+    retained_digits = 0
     for left_exponents, left_value in left.items():
         for right_exponents, right_value in right.items():
             completed += 1
@@ -764,9 +850,17 @@ def _poly_mul(
                     "differential_form.calculus.exponent_budget",
                     "exterior-calculus exponents exceed the bounded output envelope",
                 )
-            product[exponents] = product.get(exponents, Fraction()) + (
-                left_value * right_value
-            )
+            current = product.get(exponents, Fraction())
+            if presolve is None:
+                product[exponents] = current + left_value * right_value
+            else:
+                value = presolve.multiply(left_value, right_value, location=location)
+                combined = presolve.add(current, value, location=location)
+                retained_digits += (presolve.height(combined) if combined else 0) - (
+                    presolve.height(current) if current else 0
+                )
+                presolve.check_storage(retained_digits, location=location)
+                product[exponents] = combined
     return {key: value for key, value in product.items() if value}
 
 
@@ -943,6 +1037,155 @@ def interior_product(
     )
 
 
+@dataclass
+class _PullbackPresolveBudget:
+    """One request's extra alternating-factor work, before substitution."""
+
+    pairs: int = 0
+    digit_work: int = 0
+
+    @staticmethod
+    def height(value: Fraction) -> int:
+        # A private workspace, larger than the final form carrier. An admitted
+        # image derivative has at most 4099 digits; eight raw differential
+        # factors need at most 32792 before additions. Exact reduced sums are
+        # separately capped, while transient Fraction operands fit 2H+1.
+        bits = max(value.numerator.bit_length(), value.denominator.bit_length())
+        return (bits * 30103) // 100000 + 1
+
+    def retain(self, value: Fraction, *, location: tuple[str, ...]) -> Fraction:
+        if self.height(value) > 65_536:
+            raise _calculus_budget(
+                location,
+                "differential_form.pullback.presolve_height",
+                "pullback differential presolve exceeds its private scalar-height budget",
+            )
+        return value
+
+    def charge_scalars(
+        self, left: Fraction, right: Fraction, *, location: tuple[str, ...]
+    ) -> None:
+        self.retain(left, location=location)
+        self.retain(right, location=location)
+        self.charge_work(self.height(left) * self.height(right), location=location)
+
+    def charge_work(self, amount: int, *, location: tuple[str, ...]) -> None:
+        self.digit_work += amount
+        if self.digit_work > MAX_PULLBACK_PRESOLVE_DIGIT_WORK:
+            raise _calculus_budget(
+                location,
+                "differential_form.pullback.presolve_work",
+                "pullback differential presolve exceeds its cumulative digit-work budget",
+            )
+
+    def multiply(
+        self, left: Fraction, right: Fraction, *, location: tuple[str, ...]
+    ) -> Fraction:
+        if left in (-1, 1):
+            return self.retain(right if left == 1 else -right, location=location)
+        if right in (-1, 1):
+            return self.retain(left if right == 1 else -left, location=location)
+        self.charge_scalars(left, right, location=location)
+        return self.retain(left * right, location=location)
+
+    def add(
+        self, left: Fraction, right: Fraction, *, location: tuple[str, ...]
+    ) -> Fraction:
+        if not left:
+            return self.retain(right, location=location)
+        if not right:
+            return self.retain(left, location=location)
+        if left.denominator == right.denominator:
+            self.retain(left, location=location)
+            self.retain(right, location=location)
+            # No denominator cross-products are needed. Price the numerator
+            # sum and its reduction against the common denominator; for
+            # integers this is linear rather than quadratic in their height.
+            numerator_digits = (
+                sum(
+                    (value.numerator.bit_length() * 30103) // 100000 + 1
+                    for value in (left, right)
+                )
+                + 1
+            )
+            denominator_digits = (left.denominator.bit_length() * 30103) // 100000 + 1
+            self.charge_work(numerator_digits * denominator_digits, location=location)
+        else:
+            self.charge_scalars(left, right, location=location)
+        return self.retain(left + right, location=location)
+
+    @staticmethod
+    def check_storage(digits: int, *, location: tuple[str, ...]) -> None:
+        # Bound each complete exterior stage and its temporary polynomial.
+        # At most the old stage, new stage and one product coexist. Each
+        # tracked height bounds max(numerator, denominator) digits, so their
+        # combined scalar payload is at most twice this count.
+        if digits > MAX_PULLBACK_PRESOLVE_STORAGE_DIGITS:
+            raise _calculus_budget(
+                location,
+                "differential_form.pullback.presolve_storage",
+                "pullback differential presolve exceeds its scalar-storage budget",
+            )
+
+    def charge_pairs(self, amount: int, *, location: tuple[str, ...]) -> None:
+        self.pairs += amount
+        if self.pairs > MAX_CALCULUS_TERM_PAIRS:
+            raise _calculus_budget(
+                location,
+                "differential_form.pullback.presolve_work",
+                "pullback differential presolve exceeds its cumulative pair budget",
+            )
+
+
+def _pullback_differential_factor(
+    indices: tuple[int, ...],
+    differentials: list[list[dict[tuple[int, ...], Fraction]]],
+    dimension: int,
+    *,
+    location: tuple[str, ...],
+    budget: _PullbackPresolveBudget,
+    initial: dict[tuple[int, ...], Fraction] | None = None,
+) -> _RemainingTerms:
+    """Expand dF_i1 wedge ... wedge dF_ik in the alternating basis first."""
+
+    if initial is not None:
+        budget.charge_pairs(len(initial), location=location)
+        initial_digits = 0
+        for value in initial.values():
+            budget.retain(value, location=location)
+            initial_digits += budget.height(value)
+        budget.check_storage(initial_digits, location=location)
+    expanded: _RemainingTerms = {
+        (): {(0,) * dimension: Fraction(1)} if initial is None else initial
+    }
+    for index in indices:
+        request_checkpoint("during pullback differential presolve")
+        staged: _RemainingTerms = {}
+        for chosen, accumulated in expanded.items():
+            for variable, partial in enumerate(differentials[index]):
+                # An alternating factor with a repeated basis index is zero;
+                # do not expand polynomial products destined to disappear.
+                if variable in chosen or not partial:
+                    continue
+                budget.charge_pairs(len(accumulated) * len(partial), location=location)
+                contribution = _poly_mul(
+                    accumulated, partial, location=location, presolve=budget
+                )
+                inversions = sum(previous > variable for previous in chosen)
+                _add_monomials(
+                    staged,
+                    tuple(sorted((*chosen, variable))),
+                    contribution,
+                    -1 if inversions % 2 else 1,
+                    location=location,
+                    presolve=budget,
+                )
+        expanded = {basis: terms for basis, terms in staged.items() if terms}
+        if not expanded:
+            break
+    return expanded
+
+
 def pullback(
     mapping: PolynomialMap,
     form: PolynomialDifferentialForm,
@@ -959,6 +1202,8 @@ def pullback(
             message="a pulled-back form must use the map target axis",
         )
     source_dimension = len(mapping.source_variables)
+    if int(form.degree) > source_dimension or not form.components:
+        return _zero_form(mapping.source_variables, int(form.degree))
     images = tuple(
         {
             term.exponents: term.coefficient.as_fraction()
@@ -969,52 +1214,72 @@ def pullback(
     differentials = [
         _differential_of_image(image, source_dimension) for image in images
     ]
+    # At most 28 pairs of admitted rows (each at most 8*256 terms).
+    # Exact repeated differentials have zero exterior product regardless of
+    # their coefficient height; recognize this before arithmetic pricing.
+    repeated_differentials = {
+        (left, right)
+        for left, right in combinations(range(len(differentials)), 2)
+        if differentials[left] == differentials[right]
+    }
     aggregate: _RemainingTerms = {}
     location = ("map", "form")
+    # Reserve two independently bounded orderings for the complete request.
+    # Trying coefficient-first after a factor refusal does not reset the
+    # deadline or either ledger; total extra work is at most their sum.
+    presolve_budget = _PullbackPresolveBudget()
+    coefficient_first_budget = _PullbackPresolveBudget()
     for component in form.components:
+        if any(
+            pair in repeated_differentials
+            for pair in combinations(component.indices, 2)
+        ):
+            continue
+        try:
+            differential_factor = _pullback_differential_factor(
+                component.indices,
+                differentials,
+                source_dimension,
+                location=location,
+                budget=presolve_budget,
+            )
+        except OperationResourceAdmissionError:
+            # Release the failed phase's traceback/workspace before recovery.
+            differential_factor = None
+        if differential_factor is None:
+            # A coefficient can cancel scalar growth or vanish identically.
+            # Preserve the useful coefficient-first path, but price that
+            # alternative separately and attempt it at most once per component.
+            substituted = _substitute_polynomial(
+                component.coefficient.polynomial.terms,
+                images,
+                source_dimension,
+                location=location,
+            )
+            if not substituted:
+                continue
+            weighted_factor = _pullback_differential_factor(
+                component.indices,
+                differentials,
+                source_dimension,
+                location=location,
+                budget=coefficient_first_budget,
+                initial=substituted,
+            )
+            for indices, contribution in weighted_factor.items():
+                _add_monomials(aggregate, indices, contribution, 1, location=location)
+            continue
+        if not differential_factor:
+            continue
         substituted = _substitute_polynomial(
             component.coefficient.polynomial.terms,
             images,
             source_dimension,
             location=location,
         )
-        factors = [differentials[index] for index in component.indices]
-        expanded: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {
-            (): substituted
-        }
-        for partials in factors:
-            staged: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
-            for chosen, accumulated in expanded.items():
-                for variable in range(source_dimension):
-                    contribution = _poly_mul(
-                        accumulated, partials[variable], location=location
-                    )
-                    if contribution:
-                        staged[(*chosen, variable)] = contribution
-            expanded = staged
-            if len(expanded) > MAX_CALCULUS_TERM_PAIRS:
-                raise _calculus_budget(
-                    location,
-                    "differential_form.calculus.term_budget",
-                    "pullback differential expansion exceeds the bounded work envelope",
-                )
-        for chosen, contribution in expanded.items():
-            if len(set(chosen)) != len(chosen):
-                continue
-            inversions = sum(
-                1
-                for left in range(len(chosen))
-                for right in range(left + 1, len(chosen))
-                if chosen[left] > chosen[right]
-            )
-            merged = tuple(sorted(chosen))
-            _add_monomials(
-                aggregate,
-                merged,
-                contribution,
-                -1 if inversions % 2 else 1,
-                location=location,
-            )
+        for indices, factor in differential_factor.items():
+            contribution = _poly_mul(substituted, factor, location=location)
+            _add_monomials(aggregate, indices, contribution, 1, location=location)
     _admit_remaining_support(aggregate)
     return _admitted_result(
         variables=mapping.source_variables,

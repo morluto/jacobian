@@ -4073,6 +4073,57 @@ def test_annotation_and_projection_form_matrix() -> None:
             ), (annotation, body)
 
 
+def test_shared_annotation_interpretation_reaches_three_level_consumers() -> None:
+    """One interpretation must agree across detector, depth index and checker."""
+    annotations = (
+        ("", "tuple[tuple[tuple[int, ...], ...], ...]"),
+        (
+            "Row = typing.Tuple[int, ...]\nPlane = typing.Tuple[Row, ...]\nCube = typing.Tuple[Plane, ...]\n",
+            'typing.Annotated["Cube", marker]',
+        ),
+        (
+            "type Row = t.Tuple[int, ...]\ntype Plane = t.Tuple[Row, ...]\n",
+            '"t.Tuple[Plane, ...]"',
+        ),
+    )
+    forms: tuple[tuple[str, set[str]], ...] = (
+        ("return canonicalize_json_containers(data)", set()),
+        (
+            "data['payload'] = tuple(tuple(row) for row in data['payload'])\n    return data",
+            {"payload"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    if data.get('enabled') is None:\n        return data\n    return normalized",
+            {"payload"},
+        ),
+        (
+            "normalized = canonicalize_json_containers(data)\n    [normalized, [ignored]] = [data, [None]]\n    return normalized",
+            {"payload"},
+        ),
+    )
+    for prefix, annotation in annotations:
+        tree = ast.parse(
+            f"{prefix}class Model(StrictModel):\n    payload: {annotation}\n    enabled: bool | None = None\n"
+        )
+        model = tree.body[-1]
+        assert isinstance(model, ast.ClassDef)
+        aliases = _declared_aliases(tree)
+        assert _leaf_container_field(annotation, set(), aliases)
+        shapes = _json_shapes(model, {"Model": model}, {model: aliases})
+        assert all(
+            shapes.types["payload" + "[]" * depth] == frozenset({"list"})
+            for depth in range(3)
+        )
+        assert shapes.types["payload[][][]"] == frozenset({"int"})
+        for body, expected in forms:
+            assert (
+                _fixture_uncovered(
+                    f"def validate(cls, data):\n    {body}\n", {"payload"}, shapes
+                )
+                == expected
+            ), (annotation, body)
+
+
 def test_projected_payload_survives_helper_tuple_destructuring() -> None:
     assert not _fixture_uncovered(
         """

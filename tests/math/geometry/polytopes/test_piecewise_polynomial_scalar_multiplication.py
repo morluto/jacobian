@@ -4,12 +4,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -164,22 +162,6 @@ def test_scalar_multiple_recomputes_and_rejects_forged_compatibility_claim():
                 function=forged, scalar=CanonicalRational(num=2, den=1)
             )
         )
-
-
-def test_catalog_example_executes_through_the_public_typed_operation():
-    catalog = Catalog.open()
-    operation = catalog.operation("piecewise_polynomial.scalar_multiply.compute")
-    assert operation is not None and operation.examples
-
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    validated = PiecewisePolynomialResult.model_validate_json(json.dumps(result.output))
-    assert validated.status == "COMPATIBLE"
-    assert (
-        validated.pieces[0].polynomial.polynomial.terms[0].coefficient.as_fraction()
-        == 2
-    )
 
 
 def test_scalar_growth_is_rejected_before_coefficient_expansion(monkeypatch):

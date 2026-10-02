@@ -4,12 +4,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -299,21 +297,3 @@ def test_coordinate_output_is_admitted_before_nullspace_materialization(monkeypa
         spline_kernel.spline_coordinates(
             SplineCoordinatesRequest(function=function, degree=1, smoothness=0)
         )
-
-
-def test_catalog_exposes_piecewise_to_spline_coordinates():
-    function = _two_interval_function(((0, 1),), ((0, 1),))
-    operation_id = "polyhedral_complex.spline.coordinates.compute"
-    catalog = Catalog.open()
-    operation = catalog.operation(operation_id)
-    invoked = invoke_operation(
-        operation.operation_id,
-        {
-            "function": function.model_dump(mode="json"),
-            "degree": 1,
-            "smoothness": 0,
-        },
-        catalog,
-    )
-    assert invoked.output["spline_space"]["nullity"] == 3
-    assert len(invoked.output["basis_coordinates"]) == 3

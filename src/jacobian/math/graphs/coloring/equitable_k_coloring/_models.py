@@ -6,6 +6,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 MAX_EQUITABLE_COLORING_SEARCH_NODES = 1_000_000
@@ -20,7 +21,7 @@ def _is_complete(graph: SimpleUndirectedGraph) -> bool:
 class EquitableColoringRequest(StrictModel):
     """Request to decide equitable k-colourability."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     k: int = Field(gt=0)
 
 

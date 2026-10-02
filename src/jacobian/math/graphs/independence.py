@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 IndependenceSearchStatus = Literal["EXACT", "UNKNOWN"]
@@ -30,7 +31,7 @@ class IndependenceNumberBudget(StrictModel):
 class IndependenceNumberRequest(StrictModel):
     """One finite simple graph and its operation-owned search budget."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     resource_budget: IndependenceNumberBudget = Field(
         default_factory=IndependenceNumberBudget
     )

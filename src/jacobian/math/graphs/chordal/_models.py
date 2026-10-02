@@ -8,6 +8,7 @@ from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     SimpleUndirectedGraph,
 )
@@ -30,7 +31,7 @@ ChordalStatus = Literal["CHORDAL", "NONCHORDAL"]
 class ChordalRecognitionRequest(StrictModel):
     """Request chordal recognition of a finite simple graph."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
 
 class ChordalRecognitionResult(StrictModel):

@@ -133,8 +133,8 @@ PRIME_OPERATIONS = (
         examples=(
             OperationExample(
                 name="nth_prime_6",
-                description="Compute the sixth prime.",
-                input={"n": 6},
+                description="Compute the sixth prime from an exact decimal-string input.",
+                input={"n": "6"},
             ),
         ),
     ),

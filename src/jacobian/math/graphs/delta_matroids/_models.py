@@ -13,14 +13,15 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     BinarySymmetricMatrix,
 )
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
+from jacobian.math.graphs._input import LoopedSimpleGraphInput
 from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, LoopedSimpleGraph
 
 
 class LoopedGraphDeltaMatroidRequest(StrictModel):
-    """Request using the canonical looped graph encoding."""
+    """A looped graph request with unordered off-diagonal endpoint pairs."""
 
-    graph: LoopedSimpleGraph = Field(
-        description="Canonical looped graph: unique nonempty NFC labels (<=64 UTF-8 bytes), unique declared off-diagonal edges oriented left < right, and unique declared loop labels. Computational admission is at most eight vertices."
+    graph: LoopedSimpleGraphInput = Field(
+        description="Looped graph: unique nonempty NFC labels (<=64 UTF-8 bytes), unique declared off-diagonal edges in either endpoint order, and unique declared loop labels. Pair normalization preserves the vertex, edge and loop axes. Computational admission is at most eight vertices."
     )
 
 

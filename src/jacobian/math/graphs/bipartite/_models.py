@@ -1,10 +1,14 @@
 """Dulmage--Mendelsohn decomposition contracts."""
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    GraphValueInputEncoding,
+    IndexedSimpleUndirectedGraphInput,
+)
 from jacobian.math.graphs.bipartite.values import (
     BipartiteVertexRegion,
     FixedBipartiteGraph,
@@ -12,8 +16,18 @@ from jacobian.math.graphs.bipartite.values import (
 )
 
 
+class _FixedBipartiteGraphInput(FixedBipartiteGraph):
+    graph: IndexedSimpleUndirectedGraphInput
+
+
+FixedBipartiteGraphInput = Annotated[
+    FixedBipartiteGraph,
+    GraphValueInputEncoding(FixedBipartiteGraph, _FixedBipartiteGraphInput),
+]
+
+
 class DulmageMendelsohnRequest(StrictModel):
-    graph: FixedBipartiteGraph
+    graph: FixedBipartiteGraphInput
 
 
 class DulmageMendelsohnDecomposition(StrictModel):

@@ -6,6 +6,10 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    GraphValueInputEncoding,
+    IndexedSimpleUndirectedGraphInput,
+)
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.matrices.values import RationalMatrix, SparseRationalMatrixEntry
 
@@ -35,8 +39,20 @@ class PartialSymmetricRationalMatrix(StrictModel):
         return self
 
 
+class _PartialSymmetricRationalMatrixInput(PartialSymmetricRationalMatrix):
+    graph: IndexedSimpleUndirectedGraphInput
+
+
+PartialSymmetricRationalMatrixInput = Annotated[
+    PartialSymmetricRationalMatrix,
+    GraphValueInputEncoding(
+        PartialSymmetricRationalMatrix, _PartialSymmetricRationalMatrixInput
+    ),
+]
+
+
 class ChordalPSDCompletionRequest(StrictModel):
-    matrix: PartialSymmetricRationalMatrix
+    matrix: PartialSymmetricRationalMatrixInput
 
 
 class CompletedChordalPSDCompletion(StrictModel):

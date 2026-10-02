@@ -4,6 +4,7 @@ from pydantic import Field, StrictInt, StrictStr, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceSearchStatus,
@@ -20,7 +21,7 @@ MAX_INDUCED_MATCHING_CONFLICT_GRAPH_CELLS = (
 
 
 class MaximumInducedMatchingRequest(StrictModel):
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical finite simple graph. Its source edge count must not exceed "
             "resource_budget.max_order because one conflict vertex is created per edge."

@@ -53,8 +53,8 @@ DIVISIBILITY_OPERATIONS = (
         examples=(
             OperationExample(
                 name="gcd_84_30",
-                description="Compute gcd(84, 30).",
-                input={"left": "84", "right": "30"},
+                description="Compute gcd(84, 30) with numeric and decimal-string inputs.",
+                input={"left": 84, "right": "30"},
             ),
         ),
     ),

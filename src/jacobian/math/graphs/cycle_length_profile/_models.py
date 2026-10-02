@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_EDGES,
     MAX_SIMPLE_GRAPH_VERTICES,
@@ -38,7 +39,7 @@ def is_dihedral_canonical_cycle(cycle: tuple[str, ...]) -> bool:
 class CycleLengthProfileRequest(StrictModel):
     """Request for the simple-cycle length profile of a graph."""
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical simple graph. Admission also requires the complete first-"
             "witness search to fit the 10,000,000-unit work bound and the complete "
@@ -122,7 +123,7 @@ class FixedLengthCycleEnumerationRequest(StrictModel):
     case without search.
     """
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical finite simple undirected graph with at most "
             f"{MAX_VERTICES} vertices; directed and multigraph values are not "

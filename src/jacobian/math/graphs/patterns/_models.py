@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_ENCODED_SIMPLE_GRAPH_EDGES,
     MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
@@ -134,14 +135,14 @@ class InducedVertexSubsetPatternCountRequest(StrictModel):
         }
     )
 
-    host: SimpleUndirectedGraph = Field(
+    host: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical finite simple undirected host graph; vertex labels are "
             "transport and do not constrain isomorphism. Output from "
             "explicit_graph or compose_graphs is accepted unchanged."
         )
     )
-    pattern: SimpleUndirectedGraph = Field(
+    pattern: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical finite simple undirected pattern graph. An empty pattern "
             "has one occurrence; a pattern larger than the host has zero. Output "

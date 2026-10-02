@@ -54,7 +54,14 @@ def test_graph_polynomial_inspection_rejection_and_boundary_recovery(kind: str) 
             contract = inspected.structured_content["operation"]
             schema = contract["input_schema"]
             graph_schema = schema["properties"]["graph"]
-            assert graph_schema["$ref"] == "#/$defs/IndexedSimpleUndirectedGraph"
+            input_definition = schema["$defs"][
+                graph_schema["$ref"].removeprefix("#/$defs/")
+            ]
+            assert input_definition["title"] == "IndexedSimpleUndirectedGraphInput"
+            assert (
+                "either endpoint order"
+                in input_definition["properties"]["edges"]["description"]
+            )
             assert graph_schema["properties"]["vertex_count"]["maximum"] == 12
             assert graph_schema["properties"]["edges"]["maxItems"] == 24
             for description in (contract["description"], graph_schema["description"]):
@@ -62,7 +69,7 @@ def test_graph_polynomial_inspection_rejection_and_boundary_recovery(kind: str) 
                 assert "24 edges" in description
                 assert "computation" in description
             # These limits belong to this request, not to the reusable graph value.
-            canonical = schema["$defs"]["IndexedSimpleUndirectedGraph"]["properties"]
+            canonical = input_definition["properties"]
             assert canonical["vertex_count"]["maximum"] == 1024
             assert canonical["edges"]["maxItems"] == 65_536
             validator = Draft202012Validator(schema)
@@ -103,16 +110,28 @@ def test_graph_polynomial_inspection_rejection_and_boundary_recovery(kind: str) 
 
             # Follow the correction with an actual request at the vertex cap.
             # Independently: chi(P12)=x(x-1)^11, T(P12)=x^11, F(P12)=0.
-            for graph in (_path(12), {"vertex_count": 12, "edges": []}, _path(0)):
+            recovery_graphs: tuple[dict[str, Any], ...] = (
+                _path(12),
+                {"vertex_count": 12, "edges": []},
+                _path(0),
+            )
+            for recovery_graph in recovery_graphs:
+                # Preserve the upstream JSON endpoint normalization together
+                # with the owner-specific computation limits and canonical output.
+                unoriented = {
+                    **recovery_graph,
+                    "edges": [list(reversed(edge)) for edge in recovery_graph["edges"]],
+                }
+                validator.validate({"graph": unoriented})
                 accepted = await client.call_tool(
                     "math.run",
-                    {"operation_id": operation_id, "payload": {"graph": graph}},
+                    {"operation_id": operation_id, "payload": {"graph": unoriented}},
                 )
                 assert not accepted.is_error
                 output = accepted.structured_content["output"]
-                assert output["graph"] == graph
+                assert output["graph"] == recovery_graph
                 expected: dict[tuple[int, ...], int]
-                if graph["edges"]:
+                if recovery_graph["edges"]:
                     expected = (
                         {
                             (degree + 1,): (-1) ** (11 - degree) * comb(11, degree)
@@ -124,7 +143,7 @@ def test_graph_polynomial_inspection_rejection_and_boundary_recovery(kind: str) 
                         else {}
                     )
                 else:
-                    vertex_count = graph["vertex_count"]
+                    vertex_count = recovery_graph["vertex_count"]
                     assert isinstance(vertex_count, int)
                     expected = {
                         (

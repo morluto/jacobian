@@ -1,4 +1,4 @@
-"""Graph inspection and validation explain how to orient undirected edges."""
+"""Graph inspection publishes pair normalization at the actual MCP boundary."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ def _content_text(block: ContentBlock) -> str:
     return block.text
 
 
-def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> None:
+def test_graph_inspection_and_execution_accept_either_undirected_endpoint_order() -> (
+    None
+):
     async def scenario() -> None:
         operation_id = "graph.maximal_clique_hypergraph.construct"
         edges = [
@@ -45,10 +47,13 @@ def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> 
                 {"operation_id": operation_id},
             )
             contract = inspected.structured_content["operation"]
-            schema = contract["input_schema"]["$defs"]["SimpleUndirectedGraph"]
+            input_schema = contract["input_schema"]
+            reference = input_schema["properties"]["graph"]["$ref"]
+            schema = input_schema["$defs"][reference.rsplit("/", 1)[1]]
             description = schema["properties"]["edges"]["description"]
             assert "lexicographic label order" in description
-            assert "not positions in vertices" in description
+            assert "either endpoint order" in description
+            assert "list order are preserved" in description
             example = contract["examples"][0]["input"]
             assert example["graph"]["vertices"] != sorted(example["graph"]["vertices"])
             example_result = await client.call_tool(
@@ -56,25 +61,15 @@ def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> 
             )
             assert example_result.structured_content["output"]["clique_count"] == 2
 
-            rejected = await client.call_tool(
+            result = await client.call_tool(
                 "math.run",
                 {"operation_id": operation_id, "payload": {"graph": graph}},
             )
-            error = json.loads(
-                _content_text(rejected.content[0]).removeprefix(
-                    "Error executing tool math.run: "
-                )
-            )["errors"][0]
-            assert error["location"] == ["graph"]
-            assert "lexicographic label order" in error["message"]
-            assert "not positions in vertices" in error["message"]
-
-            graph["edges"] = [sorted(edge) for edge in edges]
-            result = await client.call_tool(
-                "math.run", {"operation_id": operation_id, "payload": {"graph": graph}}
-            )
             output = result.structured_content["output"]
-            assert output["graph"] == graph
+            assert output["graph"] == {
+                **graph,
+                "edges": [sorted(edge) for edge in edges],
+            }
             assert output["clique_count"] == 4
             assert {tuple(members) for _, members in output["hypergraph"]["edges"]} == {
                 ("r", "x", "y", "z"),
@@ -82,5 +77,20 @@ def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> 
                 ("u", "w", "x", "y"),
                 ("u", "v", "x"),
             }
+
+            rejected = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": operation_id,
+                    "payload": {"graph": {**graph, "edges": [["x", "r"], ["r", "x"]]}},
+                },
+            )
+            error = json.loads(
+                _content_text(rejected.content[0]).removeprefix(
+                    "Error executing tool math.run: "
+                )
+            )["errors"][0]
+            assert error["location"] == ["graph"]
+            assert error["code"] == "graph.graph_edges_must_be_unique"
 
     asyncio.run(scenario())

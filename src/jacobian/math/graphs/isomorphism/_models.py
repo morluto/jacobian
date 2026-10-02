@@ -8,6 +8,7 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import ColoredUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     ColoredUndirectedGraph,
@@ -110,7 +111,7 @@ class ColoredGraphCanonicalizationRequest(StrictModel):
         }
     )
 
-    colored_graph: ColoredUndirectedGraph = Field(
+    colored_graph: ColoredUndirectedGraphInput = Field(
         description=(
             "Canonical colored-graph value. Color tuples are empty or total and "
             "aligned with the embedded graph's authoritative vertex and edge axes."

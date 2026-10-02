@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from jacobian._models import StrictModel
+from jacobian.math.number_theory._integer_input import IntegerInput
 from jacobian.math.number_theory._models import BoundedInteger
 
 
 class IntegerPairRequest(StrictModel):
     """Two canonical integers supplied to a symmetric binary operation."""
 
-    left: BoundedInteger
-    right: BoundedInteger
+    left: IntegerInput = Field(
+        description=(
+            "Exact integer with at most 256 decimal digits, as a canonical decimal "
+            "string or a safe JSON integer (absolute value at most 9007199254740991)."
+        )
+    )
+    right: IntegerInput = Field(
+        description=(
+            "Exact integer with at most 256 decimal digits, as a canonical decimal "
+            "string or a safe JSON integer (absolute value at most 9007199254740991)."
+        )
+    )
 
 
 class DivisibilityRequest(StrictModel):

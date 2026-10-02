@@ -8,6 +8,7 @@ from pydantic import AfterValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import IndexedSimpleUndirectedGraphInput
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 # Input graph bounds.
@@ -35,7 +36,7 @@ def _require_transform_input_graph(
 
 
 _TransformInputGraph = Annotated[
-    IndexedSimpleUndirectedGraph,
+    IndexedSimpleUndirectedGraphInput,
     AfterValidator(_require_transform_input_graph),
     Field(description="Canonical graph with 0..64 vertices and at most 2016 edges."),
 ]

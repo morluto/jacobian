@@ -8,13 +8,14 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 class RegularSubgraphRequest(StrictModel):
     """A simple graph and a target degree k for which a k-regular subgraph is sought."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     k: int = Field(ge=0)
 
 

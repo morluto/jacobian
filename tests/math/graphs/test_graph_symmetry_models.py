@@ -146,18 +146,10 @@ def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
             "generator_id"
         ]["description"]
     )
-    assert (
-        "NFC"
-        in request_schema["$defs"]["ColoredUndirectedGraph"]["properties"][
-            "vertex_colors"
-        ]["description"]
-    )
-    assert (
-        "NFC"
-        in request_schema["$defs"]["ColoredUndirectedGraph"]["properties"][
-            "edge_colors"
-        ]["description"]
-    )
+    reference = request_schema["properties"]["graph"]["$ref"]
+    colored_graph = request_schema["$defs"][reference.rsplit("/", 1)[1]]
+    assert "NFC" in colored_graph["properties"]["vertex_colors"]["description"]
+    assert "NFC" in colored_graph["properties"]["edge_colors"]["description"]
 
 
 def test_graph_symmetry_request_rejects_non_nfc_color_names() -> None:

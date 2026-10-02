@@ -16,6 +16,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math.graphs._input import (
+    SimpleUndirectedGraphInput,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 MAXIMUM_CUT_CANDIDATE_PARTITIONS = 1_048_576
@@ -268,9 +272,9 @@ def _require_graph_envelope(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis
 
 
 def _maximum_cut_graph_schema() -> JsonSchemaValue:
-    schema = SimpleUndirectedGraph.model_json_schema()
+    schema = simple_graph_input_schema()
     schema["description"] = (
-        "Canonical materialized SimpleUndirectedGraph for an exact-only maximum-cut "
+        "Materialized SimpleUndirectedGraph for an exact-only maximum-cut "
         "request. Admission preflights a complete exact proof with at most "
         f"{MAXIMUM_CUT_CANDIDATE_PARTITIONS} internally derived candidate partitions, "
         f"{MAXIMUM_CUT_EDGE_UPDATES} incremental weighted edge contributions, and "
@@ -281,8 +285,8 @@ def _maximum_cut_graph_schema() -> JsonSchemaValue:
 
 
 MaximumCutGraph = Annotated[
-    SimpleUndirectedGraph,
-    WithJsonSchema(_maximum_cut_graph_schema()),
+    SimpleUndirectedGraphInput,
+    WithJsonSchema(_maximum_cut_graph_schema(), mode="validation"),
 ]
 
 
@@ -630,6 +634,19 @@ MAXIMUM_CUT_OPERATION: MathTool[
         "bounded",
     ),
     examples=(
+        OperationExample(
+            name="numeric_labels_unoriented_path",
+            description=(
+                "Compute the two-edge path's cut of size two. JSON requests orient "
+                "each endpoint pair by label while preserving both list axes."
+            ),
+            input={
+                "graph": {
+                    "vertices": ["2", "10", "11"],
+                    "edges": [["2", "10"], ["10", "11"]],
+                }
+            },
+        ),
         OperationExample(
             name="cycle_five",
             description=(

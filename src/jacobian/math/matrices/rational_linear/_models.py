@@ -10,6 +10,12 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.matrices._rational_input import (
+    MAX_REQUEST_RATIONAL_DIGITS,
+    RationalInput,
+    RationalValueInputEncoding,
+    SparseRationalMatrixInput,
+)
 from jacobian.math.matrices.values import (
     MAX_SPARSE_RATIONAL_MATRIX_AXIS,
     MAX_SPARSE_RATIONAL_MATRIX_NONZEROS,
@@ -18,7 +24,7 @@ from jacobian.math.matrices.values import (
 
 MAX_LINEAR_DIMENSION = MAX_SPARSE_RATIONAL_MATRIX_AXIS
 MAX_LINEAR_NONZERO_COUNT = MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
-MAX_RATIONAL_DIGITS = 256
+MAX_RATIONAL_DIGITS = MAX_REQUEST_RATIONAL_DIGITS
 
 LinearVariableName = Annotated[
     str,
@@ -139,10 +145,25 @@ class LinearRationalSystem(StrictModel):
         return self
 
 
+class _LinearRationalSystemInput(LinearRationalSystem):
+    """Request-only ratio normalization after the inherited raw preflight."""
+
+    coefficients: SparseRationalMatrixInput
+    rhs: tuple[RationalInput, ...] = Field(
+        min_length=1, max_length=MAX_LINEAR_DIMENSION
+    )
+
+
+_LinearRationalSystemInputValue = Annotated[
+    LinearRationalSystem,
+    RationalValueInputEncoding(LinearRationalSystem, _LinearRationalSystemInput),
+]
+
+
 class LinearRationalSolutionFindRequest(StrictModel):
     """Ask for one exact solution of a rational linear system."""
 
-    system: LinearRationalSystem
+    system: _LinearRationalSystemInputValue
 
 
 class LinearRationalSolutionResult(StrictModel):
@@ -249,7 +270,7 @@ class LinearRationalInconsistencyResult(StrictModel):
 class LinearRationalInconsistencyFindRequest(StrictModel):
     """Ask whether a rational linear system is inconsistent."""
 
-    system: LinearRationalSystem
+    system: _LinearRationalSystemInputValue
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

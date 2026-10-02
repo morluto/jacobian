@@ -40,6 +40,37 @@ encoding admits 12,256 vertices and 36,000 edges
 (`MAX_ENCODED_SIMPLE_GRAPH_VERTICES` / `MAX_ENCODED_SIMPLE_GRAPH_EDGES`).
 Many graph operations still admit at most 256 vertices as a consumer bound.
 
+### Undirected graph request normalization
+
+Ordinary JSON graph operands use graph-owned input codecs for
+`SimpleUndirectedGraph`, `IndexedSimpleUndirectedGraph`, and `LoopedSimpleGraph`.
+They accept either endpoint order for each undirected edge, then orient only
+that pair before constructing the same canonical native graph. Labelled pairs
+use lexicographic order (`['2', '10']` becomes `['10', '2']`); indexed pairs use
+numeric order. The vertex axis, edge-list axis, and separate loop list are never
+sorted. Aligned matrix entries, colors, probabilities, chip configurations,
+embedding rotations/signs, and witnesses retain their existing meaning.
+
+The same request-only normalization applies to ordinary composite operands:
+colored graphs, fixed bipartite graphs, graph vertex maps, edge-coloring
+assignments, sink configurations, partial symmetric matrices, and graph-based
+probability sources. Their declared non-graph fields and native nested values
+are preserved; all inherited structural and consumer admission checks still run.
+Raw shape and carrier counts are checked before orientation. Label spelling is
+unchanged; undeclared endpoints, forbidden loops and duplicate edges (including
+reversed duplicates) remain invalid. Each operation retains its computational
+bounds, and all directed graph edges remain directed.
+
+This is explicit carrier-owned request decoding, not recursive interpretation
+of arbitrary dictionaries or generated JSON Schema. Native constructors,
+standalone/persisted value decoding, and all returned values remain canonical.
+Request schemas describe alternative pair spelling; serialization describes
+canonical order. Source-bound deletion/deck families and canonical deck-class
+representatives, plus tree-decomposition evidence, retain strict graph decoding
+also as operation operands. Their asserted source/card/decomposition relations
+are distinct from ordinary raw adjacency. Individual edge selectors and other
+canonical witness coordinates retain their declared contracts.
+
 Frame operations share `VectorFamily`, whose required `dimension` retains the
 standard Euclidean ambient space even when `vectors` is empty. Coordinates are
 integers. Gram computation accepts empty families in any admitted dimension;
@@ -198,6 +229,23 @@ describes the interoperable range, and
 64-bit integers as strings. Jacobian's strict input spelling and rejection of
 numeric JSON for exact-integer fields are explicit contract choices, not
 requirements imposed by MCP.
+
+Selected number-theory requests opt into a more permissive, carrier-owned
+integer input codec. GCD and extended-GCD operands accept canonical decimal
+strings or safe JSON integers with absolute value at most `2**53-1`. The unary
+Euler-totient, divisor-count, divisor-sum, Mobius, next-prime, nth-prime,
+prime-count, previous-prime, primorial, and floor-square-root arguments accept
+either spelling within their existing operation bounds. Thus GCD's returned
+`"6"` can be passed unchanged as a consumer's `n`.
+
+Their request schemas publish both spellings and the operation's numerical
+range. Strings retain the canonical integer grammar above; raw digit limits
+are checked before conversion, followed by the same numerical bounds as JSON
+integers. Booleans, floating-point numbers, unsafe numeric tokens, leading
+zeros, plus signs, whitespace, and `"-0"` remain invalid. Native requests use
+integers, and request JSON serialization chooses decimal strings. Canonical
+value/result decoding and all existing result encodings are unchanged; this
+request convenience does not normalize arbitrary JSON fields or other carriers.
 
 The encoding is selected for the field's complete admitted domain, not for the
 magnitude of each value. If a field can contain integers outside JSON's safe
@@ -461,3 +509,56 @@ framework:
 
 Catalog examples establish first-call usability. They do not replace these
 mathematical and composition tests.
+
+## Rational matrix request normalization
+
+The bounded base-matrix requests accept exact JSON ratios such as `2/4`,
+`2/-4`, `-2/-4`, and `0/5`, encoded as `{"num":"2","den":"4"}` rather
+than fraction text. Their explicit request adapters reduce the fraction,
+move a denominator sign to the numerator, and produce canonical zero `0/1`.
+Both raw components must retain canonical ASCII integer spelling, contain at
+most 256 decimal digits excluding a minus sign, and use strings at every
+magnitude. A denominator must be nonzero. Numeric components, booleans,
+floats, leading plus signs or zeros, negative zero, whitespace, and non-ASCII
+digits are not additional accepted presentations.
+
+This ingress contract covers determinant, permanent, characteristic polynomial,
+multiplication (both operands), Kronecker product (both operands), RREF, rank,
+nullspace, square rational solve (matrix and RHS), and partial trace. Rank and
+nullspace cover both dense and coordinate-sparse matrix inputs. The two
+`linear.rational_solution.compute` and `linear.rational_inconsistency.compute`
+requests also accept these ratios in the system's sparse coefficient values
+and RHS. The unchanged canonical `LinearRationalSystem` remains their retained
+source value; variable order and the `AX_EQUALS_B` relation are preserved.
+
+Raw admission precedes reduction. A reducible 257-digit ratio is refused even
+when its reduced value is small. Dense raw matrix axes remain at most 128 for
+determinant, permanent, characteristic polynomial, multiplication, RREF, rank,
+and nullspace; Kronecker product, square solve, and partial trace retain their
+32-axis preflight. Square-solve RHS length remains at most 32. Sparse rank and
+nullspace retain axes through 8192 and at most 32768 stored entries. The separate
+rational-linear systems retain at most 8192 variables and RHS entries and 32768
+stored coefficients. Request schemas describe these raw limits; narrower
+operation-specific shape, scalar-work, intermediate, and output admission still
+applies after parsing. For example, dense rank and RREF retain their existing
+64-axis computational envelope despite the 128-axis raw request envelope.
+
+Normalization is confined to the declared scalar positions. Matrix domains,
+dimensions, row and column coordinates, variable axes, and other fields are not
+rewritten. Sparse coordinates must remain unique and row-major ordered;
+entries are never sorted, merged, or removed. A stored ratio `0/5` normalizes
+to zero and is rejected by the existing sparse nonzero rule.
+
+This is a request-presentation adapter, not a relaxation of `CanonicalRational`,
+`RationalMatrix`, `SparseRationalMatrix`, or `LinearRationalSystem`. Their native
+constructors, canonical JSON decoders, result/source fields, and serialization
+retain reduced fractions, positive denominators, and canonical zero. Request
+Python validation likewise retains the canonical native contract. Actual
+canonical producer outputs remain valid inputs without a translation step,
+subject to the consumer's existing admission limits.
+
+Other matrix owners, including canonical forms, inertia/spectral claims, Farkas
+claims, chordal PSD decomposition, and completion, do not inherit this request
+family. Their separate admission and authored-claim contracts are not changed by
+these adapters. New siblings of the covered owners must opt into the applicable
+request annotation and join the registry-backed argument-position regressions.

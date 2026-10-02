@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_VERTICES,
     FiniteHypergraph,
 )
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -42,7 +43,7 @@ def _require_hypergraph_compatible_labels(graph: SimpleUndirectedGraph) -> None:
 class MaximalCliqueHypergraphRequest(StrictModel):
     """Request to construct the maximal-clique hypergraph of a graph."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def require_hypergraph_compatible_labels(self) -> Self:

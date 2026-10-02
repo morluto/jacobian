@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import IndexedSimpleUndirectedGraphInput
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 # Derived integer scales that make rational capacities and costs exact
@@ -315,7 +316,7 @@ class BipartiteFactorRequest(StrictModel):
     edges. Disconnected graphs and isolated vertices remain valid.
     """
 
-    graph: IndexedSimpleUndirectedGraph
+    graph: IndexedSimpleUndirectedGraphInput
     left: tuple[int, ...] = Field(min_length=1, max_length=64)
     right: tuple[int, ...] = Field(min_length=1, max_length=64)
     required_degrees: tuple[int, ...] = Field(

@@ -199,6 +199,23 @@ describes the interoperable range, and
 numeric JSON for exact-integer fields are explicit contract choices, not
 requirements imposed by MCP.
 
+Selected number-theory requests opt into a more permissive, carrier-owned
+integer input codec. GCD and extended-GCD operands accept canonical decimal
+strings or safe JSON integers with absolute value at most `2**53-1`. The unary
+Euler-totient, divisor-count, divisor-sum, Mobius, next-prime, nth-prime,
+prime-count, previous-prime, primorial, and floor-square-root arguments accept
+either spelling within their existing operation bounds. Thus GCD's returned
+`"6"` can be passed unchanged as a consumer's `n`.
+
+Their request schemas publish both spellings and the operation's numerical
+range. Strings retain the canonical integer grammar above; raw digit limits
+are checked before conversion, followed by the same numerical bounds as JSON
+integers. Booleans, floating-point numbers, unsafe numeric tokens, leading
+zeros, plus signs, whitespace, and `"-0"` remain invalid. Native requests use
+integers, and request JSON serialization chooses decimal strings. Canonical
+value/result decoding and all existing result encodings are unchanged; this
+request convenience does not normalize arbitrary JSON fields or other carriers.
+
 The encoding is selected for the field's complete admitted domain, not for the
 magnitude of each value. If a field can contain integers outside JSON's safe
 integer range, every instance uses the string form. Switching between a JSON

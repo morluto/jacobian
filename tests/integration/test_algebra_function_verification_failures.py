@@ -425,13 +425,13 @@ EXPANDED_CASES += (
         "formal_series.rational.inverse.compute",
         "polynomials.series.operations",
         "verify_inverse",
-        "_cauchy_convolve",
+        "_product_residual_backend",
     ),
     (
         "formal_series.rational.divide.compute",
         "polynomials.series.operations",
         "verify_divide",
-        "_cauchy_convolve",
+        "_product_residual_backend",
     ),
     (
         "formal_series.rational.reversion.compute",
@@ -588,7 +588,10 @@ def test_nontrivial_long_series_verification_preserves_resource_refusal(
         TruncatedSeries,
     )
 
-    n = 513
+    # Unit inverse/division admit bounded orders through 2048; use an order
+    # beyond that envelope so verification still preserves the resource
+    # refusal. Reversion keeps its 512-order bound, so 513 still refuses.
+    n = 2049 if kind in ("inverse", "divide") else 513
     zero = CanonicalRational(num=0, den=1)
 
     def series(values: tuple[int, ...]) -> TruncatedSeries:

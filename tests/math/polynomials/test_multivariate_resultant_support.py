@@ -5,7 +5,7 @@ from math import comb
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.multivariate import operations
 from jacobian.math.polynomials.multivariate._resultant import (
     MultivariateResultantResult,
@@ -168,7 +168,10 @@ def test_genuine_active_growth_is_rejected_before_backend(
 
     monkeypatch.setattr(operations, "_sylvester_resultant_value", unexpected_backend)
     with pytest.raises(
-        OperationDomainValidationError, match="resultant output"
+        OperationResourceAdmissionError, match="resultant output support bound"
     ) as error:
         operations.multivariate_resultant(left, right, "x")
-    assert error.value.errors()[0]["type"] == "polynomial.multivariate_contract"
+    assert (
+        error.value.errors()[0]["type"]
+        == "polynomial.multivariate_resultant.support_budget"
+    )

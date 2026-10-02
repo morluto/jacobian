@@ -354,10 +354,7 @@ def test_general_lp_rejects_variables_beyond_the_public_envelope() -> None:
     GeneralRationalLinearProgramRequest.model_validate({"program": program})
     with pytest.raises(OperationResourceAdmissionError) as error:
         _run(program)
-    assert (
-        error.value.errors()[0]["type"]
-        == "optimization.linear.solver_shape_bound"
-    )
+    assert error.value.errors()[0]["type"] == "optimization.linear.solver_shape_bound"
 
 
 def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> None:
@@ -420,10 +417,7 @@ def test_general_lp_rejects_constraints_beyond_the_public_row_envelope() -> None
     GeneralRationalLinearProgramRequest.model_validate({"program": program})
     with pytest.raises(OperationResourceAdmissionError) as error:
         _run(program)
-    assert (
-        error.value.errors()[0]["type"]
-        == "optimization.linear.solver_shape_bound"
-    )
+    assert error.value.errors()[0]["type"] == "optimization.linear.solver_shape_bound"
 
 
 def test_general_lp_presolves_one_variable_equality_program() -> None:

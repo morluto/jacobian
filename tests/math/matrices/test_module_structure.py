@@ -172,7 +172,7 @@ def test_centralizer_sixteen_by_sixteen_jordan_kernel_is_exact() -> None:
     _assert_centralizer_commutes(matrix, result.basis)
 
 
-def test_centralizer_sixteen_by_sixteen_scalar_reaches_maximum_output() -> None:
+def test_centralizer_sixteen_by_sixteen_scalar_has_full_algebra_basis() -> None:
     size = 16
     scalar = 10**255
     matrix = _matrix(
@@ -196,7 +196,7 @@ def test_centralizer_general_maximum_height_is_admitted_before_flint() -> None:
             tuple(
                 scalar
                 if row == column
-                else scalar - 1
+                else scalar - row - 1
                 if column == (row + 1) % size
                 else 0
                 for column in range(size)

@@ -20,7 +20,9 @@ from typing import Any, cast
 ROOT = Path(__file__).resolve().parents[2]
 TIMING_SUITES = ("benchmark", "math")
 MAX_BYTES = 5 * 1024 * 1024
-MAX_ENTRIES = 20_000
+# Shards can retain the full prior baseline; the math suite exceeds 20,000
+# entries. Keep both entry and byte bounds for shards and the merged history.
+MAX_ENTRIES = 50_000
 MAX_CANDIDATES = 5
 HTTP_TIMEOUT_SECONDS = 10
 MAX_TIMING_HISTORY_AGE = timedelta(days=30)
@@ -293,9 +295,12 @@ def merge(
         raise ValueError(f"expected {count} shard timing files, received {len(inputs)}")
     merged: dict[str, float] = {}
     for path in inputs:
-        payload = load_json_bytes(path.read_bytes(), str(path))
+        with path.open("rb") as stream:
+            payload = load_json_bytes(stream.read(MAX_BYTES + 1), str(path))
         durations = validate_durations(payload, str(path), suite)
         duplicates = merged.keys() & durations.keys()
+        if len(merged) + len(durations) - len(duplicates) > MAX_ENTRIES:
+            raise ValueError(f"{output} exceeds {MAX_ENTRIES} timing entries")
         for nodeid in sorted(duplicates):
             previous = merged[nodeid]
             incoming = durations[nodeid]
@@ -317,8 +322,11 @@ def merge(
         "pytest_split_version": pytest_split_version,
         "durations": dict(sorted(merged.items())),
     }
+    encoded = (json.dumps(envelope, indent=2) + "\n").encode("utf-8")
+    if len(encoded) > MAX_BYTES:
+        raise ValueError(f"{output} exceeds {MAX_BYTES} bytes")
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(envelope, indent=2) + "\n", encoding="utf-8")
+    output.write_bytes(encoded)
 
 
 def main() -> None:

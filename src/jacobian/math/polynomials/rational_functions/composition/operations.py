@@ -497,18 +497,79 @@ def _constant_fraction(value: RationalFunction) -> Fraction:
     return value.numerator.terms[0].coefficient.as_fraction()
 
 
-def _constant_substitute_polynomial(
+def _constant_substitution_bits(
     polynomial: SparseRationalPolynomial,
     values: tuple[Fraction, ...],
     ledger: _Ledger,
+) -> int:
+    """Admit scalar widths before expansion, retaining both fraction parts.
+
+    Products add numerator and denominator bit bounds separately. Addition
+    cross-multiplies both numerators before adding and multiplies the
+    denominators; reduction can only decrease these bounds. Charge powers as
+    repeated full-width products, covering Fraction's binary powering.
+    """
+    result_numerator_bits = 0
+    result_denominator_bits = 1
+    for term in polynomial.terms:
+        if any(
+            not value and exponent
+            for value, exponent in zip(values, term.exponents, strict=True)
+        ):
+            continue
+        coefficient = term.coefficient.as_fraction()
+        numerator_bits = coefficient.numerator.bit_length()
+        denominator_bits = coefficient.denominator.bit_length()
+        for value, exponent in zip(values, term.exponents, strict=True):
+            if not exponent or abs(value) == 1:
+                continue
+            power_numerator_bits = exponent * value.numerator.bit_length()
+            power_denominator_bits = exponent * value.denominator.bit_length()
+            numerator_bits += power_numerator_bits
+            denominator_bits += power_denominator_bits
+            ledger.charge(
+                "multiplication",
+                exponent * (power_numerator_bits + power_denominator_bits)
+                + numerator_bits
+                + denominator_bits,
+            )
+        if result_numerator_bits:
+            result_numerator_bits = (
+                max(
+                    result_numerator_bits + denominator_bits,
+                    numerator_bits + result_denominator_bits,
+                )
+                + 1
+            )
+            result_denominator_bits += denominator_bits
+        else:
+            result_numerator_bits = numerator_bits
+            result_denominator_bits = denominator_bits
+        result_bits = result_numerator_bits + result_denominator_bits
+        if result_bits > MAX_COMPOSITION_BITS:
+            _reject(
+                "allocation",
+                "constant substitution exceeds its intermediate coefficient-bit bound",
+            )
+        ledger.charge("addition", result_bits)
+    return result_numerator_bits + result_denominator_bits
+
+
+def _constant_substitute_polynomial(
+    polynomial: SparseRationalPolynomial,
+    values: tuple[Fraction, ...],
 ) -> Fraction:
     result = Fraction(0)
     for term in polynomial.terms:
+        if any(
+            not value and exponent
+            for value, exponent in zip(values, term.exponents, strict=True)
+        ):
+            continue
         coefficient = term.coefficient.as_fraction()
         for value, exponent in zip(values, term.exponents, strict=True):
-            ledger.charge("multiplication", exponent + 1)
             coefficient *= value**exponent
-        ledger.charge("addition", 1)
+        request_checkpoint("during admitted constant substitution")
         result += coefficient
     return result
 
@@ -526,11 +587,22 @@ def _constant_map_composition(
     guards: tuple[RationalPolynomial, ...] = ()
     composites: list[RationalFunction] = []
     for outer_component in outer.components:
-        numerator = _constant_substitute_polynomial(
+        numerator_bits = _constant_substitution_bits(
             outer_component.numerator, values, ledger
         )
-        denominator = _constant_substitute_polynomial(
+        denominator_bits = _constant_substitution_bits(
             outer_component.denominator, values, ledger
+        )
+        quotient_bits = numerator_bits + denominator_bits
+        if quotient_bits > MAX_COMPOSITION_BITS:
+            _reject(
+                "allocation",
+                "constant quotient exceeds its intermediate coefficient-bit bound",
+            )
+        ledger.charge("normalization", quotient_bits)
+        numerator = _constant_substitute_polynomial(outer_component.numerator, values)
+        denominator = _constant_substitute_polynomial(
+            outer_component.denominator, values
         )
         if denominator == 0:
             raise OperationDomainValidationError(
@@ -539,15 +611,13 @@ def _constant_map_composition(
                 message="an outer denominator vanishes identically after substitution",
             )
         result_value = numerator / denominator
-        result_digits = max(
-            len(str(abs(result_value.numerator))), len(str(result_value.denominator))
-        )
-        if result_digits > 128:
+        # Compare bounded integers directly; decimal conversion itself can
+        # exceed Python's host digit ceiling before the typed refusal.
+        if max(abs(result_value.numerator), result_value.denominator) >= 10**128:
             _reject(
                 "result_height",
                 "constant composite exceeds the 128-digit canonical coefficient bound",
             )
-        ledger.charge("normalization", result_digits)
         allocation.charge(1, _bits_for_fraction(result_value))
         composites.append(
             RationalFunction._from_kernel(

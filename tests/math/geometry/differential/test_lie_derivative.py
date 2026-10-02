@@ -19,11 +19,15 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential import (
     RationalCoordinateTensor,
     RationalLieDerivativeProfile,
     lie_derivative,
+    verify_lie_derivative,
 )
 from jacobian.math.geometry.differential import _bounds as lie_bounds
 from jacobian.math.geometry.differential import _sympy as lie_backend
@@ -501,6 +505,7 @@ def test_rejects_axis_mismatch_and_nonvector_signature_at_domain_admission() -> 
         match="same ordered coordinate axis",
     ) as mismatch:
         lie_derivative(contravariant_x, scalar_y)
+    assert type(mismatch.value) is OperationDomainValidationError
     assert mismatch.value.errors()[0]["type"].endswith("coordinate_axis_mismatch")
 
     with pytest.raises(
@@ -508,6 +513,7 @@ def test_rejects_axis_mismatch_and_nonvector_signature_at_domain_admission() -> 
         match="rank one and CONTRAVARIANT",
     ) as signature:
         lie_derivative(covariant_x, scalar_x)
+    assert type(signature.value) is OperationDomainValidationError
     assert signature.value.errors()[0]["type"].endswith("vector_signature")
 
 
@@ -957,7 +963,7 @@ def test_source_conversion_is_precharged_before_content_arithmetic(
         rational_bounds, "_polynomial_bound", forbidden_content_arithmetic
     )
 
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         build_lie_derivative_plan(vector, scalar)
 
     assert error.value.errors()[0]["type"].endswith("work_budget")
@@ -991,7 +997,7 @@ def test_intermediate_support_is_rejected_before_coprimality_recognition(
         forbidden_recognition,
     )
 
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         lie_derivative(vector, scalar)
     assert error.value.errors()[0]["type"].endswith("intermediate_support")
 
@@ -1025,7 +1031,7 @@ def test_work_budget_rejection_precedes_coprimality_recognition(
     )
     monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", 1)
 
-    with pytest.raises(OperationDomainValidationError, match="work budget") as error:
+    with pytest.raises(OperationResourceAdmissionError, match="work budget") as error:
         lie_derivative(vector, tensor)
 
     assert error.value.errors()[0]["type"].endswith("work_budget")
@@ -1067,7 +1073,7 @@ def test_locus_guard_rejection_precedes_coprimality_recognition(
         forbidden_recognition,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="guard representation"):
+    with pytest.raises(OperationResourceAdmissionError, match="guard representation"):
         lie_derivative(vector, scalar)
 
 
@@ -1159,7 +1165,7 @@ def test_cancellation_support_growth_is_rejected_before_conversion() -> None:
         ),
     )
     scalar = _tensor(axis, (), (rational_function_from_sympy(x + y, axis),))
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         lie_derivative(vector, scalar)
     assert error.value.errors()[0]["type"].endswith("result_support")
 
@@ -1205,7 +1211,7 @@ def test_result_exponent_admission_has_an_accepted_and_rejected_edge() -> None:
         guards=(power_guard(64),),
     )
     with pytest.raises(
-        OperationDomainValidationError,
+        OperationResourceAdmissionError,
         match="exponent bound 64",
     ) as error:
         lie_derivative(rejected_vector, rejected_scalar)
@@ -1240,8 +1246,6 @@ def test_profile_rejects_a_forged_result_that_drops_an_inherited_guard() -> None
 
 def test_polynomial_cancellation_support_growth_is_rejected_before_conversion() -> None:
     """Division can increase support; admission must not min against raw terms."""
-
-    from jacobian.catalog.models import OperationDomainValidationError
 
     variables = ("x", "y", "z")
     denominator = (
@@ -1283,6 +1287,81 @@ def test_polynomial_cancellation_support_growth_is_rejected_before_conversion() 
         (),
         (_function(variables, (1, (1, 0, 0)), (1, (0, 1, 0))),),
     )
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         lie_derivative(vector, scalar)
     assert error.value.errors()[0]["type"].endswith("result_support")
+
+
+def test_verifier_preserves_real_resource_refusal() -> None:
+    # A dense self-bracket is identically zero, independently of replay. Its
+    # intermediate support exceeds admission even if monomial cancellation
+    # gains a cheaper path in the future.
+    axis = ("x", "y")
+    value = _function(
+        axis,
+        *(
+            (1, exponents)
+            for exponents in sorted(product(range(0, 64, 4), repeat=2), reverse=True)
+        ),
+    )
+    vector = _tensor(axis, ("CONTRAVARIANT",), (value, _zero(axis)))
+    zero = _tensor(axis, ("CONTRAVARIANT",), (_zero(axis), _zero(axis)))
+    claim = RationalLieDerivativeProfile.model_validate_json(
+        RationalLieDerivativeProfile(
+            vector_field=vector, source=vector, lie_derivative=zero
+        ).model_dump_json()
+    )
+    with pytest.raises(OperationResourceAdmissionError) as producer:
+        lie_derivative(vector, vector)
+    with pytest.raises(OperationResourceAdmissionError) as verifier:
+        verify_lie_derivative(claim)
+    assert producer.value.errors() == verifier.value.errors()
+    assert producer.value.errors()[0]["type"].endswith("intermediate_support")
+
+
+def test_verifier_at_exact_work_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    axis = ("x",)
+    vector = _tensor(axis, ("CONTRAVARIANT",), (_function(axis, (1, (32,))),))
+    zero = _tensor(axis, ("CONTRAVARIANT",), (_zero(axis),))
+    # [X, X] = X X' - X X' = 0; the oracle does not call the producer.
+    claim = RationalLieDerivativeProfile.model_validate_json(
+        RationalLieDerivativeProfile(
+            vector_field=vector, source=vector, lie_derivative=zero
+        ).model_dump_json()
+    )
+    plan = build_lie_derivative_plan(vector, vector)
+    monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", plan.work_units)
+    assert verify_lie_derivative(claim) is True
+    forged = RationalLieDerivativeProfile.model_validate_json(
+        claim.model_copy(
+            update={
+                "lie_derivative": _tensor(
+                    axis, ("CONTRAVARIANT",), (_function(axis, (1, (0,))),)
+                )
+            }
+        ).model_dump_json()
+    )
+    assert verify_lie_derivative(forged) is False
+    monkeypatch.setattr(
+        lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", plan.work_units - 1
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work budget"):
+        verify_lie_derivative(claim)
+
+
+def test_verifier_rejects_noncanonical_source() -> None:
+    axis = ("x",)
+    value = _function(axis, (1, (2,)), (-1, (0,)), denominator=((1, (1,)), (-1, (0,))))
+    guards = (_guard((1, (1,)), (-1, (0,))),)
+    vector = _tensor(axis, ("CONTRAVARIANT",), (value,), guards=guards)
+    zero = _tensor(axis, ("CONTRAVARIANT",), (_zero(axis),), guards=guards)
+    claim = RationalLieDerivativeProfile.model_validate_json(
+        RationalLieDerivativeProfile(
+            vector_field=vector, source=vector, lie_derivative=zero
+        ).model_dump_json()
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        lie_derivative(vector, vector)
+    assert type(error.value) is OperationDomainValidationError
+    assert error.value.errors()[0]["type"].endswith("component_not_canonical")
+    assert verify_lie_derivative(claim) is False

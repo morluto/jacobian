@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Literal, NoReturn
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential._execution import (
     begin_lie_derivative_deadline,
     require_lie_derivative_deadline,
@@ -100,7 +103,7 @@ class _Ledger:
             result_terms=MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
             result_digits=MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
             label="Lie-derivative",
-            reject=_reject,
+            reject=_reject_resource,
         )
         self.work_units = 0
         self._by_category: dict[LieWorkCategory, int] = dict.fromkeys(
@@ -116,7 +119,7 @@ class _Ledger:
         self.work_units += amount
         self._by_category[category] += amount
         if self.work_units > MAX_LIE_DERIVATIVE_WORK_UNITS:
-            _reject(
+            _reject_resource(
                 "work_budget",
                 "Lie-derivative exact arithmetic exceeds the "
                 f"{MAX_LIE_DERIVATIVE_WORK_UNITS}-unit work budget",
@@ -129,7 +132,7 @@ class _Ledger:
         )
 
 
-def _reject(
+def _reject_domain(
     reason: str,
     message: str,
     *,
@@ -137,6 +140,16 @@ def _reject(
 ) -> NoReturn:
     raise OperationDomainValidationError(
         location=location,
+        code=f"differential_geometry.lie_derivative.{reason}",
+        message=message,
+    )
+
+
+def _reject_resource(reason: str, message: str) -> NoReturn:
+    """Keep operational non-completion distinct from an invalid relation."""
+
+    raise OperationResourceAdmissionError(
+        location=(),
         code=f"differential_geometry.lie_derivative.{reason}",
         message=message,
     )
@@ -167,13 +180,13 @@ def build_lie_derivative_plan(
         deadline = begin_lie_derivative_deadline()
 
     if vector_field.coordinate_axis != tensor.coordinate_axis:
-        _reject(
+        _reject_domain(
             "coordinate_axis_mismatch",
             "vector field and tensor must use the same ordered coordinate axis",
             location=("vector_field", "coordinate_axis"),
         )
     if vector_field.variance != ("CONTRAVARIANT",):
-        _reject(
+        _reject_domain(
             "vector_signature",
             "vector field must have rank one and CONTRAVARIANT variance",
             location=("vector_field", "variance"),
@@ -185,7 +198,7 @@ def build_lie_derivative_plan(
         variable_count=dimension,
     )
     if len(inherited_guards) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
-        _reject(
+        _reject_resource(
             "result_locus_guards",
             "Lie-derivative retained locus exceeds the "
             f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
@@ -282,7 +295,7 @@ def build_lie_derivative_plan(
         len(inherited_guards) + possible_result_guards
         > MAX_RATIONAL_TENSOR_LOCUS_GUARDS
     ):
-        _reject(
+        _reject_resource(
             "result_locus_guards",
             "Lie-derivative retained locus can exceed the "
             f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
@@ -308,7 +321,7 @@ def build_lie_derivative_plan(
     )
     if recognition.non_coprime is not None:
         failure = recognition.non_coprime
-        _reject(
+        _reject_domain(
             "component_not_canonical",
             f"{failure.owner} components must have coprime canonical rational-function parts",
             location=(failure.owner, "components", failure.component),

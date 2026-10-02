@@ -224,7 +224,18 @@ class PolynomialFactorizationResult(StrictModel):
 
     polynomial: RationalPolynomial
     coefficient: CanonicalRational
-    factors: tuple[PolynomialIrreducibleFactor, ...] = Field(max_length=64)
+    # Every distinct nonconstant factor consumes at least one source degree.
+    # For admitted degree n, the kernel retains at most n records and 2*n
+    # factor terms; source and reconstruction add at most 2*(n+1) terms.
+    # Scalar/exponent bounds remain owned by each canonical polynomial value.
+    factors: tuple[PolynomialIrreducibleFactor, ...] = Field(
+        max_length=_MAX_GCD_DEGREE,
+        description=(
+            "Complete monic irreducible-factor records, at most the admitted "
+            "source degree (500). Ordered by multiplicity, degree, and exact "
+            "integer-component sparse fingerprint."
+        ),
+    )
     reconstructed: RationalPolynomial
     normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
         "CONTENT_AND_MONIC_IRREDUCIBLES"

@@ -153,3 +153,73 @@ def test_factorization_verifier_rejects_changed_source_or_reconstruction(
         forged.model_dump_json()
     )
     assert not verify_polynomial_factorization(decoded)
+
+
+def _root_product(count: int) -> Coefficients:
+    """Expand product(x-r), r=1..count by integer convolution."""
+    coefficients = [1]
+    for root in range(1, count + 1):
+        expanded = [0] * (len(coefficients) + 1)
+        for degree, value in enumerate(coefficients):
+            expanded[degree] -= root * value
+            expanded[degree + 1] += value
+        coefficients = expanded
+    return tuple(coefficients)
+
+
+@pytest.mark.parametrize("count", (64, 65, 128))
+def test_complete_factor_records_round_trip_beyond_the_old_count_limit(
+    count: int,
+) -> None:
+    source = _polynomial(_root_product(count))
+    result = polynomial_factorization(source)
+    assert len(result.factors) == count
+    assert result.coefficient.as_fraction() == 1
+    assert tuple(record.factor for record in result.factors) == tuple(
+        _polynomial((-root, 1)) for root in range(count, 0, -1)
+    )
+    assert all(record.multiplicity == 1 for record in result.factors)
+    assert _rebuild_product(result) == _coefficients(source)
+    assert result.reconstructed == source
+    assert PolynomialFactorizationResult.model_validate(result.model_dump()) == result
+    decoded = PolynomialFactorizationResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert decoded == result
+    assert verify_polynomial_factorization(decoded)
+
+
+def test_factor_record_count_and_multiplicity_have_distinct_degree_bounds() -> None:
+    source = _polynomial((0,) * 500 + (1,))
+    result = polynomial_factorization(source)
+    assert len(result.factors) == 1
+    assert result.factors[0].multiplicity == 500
+    assert result.factors[0].factor == _polynomial((0, 1))
+    assert _rebuild_product(result) == _coefficients(source)
+    assert (
+        PolynomialFactorizationResult.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_factor_height_may_exceed_source_height_without_losing_canonical_output() -> (
+    None
+):
+    p, q = 10**255, 10**255 + 1
+    source = _polynomial((q, Fraction(1, p)))
+    result = polynomial_factorization(source)
+    assert result.coefficient.as_fraction() == Fraction(1, p)
+    assert result.factors[0].factor == _polynomial((p * q, 1))
+    assert _rebuild_product(result) == _coefficients(source)
+    assert (
+        PolynomialFactorizationResult.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_factor_decoder_keeps_the_admitted_degree_count_limit() -> None:
+    result = polynomial_factorization(_polynomial((0, 1)))
+    oversized = result.model_copy(update={"factors": result.factors * 501})
+    with pytest.raises(ValidationError) as error:
+        PolynomialFactorizationResult.model_validate_json(oversized.model_dump_json())
+    assert error.value.errors()[0]["type"] == "too_long"

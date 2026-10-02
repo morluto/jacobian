@@ -2,6 +2,7 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.canonical_forms._models import (
+    CentralizerRequest,
     CentralizerResult,
     InvariantFactorProfileResult,
     MatrixPolynomialEvaluationRequest,
@@ -124,7 +125,7 @@ def _run_similarity(request: SimilarityRequest) -> SimilarityResult:
     return decide_similarity(request.left, request.right)
 
 
-def _run_centralizer(request: SquareMatrixRequest) -> CentralizerResult:
+def _run_centralizer(request: CentralizerRequest) -> CentralizerResult:
     return centralizer_basis(request.matrix)
 
 
@@ -369,7 +370,7 @@ TOOLS: MathTools = (
         title="Compute an exact centralizer basis",
         description="Return a complete exact basis of the centralizer {X : AX = XA}. "
         "The identity lies in the span of the returned basis but need not be a basis member.",
-        request_type=SquareMatrixRequest,
+        request_type=CentralizerRequest,
         result_type=CentralizerResult,
         run=_run_centralizer,
         tags=("matrix", "centralizer", "exact", "complete"),

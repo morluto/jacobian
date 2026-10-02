@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from fractions import Fraction
+from itertools import islice, product
+from math import prod
 
 import pytest
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.polynomials._elementary_kernel import rational_polynomial_evaluate
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     CompositionResult,
@@ -46,7 +50,7 @@ def _compose(request: CompositionRequest) -> CompositionResult:
 
 def _polynomial(
     variables: tuple[str, ...],
-    terms: dict[tuple[int, ...], int | Fraction],
+    terms: Mapping[tuple[int, ...], int | Fraction],
 ) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
@@ -99,6 +103,116 @@ def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> 
     )
     with pytest.raises(OperationDomainValidationError):
         _evaluate(request)
+
+
+@pytest.mark.parametrize("degree", (64, 65, 127))
+@pytest.mark.parametrize("name", ("x", "t"))
+@pytest.mark.parametrize("coordinate", (Fraction(0), Fraction(-2), Fraction(2, 3)))
+def test_unified_evaluation_retains_univariate_envelope(
+    degree: int, name: str, coordinate: Fraction
+) -> None:
+    source = _polynomial((name,), {(degree,): Fraction(-3, 7), (0,): Fraction(2, 5)})
+    scalar = CanonicalRational.from_fraction(coordinate)
+    point = VariablePoint(variables=(name,), values=(scalar,))
+    result = evaluate_polynomial(source, point)
+    assert result.value.as_fraction() == Fraction(
+        -3, 7
+    ) * coordinate**degree + Fraction(2, 5)
+    assert result.value == rational_polynomial_evaluate(source, scalar).value
+    decoded = EvalResult.model_validate_json(result.model_dump_json(), strict=True)
+    assert decoded == result
+    identity = _polynomial((name,), {(1,): 1})
+    assert (
+        evaluate_polynomial(
+            identity, VariablePoint(variables=(name,), values=(decoded.value,))
+        )
+        == result
+    )
+
+
+def test_unified_evaluation_preserves_dense_and_high_coefficient_scalar_cases() -> None:
+    source = _polynomial(("t",), {(degree,): 10**255 for degree in range(128)})
+    point = VariablePoint(variables=("t",), values=(CanonicalRational(num=1, den=1),))
+    assert evaluate_polynomial(source, point).value.num == 128 * 10**255
+
+
+@pytest.mark.parametrize("variables", (("t",), ("y", "x"), tuple("abcdefgh")))
+def test_unified_evaluation_preserves_zero_and_multivariate_fraction_oracle(
+    variables: tuple[str, ...],
+) -> None:
+    values = tuple(Fraction(index - 2, index + 1) for index in range(len(variables)))
+    point = VariablePoint(
+        variables=variables,
+        values=tuple(CanonicalRational.from_fraction(value) for value in values),
+    )
+    assert evaluate_polynomial(_polynomial(variables, {}), point).value.num == 0
+    support = tuple(islice(product(range(3), repeat=len(variables)), 9))
+    terms = {key: Fraction(index + 1, index + 2) for index, key in enumerate(support)}
+    source = _polynomial(variables, terms)
+    expected = sum(
+        (
+            coefficient
+            * prod(value**exponent for value, exponent in zip(values, key, strict=True))
+            for key, coefficient in terms.items()
+        ),
+        Fraction(),
+    )
+    assert evaluate_polynomial(source, point).value.as_fraction() == expected
+
+
+def test_unified_evaluation_preserves_multivariate_source_term_boundary() -> None:
+    terms = dict.fromkeys(islice(product(range(20), repeat=2), 256), 1)
+    source = _polynomial(("x", "y"), terms)
+    coordinates = (Fraction(1, 2), Fraction(-2, 3))
+    point = VariablePoint(
+        variables=source.variables,
+        values=tuple(CanonicalRational.from_fraction(value) for value in coordinates),
+    )
+    expected = sum(
+        (coordinates[0] ** left * coordinates[1] ** right for left, right in terms),
+        Fraction(),
+    )
+    assert evaluate_polynomial(source, point).value.as_fraction() == expected
+
+
+@pytest.mark.parametrize(
+    ("variables", "terms"),
+    [
+        (("x",), {(128,): 1}),
+        (("x",), {(1,): 10**256}),
+        (("x", "y"), {(64, 1): 1}),
+        (("x", "y"), {(1, 0): 10**128}),
+        (("x", "y"), dict.fromkeys(islice(product(range(20), repeat=2), 257), 1)),
+    ],
+)
+def test_unified_evaluation_preserves_source_regime_boundaries(
+    variables: tuple[str, ...], terms: dict[tuple[int, ...], int]
+) -> None:
+    source = _polynomial(variables, terms)
+    point = VariablePoint(
+        variables=variables, values=(CanonicalRational(num=0, den=1),) * len(variables)
+    )
+    with pytest.raises(OperationDomainValidationError):
+        evaluate_polynomial(source, point)
+
+
+@pytest.mark.parametrize(
+    ("variables", "point_variables"),
+    [(("t",), ("x",)), (("x", "y"), ("y", "x"))],
+)
+def test_unified_evaluation_validates_full_axis_before_routing(
+    variables: tuple[str, ...], point_variables: tuple[str, ...]
+) -> None:
+    source = _polynomial(variables, {})
+    point = VariablePoint(
+        variables=point_variables,
+        values=(CanonicalRational(num=1, den=1),) * len(point_variables),
+    )
+    with pytest.raises(OperationDomainValidationError, match="complete ordered axis"):
+        evaluate_polynomial(source, point)
+    short_point = point.model_copy(update={"variables": variables, "values": ()})
+    with pytest.raises(OperationDomainValidationError, match="complete ordered axis"):
+        evaluate_polynomial(source, short_point)
 
 
 def test_jacobian_entries_are_directly_composable_polynomials() -> None:

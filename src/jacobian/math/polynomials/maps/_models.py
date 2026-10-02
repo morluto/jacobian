@@ -69,8 +69,22 @@ class VariablePoint(StrictModel):
 class EvalRequest(StrictModel):
     """Evaluate one canonical rational polynomial at a complete rational point."""
 
-    polynomial: RationalPolynomial
-    point: VariablePoint
+    polynomial: RationalPolynomial = Field(
+        description=(
+            "Canonical QQ polynomial on the complete ordered point axis. "
+            "One variable: degree at most 127 and coefficient components at most "
+            "256 digits (at most 128 distinct terms). Two to eight variables: "
+            "at most 256 terms, total degree at most 64, and coefficient "
+            "components at most 128 digits. Exact evaluation must satisfy the "
+            "source-derived 32,768-digit rational result-component bound."
+        )
+    )
+    point: VariablePoint = Field(
+        description=(
+            "Exact rational values with variables identical to the polynomial's "
+            "complete ordered axis, including renamed axes and zero polynomials."
+        )
+    )
 
 
 class EvalResult(StrictModel):

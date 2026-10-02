@@ -121,6 +121,17 @@ the retained `hypergraph.vertices` order to build `witness.assignments` as
 `(1, 0)` become assignments `(("a", 1), ("b", 0))`. Preserve the hypergraph and
 palette size. For `NOT_COLORABLE`, omit `witness`.
 
+Replace `polynomial.rational.compute.evaluate` with `polynomial.map.evaluate`.
+The canonical `QQ` polynomial is unchanged. Wrap the former scalar `point` in
+`{"variables": ["x"], "values": [point]}`, using the polynomial's actual declared
+variable name in place of `x`. The result is `{"value": ...}`; it no longer echoes
+the point. Ordered axes remain explicit for renamed variables and zero
+polynomials. The unified operation preserves degree-127 univariate evaluation
+and the existing two-to-eight-variable regime (256 terms, total degree 64),
+subject to its source/coefficient and exact-result bounds. The native
+`rational_polynomial_evaluate` helper remains available without a second
+catalog declaration.
+
 ## Optional backend availability
 
 Operation declarations, matches, and browse cards include `runtime_requirements`.

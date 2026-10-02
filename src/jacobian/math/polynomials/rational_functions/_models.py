@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -74,9 +75,15 @@ def require_hermite_reduction_budget(function: RationalFunction) -> None:
         _require_rational_function_structural_normal_form(function)
         # The canonical unit denominator makes coprimality immediate. Each
         # primitive coefficient divides a source coefficient by its new degree;
-        # its numerator cannot grow and this unreduced denominator is a bound.
+        # its numerator cannot grow. Since a/b is reduced, division by k gives
+        # reduced denominator b * (k / gcd(a, k)). Price that exact denominator
+        # before integration rather than rejecting cancellable growth.
         if any(
-            term.coefficient.den * (term.exponents[0] + 1)
+            term.coefficient.den
+            * (
+                (term.exponents[0] + 1)
+                // gcd(term.coefficient.num, term.exponents[0] + 1)
+            )
             >= 10**MAX_HERMITE_RESULT_COEFFICIENT_DIGITS
             for term in function.numerator.terms
         ):

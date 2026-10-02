@@ -53,17 +53,23 @@ def _admit(f: RationalFunction) -> None:
 def logarithmic_differential(
     function: RationalFunction,
 ) -> LogarithmicDifferentialResult:
-    from .operations import hermite_reduction, partial_fractions
+    from .operations import partial_fractions
 
     _admit(function)
-    _, remainder = hermite_reduction(function)
+    # Use the original admitted source. Its profile already establishes that
+    # the simple-pole part equals H; derived coefficients need not satisfy the
+    # unrelated source-height cap a second time. Under the admitted denominator
+    # degree <= 3, every repeated irreducible factor is linear, and each higher
+    # linear-pole power is a rational derivative. This identity does not extend
+    # to unrestricted repeated nonlinear factors.
+    profile = partial_fractions(function)
+    remainder = profile.hermite_remainder
     if not remainder.numerator.terms:
         return LogarithmicDifferentialResult(
             source=function,
             terms=(),
             reconstructed=rational_function_from_sympy(0, function.variables),
         )
-    profile = partial_fractions(remainder)
     terms = tuple(
         LogarithmicDifferentialTerm(factor=t.factor, numerator=t.numerator)
         for t in profile.terms
@@ -92,7 +98,10 @@ def formal_antiderivative(
     from .operations import hermite_reduction
 
     rational_part, remainder = hermite_reduction(function)
-    log_part = logarithmic_differential(remainder)
+    # The nested logarithmic source has always been H, including zero.
+    log_part = logarithmic_differential(
+        function if remainder.numerator.terms else remainder
+    )
     return FormalAntiderivativeResult(
         source=function, rational_part=rational_part, logarithmic_part=log_part
     )

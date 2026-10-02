@@ -133,6 +133,25 @@ def _hermite_reduction_admitted(
     )
 
 
+def _hermite_remainder_admitted(function: RationalFunction) -> RationalFunction:
+    """Return only H after partial-fraction admission, without a discarded R.
+
+    Every admitted polynomial has a polynomial primitive in characteristic
+    zero, so its proper Hermite remainder is zero regardless of whether that
+    unused primitive fits the primitive-producing operation's output carrier.
+    Nonpolynomial sources retain the full Hermite admission and kernel.
+    """
+
+    if all(not any(term.exponents) for term in function.denominator.terms):
+        return RationalFunction(
+            variables=function.variables,
+            numerator=SparseRationalPolynomial(),
+            denominator=function.denominator,
+        )
+    _, remainder = hermite_reduction(function)
+    return remainder
+
+
 def verify_hermite_reduction(claim: HermiteReductionResult) -> bool:
     """Verify the canonical Hermite decomposition against its source function."""
     try:
@@ -217,7 +236,7 @@ def _partial_fractions_admitted(function: RationalFunction) -> PartialFractionsR
     if reconstructed != function:
         raise RuntimeError("partial-fraction replay did not reconstruct the source")
 
-    _, hermite_remainder = hermite_reduction(function)
+    hermite_remainder = _hermite_remainder_admitted(function)
     simple_pole_part = _sum_partial_fraction_terms(
         tuple(term for term in terms if term.exponent == 1), variables
     )

@@ -26,7 +26,8 @@ _MAX_GCD_DEGREE = 500
 _MAX_ELIMINATION_DEGREE_SUM = 128
 _MAX_DISCRIMINANT_DEGREE = 64
 _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM = 1_024
-_MAX_SQUARE_FREE_EXPONENT = 64
+_MAX_SQUARE_FREE_GENERAL_EXPONENT = 64
+_MAX_SQUARE_FREE_MULTIPLICITY = 64
 _MAX_ELEMENTARY_DEGREE = 127
 _MAX_INTEGER_COEFFICIENT_DIGITS = 256
 _MAX_GROEBNER_EXPONENT = 12
@@ -124,12 +125,20 @@ class PolynomialDiscriminantResult(StrictModel):
 
 
 class PolynomialSquareFreeRequest(StrictModel):
-    polynomial: RationalPolynomial
+    polynomial: RationalPolynomial = Field(
+        description=(
+            "QQ polynomial with at most 1024 terms and 256-digit coefficient "
+            "components. General sources retain the exponent-64 envelope. "
+            "Univariate binomials a*x^n+b with nonzero a and b admit every "
+            "canonical exponent n (up to 32768) by degree-one reduction. "
+            "Returned factor multiplicities remain at most 64."
+        ),
+    )
 
 
 class PolynomialSquareFreeFactor(StrictModel):
     factor: RationalPolynomial
-    multiplicity: int = Field(ge=1, le=_MAX_SQUARE_FREE_EXPONENT)
+    multiplicity: int = Field(ge=1, le=_MAX_SQUARE_FREE_MULTIPLICITY)
 
 
 class PolynomialSquareFreeDecompositionResult(StrictModel):

@@ -12,6 +12,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._integer_input import IntegerInputEncoding
 from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
 
 MAX_VALUATION_ARGUMENT_DIGITS = 4_096
@@ -22,7 +23,17 @@ MAX_LEGENDRE_PRIME = MAX_SAFE_INTEGER
 
 
 class FloorSquareRootRequest(StrictModel):
-    n: StrictInt = Field(ge=0, le=MAX_SAFE_INTEGER)
+    n: Annotated[
+        int,
+        IntegerInputEncoding(
+            max_digits=len(str(MAX_SAFE_INTEGER)), minimum=0, maximum=MAX_SAFE_INTEGER
+        ),
+    ] = Field(
+        description=(
+            f"Integer n in [0, {MAX_SAFE_INTEGER}], as a canonical decimal string "
+            "or JSON integer."
+        )
+    )
 
 
 class FloorSquareRootResult(StrictModel):

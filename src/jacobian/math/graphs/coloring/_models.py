@@ -363,7 +363,6 @@ class PrecoloringEdgeRepairResult(StrictModel):
         ge=1,
         le=MAX_SOLVER_CONFLICT_BUDGET,
     )
-    status: Literal["OPTIMAL"]
     repaired_edge_count: int
     coloring: VertexColoringAssignment
     repaired_edge_indices: tuple[int, ...]

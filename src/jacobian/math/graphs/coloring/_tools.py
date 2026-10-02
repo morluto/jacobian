@@ -193,8 +193,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "fixed partial vertex colouring extends to a proper total "
             "k-colouring. The result carries one total extending colouring "
             "and exactly its monochromatic source edges; an empty fixed "
-            "sequence gives the chromatic edge-stability invariant. Uses a "
-            "bounded Z3 optimization with an explicit OPTIMAL outcome only."
+            "sequence gives the chromatic edge-stability invariant. Budget "
+            "exhaustion raises an operational error rather than returning an incumbent."
         ),
         request_type=PrecoloringEdgeRepairRequest,
         result_type=PrecoloringEdgeRepairResult,

@@ -293,6 +293,60 @@ Test both validation modes when changing nested preflight, not just a scalar
 round trip or a catalog example. Do not fix one mode by silently routing native
 construction through JSON.
 
+#### Opt-in owned-container projection
+
+`jacobian._models.project_owned_containers(value, cls)` is an opt-in finishing
+step for an owner's `mode="before"` validator. Retain the owner's admission
+checks, then return this projection. The initial pilot is
+`PartitionCheckRequest.preflight_raw_parts`; other validators retain their
+existing implementation and static regression checks.
+
+The helper projects only declared container fields. Nested `StrictModel`
+envelopes use their own fields; scalar leaves and native model instances stay
+opaque. Lists and tuples become tuples without changing the caller's input.
+Missing fields remain missing, so defaults and `model_fields_set` keep their
+normal meaning; present `None` is distinct from absence. It does not evaluate
+defaults or run validators to discover ownership.
+
+The supported schema grammar is deliberately bounded:
+
+- Closed, non-generic `StrictModel` envelopes, including recursive model fields
+- Ordinary scalar core types, fixed tuples, and homogeneous tuples with an
+  explicit `max_length`; nullable/default wrappers and scalar unions
+- `Annotated` constraints resolved by Pydantic, including its effective bound
+  ordering; string-literal discriminated unions of supported models
+- String aliases, alias generators, and string-only `AliasChoices`, using each
+  model's configured `validate_by_alias` / `validate_by_name` policy. The first
+  present alias wins even for `None`; unused aliases remain forbidden extras.
+
+The helper reads the completed core schema anew for each call, avoiding stale
+plans after `model_rebuild()`. It refuses unsupported schemas with a developer
+`TypeError` before reading input. These include `AliasPath` carriers, overlapping
+field aliases, generic models and non-model schema references (including
+recursive type aliases), mixed variadic tuples,
+untagged structured unions, callable discriminators, arbitrary containers, field
+validation transformations, and custom model schema hooks. It cannot observe
+per-call `model_validate(by_alias=..., by_name=...)` overrides: callers must use
+the model's configured policy. New owners with unsupported schemas need an
+explicitly tested adapter or an extension of this grammar before migration.
+
+Only exact builtin dictionaries with exact string keys, lists, and tuples are
+traversed. Tuple bounds and fixed arity are checked before element access or
+materialization. Projection is limited to 64 levels and 100,000 cells (the root
+plus declared field and tuple-element occurrences); repeated DAG references
+are charged for each output occurrence. Path cycles fail with a bounded
+`CanonicalizationError`. Schema compilation is separately bounded.
+
+Unknown keys are never dropped or recursively inspected. The first unknown or
+unused alias raises `extra_forbidden` at its nested location without retrieving
+its value. This early refusal intentionally does not aggregate other validation
+errors, and its error input is `None` rather than the unknown value. Missing or
+invalid union tags remain Pydantic's errors without branch traversal. Model
+preflights must preserve declared ownership; transformations they perform later,
+and any traversal of invalid scalar leaves by legacy validators, remain the
+owner's responsibility. This helper is a projection step, not validation or a
+general Pydantic interpreter.
+
 Publish request schemas with `mode="validation"` and result schemas with
 `mode="serialization"`; Pydantic documents these as
 [distinct schema modes](https://docs.pydantic.dev/latest/concepts/json_schema/#configuring-the-jsonschemamode).

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from jacobian._owned_containers import project_owned_containers
 from jacobian.canonical import CanonicalizationError
 
 _MAX_CONTAINER_DEPTH = 256
@@ -56,4 +57,4 @@ class StrictModel(BaseModel):
     )
 
 
-__all__ = ["StrictModel", "canonicalize_json_containers"]
+__all__ = ["StrictModel", "canonicalize_json_containers", "project_owned_containers"]

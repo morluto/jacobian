@@ -29,9 +29,10 @@ from jacobian.math.polynomials.values import (
 )
 
 R = CanonicalRational
+Term = tuple[int, tuple[int, ...]]
 
 
-def _poly_on_axis(variables, *terms):
+def _poly_on_axis(variables: tuple[str, ...], *terms: Term) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -46,11 +47,15 @@ def _poly_on_axis(variables, *terms):
     )
 
 
-def _poly(*terms):
+def _poly(*terms: Term) -> RationalPolynomial:
     return _poly_on_axis(("x", "y"), *terms)
 
 
-def _form(variables, degree, *components):
+def _form(
+    variables: tuple[str, ...],
+    degree: int,
+    *components: tuple[tuple[int, ...], RationalPolynomial],
+) -> PolynomialDifferentialForm:
     return PolynomialDifferentialForm(
         variables=variables,
         degree=degree,
@@ -61,7 +66,9 @@ def _form(variables, degree, *components):
     )
 
 
-def _coeff(form, indices=(0, 1)):
+def _coeff(
+    form: PolynomialDifferentialForm, indices: tuple[int, ...] = (0, 1)
+) -> dict[tuple[int, ...], Fraction]:
     component = next(c for c in form.components if c.indices == indices)
     return {
         term.exponents: term.coefficient.as_fraction()
@@ -69,7 +76,7 @@ def _coeff(form, indices=(0, 1)):
     }
 
 
-def _field(*components):
+def _field(*components: tuple[Term, ...]) -> PolynomialVectorField:
     return PolynomialVectorField(
         variables=("x", "y"),
         components=tuple(
@@ -213,3 +220,62 @@ def test_primitive_rejects_degree_zero() -> None:
         ),
     )
     assert affine_homotopy_primitive(scalar).outcome == "NOT_APPLICABLE"
+
+
+@pytest.mark.parametrize(
+    ("variables", "terms", "field_terms", "expected_terms"),
+    [
+        (("x",), ((1, (1,)),), (((1, (0,)),),), ((1, (0,)),)),
+        (("x",), ((7, (0,)),), (((1, (0,)),),), ()),
+        (("x",), (), (((1, (0,)),),), ()),
+        (("x",), ((1, (2,)),), ((),), ()),
+        # X = y partial_x - x partial_y; X(x^2 y) = 2xy^2 - x^3.
+        (
+            ("x", "y", "z"),
+            ((1, (2, 1, 0)),),
+            (((1, (0, 1, 0)),), ((-1, (1, 0, 0)),), ()),
+            ((-1, (3, 0, 0)), (2, (1, 2, 0))),
+        ),
+        ((), ((7, ()),), (), ()),
+        ((), (), (), ()),
+    ],
+)
+def test_scalar_lie_derivative_preserves_degree_and_axis(
+    variables: tuple[str, ...],
+    terms: tuple[Term, ...],
+    field_terms: tuple[tuple[Term, ...], ...],
+    expected_terms: tuple[Term, ...],
+) -> None:
+    form = (
+        _form(variables, 0, ((), _poly_on_axis(variables, *terms)))
+        if terms
+        else _form(variables, 0)
+    )
+    field = PolynomialVectorField(
+        variables=variables,
+        components=tuple(_poly_on_axis(variables, *terms) for terms in field_terms),
+    )
+    expected = (
+        _form(variables, 0, ((), _poly_on_axis(variables, *expected_terms)))
+        if expected_terms
+        else _form(variables, 0)
+    )
+    assert lie_derivative(field, form) == expected
+    # Standalone scalar contraction retains the public degree-zero convention.
+    assert interior_product(field, form) == _form(variables, 0)
+
+
+def test_lie_derivative_top_form_includes_field_derivatives() -> None:
+    # Dilation has divergence 2, so L_X(dx wedge dy) = 2 dx wedge dy.
+    field = _field(((1, (1, 0)),), ((1, (0, 1)),))
+    form = _form(("x", "y"), 2, ((0, 1), _poly((1, (0, 0)))))
+    assert lie_derivative(field, form) == _form(
+        ("x", "y"), 2, ((0, 1), _poly((2, (0, 0))))
+    )
+
+
+def test_scalar_lie_derivative_still_rejects_field_axis_mismatch() -> None:
+    field = _field((), ())
+    with pytest.raises(OperationDomainValidationError) as exc:
+        lie_derivative(field, _form(("x",), 0))
+    assert exc.value.errors()[0]["type"] == "differential_form.field_axis"

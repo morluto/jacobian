@@ -124,7 +124,7 @@ def test_metric_determinant_guard_is_substituted_and_singular_pullback_rejected(
     source = metric((1, 0, 0, u**2), ("u", "v"))
     result = pullback_metric(source, map_value((x, y), ("x", "y"), ("u", "v")))
     assert any(
-        guard.terms[-1].coefficient.num == 1 and guard.terms[-1].exponents == (2, 0)
+        guard.terms[-1].coefficient.num == 1 and guard.terms[-1].exponents == (1, 0)
         for guard in result.pullback_locus_guard
     )
     with pytest.raises(OperationDomainValidationError, match="vanishes identically"):

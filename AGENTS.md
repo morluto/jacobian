@@ -76,6 +76,19 @@ ownership across the execution path, and useful accepted boundaries. The
 owning lanes. Use real mathematical behavior, not fakes or source-text assertions,
 for correctness. Reproduce a reported backend or admission defect before repair.
 
+## Test execution
+
+Use `make test-focused LANE=... TESTS=...` or
+`make handoff-scoped LANE=... TESTS=... PATHS="..."` during owner edits, then
+`make affected AFFECTED_BASE=origin/main` on the final tree. Do not reconstruct
+owner-wide or broad `pytest -n N` commands. Before a broad math run, choose
+`MATH_WORKERS` deliberately for available memory and concurrent solver work;
+use `MATH_WORKERS=1` or `MATH_WORKERS=0` when capacity is uncertain. The
+[math worker policy](docs/reference/testing-strategy.md#math-workers-and-host-budget)
+defines supported controls and the
+[validation leases](docs/reference/testing-strategy.md#command-hierarchy-and-timing-evidence)
+define which broad entry points serialize work.
+
 ## Shared work and completion
 
 Preserve unrelated work. Agents must not concurrently switch branches, stage,

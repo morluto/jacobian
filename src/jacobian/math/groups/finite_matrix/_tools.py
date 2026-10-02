@@ -122,8 +122,8 @@ TOOLS: MathTools = (
         run=_construct_gl,
         tags=("finite-matrix-group", "general-linear-group", "prime-field", "exact"),
         discovery_terms=(
-            "GL n q",
-            "general linear group over finite field",
+            "GL n p",
+            "general linear group over prime field",
             "invertible prime field matrices",
         ),
         examples=(
@@ -151,8 +151,8 @@ TOOLS: MathTools = (
         run=_construct_sl,
         tags=("finite-matrix-group", "special-linear-group", "prime-field", "exact"),
         discovery_terms=(
-            "SL n q",
-            "special linear group over finite field",
+            "SL n p",
+            "special linear group over prime field",
             "determinant one prime field matrices",
         ),
         examples=(

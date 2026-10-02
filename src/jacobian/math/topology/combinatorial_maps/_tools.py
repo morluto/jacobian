@@ -294,7 +294,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "rotation system",
             "orientable embedding",
             "graph genus",
-            "combinatorial map",
+            "orientable rotation-system embedding check",
         ),
         examples=(
             OperationExample(

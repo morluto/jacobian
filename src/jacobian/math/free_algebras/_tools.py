@@ -302,11 +302,11 @@ TOOLS = (
         run=_run_multiply,
         tags=("algebra", "free-algebra", "noncommutative", "polynomial", "exact"),
         discovery_terms=(
-            "free associative algebra",
+            "free associative algebra multiplication",
             "noncommutative polynomial",
             "word multiplication",
             "distributive product",
-            "sparse nc polynomial",
+            "sparse nc polynomial multiplication",
         ),
         examples=(
             OperationExample(

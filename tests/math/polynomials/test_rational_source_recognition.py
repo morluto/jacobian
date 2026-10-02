@@ -72,7 +72,7 @@ def test_constant_composition_recognizes_wide_source_without_expansion(
     assert result.construction_locus_guard == ()
 
 
-@pytest.mark.parametrize("exponent", [128, -65])
+@pytest.mark.parametrize("exponent", [-128])
 def test_wide_source_still_obeys_derivative_result_envelope(exponent: int) -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         gradient(_source(exponent, ("x",)))

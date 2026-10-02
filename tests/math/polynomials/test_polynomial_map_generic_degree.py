@@ -32,7 +32,10 @@ from jacobian.math.polynomials.maps._models import (
 )
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
-from jacobian.math.polynomials.maps.operations import generic_degree
+from jacobian.math.polynomials.maps.operations import (
+    generic_degree,
+    verify_generic_degree,
+)
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
@@ -293,6 +296,9 @@ def test_known_generic_degrees(
     assert result.degree == degree
     assert result.evidence is not None
     assert len(result.evidence.standard_monomials) == degree
+    assert verify_generic_degree(
+        GenericDegreeResult.model_validate_json(result.model_dump_json(), strict=True)
+    )
 
 
 @requires_singular
@@ -327,6 +333,12 @@ def test_same_generic_ideal_distinguishes_both_nonfinite_outcomes() -> None:
     assert positive_dimensional.degree is None
     assert non_dominant.evidence is not None
     assert positive_dimensional.evidence is not None
+    for result in (non_dominant, positive_dimensional):
+        assert verify_generic_degree(
+            GenericDegreeResult.model_validate_json(
+                result.model_dump_json(), strict=True
+            )
+        )
 
 
 @requires_singular

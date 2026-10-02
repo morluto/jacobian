@@ -20,6 +20,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials._gcd_verification import verify_gcd_relation
 from jacobian.math.polynomials._models import (
     _MAX_DISCRIMINANT_DEGREE,
     _MAX_ELIMINATION_DEGREE_SUM,
@@ -644,8 +645,6 @@ def verify_polynomial_gcd(claim: PolynomialGcdResult) -> bool:
     Resource refusal during bounded candidate replay propagates rather than
     returning a mathematical negative.
     """
-
-    from jacobian.math.polynomials._gcd_verification import verify_gcd_relation
 
     return verify_gcd_relation(claim)
 

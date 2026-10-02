@@ -161,6 +161,8 @@ def _prepare_monomial_gradient(
     at most 128-digit rationals by integers of magnitude <=128. Exact valuation
     normalization only shifts the unchanged surviving support. All component
     supports, exponents and scalar sizes are checked before result construction.
+    The sparse shifts preserve support and use the full canonical exponent
+    carrier; no dense quotient expansion or general GCD bound is widened.
     """
     _recognize_source(source, deadline)
     variables = source.variables
@@ -191,8 +193,11 @@ def _prepare_monomial_gradient(
             (coefficient, tuple(e + p for e, p in zip(exponents, powers, strict=True)))
             for coefficient, exponents in raw
         )
-        if any(p > 64 for p in powers) or any(
-            any(e > 64 for e in exponents) for _, exponents in normalized
+        if any(
+            p > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT for p in powers
+        ) or any(
+            any(e > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT for e in exponents)
+            for _, exponents in normalized
         ):
             _reject(
                 "result_exponent",

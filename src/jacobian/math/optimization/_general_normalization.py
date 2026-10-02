@@ -8,11 +8,11 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization._general_models import (
-    MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
-    MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
     GeneralFormRationalLinearProgram,
 )
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_SOLVER_CONSTRAINTS,
+    MAX_LINEAR_SOLVER_VARIABLES,
     MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
 )
@@ -163,9 +163,9 @@ def normalize_general_program(
         (
             "normalized_columns",
             normalized_columns,
-            MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+            MAX_LINEAR_SOLVER_VARIABLES,
         ),
-        ("normalized_rows", normalized_rows, MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS),
+        ("normalized_rows", normalized_rows, MAX_LINEAR_SOLVER_CONSTRAINTS),
     ):
         if count > limit:
             raise OperationResourceAdmissionError(
@@ -173,8 +173,8 @@ def normalize_general_program(
                 code=f"optimization.linear.{reason}",
                 message=(
                     f"Exact LP {reason} exceeded: normalized_columns={normalized_columns}, "
-                    f"column_limit={MAX_GENERAL_LINEAR_PROGRAM_VARIABLES}, "
-                    f"normalized_rows={normalized_rows}, row_limit={MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS}."
+                    f"column_limit={MAX_LINEAR_SOLVER_VARIABLES}, "
+                    f"normalized_rows={normalized_rows}, row_limit={MAX_LINEAR_SOLVER_CONSTRAINTS}."
                 ),
             )
 

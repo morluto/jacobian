@@ -16,9 +16,13 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_PROGRAM_CONSTRAINTS,
+    MAX_LINEAR_PROGRAM_VARIABLES,
     RationalLinearProgramStatus,
+    _bound_coefficient_cells,
     _bound_raw_rational,
     _prepare_raw_rational_vector,
+    _require_raw_container,
 )
 
 
@@ -29,8 +33,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 type RationalLinearRelation = Literal["LE", "EQ", "GE"]
 type RationalObjectiveSense = Literal["MINIMIZE", "MAXIMIZE"]
 
-MAX_GENERAL_LINEAR_PROGRAM_VARIABLES = 32
-MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS = 64
+MAX_GENERAL_LINEAR_PROGRAM_VARIABLES = MAX_LINEAR_PROGRAM_VARIABLES
+MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS = MAX_LINEAR_PROGRAM_CONSTRAINTS
 MAX_GENERAL_RATIONAL_INPUT_DIGITS = 128
 
 
@@ -41,6 +45,7 @@ def _prepare_raw_general_program(value: object) -> object:
         return value
     prepared = dict(value)
     variables = prepared.get("variables")
+    _require_raw_container(variables, label="general linear-program variables")
     if isinstance(variables, (list, tuple)):
         if len(variables) > MAX_GENERAL_LINEAR_PROGRAM_VARIABLES:
             raise ValueError(
@@ -75,12 +80,19 @@ def _prepare_raw_general_program(value: object) -> object:
         )
         prepared["objective"] = objective_prepared
     constraints = prepared.get("constraints")
+    _require_raw_container(constraints, label="general linear-program constraints")
     if isinstance(constraints, (list, tuple)):
         if len(constraints) > MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS:
             raise ValueError(
                 "general linear-program constraints exceed the "
                 f"{MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS}-entry bound"
             )
+        _bound_coefficient_cells(
+            constraint.get("coefficients")
+            if isinstance(constraint, Mapping)
+            else getattr(constraint, "coefficients", None)
+            for constraint in constraints
+        )
         normalized_constraints: list[object] = []
         for constraint in constraints:
             if not isinstance(constraint, Mapping):
@@ -235,14 +247,14 @@ class GeneralFormRationalLinearProgram(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_program(cls, value: object) -> object:
-        value = canonicalize_json_containers(value)
         try:
-            return _prepare_raw_general_program(value)
+            return canonicalize_json_containers(_prepare_raw_general_program(value))
         except ValueError as error:
             raise _validation_error("raw_input_bound", str(error)) from error
 
     @model_validator(mode="after")
     def require_dimensions(self) -> Self:
+        _bound_coefficient_cells(row.coefficients for row in self.constraints)
         if len({variable.name for variable in self.variables}) != len(self.variables):
             raise _validation_error(
                 "duplicate_variable",
@@ -342,7 +354,6 @@ class GeneralRationalLinearProgramResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_result(cls, value: object) -> object:
-        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         try:
@@ -376,7 +387,7 @@ class GeneralRationalLinearProgramResult(StrictModel):
                     maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
                     label=f"general linear-program {name}",
                 )
-            return prepared
+            return canonicalize_json_containers(prepared)
         except ValueError as error:
             raise _validation_error("raw_result_bound", str(error)) from error
 

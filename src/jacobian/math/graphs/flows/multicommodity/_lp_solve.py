@@ -29,14 +29,16 @@ from jacobian.math.graphs.flows.multicommodity._models import (
 )
 from jacobian.math.optimization._general_linear_program import general_linear_program
 from jacobian.math.optimization._general_models import (
-    MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
-    MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
     MAX_GENERAL_RATIONAL_INPUT_DIGITS,
     GeneralFormRationalLinearProgram,
     GeneralRationalLinearProgramResult,
     RationalLinearConstraint,
     RationalLinearObjective,
     RationalLinearProgramVariable,
+)
+from jacobian.math.optimization._models import (
+    MAX_LINEAR_SOLVER_CONSTRAINTS,
+    MAX_LINEAR_SOLVER_VARIABLES,
 )
 
 __all__ = [
@@ -69,8 +71,8 @@ def admit_lp_envelope(
 
     variables = len(commodities) * len(network.edges) + extra_variables
     constraints = len(commodities) * network.vertex_count + len(network.edges)
-    if variables > MAX_GENERAL_LINEAR_PROGRAM_VARIABLES or (
-        constraints > MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS
+    if variables > MAX_LINEAR_SOLVER_VARIABLES or (
+        constraints > MAX_LINEAR_SOLVER_CONSTRAINTS
     ):
         raise OperationResourceAdmissionError(
             location=("network", "commodities"),

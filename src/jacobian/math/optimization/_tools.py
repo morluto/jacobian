@@ -8,8 +8,8 @@ from jacobian.math.optimization._general_models import (
 )
 from jacobian.math.optimization._models import (
     MAX_LINEAR_PROGRAM_BACKEND_STATES,
-    MAX_LINEAR_PROGRAM_CONSTRAINTS,
-    MAX_LINEAR_PROGRAM_VARIABLES,
+    MAX_LINEAR_SOLVER_CONSTRAINTS,
+    MAX_LINEAR_SOLVER_VARIABLES,
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
 )
@@ -22,6 +22,9 @@ from jacobian.math.optimization._optimality import (
 from jacobian.math.optimization.operations import linear_program
 
 _LINEAR_ENVELOPE = (
+    f"Search admits at most {MAX_LINEAR_SOLVER_VARIABLES} source variables and "
+    f"{MAX_LINEAR_SOLVER_CONSTRAINTS} source rows, separately from the larger shared "
+    "carrier used for supplied primal-dual checking. "
     "Resource admission bounds canonical source dimensions, coefficient height, "
     "matrix cardinality, source-derived rational certificate height, and the finite "
     "primal/dual/Farkas combinatorial state envelope to at most "
@@ -97,7 +100,7 @@ RATIONAL_LINEAR_OPERATIONS = (
             "Other programs normalize each free variable to two columns and each "
             "one-sided variable to one, plus one slack per inequality and one "
             "row/slack per two-sided variable bound. Normalized limits are "
-            f"{MAX_LINEAR_PROGRAM_VARIABLES} columns and {MAX_LINEAR_PROGRAM_CONSTRAINTS} rows. "
+            f"{MAX_LINEAR_SOLVER_VARIABLES} columns and {MAX_LINEAR_SOLVER_CONSTRAINTS} rows. "
             + _LINEAR_ENVELOPE
         ),
         request_type=GeneralRationalLinearProgramRequest,
@@ -167,8 +170,9 @@ TOOLS: MathTools = (
             "or general linear program without solving. Establishes primal constraints "
             "and bounds, dual signs, stationarity and equal objectives in the source "
             "minimization or maximization convention, including free variables. "
-            "A failed candidate does not imply infeasibility. Admits at most 32 "
-            "variables, 64 rows, 128-digit candidate scalars, 20,000 scalar updates, "
+            "A failed candidate does not imply infeasibility. Admits source carriers with at most 128 "
+            "variables, 1,024 rows, 16,384 coefficient entries and 128-digit source scalars; "
+            "candidate scalars may have 32,768 digits. Checking separately admits 100,000 scalar updates, "
             "32,768 predicted intermediate digits and 8,388,608 retained scalar digits; "
             "a shared 60-second safety deadline covers checking and result construction."
         ),

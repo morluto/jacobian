@@ -50,6 +50,32 @@ Audit what the contract unnecessarily excludes as well as what it unsafely
 accepts. Preserve the motivating request and exact invariant; a fast but weaker
 result is not a scale improvement.
 
+## Check a justified transformation
+
+For a changed mathematical owner, choose a relevant invariant or equivariance
+and derive its expected effect before writing the test. Relabelling may preserve
+a scalar invariant while transporting indexed witnesses; row permutations must
+preserve the intended set or multiset semantics. Translation preserves planar
+squared circumradii, while scaling by nonzero c multiplies them by c². Translation
+preserves repeated differences; an invertible linear coordinate map transports
+their values and preserves their multiplicities. These are examples, not a
+requirement that every operation support every transformation. State when the
+transformation changes the problem or leaves the admitted domain.
+
+Use the actual source and an independent defining-identity check, alongside the
+relation between transformed outputs. Include a negative control for an invalid
+invariance assumption or lost source indices/multiplicities. For a transformation
+or encoding operation, check that source identities, hypotheses and the intended
+relation survive the map: correct solver execution on the encoded problem does
+not establish that the mathematical model was valid.
+
+Keep these tests with the affected owner. Do not introduce a catalog-wide matrix,
+generic assurance fields, or repeated expensive verification during result
+construction. A concrete example is
+`tests/math/combinatorics/additive/test_difference_profile_equivariance.py`:
+affine coordinate changes and source permutations are checked against exact
+source subtraction, with stale-index and noninjective-map controls.
+
 ## Establish the finding and finish
 
 After proving a defect, inspect the owner, shared helper, and its callers for the

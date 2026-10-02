@@ -8,6 +8,10 @@ from pydantic import AfterValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    GraphValueInputEncoding,
+    SimpleUndirectedGraphInput,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.values import IntegerMatrix
 
@@ -48,6 +52,11 @@ _ChipFiringGraph = Annotated[
     AfterValidator(_require_chip_firing_graph),
 ]
 
+_ChipFiringGraphInput = Annotated[
+    SimpleUndirectedGraphInput,
+    AfterValidator(_require_chip_firing_graph),
+]
+
 
 def _require_critical_group_graph(
     graph: SimpleUndirectedGraph,
@@ -70,9 +79,14 @@ _CriticalGroupGraph = Annotated[
     AfterValidator(_require_critical_group_graph),
 ]
 
+_CriticalGroupGraphInput = Annotated[
+    SimpleUndirectedGraphInput,
+    AfterValidator(_require_critical_group_graph),
+]
+
 
 class LaplacianRequest(StrictModel):
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
 
 
 class LaplacianResult(StrictModel):
@@ -101,7 +115,7 @@ class LaplacianResult(StrictModel):
 class ReducedLaplacianRequest(StrictModel):
     """Request the reduced Laplacian (sink row/column deleted)."""
 
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
     sink: str
 
     @model_validator(mode="after")
@@ -142,7 +156,7 @@ class ReducedLaplacianResult(StrictModel):
 class FiringRequest(StrictModel):
     """Fire a vertex: transfer one chip to each neighbor."""
 
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
     divisor: tuple[int, ...] = Field(min_length=1)
     firing_vertex: str
 
@@ -170,7 +184,7 @@ class FiringResult(StrictModel):
 class FireVectorRequest(StrictModel):
     """Fire a vector: D' = D - L f."""
 
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
     divisor: tuple[int, ...] = Field(min_length=1)
     firing_vector: tuple[int, ...] = Field(min_length=1)
 
@@ -232,10 +246,20 @@ class SinkConfiguration(StrictModel):
         return self
 
 
+class _SinkConfigurationInput(SinkConfiguration):
+    graph: _ChipFiringGraphInput
+
+
+SinkConfigurationInput = Annotated[
+    SinkConfiguration,
+    GraphValueInputEncoding(SinkConfiguration, _SinkConfigurationInput),
+]
+
+
 class StabilizeRequest(StrictModel):
     """Stabilize a sink configuration; every vertex must reach the sink."""
 
-    configuration: SinkConfiguration
+    configuration: SinkConfigurationInput
 
 
 class StabilizeResult(StrictModel):
@@ -249,7 +273,7 @@ class StabilizeResult(StrictModel):
 class ParallelStepRequest(StrictModel):
     """One parallel firing step."""
 
-    configuration: SinkConfiguration
+    configuration: SinkConfigurationInput
 
 
 class ParallelStepResult(StrictModel):
@@ -262,7 +286,7 @@ class ParallelStepResult(StrictModel):
 class QReducedRequest(StrictModel):
     """q-reduced form on a connected graph; coefficients have at most 1000 digits."""
 
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
     divisor: tuple[int, ...] = Field(min_length=1)
     sink: str
 
@@ -299,7 +323,7 @@ class DegreeResult(StrictModel):
 class CanonicalDivisorRequest(StrictModel):
     """Compute the graph canonical divisor K(v) = deg(v) - 2."""
 
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
 
 
 class CanonicalDivisorResult(StrictModel):
@@ -313,7 +337,7 @@ class CanonicalDivisorResult(StrictModel):
 class CriticalGroupRequest(StrictModel):
     """Request the critical group (sandpile group) of a graph."""
 
-    graph: _CriticalGroupGraph
+    graph: _CriticalGroupGraphInput
     sink: str
 
     @model_validator(mode="after")
@@ -339,7 +363,7 @@ class AbelJacobiRequest(StrictModel):
     resource admission.
     """
 
-    graph: _ChipFiringGraph
+    graph: _ChipFiringGraphInput
     divisor: tuple[int, ...] = Field(min_length=1)
     sink: str
 

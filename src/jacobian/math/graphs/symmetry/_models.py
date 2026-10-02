@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import ColoredUndirectedGraphInput
 from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 from jacobian.math.groups._models import MAX_GROUP_DEGREE, PermutationGroup
@@ -101,6 +102,8 @@ class GraphSymmetryOrbitSource(StrictModel):
 
 class GraphSymmetryOrbitRequest(GraphSymmetryOrbitSource):
     """Declared color-preserving generators of one bounded graph's subgroup."""
+
+    graph: ColoredUndirectedGraphInput
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -327,7 +330,7 @@ class FullGraphAutomorphismRequest(StrictModel):
     operations without losing the graph labels needed by symmetry replay.
     """
 
-    graph: ColoredUndirectedGraph = Field(
+    graph: ColoredUndirectedGraphInput = Field(
         description=(
             "One finite simple vertex/edge-colored graph. The automorphism "
             f"action admits at most {MAX_GROUP_DEGREE} vertices; larger shared "

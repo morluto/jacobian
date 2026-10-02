@@ -24,6 +24,7 @@ from jacobian.math.combinatorics.posets.core._models import (
     OrderedPair,
 )
 from jacobian.math.combinatorics.posets.core.operations import verify_finite_poset
+from jacobian.math.graphs._input import IndexedSimpleUndirectedGraphInput
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
@@ -69,7 +70,7 @@ class CliqueRequest(StrictModel):
 
 
 class GraphCliqueRequest(StrictModel):
-    graph: IndexedSimpleUndirectedGraph
+    graph: IndexedSimpleUndirectedGraphInput
 
 
 class CliqueResult(StrictModel):

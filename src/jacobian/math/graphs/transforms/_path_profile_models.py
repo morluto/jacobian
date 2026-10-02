@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_PATH_PROFILE_SEARCH_WORK = 10_000_000
@@ -37,7 +38,7 @@ def _path_prefix_work_bound(vertex_count: int, max_degree: int, length: int) -> 
 class PathProfileRequest(StrictModel):
     """A finite simple undirected graph and a path length."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     path_length: int = Field(ge=0, le=10)
 
     @model_validator(mode="after")

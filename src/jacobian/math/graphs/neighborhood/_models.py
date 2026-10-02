@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
@@ -15,7 +16,7 @@ from jacobian.math.graphs.values import (
 class NeighborhoodRequest(StrictModel):
     """Compute the exact open neighbourhood of a selected vertex set."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     selected_vertices: tuple[str, ...] = Field(max_length=MAX_SIMPLE_GRAPH_VERTICES)
 
     @model_validator(mode="before")

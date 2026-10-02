@@ -9,26 +9,37 @@ from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
+from jacobian.math.graphs._input import (
+    ColoredUndirectedGraphInput,
+    colored_graph_input_schema,
+)
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_VERTICES = 12
 
 
 def _monochromatic_graph_schema() -> JsonSchemaValue:
-    schema = ColoredUndirectedGraph.model_json_schema()
+    schema = colored_graph_input_schema()
     schema["description"] = (
         "A coloured simple graph with at most "
         f"{MAX_VERTICES} vertices; the operation bounds its exact subset "
         "search and complete hypergraph result."
     )
-    definition = schema.get("$defs", {}).get("SimpleUndirectedGraph")
+    definition = schema.get("$defs", {}).get("_UnorientedSimpleGraph")
     if definition is None:
         raise RuntimeError("colored graph schema lost its simple-graph definition")
     definition["properties"]["vertices"]["maxItems"] = MAX_VERTICES
     definition["properties"]["edges"]["maxItems"] = (
         MAX_VERTICES * (MAX_VERTICES - 1) // 2
     )
-    schema["properties"]["graph"] = definition
+    schema["properties"]["graph"] = {
+        **definition,
+        **{
+            key: value
+            for key, value in schema["properties"]["graph"].items()
+            if key != "$ref"
+        },
+    }
     del schema["$defs"]
     schema["properties"]["edge_colors"]["maxItems"] = (
         MAX_VERTICES * (MAX_VERTICES - 1) // 2
@@ -37,8 +48,8 @@ def _monochromatic_graph_schema() -> JsonSchemaValue:
 
 
 MonochromaticPathGraph = Annotated[
-    ColoredUndirectedGraph,
-    WithJsonSchema(_monochromatic_graph_schema()),
+    ColoredUndirectedGraphInput,
+    WithJsonSchema(_monochromatic_graph_schema(), mode="validation"),
 ]
 
 

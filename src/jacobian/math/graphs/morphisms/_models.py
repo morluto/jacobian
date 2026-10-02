@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    GraphValueInputEncoding,
+    SimpleUndirectedGraphInput,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 # Exhaustive backtracking search over graph morphisms is exponential in the
@@ -96,6 +100,17 @@ class GraphHomomorphismObstruction(StrictModel):
     image_vertices: tuple[str, str]
 
 
+class _GraphVertexMapInput(GraphVertexMap):
+    source_graph: SimpleUndirectedGraphInput
+    target_graph: SimpleUndirectedGraphInput
+
+
+GraphVertexMapInput = Annotated[
+    GraphVertexMap,
+    GraphValueInputEncoding(GraphVertexMap, _GraphVertexMapInput),
+]
+
+
 class HomomorphismCheckRequest(StrictModel):
     """Check one complete source-bound graph vertex map exactly."""
 
@@ -110,7 +125,7 @@ class HomomorphismCheckRequest(StrictModel):
         }
     )
 
-    vertex_map: GraphVertexMap
+    vertex_map: GraphVertexMapInput
 
 
 class HomomorphismCheckResult(StrictModel):
@@ -191,7 +206,7 @@ class FixedLengthCycleRequest(StrictModel):
         },
     )
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "Canonical simple undirected graph. The operation is bounded to "
             "at most 64 vertices; larger graphs are rejected."
@@ -324,10 +339,10 @@ class SubgraphPatternFindRequest(StrictModel):
         },
     )
 
-    pattern: SimpleUndirectedGraph = Field(
+    pattern: SimpleUndirectedGraphInput = Field(
         description="Canonical pattern graph with at most 64 vertices."
     )
-    host: SimpleUndirectedGraph = Field(description="Canonical host graph.")
+    host: SimpleUndirectedGraphInput = Field(description="Canonical host graph.")
 
 
 def _validate_embedding_witness(

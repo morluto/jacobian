@@ -258,7 +258,8 @@ def test_request_schema_exposes_tree_and_work_preconditions() -> None:
     assert "nonempty" in schema["description"]
     assert "acyclic" in schema["description"]
     assert "convolution-work" in schema["properties"]["graph"]["description"]
-    graph_schema = schema["$defs"]["SimpleUndirectedGraph"]
+    reference = schema["properties"]["graph"]["$ref"]
+    graph_schema = schema["$defs"][reference.rsplit("/", 1)[1]]
     assert graph_schema["properties"]["vertices"]["maxItems"] == 12256
 
 

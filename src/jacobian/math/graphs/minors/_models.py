@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_EDGES,
     MAX_SIMPLE_GRAPH_VERTICES,
@@ -99,10 +100,10 @@ class BranchConnectivityLedger(StrictModel):
 class MinorModelCheckRequest(StrictModel):
     """Check one candidate H-minor model in G."""
 
-    source: SimpleUndirectedGraph = Field(
+    source: SimpleUndirectedGraphInput = Field(
         description="Source graph G holding the candidate branch sets."
     )
-    target: SimpleUndirectedGraph = Field(
+    target: SimpleUndirectedGraphInput = Field(
         description="Target graph H whose vertices and edges the model covers."
     )
     branch_sets: tuple[BranchSet, ...] = Field(
@@ -254,10 +255,10 @@ class MinorModelFindRequest(StrictModel):
     budget was exceeded first.
     """
 
-    source: SimpleUndirectedGraph = Field(
+    source: SimpleUndirectedGraphInput = Field(
         description="Source graph G holding the searched branch sets."
     )
-    target: SimpleUndirectedGraph = Field(
+    target: SimpleUndirectedGraphInput = Field(
         description="Target graph H whose minor model is searched."
     )
     resource_budget: MinorModelFindBudget = Field(default_factory=MinorModelFindBudget)
@@ -397,10 +398,10 @@ class SubdivisionPath(StrictModel):
 class TopologicalMinorCheckRequest(StrictModel):
     """Check one candidate subdivision model of target H in source G."""
 
-    source: SimpleUndirectedGraph = Field(
+    source: SimpleUndirectedGraphInput = Field(
         description="Source graph G holding the candidate subdivision."
     )
-    target: SimpleUndirectedGraph = Field(
+    target: SimpleUndirectedGraphInput = Field(
         description="Target graph H whose subdivision is checked."
     )
     branch_vertices: tuple[BranchVertex, ...] = Field(
@@ -491,10 +492,10 @@ class TopologicalMinorFindRequest(StrictModel):
     was exceeded first.
     """
 
-    source: SimpleUndirectedGraph = Field(
+    source: SimpleUndirectedGraphInput = Field(
         description="Source graph G searched for the subdivision."
     )
-    target: SimpleUndirectedGraph = Field(
+    target: SimpleUndirectedGraphInput = Field(
         description="Target graph H whose subdivision is searched."
     )
     resource_budget: TopologicalMinorFindBudget = Field(

@@ -16,7 +16,7 @@ _CANONICAL_LIMIT = 10**MAX_CANONICAL_RATIONAL_DIGITS
 MAX_DIVISION_PRIVATE_BITS = 262_144
 MAX_DIVISION_WORK = 1 << 37
 MAX_DIVISION_ALLOCATION_BITS = 536_870_912
-MAX_DIVISION_OUTPUT_CHARACTERS = 9_000_000
+MAX_DIVISION_RESULT_DIGITS = 9_000_000
 
 
 def _reject(reason: str, message: str) -> None:
@@ -128,10 +128,8 @@ def _digits(value: int) -> int:
     return 1 if not value else (abs(value).bit_length() * 30103) // 100000 + 1
 
 
-def _source_characters(terms: tuple[RationalPolynomialTerm, ...]) -> int:
-    return 256 + sum(
-        128 + _digits(t.coefficient.num) + _digits(t.coefficient.den) for t in terms
-    )
+def _source_digits(terms: tuple[RationalPolynomialTerm, ...]) -> int:
+    return sum(_digits(t.coefficient.num) + _digits(t.coefficient.den) for t in terms)
 
 
 def _component(value: int) -> None:
@@ -264,14 +262,14 @@ def admit_univariate_division(
             "allocation",
             "division exceeds its aggregate exact-coefficient storage envelope",
         )
-    characters = (
-        2 * _source_characters(a_terms)
-        + _source_characters(b_terms)
-        + quotient_terms * (128 + _digits(qnum) + _digits(qden))
-        + remainder_terms * (128 + _digits(rnum) + _digits(rden))
-        + 1024
+    result_digits = (
+        2 * _source_digits(a_terms)
+        + _source_digits(b_terms)
+        + quotient_terms * (_digits(qnum) + _digits(qden))
+        + remainder_terms * (_digits(rnum) + _digits(rden))
     )
-    if characters > MAX_DIVISION_OUTPUT_CHARACTERS:
+    if result_digits > MAX_DIVISION_RESULT_DIGITS:
         _reject(
-            "output_size", "division exceeds its complete canonical output envelope"
+            "output_digits",
+            "division exceeds its aggregate retained scalar-digit budget",
         )

@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import sympy
-from pydantic_core import PydanticCustomError
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError, PydanticSerializationError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -54,7 +55,12 @@ from jacobian.math.polynomials.maps.values import (
     require_map_polynomial,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
+    MAX_POLYNOMIAL_VARIABLES,
     RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     rational_evaluation_component_digit_bounds,
 )
 
@@ -101,12 +107,19 @@ def _admit_composition(
     outer_variable: str,
     inner_variable: str,
 ) -> None:
-    require_map_polynomial(outer, label="outer polynomial")
-    require_map_polynomial(inner, label="inner polynomial")
     if outer.variables != (outer_variable,):
         raise _validation_error("outer polynomial must use exactly outer_variable")
     if inner.variables != (inner_variable,):
         raise _validation_error("inner polynomial must use exactly inner_variable")
+    if _is_identity_polynomial(outer) or _is_identity_polynomial(inner):
+        # Identity substitution retains exactly the other canonical operand:
+        # no coefficient arithmetic, support expansion, or backend allocation.
+        # Only bounded canonical recognition and delivery remain; the general
+        # substitution's smaller support/height/degree caps do not constrain
+        # this regime.
+        return
+    require_map_polynomial(outer, label="outer polynomial")
+    require_map_polynomial(inner, label="inner polynomial")
     outer_degree = max(
         (term.exponents[0] for term in outer.polynomial.terms), default=0
     )
@@ -115,6 +128,78 @@ def _admit_composition(
     )
     if outer_degree * inner_degree > _MAX_COMPOSITION_DEGREE:
         raise _validation_error(f"composition exceeds degree {_MAX_COMPOSITION_DEGREE}")
+
+
+def _is_identity_polynomial(polynomial: RationalPolynomial) -> bool:
+    terms = polynomial.polynomial.terms
+    return (
+        len(terms) == 1
+        and terms[0].exponents == (1,)
+        and terms[0].coefficient.num == terms[0].coefficient.den == 1
+    )
+
+
+def _composition_operand(
+    polynomial: RationalPolynomial, *, label: str
+) -> RationalPolynomial:
+    """Recognize native canonical values before the no-arithmetic path."""
+    try:
+        # Bound every traversed native container before model_dump materializes
+        # it. Forged models need not satisfy any constructor/schema limits.
+        if not isinstance(polynomial, RationalPolynomial):
+            raise ValueError("expected a rational polynomial")
+        domain = getattr(polynomial, "domain", None)
+        variables = getattr(polynomial, "variables", None)
+        sparse = getattr(polynomial, "polynomial", None)
+        if (
+            type(domain) is not str
+            or domain != "QQ"
+            or not isinstance(variables, tuple)
+            or len(variables) > MAX_POLYNOMIAL_VARIABLES
+            or any(type(name) is not str or len(name) > 32 for name in variables)
+            or not isinstance(sparse, SparseRationalPolynomial)
+        ):
+            raise ValueError("invalid polynomial shape")
+        terms = getattr(sparse, "terms", None)
+        if not isinstance(terms, tuple) or len(terms) > MAX_POLYNOMIAL_TERMS:
+            raise ValueError("invalid polynomial support")
+        for term in terms:
+            if not isinstance(term, RationalPolynomialTerm):
+                raise ValueError("invalid polynomial term")
+            exponents = getattr(term, "exponents", None)
+            coefficient = getattr(term, "coefficient", None)
+            if (
+                not isinstance(exponents, tuple)
+                or len(exponents) > MAX_POLYNOMIAL_VARIABLES
+                or any(
+                    type(exponent) is not int
+                    or not 0 <= exponent <= MAX_POLYNOMIAL_EXPONENT
+                    for exponent in exponents
+                )
+                or not isinstance(coefficient, CanonicalRational)
+            ):
+                raise ValueError("invalid monomial shape")
+            for component in (
+                getattr(coefficient, "num", None),
+                getattr(coefficient, "den", None),
+            ):
+                # 10**d < 2**(4*d): a cheap preflight before exact scalar
+                # validation and fraction reduction, which enforce the tight cap.
+                if (
+                    type(component) is not int
+                    or component.bit_length() > 4 * MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    raise ValueError("invalid rational component")
+        # model_copy/model_construct values are caller-authored at a native
+        # boundary. Reparse numeric leaves; never normalize malformed input by
+        # returning it unchanged or letting a symbolic conversion repair it.
+        return RationalPolynomial.model_validate(polynomial.model_dump())
+    except (ValidationError, PydanticSerializationError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=(label,),
+            code="polynomial.composition_operand",
+            message="composition requires a canonical rational polynomial",
+        ) from exc
 
 
 def _admit_generic_degree(polynomial_map: RationalPolynomialMap) -> None:
@@ -383,9 +468,19 @@ def compose_polynomials(
 ) -> CompositionResult:
     """Substitute the inner univariate polynomial into the outer polynomial."""
 
+    outer = _composition_operand(outer, label="outer")
+    inner = _composition_operand(inner, label="inner")
     _run_admission(
         lambda: _admit_composition(outer, inner, outer_variable, inner_variable)
     )
+    if _is_identity_polynomial(outer):
+        return CompositionResult(polynomial=inner)
+    if _is_identity_polynomial(inner):
+        return CompositionResult(
+            polynomial=RationalPolynomial(
+                variables=inner.variables, polynomial=outer.polynomial
+            )
+        )
     outer_expression = rational_polynomial_to_sympy(outer).as_expr()
     inner_expression = rational_polynomial_to_sympy(inner).as_expr()
     outer_symbol = symbols_for_variables(outer.variables)[0]

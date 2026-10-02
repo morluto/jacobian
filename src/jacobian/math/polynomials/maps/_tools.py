@@ -158,8 +158,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.map.compose",
         title="Compose two univariate polynomials",
-        description="Compute the exact composition of two bounded univariate canonical "
-        "rational polynomials.",
+        description=(
+            "Compute the exact composition of two univariate canonical rational "
+            "polynomials. Identity substitution on either side retains up to "
+            "4096 terms at the canonical coefficient and exponent limits, with "
+            "the result on the inner variable axis. Other substitutions admit "
+            "degree at most 64 and 128-digit coefficient components per operand, "
+            "and degree product at most 128."
+        ),
         request_type=CompositionRequest,
         result_type=CompositionResult,
         run=_compose,

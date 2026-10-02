@@ -14,6 +14,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.polynomials._bezout_kernel import (
+    MAX_BEZOUT_SOURCE_COEFFICIENT_DIGITS,
+    bounded_bezout,
+    require_bezout_source_shape,
+)
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
@@ -239,6 +244,8 @@ def _run_admission[ResultT](admission: Callable[[], ResultT]) -> ResultT:
 
 
 def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
+    require_bezout_source_shape(left)
+    require_bezout_source_shape(right)
     if left.variables != right.variables:
         raise _validation_error("polynomials must use the same ordered variables")
     if len(left.variables) != 1:
@@ -248,6 +255,7 @@ def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
             polynomial,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_GCD_DEGREE,
+            maximum_coefficient_digits=MAX_BEZOUT_SOURCE_COEFFICIENT_DIGITS,
         )
     if not left.polynomial.terms and not right.polynomial.terms:
         raise _validation_error(
@@ -554,17 +562,14 @@ def polynomial_gcd(
     """Compute the monic GCD and Bézout identity of two canonical polynomials."""
 
     _run_admission(lambda: _admit_gcd(left, right))
-    left_sympy = rational_polynomial_to_sympy(left)
-    right_sympy = rational_polynomial_to_sympy(right)
-    left_multiplier, right_multiplier, gcd = gcdex(left_sympy, right_sympy)
-    variables = left.variables
+    left_multiplier, right_multiplier, common = bounded_bezout(left, right)
     return PolynomialGcdResult(
         left=left,
         right=right,
-        gcd=_result_polynomial(gcd, variables),
+        gcd=common,
         bezout=PolynomialBezoutIdentity(
-            left_multiplier=_result_polynomial(left_multiplier, variables),
-            right_multiplier=_result_polynomial(right_multiplier, variables),
+            left_multiplier=left_multiplier,
+            right_multiplier=right_multiplier,
         ),
     )
 

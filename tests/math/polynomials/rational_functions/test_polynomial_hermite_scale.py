@@ -1,5 +1,7 @@
 """Polynomial Hermite reduction uses bounded coefficientwise integration."""
 
+from fractions import Fraction
+
 import pytest
 from sympy import Rational, Symbol, diff, expand
 
@@ -59,3 +61,39 @@ def test_primitive_beyond_carrier_degree_is_resource_refused() -> None:
 def test_polynomial_denominator_growth_is_resource_refused() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         _compute(Symbol("t") ** 63 / (10**128 - 1))
+
+
+@pytest.mark.parametrize(
+    ("numerator", "denominator", "degree"),
+    [
+        (2, 10**128 - 1, 1),
+        (-2, 10**128 - 1, 1),
+        (64, 10**128 - 1, 63),
+        (2, 4 * 10**127 + 1, 3),
+    ],
+)
+def test_primitive_admission_prices_reduced_denominator(
+    numerator: int, denominator: int, degree: int
+) -> None:
+    source_coefficient = Fraction(numerator, denominator)
+    expected = source_coefficient / (degree + 1)
+    result = _compute(Rational(numerator, denominator) * Symbol("t") ** degree)
+    decoded = HermiteReductionResult.model_validate_json(result.model_dump_json())
+    assert decoded == result
+    assert verify_hermite_reduction(decoded)
+    assert not decoded.remainder.numerator.terms
+    assert len(decoded.rational_part.numerator.terms) == 1
+    term = decoded.rational_part.numerator.terms[0]
+    actual = Fraction(term.coefficient.num, term.coefficient.den)
+    assert actual == expected
+    assert term.exponents == (degree + 1,)
+    # An independent coefficientwise derivative recovers the source exactly.
+    assert actual * term.exponents[0] == source_coefficient
+
+
+@pytest.mark.parametrize("numerator", [1, -1])
+def test_uncancelled_primitive_denominator_still_refused(numerator: int) -> None:
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _compute(Rational(numerator, 10**128 - 1) * Symbol("t"))
+    assert error.value.errors()[0]["type"] == "polynomial.hermite_reduction_budget"
+    assert error.value.errors()[0]["loc"] == ("function",)

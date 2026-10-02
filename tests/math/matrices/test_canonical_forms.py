@@ -26,6 +26,7 @@ from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
     MatrixPolynomialRemainderResult,
     MonicPolynomial,
+    PrimaryDecompositionResult,
     RationalCanonicalFormResult,
 )
 from jacobian.math.matrices.canonical_forms._tools import (
@@ -534,6 +535,119 @@ def test_primary_decomposition_normalizes_rational_root_factors() -> None:
         [Fraction(-1, 2), Fraction(1)],
         [Fraction(-1, 3), Fraction(1)],
     ]
+
+
+def test_primary_decomposition_verifier_accepts_reordered_components() -> None:
+    result = compute_primary_decomposition(_diagonal(2, 3))
+    payload = result.model_dump(mode="json")
+    payload["components"].reverse()
+    decoded = PrimaryDecompositionResult.model_validate_json(json.dumps(payload))
+
+    assert decoded.components == tuple(reversed(result.components))
+    assert verify_primary_decomposition(decoded)
+
+
+@pytest.mark.parametrize("components", (None, 1, [], {}))
+def test_primary_decomposition_verifier_rejects_forged_native_container(
+    components: object,
+) -> None:
+    result = compute_primary_decomposition(_diagonal(2, 3))
+    forged = result.model_copy(update={"components": components})
+    assert not verify_primary_decomposition(forged)
+
+
+def test_primary_decomposition_verifier_accepts_known_diagonal_identity() -> None:
+    """diag(2,3) has minpoly (x-2)(x-3) = x^2 - 5x + 6."""
+    claim = PrimaryDecompositionResult(
+        matrix=_diagonal(2, 3),
+        components=(_mono(-2, 1), _mono(-3, 1)),
+        minimal_polynomial=_mono(6, -5, 1),
+    )
+    left, right = (_coeffs(component) for component in claim.components)
+    product = [Fraction(0)] * (len(left) + len(right) - 1)
+    for left_index, left_coefficient in enumerate(left):
+        for right_index, right_coefficient in enumerate(right):
+            product[left_index + right_index] += left_coefficient * right_coefficient
+    assert product == _coeffs(claim.minimal_polynomial)
+    assert verify_primary_decomposition(
+        PrimaryDecompositionResult.model_validate_json(claim.model_dump_json())
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "source",
+        "minimal_polynomial",
+        "component",
+        "duplicate",
+        "extra_duplicate",
+        "missing",
+        "merged",
+        "component_variable",
+        "minimal_variable",
+        "all_variables",
+    ),
+)
+def test_primary_decomposition_verifier_rejects_false_serialized_claims(
+    mutation: str,
+) -> None:
+    result = compute_primary_decomposition(_diagonal(2, 3))
+    payload = result.model_dump(mode="json")
+    match mutation:
+        case "source":
+            payload["matrix"] = _diagonal(2, 4).model_dump(mode="json")
+        case "minimal_polynomial":
+            payload["minimal_polynomial"] = _mono(8, -6, 1).model_dump(mode="json")
+        case "component":
+            payload["components"][0] = _mono(-4, 1).model_dump(mode="json")
+        case "duplicate":
+            payload["components"][1] = payload["components"][0]
+        case "extra_duplicate":
+            payload["components"].append(payload["components"][0])
+        case "missing":
+            payload["components"].pop()
+        case "merged":
+            payload["components"] = [payload["minimal_polynomial"]]
+        case "component_variable":
+            payload["components"][0]["variables"] = ["u"]
+        case "minimal_variable":
+            payload["minimal_polynomial"]["variables"] = ["u"]
+        case "all_variables":
+            payload["minimal_polynomial"]["variables"] = ["u"]
+            for component in payload["components"]:
+                component["variables"] = ["u"]
+        case _:
+            pytest.fail(f"unknown claim mutation: {mutation}")
+
+    decoded = PrimaryDecompositionResult.model_validate_json(json.dumps(payload))
+    assert not verify_primary_decomposition(decoded)
+
+
+@pytest.mark.parametrize("eigenvalue", (0, 2))
+def test_primary_decomposition_verifier_preserves_irreducible_power(
+    eigenvalue: int,
+) -> None:
+    source = _mat(
+        (_pair(eigenvalue, 1), _pair(1, 1)),
+        (_pair(0, 1), _pair(eigenvalue, 1)),
+    )
+    result = compute_primary_decomposition(source)
+    assert result.components == (_mono(eigenvalue**2, -2 * eigenvalue, 1),)
+    assert result.minimal_polynomial == result.components[0]
+    assert verify_primary_decomposition(
+        PrimaryDecompositionResult.model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    factor = _mono(-eigenvalue, 1).model_dump(mode="json")
+    payload["components"] = [factor, factor]
+    split_claim = PrimaryDecompositionResult.model_validate_json(json.dumps(payload))
+    assert not verify_primary_decomposition(split_claim)
+
+    payload["components"] = [factor]
+    reduced_claim = PrimaryDecompositionResult.model_validate_json(json.dumps(payload))
+    assert not verify_primary_decomposition(reduced_claim)
 
 
 def test_contract_rejects_nonsquare() -> None:

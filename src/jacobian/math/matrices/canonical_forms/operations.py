@@ -985,16 +985,23 @@ def verify_rational_canonical_form(claim: RationalCanonicalFormResult) -> bool:
 def verify_primary_decomposition(claim: PrimaryDecompositionResult) -> bool:
     """Verify primary components and their product against the matrix."""
 
-    if not isinstance(claim, PrimaryDecompositionResult):
+    if not isinstance(claim, PrimaryDecompositionResult) or not isinstance(
+        claim.components, tuple
+    ):
         return False
     try:
         components, minimal = _primary_decomposition_components(claim.matrix)
-        expected = PrimaryDecompositionResult._from_kernel(
-            matrix=claim.matrix,
-            components=components,
-            minimal_polynomial=minimal,
-        )
-        return expected == claim
+        if minimal != claim.minimal_polynomial or len(components) != len(
+            claim.components
+        ):
+            return False
+        # Component order is incidental; each exact polynomial must occur once.
+        unmatched = list(components)
+        for component in claim.components:
+            if component not in unmatched:
+                return False
+            unmatched.remove(component)
+        return True
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:

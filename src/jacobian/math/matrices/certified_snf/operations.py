@@ -13,7 +13,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import pairwise
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._execution import execution_deadline, require_execution_deadline
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.matrices.certified_snf._verification import admit_smith_verification
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
@@ -49,36 +54,6 @@ def _admit_certified_smith_input(matrix: IntegerMatrix) -> None:
             code="matrix.budget_exceeded",
             message=(
                 "certified Smith input entries may contain at most "
-                f"{MAX_CERTIFIED_SNF_INPUT_DIGITS} decimal digits"
-            ),
-        )
-
-
-def _admit_smith_certificate_for_verification(
-    matrix: IntegerMatrix,
-) -> None:
-    if (
-        matrix.row_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
-        or matrix.column_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
-    ):
-        raise OperationDomainValidationError(
-            location=("certificate", "source"),
-            code="matrix.budget_exceeded",
-            message=(
-                "certified Smith certificate sources may have at most "
-                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION} rows and columns"
-            ),
-        )
-    if any(
-        _integer_digits(value) > MAX_CERTIFIED_SNF_INPUT_DIGITS
-        for row in matrix.entries
-        for value in row
-    ):
-        raise OperationDomainValidationError(
-            location=("certificate", "source", "entries"),
-            code="matrix.budget_exceeded",
-            message=(
-                "certified Smith certificate source entries may contain at most "
                 f"{MAX_CERTIFIED_SNF_INPUT_DIGITS} decimal digits"
             ),
         )
@@ -173,7 +148,7 @@ def inverse_unimodular(matrix: Matrix) -> Matrix:
     return backend_inverse(matrix)
 
 
-def matrix_determinant(matrix: Matrix) -> int:
+def matrix_determinant(matrix: Matrix, *, fraction_free: bool = False) -> int:
     """Exact determinant of one square integer matrix with SymPy over ``ZZ``."""
 
     size = len(matrix)
@@ -190,6 +165,10 @@ def matrix_determinant(matrix: Matrix) -> int:
         (size, size),
         ZZ,
     )
+    if fraction_free:
+        # Bind bounded certificate replay to maintained Bareiss rather than
+        # automatic FLINT dispatch, whose private algorithm may vary.
+        return int(domain_matrix.to_ddm().det())
     return int(domain_matrix.det())
 
 
@@ -313,29 +292,40 @@ def verify_smith_normal_form_certificate(
     """Verify an independently supplied certificate in the admitted envelope.
 
     Parsing the certificate only establishes its canonical shape and Smith
-    diagonal.  This explicit path checks the claimed transformations and
-    determinant signs after first requiring the source to fit the public
-    certified-Smith request envelope, which bounds the exact replay.
+    diagonal. Replay prices all four matrices, the two exact products, and
+    fraction-free determinants independently of producer admission. Resource
+    refusal, cancellation and timeout remain operational non-conclusions.
     """
 
+    if not isinstance(certificate, SmithNormalFormCertificate):
+        return False
+    deadline = execution_deadline(60.0)
     try:
-        _admit_smith_certificate_for_verification(certificate.source)
+        admit_smith_verification(certificate)
+    except OperationResourceAdmissionError:
+        raise
     except OperationDomainValidationError:
         return False
-
+    require_execution_deadline(deadline)
     source = [list(row) for row in certificate.source.entries]
     diagonal = [list(row) for row in certificate.diagonal.entries]
     left = [list(row) for row in certificate.left_transformation.entries]
     right = [list(row) for row in certificate.right_transformation.entries]
-    if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
+    left_source = matrix_multiply(left, source)
+    require_execution_deadline(deadline)
+    reconstructed = matrix_multiply(left_source, right)
+    require_execution_deadline(deadline)
+    if reconstructed != diagonal:
         return False
-    return all(
-        matrix_determinant(transformation) == int(determinant)
-        for transformation, determinant in (
-            (left, certificate.left_determinant),
-            (right, certificate.right_determinant),
-        )
-    )
+    for transformation, determinant in (
+        (left, certificate.left_determinant),
+        (right, certificate.right_determinant),
+    ):
+        actual = matrix_determinant(transformation, fraction_free=True)
+        require_execution_deadline(deadline)
+        if actual != int(determinant):
+            return False
+    return True
 
 
 __all__ = [

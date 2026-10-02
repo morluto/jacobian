@@ -26,6 +26,12 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials._gcd_verification import verify_gcd_relation
+from jacobian.math.polynomials._invariant_admission import (
+    InvariantPlan,
+    discriminant_plan,
+    require_invariant_source,
+    resultant_plan,
+)
 from jacobian.math.polynomials._models import (
     _MAX_DISCRIMINANT_DEGREE,
     _MAX_ELIMINATION_DEGREE_SUM,
@@ -267,7 +273,9 @@ def _admit_resultant(
     left: RationalPolynomial,
     right: RationalPolynomial,
     elimination_variable: str,
-) -> None:
+) -> InvariantPlan | None:
+    require_invariant_source(left)
+    require_invariant_source(right)
     if left.variables != right.variables:
         raise _validation_error("polynomials must use the same ordered variables")
     if elimination_variable not in left.variables:
@@ -300,8 +308,13 @@ def _admit_resultant(
     ):
         raise _validation_error("resultant scalar exceeds the canonical digit budget")
 
+    return None if univariate else resultant_plan(left, right, index)
 
-def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
+
+def _admit_discriminant(
+    polynomial: RationalPolynomial, variable: str
+) -> InvariantPlan | None:
+    require_invariant_source(polynomial)
     if variable not in polynomial.variables:
         raise _validation_error(
             "discriminant variable must belong to the declared ring"
@@ -328,6 +341,12 @@ def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
         raise _validation_error(
             "discriminant scalar exceeds the canonical digit budget"
         )
+
+    return (
+        None
+        if univariate
+        else discriminant_plan(polynomial, polynomial.variables.index(variable))
+    )
 
 
 def _coefficient_bounds(polynomial: RationalPolynomial) -> tuple[int, int]:
@@ -581,7 +600,7 @@ def polynomial_resultant(
 ) -> PolynomialResultantResult:
     """Compute the exact resultant in one declared canonical ring variable."""
 
-    _run_admission(lambda: _admit_resultant(left, right, elimination_variable))
+    plan = _run_admission(lambda: _admit_resultant(left, right, elimination_variable))
     variables = left.variables
     if len(variables) == 1:
         left_flint = _flint_univariate(left)
@@ -595,21 +614,13 @@ def polynomial_resultant(
                 value=_canonical_rational_from_flint(value)
             ),
         )
-    elimination_index = variables.index(elimination_variable)
-    generator = symbols_for_variables(variables)[elimination_index]
-    value = resultant(
-        rational_polynomial_to_sympy(left),
-        rational_polynomial_to_sympy(right),
-        generator,
-    )
-    remaining_variables = tuple(
-        variable for variable in variables if variable != elimination_variable
-    )
+    if plan is None:
+        raise RuntimeError("multivariate invariant admission did not provide a plan")
     return PolynomialResultantResult(
         left=left,
         right=right,
         elimination_variable=elimination_variable,
-        resultant=_invariant_value(value, remaining_variables),
+        resultant=PolynomialValue(value=plan.execute()),
     )
 
 
@@ -618,7 +629,7 @@ def polynomial_discriminant(
 ) -> PolynomialDiscriminantResult:
     """Compute the exact discriminant in one canonical ring variable."""
 
-    _run_admission(lambda: _admit_discriminant(polynomial, variable))
+    plan = _run_admission(lambda: _admit_discriminant(polynomial, variable))
     variables = polynomial.variables
     if len(variables) == 1:
         flint_polynomial = _flint_univariate(polynomial)
@@ -638,14 +649,12 @@ def polynomial_discriminant(
                 value=_canonical_rational_from_flint(value)
             ),
         )
-    variable_index = variables.index(variable)
-    generator = symbols_for_variables(variables)[variable_index]
-    value = discriminant(rational_polynomial_to_sympy(polynomial), generator)
-    remaining_variables = tuple(name for name in variables if name != variable)
+    if plan is None:
+        raise RuntimeError("multivariate invariant admission did not provide a plan")
     return PolynomialDiscriminantResult(
         polynomial=polynomial,
         variable=variable,
-        discriminant=_invariant_value(value, remaining_variables),
+        discriminant=PolynomialValue(value=plan.execute()),
     )
 
 

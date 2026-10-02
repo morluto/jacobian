@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian._models import StrictModel, project_owned_containers
 from jacobian.math.combinatorics._models import _combinatorics_validation_error
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
@@ -57,11 +57,7 @@ class PartitionCheckRequest(StrictModel):
                 "combinatorics.partition_candidate_integer",
                 "candidate part exceeds the exact JSON integer bound",
             )
-        if type(parts) is list:
-            admitted = dict(value)
-            admitted["parts"] = tuple(parts)
-            return admitted
-        return canonicalize_json_containers(value)
+        return project_owned_containers(value, cls)
 
 
 class PartitionFound(StrictModel):

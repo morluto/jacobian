@@ -25,8 +25,61 @@ def _is_before_validator(decorator: ast.expr) -> bool:
     )
 
 
+def _owned_projection_returns(function: ast.FunctionDef) -> set[ast.Call]:
+    """Recognize only a returned primitive using the unmodified class receiver.
+
+    This deliberately excludes aliases/helpers and discarded calls. Existing
+    dataflow still has to prove that its payload is the returned owner payload.
+    """
+
+    parameters = function.args.posonlyargs + function.args.args
+    if not parameters or parameters[0].arg != "cls":
+        return set()
+    protected = {"cls", "project_owned_containers"}
+    if any(
+        parameter.arg == "project_owned_containers"
+        for parameter in ast.walk(function.args)
+        if isinstance(parameter, ast.arg)
+    ):
+        return set()
+    for node in ast.walk(function):
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            and node.id in protected
+        ):
+            return set()
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and any(
+            (alias.asname or alias.name.split(".")[0]) in protected
+            for alias in node.names
+        ):
+            return set()
+        if (
+            isinstance(node, (ast.FunctionDef, ast.ClassDef))
+            and node is not function
+            and node.name in protected
+        ):
+            return set()
+        if (
+            isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar))
+            and node.name in protected
+        ):
+            return set()
+    return {
+        node.value
+        for node in _own_nodes(function)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Call)
+        and getattr(node.value.func, "id", "") == "project_owned_containers"
+        and len(node.value.args) == 2
+        and not node.value.keywords
+        and isinstance(node.value.args[1], ast.Name)
+        and node.value.args[1].id == "cls"
+    }
+
+
 def _uses_canonical_container_projection(function: ast.FunctionDef) -> bool:
-    return any(
+    return bool(_owned_projection_returns(function)) or any(
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "canonicalize_json_containers"
@@ -69,7 +122,7 @@ def test_math_before_validators_project_json_arrays_to_canonical_tuples() -> Non
         del tree
 
     assert not missing, (
-        "mode='before' validators must call canonicalize_json_containers: "
+        "mode='before' validators must return an owned projection or call canonicalize_json_containers: "
         + ", ".join(missing)
     )
 
@@ -610,6 +663,11 @@ class _Projection:
         )
         self.shadowed_names = self.local_names | set(functions)
         self.functions = functions
+        self.owned_returns = (
+            set()
+            if "project_owned_containers" in functions
+            else _owned_projection_returns(function)
+        )
         self.arguments = arguments
         self.covered = covered
         self.stack = stack
@@ -726,7 +784,12 @@ class _Projection:
             return _WHOLE
         return frozenset()
 
+    def owned_projection(self, node: ast.Call) -> bool:
+        return node in self.owned_returns and self.value(node.args[0]) == _WHOLE
+
     def call(self, node: ast.Call, seen: frozenset[str]) -> frozenset[str]:
+        if self.owned_projection(node):
+            return self.value(node.args[0], seen)
         if (
             isinstance(node.func, ast.Attribute)
             and node.func.attr == "get"
@@ -941,6 +1004,8 @@ class _Projection:
         return None
 
     def call_shape_origin(self, node: ast.Call, seen: frozenset[int]) -> str | None:
+        if self.owned_projection(node):
+            return self.shape_origin(node.args[0], seen)
         name = getattr(node.func, "id", "")
         if name in {"canonicalize_json_containers", "dict", "cast"} and node.args:
             return self.shape_origin(node.args[-1], seen)
@@ -1808,6 +1873,7 @@ class _Projection:
             return True
         return (
             name == "canonicalize_json_containers"
+            or self.owned_projection(value)
             or (
                 name == "tuple"
                 and self.unshadowed_builtin(name)
@@ -2053,6 +2119,8 @@ class _Projection:
         return True
 
     def helper_mutates(self, call: ast.Call, field: str) -> bool:
+        if self.owned_projection(call):
+            return False
         arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
         if not any(self.value(argument) == _WHOLE for argument in arguments):
             return False
@@ -2289,8 +2357,8 @@ class _Projection:
             if isinstance(node, ast.Call):
                 if (
                     getattr(node.func, "id", "") == "canonicalize_json_containers"
-                    and node.args
-                ):
+                    or self.owned_projection(node)
+                ) and node.args:
                     self.record(node, self.destinations(node, self.value(node.args[0])))
                 elif getattr(node.func, "id", "") in self.functions:
                     self.value(node)
@@ -4785,3 +4853,68 @@ def test_inherited_partial_projection_keeps_new_subclass_fields_uncovered(
     monkeypatch.setitem(globals(), "_build_tables", lambda root: tables)
     with pytest.raises(AssertionError, match=r"Child\.extra is never projected"):
         test_before_validators_cover_every_leaf_container_field()
+
+
+def test_returned_owned_projection_with_class_receiver_covers_fields() -> None:
+    assert (
+        _fixture_uncovered(
+            """
+def validate(cls, data):
+    return project_owned_containers(data, cls)
+""",
+            {"old", "children"},
+        )
+        == set()
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "project_owned_containers(data, cls)\n    return data",
+        "projected = project_owned_containers(data, cls)\n    return data",
+        "return project_owned_containers(data, Other)",
+        "cls = Other\n    return project_owned_containers(data, cls)",
+        "for cls in owners:\n        pass\n    return project_owned_containers(data, cls)",
+        "return project_owned_containers({'old': data['old']}, cls)",
+        "project_owned_containers = identity\n    return project_owned_containers(data, cls)",
+        "return project_owned_containers(data, cls) if data.get('enabled') else data",
+    ],
+)
+def test_owned_projection_requires_returned_owner_and_correct_class_binding(
+    body: str,
+) -> None:
+    assert _fixture_uncovered(
+        f"def validate(cls, data):\n    {body}\n",
+        {"old", "children"},
+    ) == {"old", "children"}
+
+
+def test_shadowed_owned_projection_helper_does_not_count() -> None:
+    assert _fixture_uncovered(
+        """
+def project_owned_containers(data, cls):
+    return data
+
+def validate(cls, data):
+    return project_owned_containers(data, cls)
+""",
+        {"old"},
+    ) == {"old"}
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        "cls, data, *, project_owned_containers=identity",
+        "cls, data, *project_owned_containers",
+        "cls, data, **project_owned_containers",
+    ],
+)
+def test_owned_projection_keyword_and_variadic_shadowing_is_rejected(
+    parameters: str,
+) -> None:
+    assert _fixture_uncovered(
+        f"def validate({parameters}):\n    return project_owned_containers(data, cls)\n",
+        {"old"},
+    ) == {"old"}

@@ -40,7 +40,45 @@ def test_repository_document_command_examples_stay_valid() -> None:
     assert Path("README.md") in DEFAULT_DOCUMENTS
     assert Path("README.zh-CN.md") in DEFAULT_DOCUMENTS
     assert Path(".github/pull_request_template.md") in DEFAULT_DOCUMENTS
-    assert validate_documents() == []
+    assert validate_documents(documents=(*DEFAULT_DOCUMENTS, Path("AGENTS.md"))) == []
+
+
+def test_agent_guide_rejects_unknown_validation_command(tmp_path: Path) -> None:
+    root, document = _write_fixture(
+        tmp_path,
+        "Use `make missing-validation` for the final gate.\n",
+    )
+    document.rename(root / "AGENTS.md")
+
+    failures = validate_documents(root, documents=(Path("AGENTS.md"),))
+
+    assert any(
+        "unknown Make target: missing-validation" in failure for failure in failures
+    )
+
+
+def test_resource_aware_focused_and_final_commands_are_valid(tmp_path: Path) -> None:
+    root, document = _write_fixture(
+        tmp_path,
+        """```sh
+make test-focused LANE=math TESTS=tests/math/test_example.py MATH_WORKERS=0
+make handoff-scoped LANE=math TESTS=tests/math/test_example.py PATHS=tests/math/test_example.py MATH_WORKERS=1
+make affected AFFECTED_BASE=origin/main MATH_WORKERS=1
+make check-all MATH_WORKERS=1
+make validation-status
+```
+""",
+        makefile=(
+            "test-focused:\n"
+            '\t@test -n "$(LANE)" || exit 2\n'
+            '\t@test -n "$(TESTS)" || exit 2\n'
+            "handoff-scoped: test-focused\n"
+            '\t@test -n "$(PATHS)" || exit 2\n'
+            "affected:\n\ncheck-all:\n\nvalidation-status:\n"
+        ),
+    )
+
+    assert validate_documents(root, (document,)) == []
 
 
 def test_validates_targets_and_required_variables_from_literal_includes(

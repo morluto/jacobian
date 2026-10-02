@@ -56,8 +56,17 @@ lane preserves its configured timeout and worker count. Supported
 focused lanes are `math`, `catalog`, `dispatch`, `cli`, `tooling`,
 `integration`, `process`, and `mcp`; Singular and QEPCAD retain dedicated commands.
 
-The local math lane defaults to two workers. Override `MATH_WORKERS` on
-`make test-math` or `make affected` to suit the host's CPU and memory budget.
+### Math workers and host budget
+
+Use the Make entry points rather than reconstructing owner-wide or broad
+`pytest -n N` commands. Setting `MATH_WORKERS` beside a direct pytest command
+does not control pytest's `-n` option or acquire a validation lease. For one-owner
+edits, keep explicit `TESTS` on `make test-focused` or `make handoff-scoped`;
+use `make affected` for final-tree evidence.
+
+The local math lane defaults to two workers. Before a broad math run, set
+`MATH_WORKERS` deliberately on `make test-math` or `make affected` to suit the
+host's available memory and concurrent workload, not just its CPU count.
 The setting also reaches focused math commands
 and preserves their selectors, markers, and timeout. Use `MATH_WORKERS=1` for
 the conservative isolated-worker path, or `MATH_WORKERS=0` to run in the main
@@ -66,6 +75,16 @@ worker collects the suite and imports its backends separately; account for
 concurrent solver children and exact intermediates as well as worker memory.
 Do not derive a worker count from CPU count alone. Hosted math shards retain
 their separate one-worker configuration because each shard already has its own runner.
+
+`MATH_WORKERS` also reaches the math lane in `make check-all` and
+`make test-full`; other lanes retain their own worker settings. In particular,
+`make check` uses the fixed two-worker mixed-owner `test-fast` lane, so
+`MATH_WORKERS=1` does not reduce that command's concurrency. If that mixed lane
+does not fit, use the affected plan or, when broad ordinary evidence is actually
+needed, `make check-all MATH_WORKERS=1` after accounting for its other lanes.
+The [validation lease](#command-hierarchy-and-timing-evidence) coordinates
+selected broad commands within one worktree; it does not budget host memory or
+coordinate other worktrees and desktop applications.
 
 In a shared checkout with unrelated static drift, declare the source and test
 paths you own instead of waiting on unrelated files:
@@ -104,11 +123,14 @@ process, MCP, and external-backend lanes. It routes non-Singular examples throug
 `test-catalog-examples` and Singular-owned examples through `test-singular`.
 Neither command reproduces hosted packaging, coverage, or all CI jobs.
 
-`make check` and `make check-all` take a worktree-local non-blocking validation
-lease. `make validation-status` identifies a competing broad run immediately;
-focused and affected commands remain unblocked. Use
+`make check`, `make check-all`, and `make test-full` take a worktree-local
+non-blocking validation lease. `make validation-status` identifies a competing
+broad run immediately; focused, affected, and standalone `make test-math`
+commands do not take that lease. Coordinate concurrent runs and apply the
+[math worker policy](#math-workers-and-host-budget) even when using Make. Use
 `ALLOW_PARALLEL_VALIDATION=1` only for an intentional parallel broad run on a
-host with known capacity.
+host with known capacity; this override applies to `check` and `check-all`,
+not `test-full`.
 
 CI lanes using the shared `run-test-lane` action emit a JUnit artifact and a
 worker-timing sidecar retained for 90 days. Download both to identify slow

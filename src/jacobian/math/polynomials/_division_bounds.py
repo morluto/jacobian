@@ -1,4 +1,4 @@
-"""Complete univariate division envelopes for the maintained classical kernel."""
+"""Exact coefficient-budget helpers and classical univariate division admission."""
 
 from dataclasses import dataclass
 from fractions import Fraction
@@ -34,7 +34,7 @@ class _Ledger:
     work: int = 0
 
     def charge(self, operations: int, bits: int = 1) -> None:
-        request_checkpoint("during univariate division admission")
+        request_checkpoint("during polynomial division admission")
         if bits > MAX_DIVISION_PRIVATE_BITS:
             _reject(
                 "intermediate_height",
@@ -58,22 +58,25 @@ def _source(
 ) -> tuple[RationalPolynomialTerm, ...]:
     """Owner source budgets precede this bounded canonical-shape recognition."""
     terms = polynomial.polynomial.terms
-    previous = 128
+    previous: tuple[int, ...] | None = None
     for term in terms:
         if (
             type(term) is not RationalPolynomialTerm
             or type(term.exponents) is not tuple
-            or len(term.exponents) != 1
-            or type(term.exponents[0]) is not int
-            or not 0 <= term.exponents[0] < previous
+            or len(term.exponents) != len(polynomial.variables)
+            or any(
+                type(exponent) is not int or not 0 <= exponent < 128
+                for exponent in term.exponents
+            )
+            or (previous is not None and term.exponents >= previous)
             or type(term.coefficient) is not CanonicalRational
         ):
             raise OperationDomainValidationError(
                 location=(),
                 code="polynomial.division.source",
-                message="division needs canonical ordered univariate terms",
+                message="division needs canonical ordered polynomial terms",
             )
-        previous = term.exponents[0]
+        previous = term.exponents
         coefficient = term.coefficient
         if (
             type(coefficient.num) is not int

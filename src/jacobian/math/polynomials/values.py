@@ -494,26 +494,39 @@ def rational_evaluation_component_digit_bounds(
     maximum_exponents = tuple(
         max(term.exponents[axis] for term in active_terms) for axis in range(len(point))
     )
-    has_nontrivial_denominator = any(
-        term.coefficient.den != 1 for term in active_terms
-    ) or any(
-        exponent and coordinate.den != 1
-        for coordinate, exponent in zip(point, maximum_exponents, strict=True)
+    coefficient_denominator_digits = tuple(
+        0
+        if term.coefficient.den == 1
+        else len(format_canonical_integer(term.coefficient.den))
+        for term in active_terms
+    )
+    total_coefficient_denominator_digits = sum(coefficient_denominator_digits)
+    point_denominator_digits = tuple(
+        0 if coordinate.den == 1 else len(format_canonical_integer(coordinate.den))
+        for coordinate in point
+    )
+    point_numerator_digits = tuple(
+        0
+        if coordinate.num in {1, -1}
+        else len(format_canonical_integer(abs(coordinate.num)))
+        for coordinate in point
     )
     common_denominator_digits = max(
         1,
-        sum(
-            len(format_canonical_integer(term.coefficient.den))
-            for term in active_terms
-            if term.coefficient.den != 1
-        )
+        total_coefficient_denominator_digits
         + sum(
-            exponent * len(format_canonical_integer(coordinate.den))
-            for coordinate, exponent in zip(point, maximum_exponents, strict=True)
-            if coordinate.den != 1
+            exponent * digits
+            for exponent, digits in zip(
+                maximum_exponents, point_denominator_digits, strict=True
+            )
         ),
     )
-    maximum_term_numerator_digits = max(
+    # D = product_i coefficient_den_i * product_j point_den_j**max_exp_j.
+    # The i-th term needs only D / (coefficient_den_i * product_j
+    # point_den_j**exp_ij). Price precisely these remaining factors, without
+    # charging its own denominator to its numerator a second time. No powers
+    # or common-denominator integers are expanded during admission.
+    maximum_scaled_numerator_digits = max(
         max(
             1,
             (
@@ -521,21 +534,25 @@ def rational_evaluation_component_digit_bounds(
                 if term.coefficient.num in {1, -1}
                 else len(format_canonical_integer(abs(term.coefficient.num)))
             )
+            + total_coefficient_denominator_digits
+            - coefficient_digits
             + sum(
-                exponent * len(format_canonical_integer(abs(coordinate.num)))
-                for coordinate, exponent in zip(point, term.exponents, strict=True)
-                if coordinate.num not in {1, -1}
+                exponent * numerator_digits + (maximum - exponent) * denominator_digits
+                for exponent, maximum, numerator_digits, denominator_digits in zip(
+                    term.exponents,
+                    maximum_exponents,
+                    point_numerator_digits,
+                    point_denominator_digits,
+                    strict=True,
+                )
             ),
         )
-        for term in active_terms
-    )
-    denominator_scale_digits = (
-        common_denominator_digits if has_nontrivial_denominator else 0
+        for term, coefficient_digits in zip(
+            active_terms, coefficient_denominator_digits, strict=True
+        )
     )
     addition_digits = 0 if len(active_terms) == 1 else len(str(len(active_terms) - 1))
-    numerator_digits = (
-        maximum_term_numerator_digits + denominator_scale_digits + addition_digits
-    )
+    numerator_digits = maximum_scaled_numerator_digits + addition_digits
     return numerator_digits, common_denominator_digits
 
 

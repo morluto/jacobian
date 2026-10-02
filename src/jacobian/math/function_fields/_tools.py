@@ -807,7 +807,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         discovery_terms=(
             "function field multiplication",
             "algebraic function field element product",
-            "GF(p)(x)[y] reduction",
+            "GF(p)(x)[y] product reduction",
             "rational function field extension arithmetic",
         ),
         examples=(

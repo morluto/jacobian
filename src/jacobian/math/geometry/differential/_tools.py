@@ -60,7 +60,11 @@ TOOLS = (
             "rational-function",
             "exact",
         ),
-        discovery_terms=("coordinate tensor", "Lie bracket", "infinitesimal pullback"),
+        discovery_terms=(
+            "coordinate tensor",
+            "rational vector field Lie bracket",
+            "infinitesimal pullback",
+        ),
         examples=(
             OperationExample(
                 name="scalar_directional_derivative",

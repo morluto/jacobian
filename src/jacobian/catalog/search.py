@@ -114,6 +114,7 @@ class _SearchCorpus:
             tuple[frozenset[str], ...],
             frozenset[tuple[str, str]],
             frozenset[tuple[str, str]],
+            frozenset[str],
         ],
         ...,
     ]
@@ -135,6 +136,7 @@ class OperationSearchIndex:
                     for term in operation.discovery_terms
                     for phrase in _phrases(term)
                 ),
+                frozenset(_authored_phrase(term) for term in operation.discovery_terms),
             )
             for operation in operations
         )
@@ -159,12 +161,13 @@ class OperationSearchIndex:
                 tuple[frozenset[str], ...],
                 frozenset[tuple[str, str]],
                 frozenset[tuple[str, str]],
+                frozenset[str],
             ],
             ...,
         ],
     ) -> _SearchCorpus:
         document_terms = tuple(
-            frozenset().union(*fields) for _, fields, _, _ in entries
+            frozenset().union(*fields) for _, fields, _, _, _ in entries
         )
         return _SearchCorpus(
             entries=entries,
@@ -205,10 +208,18 @@ def _match_corpus(
 ) -> OperationMatchResult:
     need_terms = discovery_terms(request.need)
     need_phrases = _phrases(request.need)
+    authored_query = _authored_phrase(request.need)
     ranked: list[tuple[float, OperationDiscoveryMatch]] = []
-    for descriptor, fields, title_phrases, contract_phrases in corpus.entries:
+    for (
+        descriptor,
+        fields,
+        title_phrases,
+        contract_phrases,
+        authored_phrases,
+    ) in corpus.entries:
         if not _explicit_domain_matches(request.need, need_terms, fields, descriptor):
             continue
+        authored_match = authored_query in authored_phrases
         score = need_relevance(
             fields,
             need_terms,
@@ -217,8 +228,9 @@ def _match_corpus(
         )
         if score > 0:
             score += _phrase_relevance(need_phrases, title_phrases, contract_phrases)
-        if score > 0 and (
-            request.search_mode == "broad"
+        if (score > 0 or authored_match) and (
+            authored_match
+            or request.search_mode == "broad"
             or _precise_match(
                 descriptor,
                 fields,
@@ -344,6 +356,15 @@ def browse_operations(
         total_operations=len(operations),
         next_cursor=next_cursor,
     )
+
+
+def _authored_phrase(value: str) -> str:
+    """Compare complete authored wording without stemming or dropping symbols.
+
+    Case and repeated whitespace are presentational. Punctuation, word order
+    and added words remain significant: this is not a broad lexical override.
+    """
+    return " ".join(value.casefold().split())
 
 
 def normalize_discovery_term(term: str) -> str:

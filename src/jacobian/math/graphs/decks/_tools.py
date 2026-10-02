@@ -192,7 +192,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=_run_vertex_deleted,
         tags=("graph", "deck", "vertex-deletion", "reconstruction", "exact"),
         discovery_terms=(
-            "vertex deck",
+            "source-indexed vertex-deletion family",
             "vertex-deleted subgraphs",
             "reconstruction",
             "card family",
@@ -218,7 +218,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=EdgeDeletionFamily,
         run=_run_edge_deleted,
         tags=("graph", "deck", "edge-deletion", "exact"),
-        discovery_terms=("edge deck", "edge-deleted cards", "graph deck"),
+        discovery_terms=(
+            "edge deck",
+            "edge-deleted cards",
+            "source-indexed edge-deletion family",
+        ),
         examples=(
             OperationExample(
                 name="triangle_edge_deck",

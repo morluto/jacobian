@@ -815,7 +815,7 @@ def _build_tools() -> MathTools:
         discovery_terms=(
             "Jacobian syzygy",
             "finite field syzygy module",
-            "characteristic p differentiation",
+            "characteristic p Jacobian syzygy verification",
             "quotient ring normal form",
             "Lipman-Zariski",
             "Der module generators",
@@ -854,6 +854,7 @@ def _build_tools() -> MathTools:
             "exact",
         ),
         discovery_terms=(
+            "characteristic p differentiation",
             "characteristic p derivative",
             "finite field gradient",
             "formal partial derivative",

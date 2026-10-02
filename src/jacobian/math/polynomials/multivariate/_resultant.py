@@ -20,6 +20,8 @@ from jacobian.math.polynomials._models import (
 from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
 
 from ._models import (
+    _degree_in_variable,
+    _remaining_total_degree,
     _validate_multivariate_pair,
     _validation_error,
 )
@@ -39,39 +41,36 @@ def _resultant_support_bound(
 
     If ``f`` and ``g`` have elimination degrees ``m`` and ``n``, and total
     remaining-variable degrees ``d_f`` and ``d_g``, every resultant monomial
-    has total degree at most ``n*d_f + m*d_g``.  The returned binomial is the
-    number of monomials up to that degree in the remaining variables.
+    has total degree at most ``n*d_f + m*d_g``.  In each remaining axis ``j``
+    its degree is also at most ``n*deg_j(f) + m*deg_j(g)``: every Sylvester
+    determinant term takes ``n`` coefficients of ``f`` and ``m`` of ``g``.
+
+    Bound support by the smaller of the total-degree simplex on axes with a
+    positive degree bound and the per-axis degree box.  An inactive axis has
+    only exponent zero, even when retained in the canonical output ring.
+    These are output-support bounds, not coefficient-height or backend
+    intermediate-work bounds.
     """
-    from math import comb
+    from math import comb, prod
 
-    remaining_variable_count = len(left.variables) - 1
-    if remaining_variable_count == 0:
-        return 1
-
-    def degree(polynomial: RationalPolynomial, *, in_remaining: bool) -> int:
-        return max(
-            (
-                sum(
-                    exponent
-                    for index, exponent in enumerate(term.exponents)
-                    if (index != elimination_index) == in_remaining
-                )
-                for term in polynomial.polynomial.terms
-            ),
-            default=0,
-        )
-
-    left_elimination_degree = degree(left, in_remaining=False)
-    right_elimination_degree = degree(right, in_remaining=False)
-    left_remaining_degree = degree(left, in_remaining=True)
-    right_remaining_degree = degree(right, in_remaining=True)
+    left_elimination_degree = _degree_in_variable(left, elimination_index)
+    right_elimination_degree = _degree_in_variable(right, elimination_index)
+    axis_degree_bounds = tuple(
+        right_elimination_degree * _degree_in_variable(left, index)
+        + left_elimination_degree * _degree_in_variable(right, index)
+        for index in range(len(left.variables))
+        if index != elimination_index
+    )
+    active_variable_count = sum(degree > 0 for degree in axis_degree_bounds)
+    left_remaining_degree = _remaining_total_degree(left, elimination_index)
+    right_remaining_degree = _remaining_total_degree(right, elimination_index)
     resultant_degree_bound = (
         right_elimination_degree * left_remaining_degree
         + left_elimination_degree * right_remaining_degree
     )
-    return comb(
-        resultant_degree_bound + remaining_variable_count,
-        remaining_variable_count,
+    return min(
+        comb(resultant_degree_bound + active_variable_count, active_variable_count),
+        prod(degree + 1 for degree in axis_degree_bounds),
     )
 
 
@@ -84,8 +83,10 @@ class MultivariateResultantRequest(StrictModel):
     ``Res_x(f, c) = c ^ deg_x(f)`` (and symmetrically ``Res_x(c, g) =
     c ^ deg_x(g)``), two inputs both constant in the eliminated variable give
     the empty-determinant value 1, and a zero input gives 0.  The request
-    rejects inputs whose degree envelope can produce more terms than the
-    exact sparse result contract can represent.
+    rejects inputs whose active coefficient degree envelope exceeds the
+    1,024-term output budget.  It uses the smaller of the active total-degree
+    and per-axis degree bounds; inactive remaining variables are retained in
+    the result ring without increasing either support bound.
     """
 
     left: RationalPolynomial

@@ -60,14 +60,11 @@ def _admit_filtered_structure(
             "filtered_chain_complex.integer_coefficients_unsupported",
             "associated graded supports QQ and GF(p) filtrations",
         )
-    try:
-        require_prime_field_admission(
-            complex_value.coefficient_ring, complex_value.prime
-        )
-    except ValueError as exc:
-        raise _fail(
-            ("complex",), "filtered_chain_complex.prime_invalid", str(exc)
-        ) from exc
+    require_prime_field_admission(
+        complex_value.coefficient_ring,
+        complex_value.prime,
+        location=("complex", "prime"),
+    )
     if not isinstance(filtration, tuple) or not 1 <= len(filtration) <= (
         MAX_FILTER_LEVELS
     ):

@@ -68,6 +68,8 @@ def _construct(request: ConstructChainComplexRequest) -> ChainComplexValue:
             code=str(error["type"]),
             message=str(error["msg"]),
         ) from exc
+    except OperationDomainValidationError:
+        raise
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("differential_matrices",),
@@ -95,6 +97,8 @@ def _mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     """Project a wire request into the canonical mapping-cone operation."""
     try:
         return mapping_cone(request.chain_map)
+    except OperationDomainValidationError:
+        raise
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("chain_map",),

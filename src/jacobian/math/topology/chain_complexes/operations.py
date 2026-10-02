@@ -53,18 +53,20 @@ class ChainComplexAdmissionError(ValueError):
 
 
 def _admit_prime_fields(
-    *complexes: ChainComplexValue,
+    *complexes: tuple[tuple[str | int, ...], ChainComplexValue],
 ) -> None:
     """Admit each distinct GF(p) context once for a compound operation."""
     admitted: set[int] = set()
-    for complex_value in complexes:
+    for location, complex_value in complexes:
         prime = complex_value.prime
         if (
             complex_value.coefficient_ring is CoefficientRing.PRIME_FIELD
             and prime in admitted
         ):
             continue
-        require_prime_field_admission(complex_value.coefficient_ring, prime)
+        require_prime_field_admission(
+            complex_value.coefficient_ring, prime, location=(*location, "prime")
+        )
         if prime is not None:
             admitted.add(prime)
 
@@ -991,7 +993,11 @@ def homology_groups(
     _integral_right_inverses: list[list[list[int]]] | None = None,
 ) -> HomologyResult:
     """Return exact homology groups for a canonical chain complex value."""
-    require_prime_field_admission(complex_value.coefficient_ring, complex_value.prime)
+    require_prime_field_admission(
+        complex_value.coefficient_ring,
+        complex_value.prime,
+        location=("complex", "prime"),
+    )
     _require_complex_cell_budget(
         complex_value,
         maximum=MAX_MATRIX_CELLS,
@@ -1015,7 +1021,11 @@ def differential_squares_to_zero(
     complex_value: ChainComplexValue,
 ) -> VerificationResult:
     """Verify d^2 = 0 for one canonical chain-complex value."""
-    require_prime_field_admission(complex_value.coefficient_ring, complex_value.prime)
+    require_prime_field_admission(
+        complex_value.coefficient_ring,
+        complex_value.prime,
+        location=("complex", "prime"),
+    )
     _require_complex_cell_budget(
         complex_value,
         maximum=MAX_OPERATION_MATRIX_CELLS,
@@ -1035,7 +1045,9 @@ def chain_map_commutes(
         chain_map.target,
         chain_map.map_matrices,
     )
-    _admit_prime_fields(source, target)
+    _admit_prime_fields(
+        (("chain_map", "source"), source), (("chain_map", "target"), target)
+    )
     for label, complex_value in (("source", source), ("target", target)):
         _require_complex_cell_budget(
             complex_value,
@@ -1060,7 +1072,9 @@ def mapping_cone(
         chain_map.target,
         chain_map.map_matrices,
     )
-    _admit_prime_fields(source, target)
+    _admit_prime_fields(
+        (("chain_map", "source"), source), (("chain_map", "target"), target)
+    )
     for label, complex_value in (("source", source), ("target", target)):
         _require_complex_cell_budget(
             complex_value,
@@ -1090,7 +1104,7 @@ def tensor_product_complex(
     right: ChainComplexValue,
 ) -> TensorProductResult:
     """Compute the tensor product of two canonical chain-complex values."""
-    _admit_prime_fields(left, right)
+    _admit_prime_fields((("left",), left), (("right",), right))
     for label, complex_value in (("left", left), ("right", right)):
         _require_complex_cell_budget(
             complex_value,

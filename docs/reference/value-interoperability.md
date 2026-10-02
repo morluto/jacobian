@@ -562,3 +562,15 @@ claims, chordal PSD decomposition, and completion, do not inherit this request
 family. Their separate admission and authored-claim contracts are not changed by
 these adapters. New siblings of the covered owners must opt into the applicable
 request annotation and join the registry-backed argument-position regressions.
+
+Ordinary matrix-analysis requests also normalize rational presentations: inertia's
+QQ matrix arm, Collatz–Wielandt's matrix and vector, chordal PSD decomposition's
+matrix, and chordal PSD completion's specified values. These owners preserve the
+full carrier ceiling of 32768 digits per raw component rather than the separate
+256-digit base-linear-algebra envelope. Raw counts and components are bounded
+before reduction; all existing owner work, growth, positivity, support, and output
+admission remains in force. Completion composes rational normalization with
+undirected graph endpoint orientation without changing specified coordinates.
+An explicit zero remains specified; an absent off-diagonal entry remains unknown.
+Native and persisted values, returned sources, spectrum/Farkas evidence, and
+inertia's embedded-number-field arm retain strict canonical decoding.

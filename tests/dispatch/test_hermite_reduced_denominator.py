@@ -54,10 +54,18 @@ def test_public_hermite_callers_admit_cancellable_denominator(
         ]
 
 
-def test_public_hermite_keeps_uncancelled_overflow_typed() -> None:
+@pytest.mark.parametrize(
+    "operation_id",
+    (
+        "rational_function.hermite_reduction.compute",
+        "rational_function.rational_primitive.compute",
+        "rational_function.formal_antiderivative.compute",
+    ),
+)
+def test_public_hermite_keeps_uncancelled_overflow_typed(operation_id: str) -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         invoke_operation(
-            "rational_function.hermite_reduction.compute",
+            operation_id,
             {
                 "function": {
                     "variables": ["x"],

@@ -53,10 +53,10 @@ def _admit(f: RationalFunction) -> None:
 def logarithmic_differential(
     function: RationalFunction,
 ) -> LogarithmicDifferentialResult:
-    from .operations import hermite_reduction, partial_fractions
+    from .operations import _hermite_remainder_admitted, partial_fractions
 
     _admit(function)
-    _, remainder = hermite_reduction(function)
+    remainder = _hermite_remainder_admitted(function)
     if not remainder.numerator.terms:
         return LogarithmicDifferentialResult(
             source=function,

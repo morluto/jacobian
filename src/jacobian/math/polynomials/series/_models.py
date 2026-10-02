@@ -28,8 +28,8 @@ MAX_REVERSION_BACKEND_WORK = 1_000_000_000
 MAX_POWER_EXPONENT = 1_000
 
 # Truncation sources are admitted through the widest carrier canonical
-# values can carry: formal-series results keep the 512-order input
-# envelope, and level-one modular q-expansion replay admits E4/E6
+# values can carry: unit-series operations admit up to order 2048,
+# their constant-denominator regimes keep the wider source carrier, and level-one modular q-expansion replay admits E4/E6
 # expansions up to order 25280 under its own 4,000,000 work-term budget
 # (p * isqrt(p)).  Request admission still materializes and
 # height-validates every source coefficient before the prefix is read,
@@ -551,10 +551,9 @@ def _inverse_height(series: TruncatedSeries) -> tuple[int, int, int, int]:
     Constant sources only need denominator p. This also bounds every
     partial recurrence sum after multiplication by a source coefficient.
 
-    With N<=512 the existing kernel uses O(N**2) Fraction operations.
-    Reduced terms and partial sums fit the checked common-denominator
-    bounds; Fraction's unreduced cross-products have at most twice their
-    component bit bounds. Thus intermediates are bounded before execution.
+    These are bounds on the exact prefix and its algebraic residual. The
+    separate unit-kernel envelope prices FLINT Newton full products, including
+    discarded high coefficients, conversion, retained storage and replay.
     """
     denominator, coefficients = _cleared_series(series)
     constant = abs(coefficients[0])
@@ -740,10 +739,13 @@ def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
 
 
 def admit_native_inverse(series: TruncatedSeries) -> None:
+    from ._unit_bounds import MAX_UNIT_ORDER, kernel_envelope, require_series
+
+    require_series(series, maximum_digits=MAX_RATIONAL_DIGITS)
     constant = _has_degree_at_most(series, 0)
     _require_native_input_series(
         series,
-        maximum_order=MAX_TRUNCATE_SOURCE_ORDER if constant else MAX_TRUNCATION_ORDER,
+        maximum_order=MAX_TRUNCATE_SOURCE_ORDER if constant else MAX_UNIT_ORDER,
     )
     if series.coefficients[0].as_fraction() == 0:
         raise _validation_error(
@@ -751,16 +753,21 @@ def admit_native_inverse(series: TruncatedSeries) -> None:
         )
     if not constant:
         _inverse_height(series)
+    kernel_envelope(series).checked()
 
 
 def admit_native_divide(
     numerator: TruncatedSeries, denominator: TruncatedSeries
 ) -> None:
+    from ._unit_bounds import MAX_UNIT_ORDER, kernel_envelope, require_series
+
+    require_series(numerator, maximum_digits=MAX_RATIONAL_DIGITS)
+    require_series(denominator, maximum_digits=MAX_RATIONAL_DIGITS)
     constant = _has_degree_at_most(denominator, 0)
     _require_native_pair(
         numerator,
         denominator,
-        maximum_order=MAX_TRUNCATE_SOURCE_ORDER if constant else MAX_TRUNCATION_ORDER,
+        maximum_order=MAX_TRUNCATE_SOURCE_ORDER if constant else MAX_UNIT_ORDER,
     )
     if denominator.coefficients[0].as_fraction() == 0:
         raise _validation_error(
@@ -771,6 +778,7 @@ def admit_native_divide(
         _require_height(
             RationalHeight(2 * MAX_RATIONAL_DIGITS, 2 * MAX_RATIONAL_DIGITS), "division"
         )
+        kernel_envelope(denominator, numerator).checked()
         return
     inv_num, inv_den, source_norm, source_den = _inverse_height(denominator)
     common_denominator, coefficients = _cleared_series(numerator)
@@ -788,6 +796,7 @@ def admit_native_divide(
         source_den + quotient_den,
         "division residual",
     )
+    kernel_envelope(denominator, numerator).checked()
 
 
 def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
@@ -983,7 +992,11 @@ class _SeriesIdentityCheckRequest(_SeriesPairRequest):
 
 
 class SeriesDivideRequest(_SeriesPairRequest):
-    """Divide two series when the denominator is a unit."""
+    """Divide unit series through order 2048 when complete growth/work fit.
+
+    Constant denominators retain the linear-time order-25280 source envelope.
+    Sources have at most 256-digit components; output components fit 4096 digits.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -1072,7 +1085,11 @@ class SeriesPowerResult(StrictModel):
 
 
 class SeriesInverseRequest(StrictModel):
-    """Invert a truncated series that is a unit (nonzero constant term)."""
+    """Invert a unit series through order 2048 when complete growth/work fit.
+
+    Constant sources retain their linear-time order-25280 envelope. Source
+    components are at most 256 digits; results remain bounded by 4096 digits.
+    """
 
     variable: Variable = Field(description="The single formal variable.")
     truncation_order: StrictInt = Field(

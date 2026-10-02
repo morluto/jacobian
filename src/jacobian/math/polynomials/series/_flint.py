@@ -12,7 +12,13 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
-from jacobian._execution import BackendFailureReason, OperationBackendError
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_checkpoint,
+)
 
 
 def _backend_fraction(value: Any) -> Fraction:
@@ -51,7 +57,12 @@ def _poly_from_series(series: Any, order: int) -> Any:
 def _fractions_from_series(series: Any, order: int) -> list[Fraction]:
     if int(series.prec) != order:
         raise ValueError("FLINT returned a series at the wrong precision")
-    return [_backend_fraction(series[index]) for index in range(order)]
+    values = []
+    for index in range(order):
+        request_checkpoint("during exact FLINT series scalar decoding")
+        values.append(_backend_fraction(series[index]))
+    request_checkpoint("after exact FLINT series scalar decoding")
+    return values
 
 
 def _poly_inverse(source: Any, order: int) -> Any:
@@ -63,6 +74,7 @@ def _poly_inverse(source: Any, order: int) -> Any:
     precision = 1
     two = fmpq_poly([2])
     while precision < order:
+        request_checkpoint("during exact FLINT series Newton iteration")
         next_precision = min(2 * precision, order)
         truncated = source.truncate(next_precision)
         inverse = (inverse * (two - truncated * inverse)).truncate(next_precision)
@@ -92,6 +104,7 @@ def _poly_reversion(source: Any, order: int) -> Any:
     precision = 1
     target = fmpq_poly([0, 1])
     while precision < order:
+        request_checkpoint("during exact FLINT series Newton iteration")
         next_precision = min(2 * precision, order)
         truncated = source.truncate(next_precision)
         error = (_poly_compose(truncated, inverse, next_precision) - target).truncate(
@@ -108,7 +121,12 @@ def _poly_reversion(source: Any, order: int) -> Any:
 
 
 def _poly_coefficients(poly: Any, order: int) -> list[Fraction]:
-    return [_backend_fraction(poly[index]) for index in range(order)]
+    values = []
+    for index in range(order):
+        request_checkpoint("during exact FLINT polynomial scalar decoding")
+        values.append(_backend_fraction(poly[index]))
+    request_checkpoint("after exact FLINT polynomial scalar decoding")
+    return values
 
 
 def _inverse_backend(
@@ -166,7 +184,11 @@ def inverse_backend(
 
     try:
         return _inverse_backend(coefficients)
-    except OperationBackendError:
+    except (
+        OperationBackendError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
         raise
     except (ImportError, ModuleNotFoundError, AttributeError) as exc:
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
@@ -181,7 +203,11 @@ def reversion_backend(
 
     try:
         return _reversion_backend(coefficients)
-    except OperationBackendError:
+    except (
+        OperationBackendError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
         raise
     except (ImportError, ModuleNotFoundError, AttributeError) as exc:
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
@@ -189,4 +215,90 @@ def reversion_backend(
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
-__all__ = ["inverse_backend", "reversion_backend"]
+def _divide_backend(
+    numerator: tuple[Fraction, ...], denominator: tuple[Fraction, ...]
+) -> tuple[list[Fraction], list[Fraction]]:
+    order = len(numerator)
+    if not any(denominator[1:]):
+        quotient = []
+        residual = []
+        for value in numerator:
+            request_checkpoint("during constant series division")
+            entry = value / denominator[0]
+            quotient.append(entry)
+            residual.append(denominator[0] * entry - value)
+        return quotient, residual
+    a = _poly_from_series(_series_from_fractions(numerator, order), order)
+    b = _poly_from_series(_series_from_fractions(denominator, order), order)
+    inverse = _poly_inverse(b, order)
+    request_checkpoint("before exact FLINT series quotient")
+    quotient_poly = (a * inverse).truncate(order)
+    request_checkpoint("before exact FLINT quotient residual")
+    residual_poly = (b * quotient_poly - a).truncate(order)
+    quotient = _poly_coefficients(quotient_poly, order)
+    residual = _poly_coefficients(residual_poly, order)
+    if any(residual):
+        raise ValueError("FLINT quotient residual is nonzero")
+    return quotient, residual
+
+
+def divide_backend(
+    numerator: tuple[Fraction, ...], denominator: tuple[Fraction, ...]
+) -> tuple[list[Fraction], list[Fraction]]:
+    """Run admitted quotient arithmetic with an exact residual and typed failures."""
+    try:
+        return _divide_backend(numerator, denominator)
+    except (
+        OperationBackendError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
+        raise
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
+def product_residual_backend(
+    denominator: tuple[Fraction, ...],
+    result: tuple[Fraction, ...],
+    numerator: tuple[Fraction, ...] | None = None,
+) -> list[Fraction]:
+    """Replay an independently admitted claim without solving for its result."""
+    try:
+        order = len(denominator)
+        original = (
+            numerator
+            if numerator is not None
+            else (Fraction(1), *(Fraction() for _ in range(order - 1)))
+        )
+        if not any(denominator[1:]):
+            residual = []
+            for claimed, source in zip(result, original, strict=True):
+                request_checkpoint("during constant series claim replay")
+                residual.append(denominator[0] * claimed - source)
+            return residual
+        b = _poly_from_series(_series_from_fractions(denominator, order), order)
+        q = _poly_from_series(_series_from_fractions(result, order), order)
+        a = _poly_from_series(_series_from_fractions(original, order), order)
+        request_checkpoint("before exact FLINT unit-series claim replay")
+        return _poly_coefficients((b * q - a).truncate(order), order)
+    except (
+        OperationBackendError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
+        raise
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
+__all__ = [
+    "divide_backend",
+    "inverse_backend",
+    "product_residual_backend",
+    "reversion_backend",
+]

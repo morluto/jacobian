@@ -88,7 +88,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polynomial_field.scalar.laplacian.compute",
         title="Compute the Laplacian of a scalar field",
         description="Compute the Laplacian (sum of second partial derivatives) of a "
-        "multivariate polynomial scalar field.",
+        "multivariate polynomial scalar field. The union of surviving second-partial "
+        "supports must have at most 256 monomials; inactive axes do not consume "
+        "this result budget.",
         request_type=ScalarFieldRequest,
         result_type=ScalarResult,
         run=_laplacian,
@@ -112,7 +114,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polynomial_field.scalar.directional_derivative.compute",
         title="Compute the directional derivative",
         description="Compute the directional derivative of a scalar field along a "
-        "direction vector using exact symbolic differentiation.",
+        "direction vector using exact symbolic differentiation. The union of "
+        "first-partial supports with nonzero direction weights must have at most "
+        "256 monomials; zero weights do not consume this result budget.",
         request_type=DirectionalDerivativeRequest,
         result_type=ScalarResult,
         run=_directional_derivative,

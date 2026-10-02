@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from fractions import Fraction
+from itertools import combinations_with_replacement, islice, product
+from math import comb
 
 import pytest
 from pydantic import ValidationError
@@ -174,20 +176,234 @@ def test_gradient_exact_and_termwise_oracles_cover_simple_and_mixed_support() ->
     assert gradient(source).components == _termwise_gradient(source)
 
 
-def test_scalar_derivative_operations_keep_their_single_polynomial_budget() -> None:
-    """The gradient's sparse-vector estimate must not relax scalar assembly."""
+def _termwise_scalar_derivative(
+    polynomial: RationalPolynomial,
+    *,
+    order: int,
+    weights: tuple[Fraction, ...],
+) -> RationalPolynomial:
+    """Independent exact coefficient-map definition, without SymPy."""
 
-    variables = ("x", "a", "b", "c", "d", "e", "f", "g")
+    terms: dict[tuple[int, ...], Fraction] = {}
+    for term in polynomial.polynomial.terms:
+        for axis, weight in enumerate(weights):
+            exponent = term.exponents[axis]
+            if exponent < order:
+                continue
+            key = tuple(
+                value - order if index == axis else value
+                for index, value in enumerate(term.exponents)
+            )
+            factor = exponent if order == 1 else exponent * (exponent - 1)
+            terms[key] = terms.get(key, Fraction()) + (
+                term.coefficient.as_fraction() * factor * weight
+            )
+    return _polynomial(polynomial.variables, terms)
+
+
+def _assert_scalar_derivatives(
+    source: RationalPolynomial, weights: tuple[Fraction, ...]
+) -> tuple[ScalarResult, ScalarResult]:
+    direction = tuple(CanonicalRational.from_fraction(weight) for weight in weights)
+    laplace = laplacian(source)
+    directional = directional_derivative(source, direction)
+    assert laplace.result == _termwise_scalar_derivative(
+        source, order=2, weights=(Fraction(1),) * len(source.variables)
+    )
+    assert directional.result == _termwise_scalar_derivative(
+        source, order=1, weights=weights
+    )
+    for result in (laplace, directional):
+        assert result.result.variables == source.variables
+        assert ScalarResult.model_validate_json(result.model_dump_json()) == result
+    assert verify_laplacian(laplace)
+    assert verify_directional_derivative(directional)
+    return laplace, directional
+
+
+@pytest.mark.parametrize(
+    "variables",
+    [("x", "y", "z"), ("x", "y", "z", "w"), ("w", "z", "y", "x")],
+)
+def test_scalar_derivatives_admit_sparse_retained_axes(
+    variables: tuple[str, ...],
+) -> None:
     source = _polynomial(
         variables,
-        {(degree, 0, 0, 0, 0, 0, 0, 0): 1 for degree in range(34, 1, -1)},
+        {
+            tuple(degree if name == "x" else 0 for name in variables): 1
+            for degree in range(65)
+        },
     )
-    direction = tuple(CanonicalRational(num=1, den=1) for _ in variables)
+    weights = tuple(Fraction(name == "x") for name in variables)
+    laplace, directional = _assert_scalar_derivatives(source, weights)
+    assert len(laplace.result.polynomial.terms) == 63
+    assert len(directional.result.polynomial.terms) == 64
 
+
+def test_harmonic_scalar_derivative_cancels_on_retained_axes() -> None:
+    source = _polynomial(
+        ("x", "y", "z", "w"),
+        {(64 - k, k, 0, 0): (-1) ** (k // 2) * comb(64, k) for k in range(65)},
+    )
+    laplace, _ = _assert_scalar_derivatives(
+        source, (Fraction(1, 2), Fraction(-2, 3), Fraction(), Fraction())
+    )
+    assert not laplace.result.polynomial.terms
+
+
+def _fully_active_scalar(terms: int) -> RationalPolynomial:
+    # Different derivative axes have distinct exponent residues modulo three.
+    return _polynomial(
+        ("x", "y", "z", "w"),
+        {
+            tuple(3 * value + 2 for value in exponents): 1
+            for exponents in islice(product(range(5), repeat=4), terms)
+        },
+    )
+
+
+def test_scalar_derivative_exact_output_term_boundary() -> None:
+    source = _fully_active_scalar(64)
+    results = _assert_scalar_derivatives(source, (Fraction(1),) * 4)
+    assert all(len(result.result.polynomial.terms) == 256 for result in results)
+
+    source = _fully_active_scalar(65)
+    direction = (CanonicalRational(num=1, den=1),) * 4
+    assert (
+        len(
+            _termwise_scalar_derivative(
+                source, order=2, weights=(Fraction(1),) * 4
+            ).polynomial.terms
+        )
+        == 260
+    )
+    assert (
+        len(
+            _termwise_scalar_derivative(
+                source, order=1, weights=(Fraction(1),) * 4
+            ).polynomial.terms
+        )
+        == 260
+    )
     with pytest.raises(OperationDomainValidationError, match="result-term budget"):
         laplacian(source)
     with pytest.raises(OperationDomainValidationError, match="result-term budget"):
         directional_derivative(source, direction)
+
+
+@pytest.mark.parametrize("weight", [Fraction(), Fraction(-2, 3)])
+def test_direction_weights_control_surviving_support(weight: Fraction) -> None:
+    source = _fully_active_scalar(65)
+    weights = (weight, Fraction(), Fraction(), Fraction())
+    direction = tuple(CanonicalRational.from_fraction(value) for value in weights)
+    result = directional_derivative(source, direction)
+    assert result.result == _termwise_scalar_derivative(
+        source, order=1, weights=weights
+    )
+    assert len(result.result.polynomial.terms) == (65 if weight else 0)
+    assert verify_directional_derivative(
+        ScalarResult.model_validate_json(result.model_dump_json())
+    )
+
+
+def test_scalar_support_union_admits_collisions_at_source_limit() -> None:
+    # 256 homogeneous quartics on eight axes have <=36 quadratic and <=120
+    # cubic output monomials even when >256 partial contributions survive.
+    variables = tuple("abcdefgh")
+    quartics = (
+        tuple(indices.count(axis) for axis in range(8))
+        for indices in combinations_with_replacement(range(8), 4)
+    )
+    exponents = sorted(
+        quartics, key=lambda key: sum(value > 1 for value in key), reverse=True
+    )[:256]
+    source = _polynomial(variables, dict.fromkeys(exponents, 1))
+    assert sum(sum(value > 0 for value in key) for key in exponents) > 256
+    assert sum(sum(value > 1 for value in key) for key in exponents) > 256
+    results = _assert_scalar_derivatives(source, (Fraction(1),) * 8)
+    assert len(results[0].result.polynomial.terms) <= 36
+    assert len(results[1].result.polynomial.terms) <= 120
+
+
+def test_scalar_derivative_coefficient_growth_remains_exact_and_decodable() -> None:
+    variables = tuple("abcdefgh")
+    denominators = tuple(10**127 + 2 * index + 1 for index in range(8))
+    sources = tuple(
+        _polynomial(
+            variables,
+            {
+                tuple(order if axis == index else 0 for axis in range(8)): Fraction(
+                    10**127, denominator
+                )
+                for index, denominator in enumerate(denominators)
+            },
+        )
+        for order in (1, 2)
+    )
+    weights = tuple(Fraction(10**127, value + 32) for value in denominators)
+    first = _assert_scalar_derivatives(sources[0], weights)[1]
+    second = _assert_scalar_derivatives(sources[1], weights)[0]
+    assert first.result.polynomial.terms[0].coefficient.den > 10**1900
+    assert second.result.polynomial.terms[0].coefficient.den > 10**950
+
+
+@pytest.mark.parametrize("direction_length", [0, 3, 5])
+def test_native_direction_length_precedes_support_admission(
+    direction_length: int,
+) -> None:
+    direction = (CanonicalRational(num=0, den=1),) * direction_length
+    with pytest.raises(OperationDomainValidationError) as caught:
+        directional_derivative(_fully_active_scalar(65), direction)
+    assert caught.value.errors()[0]["type"] == "polynomial_vector_calc.direction_length"
+
+
+def test_zero_direction_preserves_source_and_coordinate_validation() -> None:
+    source = _fully_active_scalar(65)
+    zero = (CanonicalRational(num=0, den=1),) * 4
+    over_degree = _polynomial(source.variables, {(65, 0, 0, 0): 1})
+    over_height = _polynomial(source.variables, {(1, 0, 0, 0): 10**128})
+    over_total_degree = _polynomial(source.variables, {(33, 33, 0, 0): 1})
+    for invalid_source in (
+        over_degree,
+        over_total_degree,
+        over_height,
+        _fully_active_scalar(257),
+    ):
+        with pytest.raises(OperationDomainValidationError):
+            directional_derivative(invalid_source, zero)
+        with pytest.raises(OperationDomainValidationError):
+            laplacian(invalid_source)
+    with pytest.raises(OperationDomainValidationError) as caught:
+        directional_derivative(
+            source, (CanonicalRational(num=10**128, den=1), *zero[1:])
+        )
+    assert caught.value.errors()[0]["type"] == (
+        "polynomial_vector_calc.direction_coordinate_bound"
+    )
+
+
+def test_zero_and_multiaffine_sources_have_no_second_partial_support() -> None:
+    variables = tuple("abcdefgh")
+    for terms in ({}, dict.fromkeys(islice(product(range(2), repeat=8), 65), 1)):
+        source = _polynomial(variables, terms)
+        laplace, directional = _assert_scalar_derivatives(source, (Fraction(),) * 8)
+        assert not laplace.result.polynomial.terms
+        assert not directional.result.polynomial.terms
+
+
+def test_scalar_derivative_verifiers_reject_changed_result_and_direction() -> None:
+    source = _fully_active_scalar(65)
+    direction = (CanonicalRational(num=1, den=1),) + (
+        CanonicalRational(num=0, den=1),
+    ) * 3
+    result = directional_derivative(source, direction)
+    assert not verify_directional_derivative(
+        result.model_copy(update={"result": source})
+    )
+    assert not verify_directional_derivative(
+        result.model_copy(update={"direction": direction[1:]})
+    )
 
 
 def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:

@@ -10,6 +10,13 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.matrices._rational_input import (
+    MAX_REQUEST_RATIONAL_DIGITS,
+    RationalInput,
+    RationalMatrixInput,
+    RationalMatrixInputEnvelope,
+    SparseRationalMatrixInput,
+)
 from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
@@ -25,7 +32,7 @@ from jacobian.math.matrices.values import (
 )
 from jacobian.math.polynomials.values import MonicPolynomial
 
-MAX_INPUT_SCALAR_DIGITS = 256
+MAX_INPUT_SCALAR_DIGITS = MAX_REQUEST_RATIONAL_DIGITS
 MAX_DETERMINANT_MATRIX_DIMENSION = 128
 MAX_DETERMINANT_SCALAR_WORK = 500_000_000
 MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
@@ -253,47 +260,68 @@ def _require_square_system_admission(
 
 
 class RationalMatrixRequest(_MatrixRequest):
-    matrix: RationalMatrix
+    matrix: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_RATIONAL_MATRIX_ORDER)
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
 
 class RationalMatrixProductRequest(_MatrixRequest):
     """Two compatible bounded matrices over the exact rational domain."""
 
-    left: RationalMatrix
-    right: RationalMatrix
+    left: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_PRODUCT_AXIS)
+    ]
+    right: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_PRODUCT_AXIS)
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_MATRIX_PRODUCT_AXIS
 
 
 class SquareRationalMatrixRequest(_MatrixRequest):
-    matrix: RationalMatrix
+    matrix: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_DIMENSION)
+    ]
 
 
 class CharacteristicPolynomialRequest(_MatrixRequest):
     """One rational matrix for a complete exact characteristic polynomial."""
 
-    matrix: RationalMatrix
+    matrix: Annotated[
+        RationalMatrixInput,
+        RationalMatrixInputEnvelope(MAX_CHARACTERISTIC_POLYNOMIAL_ORDER),
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_CHARACTERISTIC_POLYNOMIAL_ORDER
 
 
 class MatrixPermanentRequest(_MatrixRequest):
     """One square matrix charged by the exact Ryser subset enumeration."""
 
-    matrix: RationalMatrix
+    matrix: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_PERMANENT_MATRIX_ORDER)
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_PERMANENT_MATRIX_ORDER
 
 
 class MatrixDeterminantRequest(_MatrixRequest):
     """One square rational matrix of order at most 128."""
 
-    matrix: RationalMatrix
+    matrix: Annotated[
+        RationalMatrixInput,
+        RationalMatrixInputEnvelope(MAX_DETERMINANT_MATRIX_DIMENSION),
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_DETERMINANT_MATRIX_DIMENSION
 
 
 class MatrixRankRequest(_MatrixRequest):
     """One bounded rectangular matrix whose exact rank is requested."""
 
-    matrix: RationalMatrix | SparseRationalMatrix
+    matrix: (
+        Annotated[
+            RationalMatrixInput, RationalMatrixInputEnvelope(MAX_RATIONAL_MATRIX_ORDER)
+        ]
+        | SparseRationalMatrixInput
+    )
     _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
     @classmethod
@@ -353,8 +381,10 @@ class SquareIntegerMatrixRequest(_MatrixRequest):
 
 
 class RationalLinearSolveRequest(_MatrixRequest):
-    matrix: RationalMatrix
-    rhs: tuple[CanonicalRational, ...] = Field(
+    matrix: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_DIMENSION)
+    ]
+    rhs: tuple[RationalInput, ...] = Field(
         min_length=1,
         max_length=MAX_MATRIX_DIMENSION,
     )
@@ -682,8 +712,12 @@ class MatrixPermanentResult(StrictModel):
 class MatrixKroneckerProductRequest(_MatrixRequest):
     """Two bounded matrices for an exact Kronecker product over QQ."""
 
-    left: RationalMatrix
-    right: RationalMatrix
+    left: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_DIMENSION)
+    ]
+    right: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_DIMENSION)
+    ]
 
 
 class MatrixKroneckerProductResult(StrictModel):
@@ -727,7 +761,9 @@ class MatrixKroneckerProductResult(StrictModel):
 class MatrixPartialTraceRequest(_MatrixRequest):
     """A composite matrix (Kronecker product A (x) B) and the subsystem dimensions."""
 
-    matrix: RationalMatrix
+    matrix: Annotated[
+        RationalMatrixInput, RationalMatrixInputEnvelope(MAX_MATRIX_DIMENSION)
+    ]
     traced_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     kept_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
 

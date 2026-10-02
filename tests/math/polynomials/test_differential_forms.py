@@ -324,7 +324,7 @@ def test_wedge_applies_negative_scalar_unit_in_both_orders() -> None:
 
 
 def test_wedge_rejects_oversized_result_coefficient() -> None:
-    coefficient = 10**4_095
+    coefficient = 10 ** (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS - 1)
     left = _form(0, ((), _poly((coefficient, (0, 0)))))
     right = _form(0, ((), _poly((coefficient, (0, 0)))))
     with pytest.raises(OperationResourceAdmissionError) as error:
@@ -425,8 +425,8 @@ def test_wedge_groups_coefficient_growth_by_output_monomial() -> None:
 
 
 def test_wedge_rejects_reduced_accumulator_growth() -> None:
-    first = 10**2500 + 7
-    second = 10**2500 + 19
+    first = 10 ** (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS // 2 + 100) + 7
+    second = 10 ** (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS // 2 + 100) + 19
     left = _form(
         0,
         (
@@ -495,7 +495,7 @@ def test_native_wedge_revalidates_forged_operands() -> None:
     with pytest.raises(OperationDomainValidationError):
         wedge(forged, forged)
     with pytest.raises(OperationDomainValidationError):
-        wedge(object(), _form(0))
+        wedge(object(), _form(0))  # type: ignore[arg-type]
 
 
 def test_wedge_binds_owner_deadline_before_convolution(
@@ -506,7 +506,9 @@ def test_wedge_binds_owner_deadline_before_convolution(
     original_collect = operations._collect_contributions
     observed_deadlines: list[float | None] = []
 
-    def inspect_deadline(pairs):
+    def inspect_deadline(
+        pairs: tuple[operations._MergedPair, ...],
+    ) -> operations._ContributionMap:
         execution = current_request_execution()
         observed_deadlines.append(execution.deadline if execution is not None else None)
         return original_collect(pairs)
@@ -516,8 +518,9 @@ def test_wedge_binds_owner_deadline_before_convolution(
     left = _form(1, ((0,), _poly((1, (1, 0)))))
     right = _form(1, ((1,), _poly((1, (0, 1)))))
     with request_execution(started):
-        assert current_request_execution() is not None
-        assert current_request_execution().deadline is None
+        execution = current_request_execution()
+        assert execution is not None
+        assert execution.deadline is None
         product = wedge(left, right)
         assert product == _form(
             2,
@@ -705,7 +708,10 @@ def test_native_admission_revalidates_forged_term_bounds() -> None:
     assert error.value.errors()[0]["type"] == "differential_form.coefficient_exponent"
 
     tall_height = RationalPolynomialTerm.model_construct(
-        coefficient=R.model_construct(num=10**5000, den=1), exponents=(0, 0)
+        coefficient=R.model_construct(
+            num=10 ** (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS + 1), den=1
+        ),
+        exponents=(0, 0),
     )
     with pytest.raises(OperationDomainValidationError) as error:
         wedge(_forged_scalar(tall_height), base)

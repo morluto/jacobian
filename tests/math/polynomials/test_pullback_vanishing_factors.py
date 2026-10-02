@@ -16,6 +16,9 @@ from jacobian.math.polynomials.differential_forms import (
     operations,
     pullback,
 )
+from jacobian.math.polynomials.differential_forms.values import (
+    MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -200,9 +203,9 @@ def test_presolve_pair_budget_is_cumulative_and_inclusive(
         images=(_poly(axis, (2, (1, 0))), _poly(axis, (3, (0, 1)))),
     )
     form = _form(axis, (0, 1), _poly(axis, (1, (0, 0))))
-    monkeypatch.setattr(operations, "MAX_CALCULUS_TERM_PAIRS", 2)
+    monkeypatch.setattr(operations, "MAX_CALCULUS_TERM_PAIRS", 4)
     assert pullback(mapping, form) == _form(axis, (0, 1), _poly(axis, (6, (0, 0))))
-    monkeypatch.setattr(operations, "MAX_CALCULUS_TERM_PAIRS", 1)
+    monkeypatch.setattr(operations, "MAX_CALCULUS_TERM_PAIRS", 3)
     with pytest.raises(OperationResourceAdmissionError) as error:
         pullback(mapping, form)
     assert error.value.errors()[0]["type"] == "differential_form.pullback.presolve_work"
@@ -218,9 +221,9 @@ def test_presolve_scalar_work_is_cumulative_and_inclusive(
         images=(_poly(axis, (2, (1, 0))), _poly(axis, (3, (0, 1)))),
     )
     form = _form(axis, (0, 1), _poly(axis, (1, (0, 0))))
-    monkeypatch.setattr(operations, "MAX_PULLBACK_PRESOLVE_DIGIT_WORK", 1)
+    monkeypatch.setattr(operations, "MAX_CALCULUS_DIGIT_WORK", 1)
     assert pullback(mapping, form) == _form(axis, (0, 1), _poly(axis, (6, (0, 0))))
-    monkeypatch.setattr(operations, "MAX_PULLBACK_PRESOLVE_DIGIT_WORK", 0)
+    monkeypatch.setattr(operations, "MAX_CALCULUS_DIGIT_WORK", 0)
     with pytest.raises(OperationResourceAdmissionError) as error:
         pullback(mapping, form)
     assert error.value.errors()[0]["type"] == "differential_form.pullback.presolve_work"
@@ -280,7 +283,8 @@ def test_dimensional_zero_does_not_accept_malformed_native_map(mutation: str) ->
             term = term.model_copy(
                 update={
                     "coefficient": CanonicalRational.model_construct(
-                        num=1 << 20000, den=1
+                        num=1 << (4 * MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS),
+                        den=1,
                     )
                 }
             )
@@ -344,9 +348,9 @@ def test_presolve_scalar_storage_boundary_is_inclusive(
         ),
     )
     form = _form(axis, (0, 1), _poly(axis, (1, (0, 0))))
-    monkeypatch.setattr(operations, "MAX_PULLBACK_PRESOLVE_STORAGE_DIGITS", 1)
+    monkeypatch.setattr(operations, "MAX_CALCULUS_STORAGE_DIGITS", 1)
     assert pullback(mapping, form) == _form(axis, (0, 1), _poly(axis, (6, (0, 0))))
-    monkeypatch.setattr(operations, "MAX_PULLBACK_PRESOLVE_STORAGE_DIGITS", 0)
+    monkeypatch.setattr(operations, "MAX_CALCULUS_STORAGE_DIGITS", 0)
     with pytest.raises(OperationResourceAdmissionError) as error:
         pullback(mapping, form)
     assert (

@@ -478,3 +478,56 @@ framework:
 
 Catalog examples establish first-call usability. They do not replace these
 mathematical and composition tests.
+
+## Rational matrix request normalization
+
+The bounded base-matrix requests accept exact JSON ratios such as `2/4`,
+`2/-4`, `-2/-4`, and `0/5`, encoded as `{"num":"2","den":"4"}` rather
+than fraction text. Their explicit request adapters reduce the fraction,
+move a denominator sign to the numerator, and produce canonical zero `0/1`.
+Both raw components must retain canonical ASCII integer spelling, contain at
+most 256 decimal digits excluding a minus sign, and use strings at every
+magnitude. A denominator must be nonzero. Numeric components, booleans,
+floats, leading plus signs or zeros, negative zero, whitespace, and non-ASCII
+digits are not additional accepted presentations.
+
+This ingress contract covers determinant, permanent, characteristic polynomial,
+multiplication (both operands), Kronecker product (both operands), RREF, rank,
+nullspace, square rational solve (matrix and RHS), and partial trace. Rank and
+nullspace cover both dense and coordinate-sparse matrix inputs. The two
+`linear.rational_solution.compute` and `linear.rational_inconsistency.compute`
+requests also accept these ratios in the system's sparse coefficient values
+and RHS. The unchanged canonical `LinearRationalSystem` remains their retained
+source value; variable order and the `AX_EQUALS_B` relation are preserved.
+
+Raw admission precedes reduction. A reducible 257-digit ratio is refused even
+when its reduced value is small. Dense raw matrix axes remain at most 128 for
+determinant, permanent, characteristic polynomial, multiplication, RREF, rank,
+and nullspace; Kronecker product, square solve, and partial trace retain their
+32-axis preflight. Square-solve RHS length remains at most 32. Sparse rank and
+nullspace retain axes through 8192 and at most 32768 stored entries. The separate
+rational-linear systems retain at most 8192 variables and RHS entries and 32768
+stored coefficients. Request schemas describe these raw limits; narrower
+operation-specific shape, scalar-work, intermediate, and output admission still
+applies after parsing. For example, dense rank and RREF retain their existing
+64-axis computational envelope despite the 128-axis raw request envelope.
+
+Normalization is confined to the declared scalar positions. Matrix domains,
+dimensions, row and column coordinates, variable axes, and other fields are not
+rewritten. Sparse coordinates must remain unique and row-major ordered;
+entries are never sorted, merged, or removed. A stored ratio `0/5` normalizes
+to zero and is rejected by the existing sparse nonzero rule.
+
+This is a request-presentation adapter, not a relaxation of `CanonicalRational`,
+`RationalMatrix`, `SparseRationalMatrix`, or `LinearRationalSystem`. Their native
+constructors, canonical JSON decoders, result/source fields, and serialization
+retain reduced fractions, positive denominators, and canonical zero. Request
+Python validation likewise retains the canonical native contract. Actual
+canonical producer outputs remain valid inputs without a translation step,
+subject to the consumer's existing admission limits.
+
+Other matrix owners, including canonical forms, inertia/spectral claims, Farkas
+claims, chordal PSD decomposition, and completion, do not inherit this request
+family. Their separate admission and authored-claim contracts are not changed by
+these adapters. New siblings of the covered owners must opt into the applicable
+request annotation and join the registry-backed argument-position regressions.

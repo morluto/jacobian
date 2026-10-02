@@ -126,10 +126,9 @@ def test_binomial_coefficient_normalization_has_bounded_growth() -> None:
         _polynomial({(65, 0): 1, (0, 0): 1}, ("y", "x")),
         _polynomial({(0, 65): 1, (0, 0): 1}, ("y", "x")),
         _polynomial({(65, 1): 1, (0, 0): 1}, ("y", "x")),
-        _polynomial({(65,): 10**256, (0,): 1}),
     ),
 )
-def test_non_binomial_or_oversized_coefficient_keeps_conservative_admission(
+def test_non_binomial_general_degree_keeps_conservative_admission(
     source: RationalPolynomial,
 ) -> None:
     with pytest.raises(OperationDomainValidationError):

@@ -40,8 +40,6 @@ from jacobian.math.polynomials._models import (
     _MAX_GROEBNER_COEFFICIENT_DIGITS,
     _MAX_GROEBNER_EXPONENT,
     _MAX_INVARIANT_TERMS,
-    _MAX_SQUARE_FREE_GENERAL_EXPONENT,
-    _MAX_SQUARE_FREE_MULTIPLICITY,
     _MAX_UNIVARIATE_INVARIANT_DEGREE_SUM,
     MAX_GROEBNER_GENERATORS,
     PolynomialBezoutIdentity,
@@ -65,7 +63,6 @@ from jacobian.math.polynomials._multiply_kernel import (
     rational_polynomial_multiply as multiply,
 )
 from jacobian.math.polynomials.values import (
-    MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
     RationalFunction,
     RationalPolynomial,
@@ -76,6 +73,8 @@ from jacobian.math.polynomials.values import (
 
 if TYPE_CHECKING:
     from sympy import Poly
+
+    from jacobian.math.polynomials._square_free import Plan as SquareFreePlan
 
 __all__ = [
     "derivative",
@@ -424,47 +423,10 @@ def _discriminant_component_digit_bound(polynomial: RationalPolynomial) -> int:
     return max(1, numerator_digits, denominator_result_digits)
 
 
-def _admit_square_free(polynomial: RationalPolynomial) -> int:
-    """Return the safe exponent dilation for the admitted backend source."""
+def _admit_square_free(polynomial: RationalPolynomial) -> SquareFreePlan:
+    from jacobian.math.polynomials._square_free import admit
 
-    if not isinstance(polynomial, RationalPolynomial):
-        raise _validation_error("square-free source must be a RationalPolynomial")
-    terms = polynomial.polynomial.terms
-    if len(terms) == 1 and any(
-        exponent > _MAX_SQUARE_FREE_MULTIPLICITY for exponent in terms[0].exponents
-    ):
-        # A monomial has each variable as a factor with precisely its exponent
-        # as multiplicity. Refuse before asking a kernel for an unencodable value.
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="polynomial.square_free_multiplicity_budget",
-            message="monomial factor multiplicity exceeds the square-free limit of 64",
-        )
-    if (
-        len(polynomial.variables) == 1
-        and len(terms) == 2
-        and terms[1].exponents == (0,)
-    ):
-        require_polynomial_budget(
-            polynomial,
-            maximum_terms=2,
-            maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
-        )
-        # a*x^n+b (a*b != 0) is square-free: its derivative is a*n*x^(n-1)
-        # and zero is not a root. Decompose a*t+b and lift t -> x^n instead
-        # of allocating a degree-n dense backend polynomial. The backend sees
-        # two coefficients at degree one. Monic normalization b/a has at most
-        # 512-digit components; reconstruction by a needs at most 768 digits
-        # before rational cancellation. Lifting preserves the product identity,
-        # two-term support and the source axis.
-        # Thus n is a representation bound only, independent of kernel work.
-        return terms[0].exponents[0]
-    require_polynomial_budget(
-        polynomial,
-        maximum_terms=_MAX_GCD_TERMS,
-        maximum_exponent=_MAX_SQUARE_FREE_GENERAL_EXPONENT,
-    )
-    return 1
+    return admit(polynomial)
 
 
 def _lift_square_free_polynomial(
@@ -663,7 +625,12 @@ def polynomial_square_free_decomposition(
 ) -> PolynomialSquareFreeDecompositionResult:
     """Compute the canonical square-free decomposition of a polynomial."""
 
-    dilation = _run_admission(lambda: _admit_square_free(polynomial))
+    admission = _run_admission(lambda: _admit_square_free(polynomial))
+    if admission.kind != "compact":
+        from jacobian.math.polynomials._square_free import compute
+
+        return compute(admission)
+    dilation = admission.dilation
     backend_source = polynomial
     if dilation != 1:
         leading, constant = polynomial.polynomial.terms

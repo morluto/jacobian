@@ -191,8 +191,14 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
             "Decompose a bounded polynomial over QQ into monic square-free factors. "
             "Univariate a*x^n+b with nonzero a and b supports every canonical "
             "exponent n up to 32768; general sources retain the exponent-64 "
-            "envelope. Coefficient components have at most 256 digits and "
-            "returned multiplicities at most 64."
+            "envelope and returned multiplicities at most 64. Sources and each "
+            "grouped factor use the canonical 4096-term carrier. Exact monic "
+            "normalization, grouped support, coefficient height/storage, and "
+            "controlled integer-PRS work are admitted before backend expansion. "
+            "Affine powers and monomial-partial square-freeness proofs stay sparse. "
+            "Cartesian products use checked univariate stages; other nonseparable "
+            "sources have a conservative recursive scratch envelope. Resource "
+            "refusal does not reject a mathematical factorization claim."
         ),
         request_type=PolynomialSquareFreeRequest,
         result_type=PolynomialSquareFreeDecompositionResult,

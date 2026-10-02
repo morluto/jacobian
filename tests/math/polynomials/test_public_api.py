@@ -236,6 +236,7 @@ def _univariate(variable: str, terms: dict[int, int]) -> Any:
 def test_factor_producers_compute_once_and_round_trip_structurally(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from jacobian.math.polynomials import _square_free_kernel
     from jacobian.math.polynomials import operations as _operations
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
@@ -245,7 +246,7 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
     source = _univariate("x", {4: 1, 2: -2, 0: 1})
     factor_calls = square_free_calls = 0
     original_factorization = _operations.factorization
-    original_square_free = _operations.square_free_decomposition
+    original_square_free = _square_free_kernel.grouped_factors
 
     def count_factorization(poly: Any) -> Any:
         nonlocal factor_calls
@@ -258,7 +259,7 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
         return original_square_free(poly)
 
     monkeypatch.setattr(_operations, "factorization", count_factorization)
-    monkeypatch.setattr(_operations, "square_free_decomposition", count_square_free)
+    monkeypatch.setattr(_square_free_kernel, "grouped_factors", count_square_free)
     factorization = _operations.polynomial_factorization(source)
     square_free = _operations.polynomial_square_free_decomposition(source)
     assert (factor_calls, square_free_calls) == (1, 1)

@@ -48,7 +48,7 @@ class _Budget:
 
 def _bounded_shape(value: RationalPolynomial) -> bool:
     """Bound forged native containers and integers before making a parsing copy."""
-    if type(value) is not RationalPolynomial:
+    if not isinstance(value, RationalPolynomial):
         return False
     if (
         value.domain != "QQ"

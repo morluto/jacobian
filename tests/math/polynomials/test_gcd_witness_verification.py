@@ -188,3 +188,14 @@ def test_divisibility_growth_refusal_is_not_a_false_verdict() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         verify_polynomial_gcd(claim)
     assert error.value.errors()[0]["type"] == "polynomial.gcd_verification_budget"
+
+
+def test_accepts_monic_polynomial_subtype_at_native_boundary() -> None:
+    from jacobian.math.polynomials.values import MonicPolynomial
+
+    claim = _claim((-1, 1), (-1, 1), (-1, 1), (), (1,))
+    monic = MonicPolynomial.model_validate(claim.gcd.model_dump())
+    specialized = PolynomialGcdResult(
+        left=monic, right=monic, gcd=monic, bezout=claim.bezout
+    )
+    assert verify_polynomial_gcd(specialized)

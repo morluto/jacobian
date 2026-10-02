@@ -13,6 +13,7 @@ from pydantic_core import PydanticCustomError, core_schema
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_DIMENSION,
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
@@ -422,7 +423,10 @@ def _require_prime_coupling(
 
 
 def require_prime_field_admission(
-    coefficient_ring: CoefficientRing, prime: int | None
+    coefficient_ring: CoefficientRing,
+    prime: int | None,
+    *,
+    location: tuple[str | int, ...] = ("prime",),
 ) -> None:
     """Establish primality before an operation uses GF(p) arithmetic.
 
@@ -436,7 +440,11 @@ def require_prime_field_admission(
         if prime is None:  # defensive after structural ring/modulus validation
             raise ValueError("GF_p requires a prime modulus")
         if not fmpz(prime).is_prime():
-            raise ValueError(f"prime {prime} is not prime")
+            raise OperationDomainValidationError(
+                location=location,
+                code="chain_complex.prime_not_prime",
+                message=f"prime {prime} is not prime",
+            )
 
 
 def _require_coefficient_scalar(

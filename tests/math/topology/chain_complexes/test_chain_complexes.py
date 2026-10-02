@@ -100,18 +100,25 @@ def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
         require_prime_field_admission as original,
     )
 
-    def tracked(ring: CoefficientRing, prime: int | None) -> None:
+    def tracked(
+        ring: CoefficientRing,
+        prime: int | None,
+        *,
+        location: tuple[str | int, ...] = ("prime",),
+    ) -> None:
         assert prime is not None
         calls.append(prime)
-        original(ring, prime)
+        original(ring, prime, location=location)
 
     monkeypatch.setattr(chain_operations, "require_prime_field_admission", tracked)
     value = ChainComplexValue.model_validate(payload)
     ChainComplexValue.model_validate_json(value.model_dump_json())
     assert calls == []
-    with pytest.raises(ValueError, match="not prime"):
+    with pytest.raises(OperationDomainValidationError, match="not prime") as caught:
         differential_squares_to_zero(value)
     assert calls == [15]
+    assert caught.value.errors()[0]["type"] == "chain_complex.prime_not_prime"
+    assert caught.value.errors()[0]["loc"] == ("complex", "prime")
 
 
 def test_native_chain_coefficients_reject_large_ints_without_string_conversion() -> (

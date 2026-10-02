@@ -2834,7 +2834,8 @@ def _table_functions(
 
     Local definitions at any depth win over imports, matching the previous
     ``_module_functions`` plus ``ast.walk`` fill-in. The cache holds only the
-    working set for the module under analysis and is dropped with it.
+    working set for the module under analysis and is dropped with it. Entries
+    are complete scopes; shallow import lookups must never populate this cache.
     """
 
     if module in cache:
@@ -2844,17 +2845,18 @@ def _table_functions(
         node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
     }
     imports = tables.imports
+    imported_functions: dict[str, dict[str, ast.FunctionDef]] = {}
     for (owner, alias), (target, original) in imports.items():
         if owner != module:
             continue
-        if target not in cache:
+        if target not in imported_functions:
             imported_tree = ast.parse(texts[target])
-            cache[target] = {
+            imported_functions[target] = {
                 node.name: node
                 for node in imported_tree.body
                 if isinstance(node, ast.FunctionDef)
             }
-        imported = cache[target]
+        imported = imported_functions[target]
         if original in imported:
             functions.setdefault(alias, imported[original])
     for node in ast.walk(tree):
@@ -2877,6 +2879,21 @@ def _table_validator(
         if isinstance(node, ast.FunctionDef):
             return node
     raise AssertionError("validator source did not parse to a function")
+
+
+def _table_uncovered_leaf_fields(
+    entry: tuple[str, str, str],
+    tables: _Tables,
+    texts: dict[str, str],
+    function_cache: dict[str, dict[str, ast.FunctionDef]],
+    leaf_fields: set[str],
+    shapes: _ModelShape,
+) -> set[str]:
+    # Inheritance changes cls and its fields, but never a function's globals.
+    # Resolve calls where this validator was defined, not in its subclass module.
+    validator = _table_validator(entry, tables, texts)
+    functions = _table_functions(entry[0], tables, texts, function_cache)
+    return _uncovered_leaf_fields(validator, functions, leaf_fields, shapes)
 
 
 # Whole-tree static analysis: cost scales with src/jacobian/math, so it cannot
@@ -2905,7 +2922,6 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
     alias_cache: dict[str, dict[str, set[str]]] = {}
     for module in sorted({key[0] for key in classes}):
         function_cache: dict[str, dict[str, ast.FunctionDef]] = {}
-        functions: dict[str, ast.FunctionDef] | None = None
         for key in classes:
             if key[0] != module:
                 continue
@@ -2920,13 +2936,10 @@ def test_before_validators_cover_every_leaf_container_field() -> None:
             }
             if not leaf_fields:
                 continue
-            if functions is None:
-                functions = _table_functions(module, tables, texts, function_cache)
             shapes = _table_json_shapes(key, tables, unique, scope_cache, alias_cache)
             for entry in before:
-                validator = _table_validator(entry, tables, texts)
-                uncovered = _uncovered_leaf_fields(
-                    validator, functions, leaf_fields, shapes
+                uncovered = _table_uncovered_leaf_fields(
+                    entry, tables, texts, function_cache, leaf_fields, shapes
                 )
                 for name in sorted(uncovered):
                     violations.append(
@@ -4616,3 +4629,136 @@ def validate(cls, data):
 """,
         {"provenance"},
     ) == {"provenance"}
+
+
+@pytest.mark.parametrize(
+    ("base_body", "child_body", "override", "expected"),
+    [
+        ("return canonicalize_json_containers(data)", "return data", False, set()),
+        (
+            "return data",
+            "return canonicalize_json_containers(data)",
+            False,
+            {"values", "extra"},
+        ),
+        (
+            "data['values'] = canonicalize_json_containers(data['values']); return data",
+            "return canonicalize_json_containers(data)",
+            False,
+            {"extra"},
+        ),
+        ("return data", "return canonicalize_json_containers(data)", True, set()),
+        (
+            "return canonicalize_json_containers(data)",
+            "return data",
+            True,
+            {"values", "extra"},
+        ),
+    ],
+)
+def test_inherited_validator_uses_defining_module_helpers(
+    tmp_path: Path,
+    base_body: str,
+    child_body: str,
+    override: bool,
+    expected: set[str],
+) -> None:
+    (tmp_path / "base.py").write_text(
+        "def prepare(data):\n    " + base_body + "\n"
+        "class Base(StrictModel):\n"
+        "    values: tuple[tuple[int, ...], ...]\n"
+        "    @model_validator(mode='before')\n"
+        "    def validate(cls, data):\n"
+        "        return prepare(data)\n",
+        encoding="utf-8",
+    )
+    child_source = (
+        "from base import Base as ImportedBase\n"
+        "def prepare(data):\n    " + child_body + "\n"
+        "class Child(ImportedBase):\n"
+        "    extra: tuple[int, ...]\n"
+    )
+    if override:
+        child_source += (
+            "    @model_validator(mode='before')\n"
+            "    def validate(cls, data):\n"
+            "        return prepare(data)\n"
+        )
+    (tmp_path / "child.py").write_text(child_source, encoding="utf-8")
+    tables = _build_tables(tmp_path)
+    unique = {name: key for key in tables.classes for name in [key[1]]}
+    scope_cache: dict[str, dict[str, tuple[str, str]]] = {}
+    key = ("child.py", "Child")
+    validators = _table_inherited_validators(key, tables, unique, scope_cache)
+    assert len(validators) == 1
+    fields = _table_inherited_fields(key, tables, {}, {}, unique, scope_cache)
+    leaf_fields = {
+        name
+        for name, annotation in fields.items()
+        if _leaf_container_field(annotation, set(), {})
+    }
+    assert leaf_fields == {"values", "extra"}
+    shapes = _table_json_shapes(key, tables, unique, scope_cache, {})
+    assert (
+        _table_uncovered_leaf_fields(
+            validators[0], tables, tables.texts, {}, leaf_fields, shapes
+        )
+        == expected
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("projects", [False, True])
+def test_inherited_validator_function_cache_preserves_imports(
+    tmp_path: Path,
+    reverse: bool,
+    projects: bool,
+) -> None:
+    helper = "canonicalize_json_containers(data)" if projects else "data"
+    (tmp_path / "helpers.py").write_text(
+        f"def prepare(data):\n    return {helper}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "base.py").write_text(
+        "from helpers import prepare\n"
+        "class Base(StrictModel):\n"
+        "    values: tuple[tuple[int, ...], ...]\n"
+        "    @model_validator(mode='before')\n"
+        "    def validate(cls, data):\n"
+        "        return prepare(data)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "child.py").write_text(
+        "from base import Base\n"
+        "class ChildOwn(Base):\n"
+        "    @model_validator(mode='before')\n"
+        "    def validate(cls, data):\n"
+        "        return canonicalize_json_containers(data)\n"
+        "class ChildInherited(Base):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    tables = _build_tables(tmp_path)
+    unique = {key[1]: key for key in tables.classes}
+    scope_cache: dict[str, dict[str, tuple[str, str]]] = {}
+    function_cache: dict[str, dict[str, ast.FunctionDef]] = {}
+    names = (
+        ("ChildInherited", "ChildOwn") if reverse else ("ChildOwn", "ChildInherited")
+    )
+    for name in names:
+        key = ("child.py", name)
+        validators = _table_inherited_validators(key, tables, unique, scope_cache)
+        assert len(validators) == 1
+        shapes = _table_json_shapes(key, tables, unique, scope_cache, {})
+        expected = {"values"} if name == "ChildInherited" and not projects else set()
+        assert (
+            _table_uncovered_leaf_fields(
+                validators[0],
+                tables,
+                tables.texts,
+                function_cache,
+                {"values"},
+                shapes,
+            )
+            == expected
+        )

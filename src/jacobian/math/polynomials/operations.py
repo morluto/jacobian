@@ -639,16 +639,15 @@ def polynomial_factorization(
 
 
 def verify_polynomial_gcd(claim: PolynomialGcdResult) -> bool:
-    """Verify a GCD and Bézout identity against both retained operands."""
+    """Verify a monic GCD and any exact Bézout identity for retained operands.
 
-    if not isinstance(claim, PolynomialGcdResult):
-        return False
-    try:
-        return polynomial_gcd(claim.left, claim.right) == claim
-    except OperationResourceAdmissionError:
-        raise
-    except OperationDomainValidationError:
-        return False
+    Resource refusal during bounded candidate replay propagates rather than
+    returning a mathematical negative.
+    """
+
+    from jacobian.math.polynomials._gcd_verification import verify_gcd_relation
+
+    return verify_gcd_relation(claim)
 
 
 def verify_polynomial_resultant(claim: PolynomialResultantResult) -> bool:

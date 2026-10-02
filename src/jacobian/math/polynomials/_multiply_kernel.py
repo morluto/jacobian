@@ -134,6 +134,25 @@ def rational_polynomial_multiply(
     if _is_multiplicative_identity(right):
         return left
 
+    if not left.variables:
+        # QQ with no indeterminates is the scalar ring. SymPy's Poly requires
+        # a generator, so preserve this admitted canonical parent directly.
+        terms: tuple[RationalPolynomialTerm, ...] = ()
+        if left.polynomial.terms and right.polynomial.terms:
+            coefficient = (
+                left.polynomial.terms[0].coefficient.as_fraction()
+                * right.polynomial.terms[0].coefficient.as_fraction()
+            )
+            terms = (
+                RationalPolynomialTerm(
+                    exponents=(),
+                    coefficient=CanonicalRational.from_fraction(coefficient),
+                ),
+            )
+        return RationalPolynomial(
+            variables=(), polynomial=SparseRationalPolynomial(terms=terms)
+        )
+
     if dense:
         from flint import fmpq, fmpq_poly
 

@@ -521,3 +521,44 @@ def test_single_nonunit_product_preserves_exact_component_boundary(
         assert (
             RationalPolynomial.model_validate_json(result.model_dump_json()) == result
         )
+
+
+@pytest.mark.parametrize("oversized", (False, True))
+@pytest.mark.parametrize("reciprocal", (False, True))
+def test_empty_axis_product_preserves_coefficient_growth_admission(
+    oversized: bool,
+    reciprocal: bool,
+) -> None:
+    digits = MAX_CANONICAL_RATIONAL_DIGITS + int(oversized)
+
+    def constant(value: int) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=(),
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        exponents=(),
+                        coefficient=CanonicalRational(
+                            num=1 if reciprocal else value,
+                            den=value if reciprocal else 1,
+                        ),
+                    ),
+                )
+            ),
+        )
+
+    left = 5 * 10 ** (digits - 2)
+    request = RationalPolynomialMultiplyRequest(left=constant(left), right=constant(2))
+    if oversized:
+        with pytest.raises(OperationDomainValidationError) as error:
+            rational_polynomial_multiply(request)
+        assert error.value.errors()[0]["type"] == "polynomial.invariant"
+    else:
+        result = rational_polynomial_multiply(request)
+        assert result.variables == ()
+        assert result.polynomial.terms[0].exponents == ()
+        expected = Fraction(1, 2 * left) if reciprocal else Fraction(2 * left)
+        assert result.polynomial.terms[0].coefficient.as_fraction() == expected
+        assert (
+            RationalPolynomial.model_validate_json(result.model_dump_json()) == result
+        )

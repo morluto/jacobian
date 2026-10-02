@@ -349,8 +349,20 @@ class PrecoloringEdgeRepairRequest(StrictModel):
         return self
 
 
-class PrecoloringEdgeRepairResult(StrictModel):
-    """One exact minimum edge-repair optimum and its total coloring witness."""
+def _monochromatic_edge_indices(
+    graph: IndexedSimpleUndirectedGraph, coloring: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Collect exactly the source edges made monochromatic by an assignment."""
+
+    return tuple(
+        index
+        for index, (left, right) in enumerate(graph.edges)
+        if coloring[left] == coloring[right]
+    )
+
+
+class _PrecoloringEdgeRepairContext(StrictModel):
+    """Shared checked context for kernel construction and caller-authored claims."""
 
     graph: IndexedColoringGraph
     colors: int = Field(ge=1, le=MAX_COLORING_COLORS)
@@ -363,31 +375,9 @@ class PrecoloringEdgeRepairResult(StrictModel):
         ge=1,
         le=MAX_SOLVER_CONFLICT_BUDGET,
     )
-    repaired_edge_count: int
-    coloring: VertexColoringAssignment
-    repaired_edge_indices: tuple[int, ...]
 
-    @model_validator(mode="after")
-    def bind_optimum_witness(self) -> Self:
-        if self.repaired_edge_count != len(self.repaired_edge_indices):
-            raise PydanticCustomError(
-                "graph.precoloring_repair_count_must_match_indices",
-                "repaired_edge_count must equal repaired_edge_indices length",
-            )
-        if tuple(sorted(self.repaired_edge_indices)) != self.repaired_edge_indices:
-            raise PydanticCustomError(
-                "graph.precoloring_repaired_edges_must_be_sorted",
-                "repaired_edge_indices must be sorted",
-            )
-        if any(
-            index < 0 or index >= len(self.graph.edges)
-            for index in self.repaired_edge_indices
-        ):
-            raise PydanticCustomError(
-                "graph.precoloring_repaired_edges_must_be_source_bound",
-                "repaired_edge_indices must use the source edge axis",
-            )
-        if self.coloring.graph != self.graph or self.coloring.colors != self.colors:
+    def _require_coloring_context(self, coloring: VertexColoringAssignment) -> None:
+        if coloring.graph != self.graph or coloring.colors != self.colors:
             raise PydanticCustomError(
                 "graph.precoloring_witness_must_bind_source_and_palette",
                 "coloring must bind the result graph and palette",
@@ -417,24 +407,98 @@ class PrecoloringEdgeRepairResult(StrictModel):
                 "every fixed color must be in 0..colors-1",
             )
         fixed: dict[int, int] = dict(self.fixed_colors)
-        if any(
-            self.coloring.coloring[vertex] != color for vertex, color in fixed.items()
-        ):
+        if any(coloring.coloring[vertex] != color for vertex, color in fixed.items()):
             raise PydanticCustomError(
                 "graph.precoloring_witness_must_extend_fixed_colors",
                 "coloring must extend every fixed color",
             )
-        monochromatic = tuple(
-            index
-            for index, (left, right) in enumerate(self.graph.edges)
-            if self.coloring.coloring[left] == self.coloring.coloring[right]
-        )
+
+
+class _CheckedPrecoloringEdgeRepairContext(_PrecoloringEdgeRepairContext):
+    """Validate a kernel assignment before deriving its repaired-edge relation."""
+
+    coloring: VertexColoringAssignment
+
+    @model_validator(mode="after")
+    def bind_coloring_context(self) -> Self:
+        self._require_coloring_context(self.coloring)
+        return self
+
+
+class PrecoloringEdgeRepairResult(_PrecoloringEdgeRepairContext):
+    """One exact minimum edge-repair optimum and its total coloring witness."""
+
+    repaired_edge_count: int
+    coloring: VertexColoringAssignment
+    repaired_edge_indices: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def bind_optimum_witness(self) -> Self:
+        if self.repaired_edge_count != len(self.repaired_edge_indices):
+            raise PydanticCustomError(
+                "graph.precoloring_repair_count_must_match_indices",
+                "repaired_edge_count must equal repaired_edge_indices length",
+            )
+        if tuple(sorted(self.repaired_edge_indices)) != self.repaired_edge_indices:
+            raise PydanticCustomError(
+                "graph.precoloring_repaired_edges_must_be_sorted",
+                "repaired_edge_indices must be sorted",
+            )
+        if any(
+            index < 0 or index >= len(self.graph.edges)
+            for index in self.repaired_edge_indices
+        ):
+            raise PydanticCustomError(
+                "graph.precoloring_repaired_edges_must_be_source_bound",
+                "repaired_edge_indices must use the source edge axis",
+            )
+        self._require_coloring_context(self.coloring)
+        monochromatic = _monochromatic_edge_indices(self.graph, self.coloring.coloring)
         if monochromatic != self.repaired_edge_indices:
             raise PydanticCustomError(
                 "graph.precoloring_repaired_edges_must_be_monochromatic",
                 "repaired edges must be exactly the monochromatic edges",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: IndexedSimpleUndirectedGraph,
+        colors: int,
+        fixed_colors: tuple[tuple[int, int], ...],
+        solver_conflicts: int,
+        coloring: tuple[int, ...],
+    ) -> Self:
+        """Check a solved coloring, then derive its repair relation exactly once.
+
+        The operation has admitted the source and established optimality. The
+        shared context still checks all field bounds, the total assignment,
+        source/palette binding, and the fixed-color extension. Only the sorted,
+        source-bound repaired indices and their count are trusted here because
+        this factory derives them. Public parsing always replays that relation.
+        """
+
+        context = _CheckedPrecoloringEdgeRepairContext(
+            graph=graph,
+            colors=colors,
+            fixed_colors=fixed_colors,
+            solver_conflicts=solver_conflicts,
+            coloring=VertexColoringAssignment(
+                graph=graph, colors=colors, coloring=coloring
+            ),
+        )
+        repaired = _monochromatic_edge_indices(context.graph, context.coloring.coloring)
+        return cls.model_construct(
+            graph=context.graph,
+            colors=context.colors,
+            fixed_colors=context.fixed_colors,
+            solver_conflicts=context.solver_conflicts,
+            coloring=context.coloring,
+            repaired_edge_count=len(repaired),
+            repaired_edge_indices=repaired,
+        )
 
 
 def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:

@@ -1,6 +1,6 @@
 ---
 name: audit-public-operation-contracts
-description: Audit a Jacobian operation’s mathematical contract, boundedness, exact results, and composition.
+description: Design or audit a Jacobian operation’s mathematical contract, boundedness, exact results, and composition.
 ---
 
 # Audit Public Operation Contracts
@@ -9,6 +9,31 @@ Determine whether an operation is a bounded, truthful, composable mathematical
 instrument. Record the revision, operation IDs, inspected scope, and whether the
 request includes implementation. Audit-only work does not authorize repository
 or external mutations.
+
+## Design before implementation
+
+Before adding a public operation or library abstraction, apply the
+[vocabulary audit](../audit-mathematical-vocabulary/SKILL.md) to the proposed
+boundary. Keep concise evidence in the existing issue or PR, reusing what is
+already established rather than creating a mandatory review form:
+
+- State the exact mathematical postcondition and essential hypotheses.
+- Name the nearest existing operation or composition and the specific result
+  it cannot supply. Give a smallest separating example and a nearby case the
+  proposal deliberately does not solve.
+- Walk one input through its canonical result to an intended consumer. Decide
+  only relevant questions about source identity, multiplicity, ordering,
+  empty or degenerate carriers, finite versus infinite solution sets, and one
+  witness versus exhaustive output.
+- Choose the appropriate disposition: public operation, native-only function,
+  shared representation, private helper, regression fixture, or caller reasoning.
+  A composition or no-gap finding is a successful outcome, not a reason to
+  manufacture another operation.
+
+A justified boundary has one stable mathematical result, not a whole-proof API,
+assurance wrapper, workflow state, or compatibility metadata. Keep the existing
+composition and scale-first obligations below; a separating example motivates
+investigation but does not establish an admitted implementation.
 
 ## Trace the contract
 

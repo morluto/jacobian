@@ -246,7 +246,6 @@ def precoloring_edge_repair(
             colors=colors,
             fixed_colors=fixed_colors,
             solver_conflicts=solver_conflicts,
-            status="OPTIMAL",
             repaired_edge_count=0,
             coloring=VertexColoringAssignment(
                 graph=graph, colors=colors, coloring=coloring
@@ -273,7 +272,6 @@ def precoloring_edge_repair(
         colors=colors,
         fixed_colors=fixed_colors,
         solver_conflicts=solver_conflicts,
-        status="OPTIMAL",
         repaired_edge_count=len(repaired),
         coloring=VertexColoringAssignment(
             graph=graph, colors=colors, coloring=coloring

@@ -47,7 +47,6 @@ def _k4(
 
 
 def _verify(result: PrecoloringEdgeRepairResult) -> None:
-    assert result.status == "OPTIMAL"
     assert result.coloring.graph == result.graph
     assert result.coloring.colors == result.colors
     for vertex, color in result.fixed_colors:
@@ -322,3 +321,27 @@ def test_model_disagreeing_with_proven_bound_is_not_optimal(
 
     assert outcome == "budget_exceeded"
     assert coloring is None
+
+
+@pytest.mark.parametrize("with_edges", [False, True])
+def test_success_is_the_repair_value_without_a_constant_status(
+    with_edges: bool,
+) -> None:
+    request = _k4(3) if with_edges else _request((), 3, 3)
+    result = compute_precoloring_edge_repair(request)
+    payload = json.loads(result.model_dump_json())
+    schema = PrecoloringEdgeRepairResult.model_json_schema(mode="serialization")
+    assert "status" not in payload
+    assert "status" not in schema["properties"]
+    assert "status" not in schema.get("required", ())
+    assert (
+        PrecoloringEdgeRepairResult.model_validate_json(json.dumps(payload)) == result
+    )
+    with pytest.raises(ValidationError) as error:
+        PrecoloringEdgeRepairResult.model_validate_json(
+            json.dumps({**payload, "status": "OPTIMAL"})
+        )
+    assert any(
+        e["loc"] == ("status",) and e["type"] == "extra_forbidden"
+        for e in error.value.errors()
+    )

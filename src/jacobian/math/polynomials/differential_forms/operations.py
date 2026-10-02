@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
+from itertools import combinations
+
+from pydantic import ValidationError
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
@@ -508,12 +512,49 @@ def _admit_degree(degree: int) -> None:
         )
 
 
+def _admit_final_coefficients(
+    aggregate: _RemainingTerms, *, location: tuple[str, ...]
+) -> None:
+    """Prove the carrier and bounded construction cost after exact cancellation."""
+
+    if len(aggregate) > MAX_DIFFERENTIAL_FORM_COMPONENTS or any(
+        len(terms) > MAX_DIFFERENTIAL_FORM_TERMS for terms in aggregate.values()
+    ):
+        raise _calculus_budget(
+            location,
+            "differential_form.calculus.output_budget",
+            "form result exceeds its component or term envelope",
+        )
+    digits = 0
+    for terms in aggregate.values():
+        request_checkpoint("during differential-form result admission")
+        for value in terms.values():
+            if (
+                abs(value.numerator) >= _COEFFICIENT_MAGNITUDE_LIMIT
+                or value.denominator >= _COEFFICIENT_MAGNITUDE_LIMIT
+            ):
+                raise _calculus_budget(
+                    location,
+                    "differential_form.calculus.coefficient_budget",
+                    "form result exceeds its exact coefficient-height carrier",
+                )
+            digits += _fraction_component_digits(value)
+            if digits > MAX_CALCULUS_STORAGE_DIGITS:
+                raise _calculus_budget(
+                    location,
+                    "differential_form.calculus.output_budget",
+                    "form result exceeds its scalar-construction budget",
+                )
+
+
 def _admitted_result(
     *,
     variables: tuple[PolynomialVariable, ...],
     degree: int,
     aggregate: _RemainingTerms,
+    location: tuple[str, ...] = (),
 ) -> PolynomialDifferentialForm:
+    _admit_final_coefficients(aggregate, location=location)
     request_checkpoint("during differential wedge result construction")
     components: list[FormComponent] = []
     completed = 0
@@ -632,11 +673,19 @@ def wedge(
             message="wedge coefficient exponents exceed the bounded output envelope",
         )
     return _admitted_result(
-        variables=left.variables, degree=degree, aggregate=aggregate
+        variables=left.variables,
+        degree=degree,
+        aggregate=aggregate,
+        location=("left", "right"),
     )
 
 
 MAX_CALCULUS_TERM_PAIRS = 1_000_000
+# Up to eight alternating factors need a larger coupled work envelope than
+# one binary wedge; support and retained scalar height remain independently bounded.
+MAX_CALCULUS_DIGIT_WORK = 100_000_000_000
+MAX_CALCULUS_STORAGE_DIGITS = 16_000_000
+MAX_CALCULUS_INTERMEDIATE_DIGITS = 131_072
 
 
 def _calculus_budget(
@@ -658,13 +707,35 @@ def _admit_vector_field(
             code="differential_form.field_type",
             message="a vector field must be a polynomial vector field value",
         )
-    if value.variables != variables:
+    if getattr(value, "variables", None) != variables:
         raise OperationDomainValidationError(
             location=location,
             code="differential_form.field_axis",
             message="a vector field must share the form's ordered variable axis",
         )
-    return value
+    # The field has the same bounded polynomial family as an endomorphism
+    # of its axis. Reuse native shape/scalar admission before Fraction work
+    # or the scalar-contraction zero shortcut.
+    try:
+        admitted = _admit_map(
+            PolynomialMap.model_construct(
+                source_variables=variables,
+                target_variables=variables,
+                images=getattr(value, "components", None),
+            ),
+            location=location,
+        )
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.field_shape",
+            message="contraction requires a canonical bounded polynomial vector field",
+        ) from exc
+    return PolynomialVectorField.model_construct(
+        variables=variables, components=admitted.images
+    )
 
 
 def _admit_map(value: object, *, location: tuple[str, ...]) -> PolynomialMap:
@@ -676,26 +747,91 @@ def _admit_map(value: object, *, location: tuple[str, ...]) -> PolynomialMap:
             code="differential_form.map_type",
             message="a pullback map must be a polynomial map value",
         )
-    return value
+    try:
+        # Bound native containers before materialization. In particular, the
+        # dimensional-zero shortcut must not certify malformed map objects.
+        axes = (value.source_variables, value.target_variables)
+        if any(
+            not isinstance(axis, tuple)
+            or len(axis) > MAX_POLYNOMIAL_VARIABLES
+            or any(type(name) is not str or len(name) > 32 for name in axis)
+            for axis in axes
+        ):
+            raise ValueError("invalid map axes")
+        if not isinstance(value.images, tuple) or len(value.images) != len(
+            value.target_variables
+        ):
+            raise ValueError("invalid image count")
+        for image in value.images:
+            request_checkpoint("during pullback map admission")
+            if (
+                not isinstance(image, RationalPolynomial)
+                or type(image.domain) is not str
+                or image.domain != "QQ"
+                or image.variables != value.source_variables
+                or not isinstance(image.polynomial, SparseRationalPolynomial)
+                or not isinstance(image.polynomial.terms, tuple)
+                or len(image.polynomial.terms) > MAX_DIFFERENTIAL_FORM_TERMS
+            ):
+                raise ValueError("invalid map image")
+            for term in image.polynomial.terms:
+                if (
+                    not isinstance(term, RationalPolynomialTerm)
+                    or not isinstance(term.exponents, tuple)
+                    or len(term.exponents) != len(value.source_variables)
+                    or any(
+                        type(e) is not int
+                        or not 0 <= e <= MAX_DIFFERENTIAL_FORM_EXPONENT
+                        for e in term.exponents
+                    )
+                    or not isinstance(term.coefficient, CanonicalRational)
+                ):
+                    raise ValueError("invalid image term")
+                if any(
+                    type(scalar) is not int
+                    or scalar.bit_length()
+                    > 4 * MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+                    for scalar in (term.coefficient.num, term.coefficient.den)
+                ):
+                    raise ValueError("invalid image coefficient")
+        # Structural revalidation enforces exact decimal heights, reduced
+        # coefficients, term ordering and axes; it performs no substitution.
+        return PolynomialMap.model_validate(value.model_dump())
+    except (ValidationError, ValueError, TypeError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.map_shape",
+            message="pullback requires a canonical bounded polynomial map",
+        ) from exc
 
 
 def _partial_terms(
-    terms: tuple[RationalPolynomialTerm, ...], variable: int, dimension: int
+    terms: tuple[RationalPolynomialTerm, ...],
+    variable: int,
+    dimension: int,
+    *,
+    arithmetic: _CalculusArithmeticBudget,
+    location: tuple[str, ...],
 ) -> dict[tuple[int, ...], Fraction]:
     """Differentiate sparse polynomial terms with respect to one variable."""
 
+    arithmetic.charge_pairs(len(terms), location=location)
     derived: dict[tuple[int, ...], Fraction] = {}
     for term in terms:
         exponent = term.exponents[variable]
         if not exponent:
             continue
-        scaled = term.coefficient.as_fraction() * exponent
+        scaled = arithmetic.multiply(
+            term.coefficient.as_fraction(), Fraction(exponent), location=location
+        )
         if not scaled:
             continue
         exponents = list(term.exponents)
         exponents[variable] -= 1
         key = tuple(exponents)
-        derived[key] = derived.get(key, Fraction()) + scaled
+        derived[key] = arithmetic.add(
+            derived.get(key, Fraction()), scaled, location=location
+        )
     return {key: value for key, value in derived.items() if value}
 
 
@@ -706,6 +842,8 @@ def _add_monomials(
     sign: int,
     *,
     location: tuple[str, ...],
+    budget: _CalculusArithmeticBudget,
+    storage: _AggregateStorage,
 ) -> None:
     """Fold signed monomials into a form aggregate with a term-count preflight."""
 
@@ -718,6 +856,7 @@ def _add_monomials(
             "differential_form.calculus.term_budget",
             "exterior-calculus monomial support exceeds the bounded work envelope",
         )
+    budget.charge_pairs(len(monomials), location=location)
     for exponents, value in monomials.items():
         if any(exponent > MAX_DIFFERENTIAL_FORM_EXPONENT for exponent in exponents):
             raise _calculus_budget(
@@ -725,7 +864,12 @@ def _add_monomials(
                 "differential_form.calculus.exponent_budget",
                 "exterior-calculus exponents exceed the bounded output envelope",
             )
-        combined = terms.get(exponents, Fraction()) + sign * value
+        current = terms.get(exponents, Fraction())
+        combined = budget.add(current, sign * value, location=location)
+        storage.digits += (budget.height(combined) if combined else 0) - (
+            budget.height(current) if current else 0
+        )
+        budget.check_storage(storage.digits, location=location)
         if combined:
             terms[exponents] = combined
         elif exponents in terms:
@@ -737,6 +881,7 @@ def _poly_mul(
     right: dict[tuple[int, ...], Fraction],
     *,
     location: tuple[str, ...],
+    budget: _CalculusArithmeticBudget,
 ) -> dict[tuple[int, ...], Fraction]:
     """Multiply sparse monomial dictionaries with a pair-count preflight."""
 
@@ -748,8 +893,10 @@ def _poly_mul(
             "differential_form.calculus.term_budget",
             "exterior-calculus polynomial convolution exceeds the bounded work envelope",
         )
+    budget.charge_pairs(len(left) * len(right), location=location)
     product: dict[tuple[int, ...], Fraction] = {}
     completed = 0
+    retained_digits = 0
     for left_exponents, left_value in left.items():
         for right_exponents, right_value in right.items():
             completed += 1
@@ -764,9 +911,14 @@ def _poly_mul(
                     "differential_form.calculus.exponent_budget",
                     "exterior-calculus exponents exceed the bounded output envelope",
                 )
-            product[exponents] = product.get(exponents, Fraction()) + (
-                left_value * right_value
+            current = product.get(exponents, Fraction())
+            value = budget.multiply(left_value, right_value, location=location)
+            combined = budget.add(current, value, location=location)
+            retained_digits += (budget.height(combined) if combined else 0) - (
+                budget.height(current) if current else 0
             )
+            budget.check_storage(retained_digits, location=location)
+            product[exponents] = combined
     return {key: value for key, value in product.items() if value}
 
 
@@ -776,6 +928,7 @@ def _poly_pow(
     dimension: int,
     *,
     location: tuple[str, ...],
+    budget: _CalculusArithmeticBudget,
 ) -> dict[tuple[int, ...], Fraction]:
     """Raise a sparse polynomial to a nonnegative power by squaring."""
 
@@ -784,10 +937,10 @@ def _poly_pow(
     remaining = exponent
     while remaining:
         if remaining & 1:
-            result = _poly_mul(result, factor, location=location)
+            result = _poly_mul(result, factor, location=location, budget=budget)
         remaining >>= 1
         if remaining:
-            factor = _poly_mul(factor, factor, location=location)
+            factor = _poly_mul(factor, factor, location=location, budget=budget)
     return result
 
 
@@ -797,56 +950,86 @@ def _substitute_polynomial(
     dimension: int,
     *,
     location: tuple[str, ...],
+    budget: _CalculusArithmeticBudget,
 ) -> dict[tuple[int, ...], Fraction]:
     """Compose a target polynomial with source-axis image polynomials."""
 
     composed: dict[tuple[int, ...], Fraction] = {}
+    composed_storage = _AggregateStorage()
     for term in terms:
         contribution = _poly_pow(
             {tuple(0 for _ in range(dimension)): term.coefficient.as_fraction()},
             1,
             dimension,
             location=location,
+            budget=budget,
         )
         for variable, exponent in enumerate(term.exponents):
             if exponent:
                 contribution = _poly_mul(
                     contribution,
-                    _poly_pow(images[variable], exponent, dimension, location=location),
+                    _poly_pow(
+                        images[variable],
+                        exponent,
+                        dimension,
+                        location=location,
+                        budget=budget,
+                    ),
                     location=location,
+                    budget=budget,
                 )
-        for exponents, value in contribution.items():
-            composed[exponents] = composed.get(exponents, Fraction()) + value
+        _add_monomials(
+            {(): composed},
+            (),
+            contribution,
+            1,
+            location=location,
+            budget=budget,
+            storage=composed_storage,
+        )
     return {key: value for key, value in composed.items() if value}
 
 
 def _partial_dict(
-    image: dict[tuple[int, ...], Fraction], variable: int
+    image: dict[tuple[int, ...], Fraction],
+    variable: int,
+    *,
+    arithmetic: _CalculusArithmeticBudget,
+    location: tuple[str, ...],
 ) -> dict[tuple[int, ...], Fraction]:
     """Differentiate a monomial dictionary with respect to one variable."""
 
+    arithmetic.charge_pairs(len(image), location=location)
     derived: dict[tuple[int, ...], Fraction] = {}
     for exponents, value in image.items():
         exponent = exponents[variable]
         if not exponent:
             continue
-        scaled = value * exponent
+        scaled = arithmetic.multiply(value, Fraction(exponent), location=location)
         if not scaled:
             continue
         shifted = list(exponents)
         shifted[variable] -= 1
         key = tuple(shifted)
-        derived[key] = derived.get(key, Fraction()) + scaled
+        derived[key] = arithmetic.add(
+            derived.get(key, Fraction()), scaled, location=location
+        )
     return {key: value for key, value in derived.items() if value}
 
 
 def _differential_of_image(
     image: dict[tuple[int, ...], Fraction],
     dimension: int,
+    *,
+    arithmetic: _CalculusArithmeticBudget,
+    location: tuple[str, ...],
 ) -> list[dict[tuple[int, ...], Fraction]]:
     """Return the partial derivatives of one image polynomial per source variable."""
 
-    return [_partial_dict(image, variable) for variable in range(dimension)]
+    return [
+        _partial_dict(image, variable, arithmetic=arithmetic, location=location)
+        for variable in range(dimension)
+    ]
 
 
 def exterior_derivative(
@@ -861,14 +1044,20 @@ def exterior_derivative(
     _admit_degree(degree)
     if degree > dimension:
         return _zero_form(form.variables, degree)
+    arithmetic = _CalculusArithmeticBudget()
     aggregate: _RemainingTerms = {}
+    aggregate_storage = _AggregateStorage()
     location = ("form",)
     for component in form.components:
         for variable in range(dimension):
             if variable in component.indices:
                 continue
             derived = _partial_terms(
-                component.coefficient.polynomial.terms, variable, dimension
+                component.coefficient.polynomial.terms,
+                variable,
+                dimension,
+                arithmetic=arithmetic,
+                location=location,
             )
             if not derived:
                 continue
@@ -880,21 +1069,12 @@ def exterior_derivative(
                 derived,
                 -1 if position % 2 else 1,
                 location=location,
+                budget=arithmetic,
+                storage=aggregate_storage,
             )
-    for terms in aggregate.values():
-        for value in terms.values():
-            if (
-                _fraction_component_digits(value)
-                > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
-            ):
-                raise _calculus_budget(
-                    location,
-                    "differential_form.calculus.coefficient_budget",
-                    "exterior-derivative coefficients exceed the bounded output envelope",
-                )
     _admit_remaining_support(aggregate)
     return _admitted_result(
-        variables=form.variables, degree=degree, aggregate=aggregate
+        variables=form.variables, degree=degree, aggregate=aggregate, location=location
     )
 
 
@@ -917,7 +1097,9 @@ def interior_product(
         }
         for component in field.components
     )
+    arithmetic = _CalculusArithmeticBudget()
     aggregate: _RemainingTerms = {}
+    aggregate_storage = _AggregateStorage()
     location = ("field", "form")
     for component in form.components:
         for position, variable in enumerate(component.indices):
@@ -928,6 +1110,7 @@ def interior_product(
                 },
                 field_terms[variable],
                 location=location,
+                budget=arithmetic,
             )
             remaining = tuple(index for index in component.indices if index != variable)
             _add_monomials(
@@ -936,11 +1119,174 @@ def interior_product(
                 contracted,
                 -1 if position % 2 else 1,
                 location=location,
+                budget=arithmetic,
+                storage=aggregate_storage,
             )
     _admit_remaining_support(aggregate)
     return _admitted_result(
-        variables=form.variables, degree=degree, aggregate=aggregate
+        variables=form.variables, degree=degree, aggregate=aggregate, location=location
     )
+
+
+@dataclass
+class _AggregateStorage:
+    """Incremental scalar storage for one live aggregate, without retaining it."""
+
+    digits: int = 0
+
+
+@dataclass
+class _CalculusArithmeticBudget:
+    """Request-local rational work and workspace, distinct from final height."""
+
+    pairs: int = 0
+    digit_work: int = 0
+    code_prefix: str = "differential_form.calculus."
+    label: str = "exterior-calculus arithmetic"
+    pair_limit: int = MAX_CALCULUS_TERM_PAIRS
+    work_limit: int = MAX_CALCULUS_DIGIT_WORK
+    storage_limit: int = MAX_CALCULUS_STORAGE_DIGITS
+
+    @staticmethod
+    def height(value: Fraction) -> int:
+        # A private workspace, larger than the final form carrier. An admitted
+        # image derivative has at most 8195 digits. Reduced intermediates
+        # are independently capped; the workspace need not admit every
+        # formal product. Transient Fraction operands fit 2H+1.
+        bits = max(value.numerator.bit_length(), value.denominator.bit_length())
+        return (bits * 30103) // 100000 + 1
+
+    def retain(self, value: Fraction, *, location: tuple[str, ...]) -> Fraction:
+        if self.height(value) > MAX_CALCULUS_INTERMEDIATE_DIGITS:
+            raise _calculus_budget(
+                location,
+                f"{self.code_prefix}height",
+                f"{self.label} exceeds its private scalar-height budget",
+            )
+        return value
+
+    def charge_scalars(
+        self, left: Fraction, right: Fraction, *, location: tuple[str, ...]
+    ) -> None:
+        self.retain(left, location=location)
+        self.retain(right, location=location)
+        self.charge_work(self.height(left) * self.height(right), location=location)
+
+    def charge_work(self, amount: int, *, location: tuple[str, ...]) -> None:
+        self.digit_work += amount
+        if self.digit_work > self.work_limit:
+            raise _calculus_budget(
+                location,
+                f"{self.code_prefix}work",
+                f"{self.label} exceeds its cumulative digit-work budget",
+            )
+
+    def multiply(
+        self, left: Fraction, right: Fraction, *, location: tuple[str, ...]
+    ) -> Fraction:
+        if left in (-1, 1):
+            return self.retain(right if left == 1 else -right, location=location)
+        if right in (-1, 1):
+            return self.retain(left if right == 1 else -left, location=location)
+        self.charge_scalars(left, right, location=location)
+        return self.retain(left * right, location=location)
+
+    def add(
+        self, left: Fraction, right: Fraction, *, location: tuple[str, ...]
+    ) -> Fraction:
+        if not left:
+            return self.retain(right, location=location)
+        if not right:
+            return self.retain(left, location=location)
+        if left.denominator == right.denominator:
+            self.retain(left, location=location)
+            self.retain(right, location=location)
+            # No denominator cross-products are needed. Price the numerator
+            # sum and its reduction against the common denominator; for
+            # integers this is linear rather than quadratic in their height.
+            numerator_digits = (
+                sum(
+                    (value.numerator.bit_length() * 30103) // 100000 + 1
+                    for value in (left, right)
+                )
+                + 1
+            )
+            denominator_digits = (left.denominator.bit_length() * 30103) // 100000 + 1
+            self.charge_work(numerator_digits * denominator_digits, location=location)
+        else:
+            self.charge_scalars(left, right, location=location)
+        return self.retain(left + right, location=location)
+
+    def check_storage(self, digits: int, *, location: tuple[str, ...]) -> None:
+        # Bound each complete exterior stage and its temporary polynomial.
+        # At most the old stage, new stage and one product coexist. Each
+        # tracked height bounds max(numerator, denominator) digits, so their
+        # combined scalar payload is at most twice this count.
+        if digits > self.storage_limit:
+            raise _calculus_budget(
+                location,
+                f"{self.code_prefix}storage",
+                f"{self.label} exceeds its scalar-storage budget",
+            )
+
+    def charge_pairs(self, amount: int, *, location: tuple[str, ...]) -> None:
+        self.pairs += amount
+        if self.pairs > self.pair_limit:
+            raise _calculus_budget(
+                location,
+                f"{self.code_prefix}work",
+                f"{self.label} exceeds its cumulative pair budget",
+            )
+
+
+def _pullback_differential_factor(
+    indices: tuple[int, ...],
+    differentials: list[list[dict[tuple[int, ...], Fraction]]],
+    dimension: int,
+    *,
+    location: tuple[str, ...],
+    budget: _CalculusArithmeticBudget,
+    initial: dict[tuple[int, ...], Fraction] | None = None,
+) -> _RemainingTerms:
+    """Expand dF_i1 wedge ... wedge dF_ik in the alternating basis first."""
+
+    if initial is not None:
+        budget.charge_pairs(len(initial), location=location)
+        initial_digits = 0
+        for value in initial.values():
+            budget.retain(value, location=location)
+            initial_digits += budget.height(value)
+        budget.check_storage(initial_digits, location=location)
+    expanded: _RemainingTerms = {
+        (): {(0,) * dimension: Fraction(1)} if initial is None else initial
+    }
+    for index in indices:
+        request_checkpoint("during pullback differential presolve")
+        staged: _RemainingTerms = {}
+        staged_storage = _AggregateStorage()
+        for chosen, accumulated in expanded.items():
+            for variable, partial in enumerate(differentials[index]):
+                # An alternating factor with a repeated basis index is zero;
+                # do not expand polynomial products destined to disappear.
+                if variable in chosen or not partial:
+                    continue
+                contribution = _poly_mul(
+                    accumulated, partial, location=location, budget=budget
+                )
+                inversions = sum(previous > variable for previous in chosen)
+                _add_monomials(
+                    staged,
+                    tuple(sorted((*chosen, variable))),
+                    contribution,
+                    -1 if inversions % 2 else 1,
+                    location=location,
+                    budget=budget,
+                    storage=staged_storage,
+                )
+        expanded = {basis: terms for basis, terms in staged.items() if terms}
+        if not expanded:
+            break
+    return expanded
 
 
 def pullback(
@@ -959,6 +1305,9 @@ def pullback(
             message="a pulled-back form must use the map target axis",
         )
     source_dimension = len(mapping.source_variables)
+    if int(form.degree) > source_dimension or not form.components:
+        return _zero_form(mapping.source_variables, int(form.degree))
+    arithmetic = _CalculusArithmeticBudget()
     images = tuple(
         {
             term.exponents: term.coefficient.as_fraction()
@@ -967,59 +1316,116 @@ def pullback(
         for image in mapping.images
     )
     differentials = [
-        _differential_of_image(image, source_dimension) for image in images
+        _differential_of_image(
+            image, source_dimension, arithmetic=arithmetic, location=("map", "form")
+        )
+        for image in images
     ]
+    # At most 28 pairs of admitted rows (each at most 8*256 terms).
+    # Exact repeated differentials have zero exterior product regardless of
+    # their coefficient height; recognize this before arithmetic pricing.
+    repeated_differentials = {
+        (left, right)
+        for left, right in combinations(range(len(differentials)), 2)
+        if differentials[left] == differentials[right]
+    }
     aggregate: _RemainingTerms = {}
+    aggregate_storage = _AggregateStorage()
     location = ("map", "form")
+    # Reserve two independently bounded orderings for the complete request.
+    # Trying coefficient-first after a factor refusal does not reset the
+    # deadline or either ledger; total extra work is at most their sum.
+    presolve_budget = _CalculusArithmeticBudget(
+        code_prefix="differential_form.pullback.presolve_",
+        label="pullback differential presolve",
+        pair_limit=MAX_CALCULUS_TERM_PAIRS,
+        work_limit=MAX_CALCULUS_DIGIT_WORK,
+        storage_limit=MAX_CALCULUS_STORAGE_DIGITS,
+    )
+    coefficient_first_budget = _CalculusArithmeticBudget(
+        code_prefix="differential_form.pullback.presolve_",
+        label="pullback coefficient-first recovery",
+        pair_limit=MAX_CALCULUS_TERM_PAIRS,
+        work_limit=MAX_CALCULUS_DIGIT_WORK,
+        storage_limit=MAX_CALCULUS_STORAGE_DIGITS,
+    )
     for component in form.components:
+        if any(
+            pair in repeated_differentials
+            for pair in combinations(component.indices, 2)
+        ):
+            continue
+        try:
+            differential_factor = _pullback_differential_factor(
+                component.indices,
+                differentials,
+                source_dimension,
+                location=location,
+                budget=presolve_budget,
+            )
+        except OperationResourceAdmissionError:
+            # Release the failed phase's traceback/workspace before recovery.
+            differential_factor = None
+        if differential_factor is None:
+            # A coefficient can cancel scalar growth or vanish identically.
+            # Preserve the useful coefficient-first path, but price that
+            # alternative separately and attempt it at most once per component.
+            substituted = _substitute_polynomial(
+                component.coefficient.polynomial.terms,
+                images,
+                source_dimension,
+                location=location,
+                budget=arithmetic,
+            )
+            if not substituted:
+                continue
+            weighted_factor = _pullback_differential_factor(
+                component.indices,
+                differentials,
+                source_dimension,
+                location=location,
+                budget=coefficient_first_budget,
+                initial=substituted,
+            )
+            for indices, contribution in weighted_factor.items():
+                _add_monomials(
+                    aggregate,
+                    indices,
+                    contribution,
+                    1,
+                    location=location,
+                    budget=arithmetic,
+                    storage=aggregate_storage,
+                )
+            continue
+        if not differential_factor:
+            continue
         substituted = _substitute_polynomial(
             component.coefficient.polynomial.terms,
             images,
             source_dimension,
             location=location,
+            budget=arithmetic,
         )
-        factors = [differentials[index] for index in component.indices]
-        expanded: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {
-            (): substituted
-        }
-        for partials in factors:
-            staged: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
-            for chosen, accumulated in expanded.items():
-                for variable in range(source_dimension):
-                    contribution = _poly_mul(
-                        accumulated, partials[variable], location=location
-                    )
-                    if contribution:
-                        staged[(*chosen, variable)] = contribution
-            expanded = staged
-            if len(expanded) > MAX_CALCULUS_TERM_PAIRS:
-                raise _calculus_budget(
-                    location,
-                    "differential_form.calculus.term_budget",
-                    "pullback differential expansion exceeds the bounded work envelope",
-                )
-        for chosen, contribution in expanded.items():
-            if len(set(chosen)) != len(chosen):
-                continue
-            inversions = sum(
-                1
-                for left in range(len(chosen))
-                for right in range(left + 1, len(chosen))
-                if chosen[left] > chosen[right]
+        for indices, factor in differential_factor.items():
+            contribution = _poly_mul(
+                substituted, factor, location=location, budget=arithmetic
             )
-            merged = tuple(sorted(chosen))
             _add_monomials(
                 aggregate,
-                merged,
+                indices,
                 contribution,
-                -1 if inversions % 2 else 1,
+                1,
                 location=location,
+                budget=arithmetic,
+                storage=aggregate_storage,
             )
     _admit_remaining_support(aggregate)
     return _admitted_result(
         variables=mapping.source_variables,
         degree=int(form.degree),
         aggregate=aggregate,
+        location=location,
     )
 
 
@@ -1052,7 +1458,9 @@ def _add_forms(
             code="differential_form.calculus_axis",
             message="combined forms must share one variable axis and degree",
         )
+    arithmetic = _CalculusArithmeticBudget()
     aggregate: _RemainingTerms = {}
+    aggregate_storage = _AggregateStorage()
     location = ("left", "right")
     for form, sign in ((left, 1), (right, 1)):
         for component in form.components:
@@ -1065,10 +1473,15 @@ def _add_forms(
                 },
                 sign,
                 location=location,
+                budget=arithmetic,
+                storage=aggregate_storage,
             )
     _admit_remaining_support(aggregate)
     return _admitted_result(
-        variables=left.variables, degree=int(left.degree), aggregate=aggregate
+        variables=left.variables,
+        degree=int(left.degree),
+        aggregate=aggregate,
+        location=location,
     )
 
 
@@ -1084,7 +1497,9 @@ def affine_homotopy_primitive(
         return PrimitiveResult._from_kernel(source=form, outcome="NOT_APPLICABLE")
     if exterior_derivative(form).components:
         return PrimitiveResult._from_kernel(source=form, outcome="NOT_APPLICABLE")
+    arithmetic = _CalculusArithmeticBudget()
     aggregate: _RemainingTerms = {}
+    aggregate_storage = _AggregateStorage()
     location = ("form",)
     for component in form.components:
         for position, variable in enumerate(component.indices):
@@ -1092,24 +1507,36 @@ def affine_homotopy_primitive(
             weighted: dict[tuple[int, ...], Fraction] = {}
             for term in component.coefficient.polynomial.terms:
                 total = sum(term.exponents) + degree
-                value = term.coefficient.as_fraction() / total
+                arithmetic.charge_pairs(1, location=location)
+                value = arithmetic.multiply(
+                    term.coefficient.as_fraction(),
+                    Fraction(1, total),
+                    location=location,
+                )
                 shifted = list(term.exponents)
                 shifted[variable] += 1
                 key = tuple(shifted)
-                weighted[key] = weighted.get(key, Fraction()) + value
+                weighted[key] = arithmetic.add(
+                    weighted.get(key, Fraction()), value, location=location
+                )
             _add_monomials(
                 aggregate,
                 remaining,
                 weighted,
                 -1 if position % 2 else 1,
                 location=location,
+                budget=arithmetic,
+                storage=aggregate_storage,
             )
     _admit_remaining_support(aggregate)
     return PrimitiveResult._from_kernel(
         source=form,
         outcome="CONSTRUCTED",
         primitive=_admitted_result(
-            variables=form.variables, degree=degree - 1, aggregate=aggregate
+            variables=form.variables,
+            degree=degree - 1,
+            aggregate=aggregate,
+            location=location,
         ),
     )
 

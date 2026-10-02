@@ -14,6 +14,9 @@ from jacobian.math.polynomials.differential_forms import (
     exterior_derivative,
     wedge,
 )
+from jacobian.math.polynomials.differential_forms.values import (
+    MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -64,7 +67,7 @@ def _form(
 def test_exact_decimal_carrier_edge_survives_calculus(
     leading: int, sign: int, reciprocal: bool
 ) -> None:
-    magnitude = leading * 10**4095
+    magnitude = leading * 10 ** (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS - 1)
     value = Fraction(sign, magnitude) if reciprocal else Fraction(sign * magnitude)
     constant = _form(0, ((), _poly((value, (0, 0)))))
     decoded = PolynomialDifferentialForm.model_validate_json(constant.model_dump_json())
@@ -82,7 +85,7 @@ def test_exact_decimal_carrier_edge_survives_calculus(
 
 
 def test_wedge_reduced_sum_keeps_exact_decimal_denominator_edge() -> None:
-    denominator = 7 * 10**4095
+    denominator = 7 * 10 ** (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS - 1)
     # (x + 1) * (5x/D - 4/D) has middle coefficient 1/D. Both
     # source denominators are smaller; only the reduced sum reaches the edge.
     left = _form(0, ((), _poly((1, (1, 0)), (1, (0, 0)))))
@@ -119,7 +122,8 @@ def test_native_exact_carrier_cutoff_still_rejects_one_digit_too_many(
     reciprocal: bool,
 ) -> None:
     value = R.model_construct(
-        num=1 if reciprocal else 10**4096, den=10**4096 if reciprocal else 1
+        num=1 if reciprocal else 10**MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
+        den=10**MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS if reciprocal else 1,
     )
     term = RationalPolynomialTerm.model_construct(coefficient=value, exponents=(0, 0))
     coefficient = RationalPolynomial.model_construct(
@@ -141,7 +145,7 @@ def test_native_exact_carrier_cutoff_still_rejects_one_digit_too_many(
 def test_wedge_reduced_sum_rejects_actual_denominator_overflow() -> None:
     from jacobian.catalog.models import OperationResourceAdmissionError
 
-    denominator = 2 * 10**4096
+    denominator = 2 * 10**MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
     left = _form(0, ((), _poly((1, (1, 0)), (1, (0, 0)))))
     right = _form(
         0,
@@ -153,8 +157,8 @@ def test_wedge_reduced_sum_rejects_actual_denominator_overflow() -> None:
             ),
         ),
     )
-    # Inputs reduce to 4096-digit denominators; the middle coefficient's
-    # denominator has 4097 digits and really lies outside the carrier.
+    # Inputs fit the carrier; the middle coefficient's
+    # denominator has one additional digit and really lies outside the carrier.
     with pytest.raises(OperationResourceAdmissionError) as error:
         wedge(left, right)
     assert (

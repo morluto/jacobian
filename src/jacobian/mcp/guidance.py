@@ -21,7 +21,7 @@ Find or inspect public Jacobian MCP operations.
 
 Forms:
 - `query`: describe one local mathematical need in ordinary language. `namespace`,
-  `limit`, and `cursor` are optional search controls.
+  `limit`, `cursor`, and `search_mode` are optional search controls.
   Preserve established mathematical names from the task, the supplied objects and
   constraints, the requested computation or decision, the full scalar, batch, or
   exhaustive scope, and whether the requested result is a value, witness,
@@ -35,8 +35,8 @@ Forms:
 
 For matching, use `namespace` only when the primary operation-ID namespace is already
 known with high confidence. Matching returns 10 candidates by default; request up to
-20 when a wider first page is useful. Follow `next_cursor` with the same need and
-namespace to continue. Ordered matches are deterministic retrieval candidates, not
+20 when a wider first page is useful. Follow `next_cursor` with the same query, namespace, and search_mode
+to continue; the limit may change. Ordered matches are deterministic retrieval candidates, not
 applicability claims; inspect a promising operation before math.run. Read
 `operation://catalog` only when the complete bulk catalog is genuinely needed.
 

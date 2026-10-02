@@ -12,6 +12,9 @@ from jacobian.math.polynomials.differential_forms import (
     PolynomialDifferentialForm,
     exterior_derivative,
 )
+from jacobian.math.polynomials.differential_forms.values import (
+    MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
+)
 from jacobian.mcp.server import create_server
 from mcp import Client
 
@@ -19,7 +22,7 @@ from mcp import Client
 @pytest.mark.parametrize("reciprocal", (False, True))
 def test_decimal_interval_boundary_reaches_public_calculus(reciprocal: bool) -> None:
     operation_id = "differential_form.exterior_derivative.compute"
-    coefficient = "7" + "0" * 4095
+    coefficient = "7" + "0" * (MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS - 1)
     form: dict[str, Any] = {
         "variables": ["x"],
         "degree": "0",

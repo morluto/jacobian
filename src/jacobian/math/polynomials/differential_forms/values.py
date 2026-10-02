@@ -22,7 +22,10 @@ MAX_DIFFERENTIAL_FORM_TERMS = 256
 # repeated bounded compositions; the operation rejects a sum beyond this
 # representation limit before expansion.
 MAX_DIFFERENTIAL_FORM_EXPONENT = 256
-MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS = 4_096
+# A one-product handoff from the former 4096-digit operands fits this
+# carrier. All producers still admit final height; arithmetic work and
+# private workspace remain independently bounded.
+MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS = 8_192
 
 
 def _error(reason: str, message: str) -> PydanticCustomError:

@@ -8,6 +8,7 @@ from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
+from jacobian.math.graphs._input import ColoredUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     ColoredUndirectedGraph,
@@ -20,7 +21,7 @@ MAX_CLIQUE_ORDER = MAX_VERTICES
 class MonochromaticCliqueHypergraphRequest(StrictModel):
     """Request to construct the monochromatic clique hypergraph."""
 
-    colored_graph: ColoredUndirectedGraph
+    colored_graph: ColoredUndirectedGraphInput
     clique_order: StrictInt = Field(ge=2, le=MAX_CLIQUE_ORDER)
 
 

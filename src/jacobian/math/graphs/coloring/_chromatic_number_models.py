@@ -22,6 +22,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.graphs._input import (
+    SimpleUndirectedGraphInput,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CHROMATIC_CERTIFICATE_VERTICES = 20
@@ -121,11 +125,19 @@ CertificateReason = Literal[
 ]
 
 
-def _chromatic_certificate_graph_schema() -> JsonSchemaValue:
-    schema = SimpleUndirectedGraph.model_json_schema()
+def _chromatic_certificate_graph_schema(*, request: bool = False) -> JsonSchemaValue:
+    schema = (
+        simple_graph_input_schema()
+        if request
+        else SimpleUndirectedGraph.model_json_schema()
+    )
     schema["description"] = (
-        "A canonical simple undirected graph with at most "
-        f"{MAX_CHROMATIC_CERTIFICATE_VERTICES} vertices. Vertex order is the "
+        (
+            "A simple undirected graph with at most "
+            if request
+            else "A canonical simple undirected graph with at most "
+        )
+        + f"{MAX_CHROMATIC_CERTIFICATE_VERTICES} vertices. Vertex order is the "
         "authoritative axis for the coloring and rational weights."
     )
     schema["properties"]["vertices"].update(maxItems=MAX_CHROMATIC_CERTIFICATE_VERTICES)
@@ -136,6 +148,14 @@ def _chromatic_certificate_graph_schema() -> JsonSchemaValue:
 ChromaticCertificateGraph = Annotated[
     SimpleUndirectedGraph,
     WithJsonSchema(_chromatic_certificate_graph_schema()),
+]
+
+
+ChromaticCertificateGraphInput = Annotated[
+    SimpleUndirectedGraphInput,
+    WithJsonSchema(
+        _chromatic_certificate_graph_schema(request=True), mode="validation"
+    ),
 ]
 
 
@@ -392,7 +412,7 @@ class ChromaticNumberCertificateCheckRequest(StrictModel):
         }
     )
 
-    graph: ChromaticCertificateGraph
+    graph: ChromaticCertificateGraphInput
     claimed_chromatic_number: StrictInt = Field(
         ge=0,
         le=MAX_CHROMATIC_CERTIFICATE_VERTICES,

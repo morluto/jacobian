@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 256
@@ -13,7 +14,7 @@ MAX_VERTICES = 256
 class InducedEdgeCountProfileRequest(StrictModel):
     """Request for the induced-edge-count distribution at a fixed cardinality."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     cardinality: StrictInt = Field(ge=0, le=MAX_VERTICES)
 
 

@@ -501,7 +501,8 @@ def test_colored_graph_rejects_noncanonical_presentations(
 
 def test_schema_explains_alignment_and_work_admission() -> None:
     schema = ColoredGraphCanonicalizationRequest.model_json_schema()
-    graph_schema = schema["$defs"]["ColoredUndirectedGraph"]
+    reference = schema["properties"]["colored_graph"]["$ref"]
+    graph_schema = schema["$defs"][reference.rsplit("/", 1)[1]]
 
     assert "aligned" in graph_schema["description"]
     assert "execution work" in schema["description"]

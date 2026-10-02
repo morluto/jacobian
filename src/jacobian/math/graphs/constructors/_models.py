@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.constructors._bounds import MAX_TRIANGLE_PROFILE_ROWS
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
@@ -62,7 +63,7 @@ class KellerGraphResult(StrictModel):
 class TriangleProfileRequest(StrictModel):
     """One finite simple undirected graph whose triangle profile is computed."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
 
 class TriangleProfileRow(StrictModel):

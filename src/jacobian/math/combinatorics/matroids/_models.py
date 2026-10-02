@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 MAX_GROUND_SIZE = 256
@@ -57,7 +57,7 @@ MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS = 1024
 class GraphicMatroidRequest(StrictModel):
     """Construct the GF(2) incidence representation of a simple graph."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
 
 class LinearMatroid(StrictModel):

@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 256
@@ -16,7 +17,7 @@ MAX_VERTICES = 256
 class CommonNeighborProfileRequest(StrictModel):
     """Request for the common-neighbour profile of a graph."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
 
     @model_validator(mode="after")
     def validate_graph(self) -> Self:

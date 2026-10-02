@@ -18,6 +18,7 @@ from jacobian.math.geometry.framework._bounds import (
     difference_work,
     rational_parse_work,
 )
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices._operation_models import MatrixRankResult
 from jacobian.math.matrices.values import SparseRationalMatrix
@@ -154,7 +155,7 @@ class PlanarRigidityProfileRequest(StrictModel):
             "its declared point order is the rigidity-matrix vertex axis."
         )
     )
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "A simple undirected graph whose vertex set exactly equals the "
             "configuration point-label set. Edge tuple order is ignored when "

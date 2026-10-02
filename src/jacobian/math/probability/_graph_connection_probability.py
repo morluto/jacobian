@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
@@ -47,7 +48,7 @@ class GraphReliabilityEdgeProbability(StrictModel):
 class GraphConnectionProbabilityRequest(StrictModel):
     """Transport request for terminal reliability."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraphInput
     edge_probabilities: tuple[GraphReliabilityEdgeProbability, ...] = Field(
         max_length=MAX_GRAPH_RELIABILITY_EDGES
     )

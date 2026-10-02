@@ -5,6 +5,7 @@ from typing import Annotated, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import IndexedSimpleUndirectedGraphInput
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.matrices.values import RationalMatrix
 
@@ -17,7 +18,7 @@ class ChordalPSDRequest(StrictModel):
     """
 
     matrix: RationalMatrix
-    graph: IndexedSimpleUndirectedGraph
+    graph: IndexedSimpleUndirectedGraphInput
 
 
 class CliquePSDTerm(StrictModel):

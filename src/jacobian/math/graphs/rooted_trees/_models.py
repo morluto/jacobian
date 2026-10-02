@@ -6,17 +6,17 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     GraphVertexLabel,
-    SimpleUndirectedGraph,
 )
 
 
 class RootedTreeFinePartitionRequest(StrictModel):
     """One graph, declared root, and requested maximum shrub order."""
 
-    graph: SimpleUndirectedGraph = Field(
+    graph: SimpleUndirectedGraphInput = Field(
         description=(
             "The retained canonical finite simple undirected graph. The graph "
             "must be nonempty and have at most "

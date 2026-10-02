@@ -13,6 +13,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import SimpleUndirectedGraphInput
 from jacobian.math.graphs.values import GraphVertexLabel as GraphVertex
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -27,7 +28,7 @@ def _require_chromatic_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGr
 
 
 ChromaticGraph = Annotated[
-    SimpleUndirectedGraph,
+    SimpleUndirectedGraphInput,
     AfterValidator(_require_chromatic_graph),
 ]
 

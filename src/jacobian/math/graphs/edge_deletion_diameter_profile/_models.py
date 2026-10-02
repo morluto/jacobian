@@ -9,6 +9,10 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.graphs._input import (
+    SimpleUndirectedGraphInput,
+    simple_graph_input_schema,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -17,7 +21,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _graph_schema() -> JsonSchemaValue:
-    schema = SimpleUndirectedGraph.model_json_schema()
+    schema = simple_graph_input_schema()
     schema["description"] = (
         "A nonempty connected simple graph. Admission charges all-sources BFS "
         "work for the source graph and every single-edge deletion, and bounds "
@@ -27,8 +31,8 @@ def _graph_schema() -> JsonSchemaValue:
 
 
 DiameterGraph = Annotated[
-    SimpleUndirectedGraph,
-    WithJsonSchema(_graph_schema()),
+    SimpleUndirectedGraphInput,
+    WithJsonSchema(_graph_schema(), mode="validation"),
 ]
 
 

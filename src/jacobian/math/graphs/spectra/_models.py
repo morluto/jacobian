@@ -10,6 +10,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.graphs._input import (
+    IndexedSimpleUndirectedGraphInput,
+    indexed_graph_input_schema,
+)
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
 )
@@ -63,10 +67,14 @@ def _require_spectral_graph(graph: IndexedSimpleUndirectedGraph) -> None:
         )
 
 
-def _spectral_graph_schema() -> JsonSchemaValue:
+def _spectral_graph_schema(*, request: bool = False) -> JsonSchemaValue:
     """Project the spectral-operation envelope onto the shared graph value."""
 
-    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema = (
+        indexed_graph_input_schema()
+        if request
+        else IndexedSimpleUndirectedGraph.model_json_schema()
+    )
     schema["description"] = (
         "An integer-indexed simple undirected graph accepted by the spectral "
         f"operations: at most {_MAX_SPECTRAL_VERTICES} vertices and at most 512 edges."
@@ -81,9 +89,20 @@ SpectralGraph = Annotated[
     WithJsonSchema(_spectral_graph_schema()),
 ]
 
+SpectralGraphInput = Annotated[
+    IndexedSimpleUndirectedGraphInput,
+    WithJsonSchema(_spectral_graph_schema(request=True), mode="validation"),
+]
 
-def _characteristic_polynomial_graph_schema() -> JsonSchemaValue:
-    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+
+def _characteristic_polynomial_graph_schema(
+    *, request: bool = False
+) -> JsonSchemaValue:
+    schema = (
+        indexed_graph_input_schema()
+        if request
+        else IndexedSimpleUndirectedGraph.model_json_schema()
+    )
     schema["description"] = (
         "An integer-indexed simple undirected graph accepted by exact "
         f"characteristic-polynomial operations: at most {_MAX_CHARPOLY_VERTICES} "
@@ -99,9 +118,16 @@ CharacteristicPolynomialGraph = Annotated[
     WithJsonSchema(_characteristic_polynomial_graph_schema()),
 ]
 
+CharacteristicPolynomialGraphInput = Annotated[
+    IndexedSimpleUndirectedGraphInput,
+    WithJsonSchema(
+        _characteristic_polynomial_graph_schema(request=True), mode="validation"
+    ),
+]
+
 
 class GraphSpectrumRequest(StrictModel):
-    graph: SpectralGraph
+    graph: SpectralGraphInput
 
 
 class GraphSpectrumEntry(StrictModel):
@@ -123,7 +149,7 @@ class GraphSpectrumEntry(StrictModel):
 class GraphCharacteristicPolynomialRequest(StrictModel):
     """A graph whose dense integer matrix and exact polynomial are bounded."""
 
-    graph: CharacteristicPolynomialGraph
+    graph: CharacteristicPolynomialGraphInput
 
 
 class GraphSpectrumResult(StrictModel):

@@ -162,17 +162,43 @@ def _admit_factor(polynomial: RationalPolynomial) -> None:
 def _admit_resultant(
     left: RationalPolynomial, right: RationalPolynomial, elimination_variable: str
 ) -> None:
-    _admit_pair(left, right)
+    _validate_multivariate_pair(left, right)
     if elimination_variable not in left.variables:
         raise _validation_error("elimination variable must belong to the declared ring")
+    # These checks only price canonical sources. Keep their operational refusal
+    # distinct from the ring/axis conditions above, including during verification.
+    for side, polynomial in (("left", left), ("right", right)):
+        try:
+            require_polynomial_budget(
+                polynomial,
+                maximum_terms=_MAX_MULTIVARIATE_TERMS,
+                maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
+                maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
+                label=f"{side} polynomial",
+            )
+        except ValueError as exc:
+            raise OperationResourceAdmissionError(
+                location=(side,),
+                code="polynomial.multivariate_resultant.source_budget",
+                message=str(exc),
+            ) from exc
     index = left.variables.index(elimination_variable)
-    if (
-        _degree_in_variable(left, index) + _degree_in_variable(right, index)
-        > _MAX_ELIMINATION_DEGREE_SUM
-    ):
-        raise _validation_error("Sylvester degree exceeds the resultant budget")
-    if _resultant_support_bound(left, right, index) > _MAX_RESULTANT_TERMS:
-        raise _validation_error("resultant output exceeds the term budget")
+    degree_sum = _degree_in_variable(left, index) + _degree_in_variable(right, index)
+    if degree_sum > _MAX_ELIMINATION_DEGREE_SUM:
+        raise OperationResourceAdmissionError(
+            location=("elimination_variable",),
+            code="polynomial.multivariate_resultant.degree_budget",
+            message=f"Sylvester degree sum {degree_sum} exceeds the "
+            f"{_MAX_ELIMINATION_DEGREE_SUM}-degree resultant budget",
+        )
+    support_bound = _resultant_support_bound(left, right, index)
+    if support_bound > _MAX_RESULTANT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="polynomial.multivariate_resultant.support_budget",
+            message=f"resultant output support bound {support_bound} exceeds the "
+            f"{_MAX_RESULTANT_TERMS}-term output budget",
+        )
 
 
 def _admit_subresultants(
@@ -580,9 +606,15 @@ def verify_multivariate_factor(claim: MultivariateFactorResult) -> bool:
 
 
 def verify_multivariate_resultant(claim: MultivariateResultantResult) -> bool:
-    """Verify the retained Sylvester resultant relation."""
+    """Verify the retained relation; operational refusal is not mathematical False."""
+    if not isinstance(claim, MultivariateResultantResult):
+        return False
     try:
-        _admit_resultant(claim.left, claim.right, claim.elimination_variable)
+        _run_admission(
+            lambda: _admit_resultant(
+                claim.left, claim.right, claim.elimination_variable
+            )
+        )
         return (
             _sylvester_resultant_value(
                 claim.left, claim.right, claim.elimination_variable

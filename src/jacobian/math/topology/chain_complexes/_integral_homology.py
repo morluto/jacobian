@@ -20,7 +20,10 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
     SmithReduction,
@@ -114,6 +117,12 @@ def _domain_error(code: str, message: str) -> OperationDomainValidationError:
         location=("complex",),
         code=f"chain_complex.{code}",
         message=message,
+    )
+
+
+def _resource_error(code: str, message: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=("complex",), code=f"chain_complex.{code}", message=message
     )
 
 
@@ -412,6 +421,70 @@ def _smith_height_bound_from_shape(
     )
 
 
+def _monomial_smith_bound(
+    matrix: Matrix, *, rows: int, columns: int
+) -> SmithHeightBound | None:
+    """Bound the pinned Smith kernel on a signed/permuted diagonal matrix.
+
+    With at most one nonzero per row and column, pivot clearing is vacuous at
+    every recursive level. Pre-recursion transformations are signed permutations;
+    composing the embedded recursive transforms therefore creates no sums.
+    Only the final gcd/lcm repairs grow transformations. With k nonzero source
+    entries, there are at most k(k-1)/2 repairs across all levels. Every invariant and repair coefficient is bounded
+    by the product P of nonzero source magnitudes. Three row and two column
+    updates per repair add at most log2(P)+1 bits each. The bound also includes
+    extended-Euclidean intermediate coefficients and exact lcm products.
+    """
+    if any(sum(value != 0 for value in row) > 1 for row in matrix):
+        return None
+    if any(
+        sum(matrix[row][column] != 0 for row in range(rows)) > 1
+        for column in range(columns)
+    ):
+        return None
+    nonzero = [abs(value) for row in matrix for value in row if value]
+    factor_bits = max(1, sum(value.bit_length() for value in nonzero))
+    size = min(rows, columns)
+    repairs = len(nonzero) * (len(nonzero) - 1) // 2
+    left_bits = _add_bits(1, 3 * repairs * (factor_bits + 1))
+    right_bits = _add_bits(1, 2 * repairs * (factor_bits + 1))
+    # SymPy still performs dense matrix products while embedding each recursive
+    # result, even though one factor is a signed permutation. Charge that work.
+    structural_work = 8 * rows * columns + sum(
+        16
+        * (
+            (rows - pivot) * (columns - pivot)
+            + (rows - pivot) ** 2
+            + (columns - pivot) ** 2
+            + 1
+        )
+        + 2 * ((rows - pivot) ** 3 + (columns - pivot) ** 3)
+        for pivot in range(size)
+    )
+    # Euclid decreases the remainder at least by half every two divisions.
+    # Include its coefficient recurrences, exact quotients, and all five updates.
+    repair_work = 64 * repairs * (factor_bits + rows + columns + 1)
+    # The maintained inverse auto-selects fraction-free or rational Gauss-Jordan.
+    # Augmented minors fit M bits; FF multiply/subtract before exact division
+    # fits 2M+1, and rational products/divisions and subtraction fit at most
+    # 3M+1 before reduction. Retain a 4M+2 allowance, also covering determinant
+    # multiplication temporaries, rather than bounding only final cofactors.
+    minor_bits = max(
+        _add_bits(rows * left_bits, _factorial_bits(rows), 1),
+        _add_bits(columns * right_bits, _factorial_bits(columns), 1),
+    )
+    worker_intermediate_bits = _add_bits(4 * minor_bits, 2)
+    return SmithHeightBound(
+        left_bits=left_bits,
+        right_bits=right_bits,
+        diagonal_bits=factor_bits,
+        intermediate_bits=max(
+            left_bits, right_bits, factor_bits, worker_intermediate_bits
+        ),
+        work_units=structural_work + repair_work,
+    )
+
+
 def _smith_height_bound(
     matrix: Matrix,
     *,
@@ -432,6 +505,9 @@ def _smith_height_bound(
             True,
         )
         return core
+    monomial = _monomial_smith_bound(matrix, rows=rows, columns=columns)
+    if monomial is not None:
+        return _include_maintained_worker_bound(monomial, rows=rows, columns=columns)
     return _smith_height_bound_from_shape(rows, columns, input_bits)
 
 
@@ -930,7 +1006,7 @@ def _matrix_product_bits(inner: int, left_bits: int, right_bits: int) -> int:
 
 def _require_height(bound: SmithHeightBound, *, label: str) -> None:
     if bound.maximum_bits > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_height_budget_exceeded",
             f"{label} has a conservative Smith transformation-height bound above "
             f"{MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS} bits; reduce the matrix dimension "
@@ -952,13 +1028,13 @@ def _require_integral_source_bounds(source: ChainComplexValue) -> None:
             "the integral Smith kernel requires coefficient ring ZZ",
         )
     if any(size > MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK for size in source.basis_sizes):
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_chain_rank_exceeded",
             "integral homology requires every chain rank to be at most "
             f"{MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK}",
         )
     if sum(source.basis_sizes) > MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK:
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_total_rank_exceeded",
             "integral homology requires total chain rank at most "
             f"{MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK}",
@@ -968,7 +1044,7 @@ def _require_integral_source_bounds(source: ChainComplexValue) -> None:
         for index in range(len(source.basis_sizes) - 1)
     )
     if cells > MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS:
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_matrix_cells_exceeded",
             "integral homology differentials contain more than "
             f"{MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS} cells",
@@ -979,7 +1055,7 @@ def _require_integral_source_bounds(source: ChainComplexValue) -> None:
         for row in matrix
         for value in row
     ):
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_input_digits_exceeded",
             "integral homology coefficients may contain at most "
             f"{MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS} decimal digits",
@@ -1002,7 +1078,7 @@ def _require_square_zero(
             _matrix_bits(right),
         )
         if product_bits > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
-            raise _domain_error(
+            raise _resource_error(
                 "differential_product_height_exceeded",
                 "the conservative d^2 intermediate-height bound exceeds the "
                 f"{MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS}-bit execution envelope",
@@ -1280,7 +1356,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                 torsion_multiple_bits,
             )
             if result_bits > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
-                raise _domain_error(
+                raise _resource_error(
                     "integral_homology_output_height_exceeded",
                     f"degree {source.degree_min + index} has a conservative generator/output height "
                     f"above {MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS} bits",
@@ -1350,13 +1426,13 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         + output_scalar_count
     )
     if total_work > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_work_budget_exceeded",
             "the conservative d^2 and Smith work ledger exceeds "
             f"{MAX_INTEGRAL_HOMOLOGY_WORK_UNITS} units",
         )
     if output_scalar_count > MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS:
-        raise _domain_error(
+        raise _resource_error(
             "integral_homology_output_size_exceeded",
             "the complete certificate, generator, and bounding-chain result "
             f"has a conservative bound of {output_scalar_count} integer scalars, above the "

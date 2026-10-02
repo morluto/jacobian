@@ -27,7 +27,8 @@ def test_square_free_inspection_separates_degree_and_multiplicity_envelopes() ->
     request = operation.request_type.model_json_schema()
     description = request["properties"]["polynomial"]["description"]
     assert "degree-one reduction" in description
-    assert "256-digit" in description
+    assert "4096-term" in description
+    assert "normalization" in description
     result = operation.result_type.model_json_schema(mode="serialization")
     multiplicity = result["$defs"]["PolynomialSquareFreeFactor"]["properties"][
         "multiplicity"

@@ -127,8 +127,10 @@ class PolynomialDiscriminantResult(StrictModel):
 class PolynomialSquareFreeRequest(StrictModel):
     polynomial: RationalPolynomial = Field(
         description=(
-            "QQ polynomial with at most 1024 terms and 256-digit coefficient "
-            "components. General sources retain the exponent-64 envelope. "
+            "QQ polynomial in the canonical 4096-term carrier, with exact "
+            "source/result normalization, grouped support, coefficient storage "
+            "and recursive integer-PRS work admitted before expansion. "
+            "General sources retain the exponent-64 envelope. "
             "Univariate binomials a*x^n+b with nonzero a and b admit every "
             "canonical exponent n (up to 32768) by degree-one reduction. "
             "Returned factor multiplicities remain at most 64."

@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    request_checkpoint,
 )
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
@@ -20,9 +21,14 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials._division_bounds import admit_univariate_division
 from jacobian.math.polynomials.multivariate import _factor_backend
 from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionResult,
+    _polynomial_from_ring,
+)
+from jacobian.math.polynomials.multivariate._division_bounds import (
+    admit_multivariate_division,
 )
 from jacobian.math.polynomials.multivariate._factor_backend import (
     FactorBackendCancelledError,
@@ -116,10 +122,20 @@ def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
     _admit_pair(left, right)
 
 
-def _admit_division(left: RationalPolynomial, right: RationalPolynomial) -> None:
+def _admit_division(
+    left: RationalPolynomial,
+    right: RationalPolynomial,
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+) -> None:
+    if monomial_order not in ("lex", "grlex", "grevlex"):
+        raise _validation_error("division requires lex, grlex, or grevlex order")
     _admit_pair(left, right, minimum_variables=1)
     if not right.polynomial.terms:
         raise _validation_error("divisor polynomial must be nonzero")
+    if len(left.variables) == 1:
+        admit_univariate_division(left, right)
+    else:
+        admit_multivariate_division(left, right, monomial_order)
 
 
 def _admit_factor(polynomial: RationalPolynomial) -> None:
@@ -254,7 +270,7 @@ def multivariate_division(
 ) -> MultivariateDivisionResult:
     """Divide one multivariate polynomial by another with a declared monomial order."""
 
-    _run_admission(lambda: _admit_division(left, right))
+    _run_admission(lambda: _admit_division(left, right, monomial_order))
 
     variables = left.variables
     symbols = symbols_for_variables(variables)
@@ -268,34 +284,51 @@ def multivariate_division(
 
     ring_obj = sympy_ring(symbols, QQ, monomial_order)[0]
 
-    left_poly = rational_polynomial_to_sympy(left)
-    right_poly = rational_polynomial_to_sympy(right)
+    if len(variables) == 1:
+        left_poly = rational_polynomial_to_sympy(left)
+        right_poly = rational_polynomial_to_sympy(right)
+        left_ring = ring_obj.from_dict(dict(left_poly.terms()))
+        right_ring = ring_obj.from_dict(dict(right_poly.terms()))
+    else:
+        left_ring, right_ring = (
+            ring_obj.from_dict(
+                {
+                    term.exponents: QQ(*term.coefficient.as_integer_ratio())
+                    for term in source.polynomial.terms
+                }
+            )
+            for source in (left, right)
+        )
 
-    left_ring = ring_obj.from_dict(
-        {exponents: coeff for exponents, coeff in left_poly.terms()}  # noqa: C416
-    )
-    right_ring = ring_obj.from_dict(
-        {exponents: coeff for exponents, coeff in right_poly.terms()}  # noqa: C416
-    )
-
+    request_checkpoint("before multivariate division backend")
     quotient_ring, remainder_ring = left_ring.div(right_ring)
+    request_checkpoint("before multivariate division reconstruction")
 
-    # Convert back to ``Poly`` for the canonical sparse wire contract.
-    quotient_poly = _to_poly(quotient_ring, symbols)
-    remainder_poly = _to_poly(remainder_ring, symbols)
-
-    # Verify the exact reconstruction: left == quotient * right + remainder.
-    reconstruction = quotient_poly * right_poly + remainder_poly
-    if reconstruction != left_poly:
+    # Verify the exact reconstruction in the admitted sparse ring. In
+    # particular, do not turn a sparse multivariate result into a dense Poly
+    # or symbolic expression merely to convert or multiply it.
+    reconstructs = quotient_ring * right_ring + remainder_ring == left_ring
+    if not reconstructs:
         raise MultivariateOutputBudgetError(
             "multivariate division reconstruction failed"
         )
+    if len(variables) == 1:
+        from sympy import Poly
 
+        quotient_poly = Poly.from_dict(dict(quotient_ring), symbols, domain=QQ)
+        remainder_poly = Poly.from_dict(dict(remainder_ring), symbols, domain=QQ)
+        quotient = _result_polynomial(quotient_poly, variables)
+        remainder = _result_polynomial(remainder_poly, variables)
+    else:
+        quotient = _polynomial_from_ring(quotient_ring, variables)
+        remainder = _polynomial_from_ring(remainder_ring, variables)
+
+    request_checkpoint("after multivariate division result conversion")
     return MultivariateDivisionResult._from_kernel(
         left=left,
         right=right,
-        quotient=_result_polynomial(quotient_poly, variables),
-        remainder=_result_polynomial(remainder_poly, variables),
+        quotient=quotient,
+        remainder=remainder,
         monomial_order=monomial_order,
     )
 
@@ -388,14 +421,6 @@ def multivariate_subresultant_sequence(
         gcd_degree_in_main_variable=gcd_degree,
         gcd_member_leading_coefficient=gcd_leading_coefficient,
     )
-
-
-def _to_poly(ring_element: Any, symbols: tuple[Any, ...]) -> Any:
-    """Convert a low-level ring element to a SymPy ``Poly`` in ``QQ``."""
-
-    from sympy import QQ, Poly
-
-    return Poly(ring_element.as_expr(), *symbols, domain=QQ)
 
 
 def _sympy_factorization(
@@ -531,7 +556,6 @@ def verify_multivariate_division(claim: MultivariateDivisionResult) -> bool:
     if not isinstance(claim, MultivariateDivisionResult):
         return False
     try:
-        _admit_division(claim.left, claim.right)
         expected = multivariate_division(claim.left, claim.right, claim.monomial_order)
         return (
             expected.quotient == claim.quotient

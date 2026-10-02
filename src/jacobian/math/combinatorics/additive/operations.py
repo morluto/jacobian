@@ -10,7 +10,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import (
     CanonicalLimits,
-    format_canonical_integer,
 )
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -30,6 +29,7 @@ from jacobian.math.combinatorics.additive._models import (
     IntegerVectorSet,
     MultisetSumRepresentationProfileResult,
     MultisetSumWindow,
+    OrderedDifferenceCollision,
     OrderedDifferenceEntry,
     OrderedDifferencePair,
     OrderedDifferenceProfileResult,
@@ -58,7 +58,8 @@ MAX_DIRECT_SUM_DIAGNOSTIC_ENTRIES = 1_048_576
 
 # The profile kernel performs one exact subtraction per source-pair coordinate.
 # Charge the complete result carrier as well: source coordinates, difference
-# coordinates, and the two indices retained for every possible witness pair.
+# coordinates, the two indices retained for every profile pair, and the
+# selected two-pair collision with its duplicated common difference.
 MAX_ORDERED_DIFFERENCE_COORDINATE_WORK = 1_000_000
 MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS = 2_000_000
 
@@ -355,7 +356,11 @@ def ordered_difference_profile(
                 f"{MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:,}-coordinate work budget"
             ),
         )
-    output_cells = set_size * dimension + ordered_pairs * (dimension + 2)
+    output_cells = (
+        set_size * dimension
+        + ordered_pairs * (dimension + 2)
+        + (dimension + 4 if set_size >= 3 else 0)
+    )
     if output_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("vectors",),
@@ -395,8 +400,9 @@ def ordered_difference_profile(
             )
         )
     if maximum > 1:
-        first_collision = next(
-            entry.pairs[0] for entry in entries if entry.multiplicity > 1
+        entry = next(entry for entry in entries if entry.multiplicity > 1)
+        first_collision = OrderedDifferenceCollision(
+            difference=entry.difference, pairs=(entry.pairs[0], entry.pairs[1])
         )
     return OrderedDifferenceProfileResult._from_kernel(
         vectors,
@@ -415,55 +421,57 @@ def _admit_ordered_difference_entry(
     *,
     set_size: int,
     dimension: int,
+    location: tuple[str, ...] = ("claim", "entries"),
 ) -> tuple[int, ...]:
     ordered_pairs = set_size * (set_size - 1)
     if (
         type(entry) is not OrderedDifferenceEntry
-        or type(entry.difference) is not IntegerVector
-        or type(entry.difference.coordinates) is not tuple
-        or type(entry.pairs) is not tuple
+        or type(getattr(entry, "difference", None)) is not IntegerVector
+        or type(getattr(entry.difference, "coordinates", None)) is not tuple
+        or type(getattr(entry, "pairs", None)) is not tuple
     ):
         raise OperationDomainValidationError(
-            location=("claim", "entries"),
+            location=location,
             code="additive_combinatorics.ordered_difference_entry_shape",
             message="ordered-difference rows must retain their typed tuple shape",
         )
     if len(entry.difference.coordinates) != dimension:
         raise OperationDomainValidationError(
-            location=("claim", "entries"),
+            location=location,
             code="additive_combinatorics.ordered_difference_axes",
             message="ordered-difference rows must match the source dimension",
         )
     if any(
         type(coordinate) is not int
-        or len(format_canonical_integer(abs(coordinate)))
-        > _MAX_VECTOR_COORDINATE_LENGTH - 1
+        or not -(10 ** (_MAX_VECTOR_COORDINATE_LENGTH - 1))
+        < coordinate
+        < 10 ** (_MAX_VECTOR_COORDINATE_LENGTH - 1)
         for coordinate in entry.difference.coordinates
     ):
         raise OperationDomainValidationError(
-            location=("claim", "entries"),
+            location=location,
             code="additive_combinatorics.ordered_difference_coordinate_bound",
             message="ordered-difference rows exceed their admitted coordinate bound",
         )
     if (
-        type(entry.multiplicity) is not int
+        type(getattr(entry, "multiplicity", None)) is not int
         or not 0 < entry.multiplicity <= ordered_pairs
         or len(entry.pairs) > ordered_pairs
     ):
         raise OperationDomainValidationError(
-            location=("claim", "entries"),
+            location=location,
             code="additive_combinatorics.ordered_difference_multiplicity_bound",
             message="ordered-difference multiplicities exceed their admitted bound",
         )
     pairs = tuple(
         _admit_ordered_difference_pair(
-            pair, set_size=set_size, location=("claim", "entries", "pairs")
+            pair, set_size=set_size, location=(*location, "pairs")
         )
         for pair in entry.pairs
     )
     if pairs != tuple(sorted(set(pairs))):
         raise OperationDomainValidationError(
-            location=("claim", "entries", "pairs"),
+            location=(*location, "pairs"),
             code="additive_combinatorics.ordered_difference_pair_order",
             message="ordered-difference pairs must be unique and ordered",
         )
@@ -482,7 +490,10 @@ def _admit_ordered_difference_pair(
             code="additive_combinatorics.ordered_difference_pair_bounds",
             message="ordered-difference pairs must be distinct source indices",
         )
-    if type(pair.left_index) is not int or type(pair.right_index) is not int:
+    if (
+        type(getattr(pair, "left_index", None)) is not int
+        or type(getattr(pair, "right_index", None)) is not int
+    ):
         raise OperationDomainValidationError(
             location=location,
             code="additive_combinatorics.ordered_difference_pair_bounds",
@@ -502,9 +513,12 @@ def _admit_ordered_difference_pair(
 
 
 def _admit_ordered_difference_source(
-    vectors: IntegerVectorSet,
+    vectors: object,
 ) -> tuple[int, int]:
-    if type(vectors) is not IntegerVectorSet or type(vectors.vectors) is not tuple:
+    if (
+        type(vectors) is not IntegerVectorSet
+        or type(getattr(vectors, "vectors", None)) is not tuple
+    ):
         raise OperationDomainValidationError(
             location=("claim", "vectors"),
             code="additive_combinatorics.ordered_difference_source_shape",
@@ -517,7 +531,17 @@ def _admit_ordered_difference_source(
             code="additive_combinatorics.ordered_difference_source_bound",
             message="ordered-difference claim source exceeds its admitted size",
         )
-    dimension = len(vectors.vectors[0].coordinates)
+    first = vectors.vectors[0]
+    if (
+        type(first) is not IntegerVector
+        or type(getattr(first, "coordinates", None)) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("claim", "vectors"),
+            code="additive_combinatorics.ordered_difference_source_shape",
+            message="ordered-difference source vectors must retain typed coordinates",
+        )
+    dimension = len(first.coordinates)
     if not 1 <= dimension <= _MAX_DIMENSION:
         raise OperationDomainValidationError(
             location=("claim", "vectors"),
@@ -525,7 +549,10 @@ def _admit_ordered_difference_source(
             message="ordered-difference claim dimension exceeds its admitted bound",
         )
     for vector in vectors.vectors:
-        if type(vector) is not IntegerVector or type(vector.coordinates) is not tuple:
+        if (
+            type(vector) is not IntegerVector
+            or type(getattr(vector, "coordinates", None)) is not tuple
+        ):
             raise OperationDomainValidationError(
                 location=("claim", "vectors"),
                 code="additive_combinatorics.ordered_difference_source_shape",
@@ -539,7 +566,9 @@ def _admit_ordered_difference_source(
             )
         if any(
             type(coordinate) is not int
-            or len(format_canonical_integer(abs(coordinate))) > _MAX_COORDINATE_DIGITS
+            or not -(10**_MAX_COORDINATE_DIGITS)
+            < coordinate
+            < 10**_MAX_COORDINATE_DIGITS
             for coordinate in vector.coordinates
         ):
             raise OperationDomainValidationError(
@@ -548,6 +577,37 @@ def _admit_ordered_difference_source(
                 message="ordered-difference source coordinates exceed their admitted bound",
             )
     return set_size, dimension
+
+
+def _admit_ordered_difference_payload_size(
+    claim: OrderedDifferenceProfileResult, *, set_size: int, dimension: int
+) -> None:
+    """Bound aggregate traversal before visiting any claimed pair tuples."""
+    claimed_cells = set_size * dimension
+    if getattr(claim, "first_collision", None) is not None:
+        claimed_cells += dimension + 4
+    for entry in claim.entries:
+        if (
+            type(entry) is not OrderedDifferenceEntry
+            or type(getattr(entry, "difference", None)) is not IntegerVector
+            or type(getattr(entry.difference, "coordinates", None)) is not tuple
+            or type(getattr(entry, "pairs", None)) is not tuple
+        ):
+            raise OperationDomainValidationError(
+                location=("claim", "entries"),
+                code="additive_combinatorics.ordered_difference_entry_shape",
+                message="ordered-difference rows must retain their typed tuple shape",
+            )
+        claimed_cells += len(entry.difference.coordinates) + 2 * len(entry.pairs)
+        if claimed_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
+            raise OperationResourceAdmissionError(
+                location=("claim", "entries"),
+                code="additive_combinatorics.ordered_difference_output_exceeded",
+                message=(
+                    "ordered-difference claim payload exceeds the "
+                    f"{MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:,}-cell result bound"
+                ),
+            )
 
 
 def _admit_ordered_difference_claim(
@@ -560,9 +620,12 @@ def _admit_ordered_difference_claim(
             code="additive_combinatorics.ordered_difference_claim_type",
             message="ordered-difference verifier requires its typed result value",
         )
-    vectors = claim.vectors
+    vectors = getattr(claim, "vectors", None)
     set_size, dimension = _admit_ordered_difference_source(vectors)
-    if claim.set_size != set_size or claim.dimension != dimension:
+    if (
+        getattr(claim, "set_size", None) != set_size
+        or getattr(claim, "dimension", None) != dimension
+    ):
         raise OperationDomainValidationError(
             location=("claim",),
             code="additive_combinatorics.ordered_difference_axes",
@@ -579,7 +642,11 @@ def _admit_ordered_difference_claim(
                 f"{MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:,}-coordinate work budget"
             ),
         )
-    output_cells = set_size * dimension + ordered_pairs * (dimension + 2)
+    output_cells = (
+        set_size * dimension
+        + ordered_pairs * (dimension + 2)
+        + (dimension + 4 if set_size >= 3 else 0)
+    )
     if output_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("claim",),
@@ -589,7 +656,7 @@ def _admit_ordered_difference_claim(
                 f"{MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:,}-cell result bound"
             ),
         )
-    if type(claim.entries) is not tuple:
+    if type(getattr(claim, "entries", None)) is not tuple:
         raise OperationDomainValidationError(
             location=("claim", "entries"),
             code="additive_combinatorics.ordered_difference_entry_shape",
@@ -601,6 +668,9 @@ def _admit_ordered_difference_claim(
             code="additive_combinatorics.ordered_difference_entry_bound",
             message="ordered-difference claim has too many profile rows",
         )
+    _admit_ordered_difference_payload_size(
+        claim, set_size=set_size, dimension=dimension
+    )
     differences = tuple(
         _admit_ordered_difference_entry(entry, set_size=set_size, dimension=dimension)
         for entry in claim.entries
@@ -618,8 +688,8 @@ def _admit_ordered_difference_claim(
             message="ordered-difference claim axes must be native integers",
         )
     if (
-        type(claim.total_ordered_pairs) is not int
-        or type(claim.support_size) is not int
+        type(getattr(claim, "total_ordered_pairs", None)) is not int
+        or type(getattr(claim, "support_size", None)) is not int
     ):
         raise OperationDomainValidationError(
             location=("claim",),
@@ -627,32 +697,36 @@ def _admit_ordered_difference_claim(
             message="ordered-difference summaries must be native integers",
         )
     if (
-        type(claim.max_multiplicity) is not int
-        or type(claim.has_repeated_difference) is not bool
+        type(getattr(claim, "max_multiplicity", None)) is not int
+        or type(getattr(claim, "has_repeated_difference", None)) is not bool
     ):
         raise OperationDomainValidationError(
             location=("claim",),
             code="additive_combinatorics.ordered_difference_summary_shape",
             message="ordered-difference summaries have an invalid typed shape",
         )
-    if claim.first_collision is not None:
-        _admit_ordered_difference_pair(
-            claim.first_collision,
-            set_size=set_size,
-            location=("claim", "first_collision"),
-        )
-    claimed_cells = set_size * dimension + sum(
-        len(entry.difference.coordinates) + 2 * len(entry.pairs)
-        for entry in claim.entries
-    )
-    if claimed_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("claim", "entries"),
-            code="additive_combinatorics.ordered_difference_output_exceeded",
-            message=(
-                "ordered-difference claim payload exceeds the "
-                f"{MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:,}-cell result bound"
+    if (collision := getattr(claim, "first_collision", None)) is not None:
+        if (
+            type(collision) is not OrderedDifferenceCollision
+            or type(getattr(collision, "pairs", None)) is not tuple
+            or len(collision.pairs) != 2
+        ):
+            raise OperationDomainValidationError(
+                location=("claim", "first_collision"),
+                code="additive_combinatorics.ordered_difference_collision_shape",
+                message="collision claims require a common difference and exactly two pairs",
+            )
+        # Reuse the same bounded vector/pair admission as a profile row. This
+        # temporary view performs no validation or source-relation replay.
+        _admit_ordered_difference_entry(
+            OrderedDifferenceEntry.model_construct(
+                difference=getattr(collision, "difference", None),
+                multiplicity=2,
+                pairs=collision.pairs,
             ),
+            set_size=set_size,
+            dimension=dimension,
+            location=("claim", "first_collision"),
         )
     return set_size, dimension
 
@@ -699,27 +773,34 @@ def verify_ordered_difference_profile(
 
         total = sum(len(pairs) for pairs in expected.values())
         maximum = max((len(pairs) for pairs in expected.values()), default=0)
-        first_collision = next(
+        repeated = next(
             (
-                pairs[0]
+                (difference, pairs)
                 for difference, pairs in sorted(expected.items())
                 if len(pairs) > 1
             ),
             None,
         )
-        expected_collision = (
-            None
-            if first_collision is None
-            else OrderedDifferencePair(
-                left_index=first_collision[0], right_index=first_collision[1]
+        expected_collision = None
+        if repeated is not None:
+            difference, pairs = repeated
+            expected_collision = OrderedDifferenceCollision(
+                difference=_vector_from_ints(difference),
+                pairs=(
+                    OrderedDifferencePair(
+                        left_index=pairs[0][0], right_index=pairs[0][1]
+                    ),
+                    OrderedDifferencePair(
+                        left_index=pairs[1][0], right_index=pairs[1][1]
+                    ),
+                ),
             )
-        )
         return (
             claim.total_ordered_pairs == total
             and claim.support_size == len(expected)
             and claim.max_multiplicity == maximum
             and claim.has_repeated_difference == (maximum > 1)
-            and claim.first_collision == expected_collision
+            and getattr(claim, "first_collision", None) == expected_collision
             and total == set_size * (set_size - 1)
         )
     except OperationResourceAdmissionError:

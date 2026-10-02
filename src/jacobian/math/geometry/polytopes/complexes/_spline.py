@@ -799,36 +799,24 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
             "only compatible functions can be scaled",
         )
     scalar = request.scalar.as_fraction()
-    scalar_digits = _decimal_digits_upper(scalar.numerator) + _decimal_digits_upper(
-        scalar.denominator
-    )
-    if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("scalar",),
-            code="polytopal_complex.scalar_multiplication_scalar",
-            message="scalar exceeds the admitted rational digit envelope",
-        )
+    # Canonical rationals bound each component separately. Cross-cancel
+    # before pricing products; units add no width and zero emits no term.
     output_digits = 0
-    total_terms = 0
     for piece in function.pieces:
-        terms = piece.polynomial.polynomial.terms
-        total_terms += len(terms)
-        for term in terms:
-            coefficient = term.coefficient.as_fraction()
-            # Bound the reduced product, not the raw cross-product: a
-            # coefficient and scalar that cancel (N scaled by 1/N) or a zero
-            # scalar (whose term disappears) must not be charged for the
-            # intermediate width.
-            product = Fraction(
-                coefficient.numerator * scalar.numerator,
-                coefficient.denominator * scalar.denominator,
+        for term in piece.polynomial.polynomial.terms:
+            if not scalar or not term.coefficient.num:
+                continue
+            coefficient_value = term.coefficient
+            numerator_gcd = gcd(abs(coefficient_value.num), scalar.denominator)
+            denominator_gcd = gcd(coefficient_value.den, abs(scalar.numerator))
+            numerator_digits = _scalar_product_component_width(
+                coefficient_value.num // numerator_gcd,
+                scalar.numerator // denominator_gcd,
             )
-            if product:
-                numerator_digits = _decimal_digits_upper(product.numerator)
-                denominator_digits = _decimal_digits_upper(product.denominator)
-            else:
-                numerator_digits = 1
-                denominator_digits = 1
+            denominator_digits = _scalar_product_component_width(
+                coefficient_value.den // denominator_gcd,
+                scalar.denominator // numerator_gcd,
+            )
             if (
                 max(numerator_digits, denominator_digits)
                 > MAX_CANONICAL_RATIONAL_DIGITS
@@ -2059,6 +2047,23 @@ def _scaled_component_width(value: int) -> int:
     return decimal_digit_width(magnitude)
 
 
+def _scalar_product_component_width(left: int, right: int) -> int:
+    """Admit a nonzero reduced component without forming an oversized product.
+
+    Two nonunit factors have either d1+d2-1 or d1+d2 decimal digits.
+    Only when that interval straddles the cap is an exact threshold comparison
+    needed. Dividing the largest allowed component by one factor decides
+    admission without allocating the product. Unit factors add no width.
+    """
+    upper = max(1, _scaled_component_width(left) + _scaled_component_width(right))
+    limit = MAX_CANONICAL_RATIONAL_DIGITS
+    if upper <= limit or upper - 1 > limit:
+        return upper
+    if abs(left) <= (10**limit - 1) // abs(right):
+        return limit
+    return upper
+
+
 def _cancelled_component_widths(
     numerator_factors: list[int], denominator_factors: list[int]
 ) -> tuple[int, int] | None:
@@ -2437,6 +2442,12 @@ def _admit_spline_coordinate_materialization(
             code="polytopal_complex.spline_coordinates_work",
             message="spline membership and basis-coordinate work exceed the admitted envelope",
         )
+    # With no nonzero constraints the canonical nullspace is the identity.
+    # Coordinates are retained source components, and reconstruction only
+    # copies them: neither rational products nor sums can grow. The matrix
+    # work and output bounds above still apply, including for wide identities.
+    if not any(any(row) for row in constraint_rows):
+        return
     reconstruction_digits = width * (
         coordinate_scalar_digits + basis_scalar_digits + len(str(width)) + 2
     )

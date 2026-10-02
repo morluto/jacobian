@@ -41,7 +41,7 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
         vertices=tuple(
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{i}",
-                coordinates=({"num": point, "den": 1},),
+                coordinates=(CanonicalRational(num=point, den=1),),
             )
             for i, point in enumerate((left, right))
         ),
@@ -62,7 +62,7 @@ def _linear(coefficient: int = 1) -> RationalPolynomial:
     )
 
 
-def _function(coefficient: int = 1):
+def _function(coefficient: int = 1) -> PiecewisePolynomialResult:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
@@ -75,7 +75,7 @@ def _function(coefficient: int = 1):
     )
 
 
-def test_scalar_multiple_matches_exact_coefficient_and_evaluation_oracles():
+def test_scalar_multiple_matches_exact_coefficient_and_evaluation_oracles() -> None:
     function = _function()
     result = piecewise_polynomial_scalar_multiply(
         PiecewisePolynomialScalarMultiplicationRequest(
@@ -115,7 +115,7 @@ def test_scalar_multiple_matches_exact_coefficient_and_evaluation_oracles():
     assert twice_scaled == direct
 
 
-def test_zero_scalar_returns_the_zero_function_with_the_same_exact_domain():
+def test_zero_scalar_returns_the_zero_function_with_the_same_exact_domain() -> None:
     function = _function()
     result = piecewise_polynomial_scalar_multiply(
         PiecewisePolynomialScalarMultiplicationRequest(
@@ -131,7 +131,7 @@ def test_zero_scalar_returns_the_zero_function_with_the_same_exact_domain():
     )
 
 
-def test_scalar_multiple_recomputes_and_rejects_forged_compatibility_claim():
+def test_scalar_multiple_recomputes_and_rejects_forged_compatibility_claim() -> None:
     function = _function()
     pieces = list(function.pieces)
     pieces[1] = PieceAssignment(
@@ -164,13 +164,13 @@ def test_scalar_multiple_recomputes_and_rejects_forged_compatibility_claim():
         )
 
 
-def test_scalar_growth_is_rejected_before_coefficient_expansion(monkeypatch):
-    # The bound is charged on the reduced product.  ``_decimal_digits_upper``
-    # is an upper bound: 99 reports 3 digits.  Both factors therefore fit a
-    # limit of 4, but their product 99 * 99 = 9801 reports 5 and is rejected.
-    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 4)
+def test_scalar_growth_is_rejected_before_coefficient_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Both two-digit factors fit, but 99 * 99 = 9801 exceeds three digits.
     function = _function(coefficient=99)
     scalar = CanonicalRational(num=99, den=1)
+    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)
 
     with pytest.raises(OperationResourceAdmissionError, match="scaled coefficient"):
         piecewise_polynomial_scalar_multiply(

@@ -87,7 +87,9 @@ def _two_interval_function(
     )
 
 
-def test_piecewise_function_roundtrips_through_source_bound_spline_coordinates():
+def test_piecewise_function_roundtrips_through_source_bound_spline_coordinates() -> (
+    None
+):
     function = _two_interval_function((), ((1, 1), (0, -1)))
     result = spline_coordinates(
         SplineCoordinatesRequest(function=function, degree=1, smoothness=0)
@@ -131,7 +133,7 @@ def test_piecewise_function_roundtrips_through_source_bound_spline_coordinates()
     assert revived == result
 
 
-def test_two_dimensional_source_pieces_reconstruct_from_spline_coordinates():
+def test_two_dimensional_source_pieces_reconstruct_from_spline_coordinates() -> None:
     complex_value = polytopal_complex_closure(
         (
             RationalVPolytope(
@@ -218,7 +220,9 @@ def test_two_dimensional_source_pieces_reconstruct_from_spline_coordinates():
     assert reconstructed == source_vector
 
 
-def test_piece_count_is_rejected_before_assignment_canonicalization(monkeypatch):
+def test_piece_count_is_rejected_before_assignment_canonicalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     function = _two_interval_function(((0, 1),), ((0, 1),))
     malformed = PieceAssignment.model_construct(cell_id="invalid", polynomial=None)
     forged = PiecewisePolynomialResult.model_construct(
@@ -230,7 +234,7 @@ def test_piece_count_is_rejected_before_assignment_canonicalization(monkeypatch)
         obstruction_difference=None,
     )
 
-    def should_not_canonicalize(*_args, **_kwargs):
+    def should_not_canonicalize(*_args: object, **_kwargs: object) -> None:
         raise AssertionError(
             "piece assignments were canonicalized before count admission"
         )
@@ -242,7 +246,7 @@ def test_piece_count_is_rejected_before_assignment_canonicalization(monkeypatch)
         )
 
 
-def test_coordinates_reject_exact_smoothness_and_degree_failures():
+def test_coordinates_reject_exact_smoothness_and_degree_failures() -> None:
     continuous_not_c1 = _two_interval_function((), ((1, 1), (0, -1)))
     with pytest.raises(OperationDomainValidationError, match=r"C\^r interface"):
         spline_coordinates(
@@ -256,7 +260,7 @@ def test_coordinates_reject_exact_smoothness_and_degree_failures():
         )
 
 
-def test_discontinuous_piecewise_value_uses_the_unconstrained_spline_slice():
+def test_discontinuous_piecewise_value_uses_the_unconstrained_spline_slice() -> None:
     function = _two_interval_function((), ((0, 1),))
     assert function.status == "INCOMPATIBLE"
     result = spline_coordinates(
@@ -269,7 +273,7 @@ def test_discontinuous_piecewise_value_uses_the_unconstrained_spline_slice():
     )
 
 
-def test_forged_continuity_status_does_not_establish_spline_membership():
+def test_forged_continuity_status_does_not_establish_spline_membership() -> None:
     discontinuous = _two_interval_function((), ((0, 1),))
     forged = PiecewisePolynomialResult.model_construct(
         complex=discontinuous.complex,
@@ -285,11 +289,13 @@ def test_forged_continuity_status_does_not_establish_spline_membership():
         )
 
 
-def test_coordinate_output_is_admitted_before_nullspace_materialization(monkeypatch):
+def test_coordinate_output_is_admitted_before_nullspace_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     function = _two_interval_function(((0, 1),), ((0, 1),))
     monkeypatch.setattr(spline_kernel, "MAX_SPLINE_COORDINATE_OUTPUT_DIGITS", 1)
 
-    def unexpected_basis(*_args, **_kwargs):
+    def unexpected_basis(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("basis must not be materialized after output rejection")
 
     monkeypatch.setattr(spline_kernel, "_spline_space_from_data", unexpected_basis)

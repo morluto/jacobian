@@ -33,14 +33,20 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
     )
 
 
-def _dot(left, right) -> Fraction:
+def _dot(
+    left: tuple[CanonicalRational, ...], right: tuple[CanonicalRational, ...]
+) -> Fraction:
     return sum(
         (a.as_fraction() * b.as_fraction() for a, b in zip(left, right, strict=True)),
         Fraction(0),
     )
 
 
-def _evaluate(coefficients, axis, point: int) -> Fraction:
+def _evaluate(
+    coefficients: tuple[CanonicalRational, ...],
+    axis: tuple[tuple[str, tuple[int, ...]], ...],
+    point: int,
+) -> Fraction:
     return sum(
         (
             coefficient.as_fraction() * Fraction(point) ** exponents[0]
@@ -50,7 +56,7 @@ def _evaluate(coefficients, axis, point: int) -> Fraction:
     )
 
 
-def test_refinement_map_preserves_spline_basis_exactly_and_roundtrips():
+def test_refinement_map_preserves_spline_basis_exactly_and_roundtrips() -> None:
     coarse = polytopal_complex_closure((_interval(0, 2, "coarse"),))
     refined = polytopal_complex_closure(
         (_interval(0, 1, "left"), _interval(1, 2, "right"))
@@ -99,7 +105,7 @@ def test_refinement_map_preserves_spline_basis_exactly_and_roundtrips():
     assert decoded == result
 
 
-def test_refinement_map_rejects_a_coarsening_with_equal_support():
+def test_refinement_map_rejects_a_coarsening_with_equal_support() -> None:
     coarse = polytopal_complex_closure(
         (_interval(0, 1, "left"), _interval(1, 2, "right"))
     )

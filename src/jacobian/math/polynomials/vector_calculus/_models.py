@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -19,6 +19,12 @@ MAX_POLYS = 8
 _MAX_TERMS = 256
 _MAX_EXPONENT = 64
 _MAX_COEFFICIENT_DIGITS = 128
+# Every admitted gradient has at most 256 terms in aggregate; multiplying a
+# 128-digit source numerator by an exponent <=64 adds at most two digits.
+# Keep that entire producer envelope while admitting taller sparse vectors.
+_MAX_VECTOR_COEFFICIENT_DIGIT_WORK = (
+    _MAX_TERMS * 2 * (_MAX_COEFFICIENT_DIGITS + len(str(_MAX_EXPONENT)))
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -31,6 +37,7 @@ def _require_field_polynomial(
     polynomial: RationalPolynomial,
     *,
     label: str,
+    maximum_coefficient_digits: int = _MAX_COEFFICIENT_DIGITS,
 ) -> None:
     if len(polynomial.variables) > MAX_VARS:
         raise _validation_error(
@@ -40,7 +47,7 @@ def _require_field_polynomial(
         polynomial,
         maximum_terms=_MAX_TERMS,
         maximum_exponent=_MAX_EXPONENT,
-        maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+        maximum_coefficient_digits=maximum_coefficient_digits,
         label=label,
     )
     if any(sum(term.exponents) > _MAX_EXPONENT for term in polynomial.polynomial.terms):
@@ -59,7 +66,18 @@ class VectorFieldRequest(StrictModel):
     """A polynomial vector field with one component per ordered variable."""
 
     components: tuple[RationalPolynomial, ...] = Field(
-        min_length=1, max_length=MAX_POLYS
+        min_length=1,
+        max_length=MAX_POLYS,
+        description=(
+            "One component per ordered variable, with total degree at most 64 "
+            "and at most 256 source terms across the vector. Canonical rational "
+            "coefficients are admitted when their numerator and denominator "
+            f"digits total at most {_MAX_VECTOR_COEFFICIENT_DIGIT_WORK:,}; "
+            "zero components cost no coefficient work. Exact derivative "
+            f"coefficients must fit the {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit "
+            "canonical bound, checked after signed coefficient collection "
+            "and before symbolic expansion."
+        ),
     )
 
     @model_validator(mode="after")

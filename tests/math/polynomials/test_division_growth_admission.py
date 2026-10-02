@@ -258,7 +258,7 @@ def test_private_intermediate_bit_limit_is_inclusive(
     "limit,code",
     (
         ("MAX_DIVISION_ALLOCATION_BITS", "allocation"),
-        ("MAX_DIVISION_OUTPUT_CHARACTERS", "output_size"),
+        ("MAX_DIVISION_RESULT_DIGITS", "output_digits"),
     ),
 )
 def test_complete_storage_and_output_limits_remain_operational(

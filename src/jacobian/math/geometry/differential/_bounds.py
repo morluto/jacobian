@@ -14,6 +14,8 @@ from jacobian.math.geometry.differential._execution import (
     begin_lie_derivative_deadline,
     require_lie_derivative_deadline,
 )
+from jacobian.math.geometry.differential._lie_cancellation import refine_signed_result
+from jacobian.math.geometry.differential._lie_source import LieSourceAdmission
 from jacobian.math.geometry.differential._recognition_process import (
     RationalFunctionRecognitionCandidate,
     canonical_recognition_candidates,
@@ -35,6 +37,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _differentiate_fraction,
     _fraction_bound,
     _multiply_fractions,
+    _normalization_work_units,
     _recognition_work_units,
     _remove_guaranteed_common_monomial,
     _validate_canonical_result_bound,
@@ -168,6 +171,33 @@ def _replace_index(
     return (*index[:position], replacement, *index[position + 1 :])
 
 
+def _admit_component_result(
+    terms: tuple[LieProductTerm, ...],
+    product_bounds: tuple[FractionBound, ...],
+    raw_bound: FractionBound,
+    vector_field: RationalCoordinateTensor,
+    tensor: RationalCoordinateTensor,
+    ledger: _Ledger,
+    source_admission: LieSourceAdmission,
+) -> tuple[FractionBound, int]:
+    try:
+        return raw_bound, _validate_canonical_result_bound(raw_bound, ledger)
+    except OperationResourceAdmissionError as error:
+        reason = str(error.errors()[0]["type"]).rsplit(".", 1)[-1]
+        if reason not in {"result_exponent", "result_support", "result_height"}:
+            raise
+    # Preserve the original executor and all already admitted raw arithmetic.
+    # Refine representation only when the unsigned final envelope refuses it.
+    source_admission.require_canonical()
+    refined = refine_signed_result(terms, product_bounds, vector_field, tensor, ledger)
+    if refined.is_zero:
+        ledger.charge("normalization", _normalization_work_units(raw_bound))
+        return refined, 1
+    return refined, _validate_canonical_result_bound(
+        refined, ledger, work_bound=raw_bound
+    )
+
+
 def build_lie_derivative_plan(
     vector_field: RationalCoordinateTensor,
     tensor: RationalCoordinateTensor,
@@ -179,6 +209,8 @@ def build_lie_derivative_plan(
     if deadline is None:
         deadline = begin_lie_derivative_deadline()
 
+    ledger = _Ledger(deadline=deadline)
+    source_admission = LieSourceAdmission(vector_field, tensor, ledger)
     if vector_field.coordinate_axis != tensor.coordinate_axis:
         _reject_domain(
             "coordinate_axis_mismatch",
@@ -203,7 +235,6 @@ def build_lie_derivative_plan(
             "Lie-derivative retained locus exceeds the "
             f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
         )
-    ledger = _Ledger(deadline=deadline)
     vector_bounds = tuple(
         _fraction_bound(value, ledger) for value in vector_field.components
     )
@@ -221,6 +252,7 @@ def build_lie_derivative_plan(
     for index in product(range(dimension), repeat=len(tensor.variance)):
         component = _component_offset(index, dimension)
         term_plans: list[LieProductTerm] = []
+        product_bounds: list[FractionBound] = []
         result_bound = _zero_fraction(dimension)
         for axis in range(dimension):
             if vector_bounds[axis].is_zero:
@@ -231,20 +263,15 @@ def build_lie_derivative_plan(
                 right=FactorReference("TENSOR", component, axis),
             )
             term_plans.append(term)
-            result_bound = _add_fractions(
-                result_bound,
-                _multiply_fractions(
-                    vector_bounds[axis],
-                    _differentiate_fraction(
-                        tensor.components[component],
-                        tensor_bounds[component],
-                        axis,
-                        ledger,
-                    ),
-                    ledger,
+            product_bound = _multiply_fractions(
+                vector_bounds[axis],
+                _differentiate_fraction(
+                    tensor.components[component], tensor_bounds[component], axis, ledger
                 ),
                 ledger,
             )
+            product_bounds.append(product_bound)
+            result_bound = _add_fractions(result_bound, product_bound, ledger)
         for position, variance in enumerate(tensor.variance):
             component_index = index[position]
             for axis in range(dimension):
@@ -268,15 +295,21 @@ def build_lie_derivative_plan(
                 if left_bound.is_zero:
                     continue
                 term_plans.append(term)
-                result_bound = _add_fractions(
-                    result_bound,
-                    _multiply_fractions(
-                        left_bound, tensor_bounds[replaced_component], ledger
-                    ),
-                    ledger,
+                product_bound = _multiply_fractions(
+                    left_bound, tensor_bounds[replaced_component], ledger
                 )
+                product_bounds.append(product_bound)
+                result_bound = _add_fractions(result_bound, product_bound, ledger)
         result_bound = _remove_guaranteed_common_monomial(result_bound)
-        coefficient_digits = _validate_canonical_result_bound(result_bound, ledger)
+        result_bound, coefficient_digits = _admit_component_result(
+            tuple(term_plans),
+            tuple(product_bounds),
+            result_bound,
+            vector_field,
+            tensor,
+            ledger,
+            source_admission,
+        )
         component_plans.append(
             LieComponentPlan(
                 terms=tuple(term_plans),

@@ -944,6 +944,35 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
     )
 
 
+def _normalization_work_units(charged: FractionBound) -> int:
+    """Price normalization from an admitted raw envelope, without result limits."""
+    if charged.is_zero:
+        return 1
+    charged_denominator_is_unit = all(
+        degree == 0 for degree in charged.denominator.degrees
+    )
+    # Normalization still uses the recursively dense backend. A sparse
+    # canonical support bound does not justify reducing this work charge.
+    numerator_dense = (
+        charged.numerator.terms
+        if charged_denominator_is_unit
+        else min(_dense_term_bound(charged.numerator.degrees), charged.numerator.terms)
+    )
+    denominator_dense = (
+        1
+        if charged_denominator_is_unit
+        else min(
+            _dense_term_bound(charged.denominator.degrees),
+            charged.denominator.terms,
+        )
+    )
+    work_digits = _canonical_coefficient_digits(charged)
+    normalization_degree = max(numerator_dense + denominator_dense - 2, 0)
+    return (
+        (numerator_dense + denominator_dense) * (normalization_degree + 1) * work_digits
+    )
+
+
 def _validate_canonical_result_bound(
     bound: FractionBound,
     ledger: BoundsLedger,
@@ -992,32 +1021,7 @@ def _validate_canonical_result_bound(
             f"{limits.label} normalization can exceed the canonical "
             f"{limits.result_digits}-digit coefficient bound",
         )
-    charged_denominator_is_unit = all(
-        degree == 0 for degree in charged.denominator.degrees
-    )
-    # Normalization still uses the recursively dense backend. A sparse
-    # canonical support bound does not justify reducing this work charge.
-    numerator_dense = (
-        charged.numerator.terms
-        if charged_denominator_is_unit
-        else min(_dense_term_bound(charged.numerator.degrees), charged.numerator.terms)
-    )
-    denominator_dense = (
-        1
-        if charged_denominator_is_unit
-        else min(
-            _dense_term_bound(charged.denominator.degrees),
-            charged.denominator.terms,
-        )
-    )
-    work_digits = _canonical_coefficient_digits(charged)
-    normalization_degree = max(numerator_dense + denominator_dense - 2, 0)
-    ledger.charge(
-        "normalization",
-        (numerator_dense + denominator_dense)
-        * (normalization_degree + 1)
-        * work_digits,
-    )
+    ledger.charge("normalization", _normalization_work_units(charged))
     return coefficient_digits
 
 

@@ -23,6 +23,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
+from jacobian.math.polynomials._derivative_admission import admit_derivative_source
 from jacobian.math.polynomials._models import (
     _MAX_ELEMENTARY_DEGREE,
     _MAX_GCD_TERMS,
@@ -392,7 +393,7 @@ def rational_polynomial_derivative(
 ) -> RationalPolynomialDerivativeResult:
     """Return the exact derivative of a canonical rational polynomial."""
 
-    _run_admission(lambda: _admit_rational(polynomial))
+    polynomial = admit_derivative_source(polynomial)
     return RationalPolynomialDerivativeResult(
         derivative=rational_polynomial_from_sympy(
             polynomials.derivative(rational_polynomial_to_sympy(polynomial)),

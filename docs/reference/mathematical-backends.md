@@ -82,6 +82,30 @@ explicitly calls out shape/dtype restrictions, expanded allocations, and resourc
 exhaustion. Bound conversions and intermediate representations as well as the
 backend call; a fast benchmark alone does not prove a safe envelope.
 
+### Generic multivariate polynomial invariants
+
+The generic resultant and discriminant owner uses the pinned SymPy sparse
+integer polynomial ring and division-free Berkowitz characteristic coefficients.
+It clears source denominators before building a Sylvester matrix and retains
+all remaining declared axes in direct sparse output conversion. For a degree-n
+discriminant, factoring the leading coefficient from the first Sylvester column
+replaces its two nonzero entries by 1 and n; this avoids polynomial division.
+The univariate FLINT path and specialized multivariate resultant are separate.
+
+For an N-by-N matrix with entry coefficient l1 norms at most H, every Berkowitz
+intermediate uses at most N entry factors and has l1 norm at most (4NH)^N.
+The owner bounds their monomial support, sparse convolution pairs, integer
+bit-work, coefficient storage, denominator powers and final gcd normalization
+before execution. Compact monomial-resultant and binomial-discriminant identities
+use separately priced sparse power plans; these admit the 1,035-term motivating
+outputs and an exact 4,096-term canonical boundary. Native copied values receive
+bounded structural and scalar checks before the plan relies on canonicality.
+
+These are sufficient envelopes, not exact predictions after cancellation.
+Conservative workspace or output estimates may still refuse representable
+answers. The coefficient-storage reserve is not a process RSS guarantee.
+Operational refusals remain typed and do not become a false verification result.
+
 ## In-process adapters
 
 An in-process adapter has an explicit conversion in each direction, a supported

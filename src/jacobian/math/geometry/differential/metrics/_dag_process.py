@@ -73,7 +73,10 @@ def _node_payload(node: Node) -> dict[str, object]:
     if node.source is not None:
         payload["source"] = _source_payload(node.source)
     if node.operation == "SCALE":
-        payload["scalar"] = [str(node.scalar.numerator), str(node.scalar.denominator)]
+        payload["scalar"] = [
+            format_canonical_integer(node.scalar.numerator),
+            format_canonical_integer(node.scalar.denominator),
+        ]
     if node.operation == "DERIVATIVE":
         payload["axis"] = node.axis
     return payload

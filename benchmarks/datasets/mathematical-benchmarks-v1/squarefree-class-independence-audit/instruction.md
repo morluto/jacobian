@@ -11,7 +11,7 @@ You may choose any modulus within the frozen bounds. Submit its complete set of 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+The verifier replays the task-specific mathematical predicate from the submitted result. The public certificate domain permits moduli from 2 through 64. Submit 2 through 64 distinct quadratic residues, each an integer from 0 through 63, and an integer target residue from 0 through 63. These bounds follow from the largest permitted modulus; the verifier checks the complete residue set, target, and obstruction for the chosen modulus.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

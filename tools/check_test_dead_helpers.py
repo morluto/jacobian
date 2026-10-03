@@ -1158,22 +1158,9 @@ def _waived(lines: list[str], line: int) -> bool:
     return _WAIVER in lines[line - 1]
 
 
-def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[int, ...]:
-    """Module-time calls, including functions called by module-time helpers."""
+def _module_eager_call_map(tree: ast.Module) -> dict[int, tuple[int, ...]]:
+    """Map functions to module-time invocation lines in one pass per module."""
 
-    if function_line is None:
-        return ()
-    function = next(
-        (
-            node
-            for node in tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.lineno == function_line
-        ),
-        None,
-    )
-    if function is None:
-        return ()
     definitions_by_name: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -1198,7 +1185,7 @@ def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[in
 
     pending = [(name, line) for name, line in calls(tree.body)]
     visited: set[tuple[int, int]] = set()
-    invocation_lines: set[int] = set()
+    invocation_lines: dict[int, set[int]] = {}
     while pending:
         called_name, invocation_line = pending.pop()
         candidates = [
@@ -1213,10 +1200,9 @@ def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[in
         if state in visited:
             continue
         visited.add(state)
-        if target.lineno == function_line:
-            invocation_lines.add(invocation_line)
+        invocation_lines.setdefault(target.lineno, set()).add(invocation_line)
         pending.extend((name, invocation_line) for name, _line in calls(target.body))
-    return tuple(sorted(invocation_lines))
+    return {line: tuple(sorted(lines)) for line, lines in invocation_lines.items()}
 
 
 def _reachable_bindings(roots: set[int], edges: dict[int, set[int]]) -> set[int]:
@@ -1305,6 +1291,7 @@ def _referenced_bindings(
         if kind == "function"
         and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
+    eager_call_lines = _module_eager_call_map(tree)
     module_roots: set[int] = set()
     runtime_roots: set[int] = set()
     module_edges: dict[int, set[int]] = {}
@@ -1323,7 +1310,7 @@ def _referenced_bindings(
                 runtime_roots.add(choices[-1][0])
             else:
                 runtime_edges.setdefault(source, set()).add(choices[-1][0])
-            for call_line in _module_eager_calls(tree, scope_line):
+            for call_line in eager_call_lines.get(scope_line, ()):
                 target = _binding_before(choices, call_line)
                 if target is not None:
                     if source is None:

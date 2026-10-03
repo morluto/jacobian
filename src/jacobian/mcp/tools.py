@@ -78,7 +78,8 @@ class _CoalescingProgressSink(ProgressSink):
         self, progress: int, *, total: int | None = None, message: str | None = None
     ) -> None:
         with self._lock:
-            if self._closed or progress < self._last_progress:
+            # MCP requires an increase even when only the metadata changes.
+            if self._closed or progress <= self._last_progress:
                 return
             self._last_progress = progress
             self._latest = (progress, total, message)

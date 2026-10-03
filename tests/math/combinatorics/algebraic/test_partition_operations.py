@@ -673,16 +673,28 @@ def test_forged_partition_carriers_keep_domain_and_resource_classes_apart() -> N
         )
 
 
-def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning() -> None:
+def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A far-overflowing alphabet is refused by a cheap bound, not a scan.
 
     ``partition=(500), alphabet_size=10**32767`` previously ran 500 cubic
     logarithms on 32,767-digit integers before the output-limit rejection.
     """
 
+    original = native._log10_upper_units
+    probes = 0
+
+    def count_probe(value: int) -> int:
+        nonlocal probes
+        probes += 1
+        return original(value)
+
+    monkeypatch.setattr(native, "_log10_upper_units", count_probe)
     partition = IntegerPartition(parts=(500,))
     with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
         native.semistandard_young_tableaux_count(partition, 10**32767)
+    assert probes == 1
 
 
 def test_ssyt_digit_bound_is_a_sound_upper_bound_at_far_overflow() -> None:

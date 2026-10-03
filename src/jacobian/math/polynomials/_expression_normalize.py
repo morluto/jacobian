@@ -211,6 +211,8 @@ def _bounded_operands(operands: object) -> tuple[object, ...]:
         raise _MalformedExpressionError(
             "expression operands must be a bounded sequence"
         )
+    if len(operands) > 64:
+        raise _MalformedExpressionError("expression nodes may have at most 64 operands")
     bounded: list[object] = []
     for operand in operands:
         if len(bounded) >= 64:
@@ -267,6 +269,8 @@ def _bound_raw_request(value: Mapping[str, object]) -> None:
     """Bound every raw request field before the recursive canonicalization copy."""
 
     allowed = {"coefficient_domain", "variables", "expression"}
+    if len(value) > len(allowed):
+        raise ValueError("expression requests may not carry unexpected fields")
     # Iterate keys instead of materializing a set, and reject the first
     # unexpected key or any surplus key, so a request with millions of extra
     # fields never allocates a sorted copy of them.
@@ -334,12 +338,15 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
     }.get(kind if isinstance(kind, str) else "")
     if allowed is None:
         raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
-    unexpected = set(node).difference(allowed)
-    if unexpected:
+    if len(node) > len(allowed):
         raise _MalformedExpressionError(
-            "expression nodes may not carry unexpected fields: "
-            + ", ".join(sorted(map(str, unexpected)))
+            "expression nodes may not carry unexpected fields"
         )
+    for key in node:
+        if key not in allowed:
+            raise _MalformedExpressionError(
+                f"expression nodes may not carry the unexpected field {key!r}"
+            )
     value = node.get("value")
     if "value" in node:
         if isinstance(value, (list, tuple)):
@@ -347,7 +354,7 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
                 "LITERAL value must be a num/den object, not a sequence"
             )
         if isinstance(value, Mapping) and (
-            set(value).difference({"num", "den"}) or len(value) > 2
+            len(value) > 2 or set(value).difference({"num", "den"})
         ):
             raise _MalformedExpressionError(
                 "LITERAL value must contain only num and den"

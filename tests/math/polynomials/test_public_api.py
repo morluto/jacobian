@@ -163,6 +163,9 @@ def test_exact_public_api_symbols() -> None:
     assert all(
         not name.startswith("_") and hasattr(polynomials, name) for name in expected
     )
+    # The checks above are scoped to `expected`, so a newly added private name
+    # would pass; the private-name rule also holds over the complete __all__.
+    assert all(not name.startswith("_") for name in polynomials.__all__)
 
 
 def test_native_laurent_api_preserves_signed_support_and_zero_parent() -> None:

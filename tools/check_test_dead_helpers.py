@@ -33,7 +33,7 @@ _WAIVER = "# dead-code:"
 # pytest collects classes by prefix and reads the module-level ``pytestmark``;
 # neither is referenced inside the module that declares it.
 _PYTEST_COLLECTED_PREFIX = "Test"
-_PYTEST_MODULE_NAMES = frozenset({"pytestmark"})
+_PYTEST_MODULE_NAMES = frozenset({"pytestmark", "pytest_plugins"})
 _PYTEST_LIFECYCLE_HOOKS = frozenset(
     {
         "setup_module",
@@ -229,12 +229,10 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
             # argument is a local parameter declaration, not a global helper.
             for keyword in node.keywords:
                 if keyword.arg == "indirect":
-                    if (
-                        isinstance(keyword.value, ast.Constant)
-                        and (keyword.value.value is True)
-                        and node.args
+                    if isinstance(keyword.value, ast.Constant) and (
+                        keyword.value.value is True
                     ):
-                        referenced.update(_parameter_names(node.args[0]))
+                        referenced.update(_parametrize_argnames(node))
                     else:
                         referenced.update(_string_values(keyword.value))
     return referenced
@@ -268,9 +266,8 @@ def _pytest_fixture_reference_sites(
                 if (
                     isinstance(keyword.value, ast.Constant)
                     and keyword.value.value is True
-                    and node.args
                 ):
-                    requested.update(_parameter_names(node.args[0]))
+                    requested.update(_parametrize_argnames(node))
                 else:
                     requested.update(_string_values(keyword.value))
         else:
@@ -346,6 +343,18 @@ def _parameter_names(node: ast.AST) -> set[str]:
     }
 
 
+def _parametrize_argnames(node: ast.Call) -> set[str]:
+    argument = (
+        node.args[0]
+        if node.args
+        else next(
+            (keyword.value for keyword in node.keywords if keyword.arg == "argnames"),
+            None,
+        )
+    )
+    return _parameter_names(argument) if argument is not None else set()
+
+
 def _fixture_names(tree: ast.Module) -> dict[str, str]:
     """Module-level helpers pytest injects by parameter name.
 
@@ -419,6 +428,7 @@ def _scan(  # noqa: C901
     class_outer_bound: frozenset[str] | None = None,
     deferred: bool = False,
     scope_line: int | None = None,
+    class_direct_parameters: frozenset[str] = frozenset(),
 ) -> None:
     """Record module-level loads and the binding each load can reach."""
 
@@ -471,8 +481,10 @@ def _scan(  # noqa: C901
                     scope_line,
                 )
             if _is_pytest_injected(child, fixtures):
-                requested = _argument_names(child) - _direct_parametrize_names(
-                    child, pytest_aliases
+                requested = (
+                    _argument_names(child)
+                    - _direct_parametrize_names(child, pytest_aliases)
+                    - class_direct_parameters
                 )
                 for name in requested:
                     if name in fixtures:
@@ -481,6 +493,10 @@ def _scan(  # noqa: C901
                             (fixtures[name], child.lineno, True, child.lineno)
                         )
             if isinstance(child, ast.ClassDef):
+                child_class_parameters = (
+                    class_direct_parameters
+                    | _direct_parametrize_names(child, pytest_aliases)
+                )
                 _scan_class_body(
                     child.body,
                     class_outer_bound if class_outer_bound is not None else bound,
@@ -491,6 +507,7 @@ def _scan(  # noqa: C901
                     reference_sites,
                     deferred,
                     class_outer_bound if class_outer_bound is not None else bound,
+                    child_class_parameters,
                 )
                 continue
             body_bound = bound | _scope_bindings(child)
@@ -620,6 +637,7 @@ def _scan_class_body(
     reference_sites: set[tuple[str, int, bool, int | None]],
     deferred: bool,
     class_outer_bound: frozenset[str] | None = None,
+    class_direct_parameters: frozenset[str] = frozenset(),
 ) -> None:
     """Scan class statements in order because class locals bind when assigned."""
 
@@ -636,6 +654,7 @@ def _scan_class_body(
             reference_sites,
             lexical_outer,
             deferred,
+            class_direct_parameters,
         )
         bound = bound | _class_statement_bindings(statement)
 
@@ -650,6 +669,7 @@ def _scan_class_statement(
     reference_sites: set[tuple[str, int, bool, int | None]],
     outer_bound: frozenset[str],
     deferred: bool,
+    class_direct_parameters: frozenset[str],
 ) -> None:
     if isinstance(statement, ast.If):
         _scan(
@@ -677,6 +697,7 @@ def _scan_class_statement(
                 reference_sites,
                 deferred,
                 outer_bound,
+                class_direct_parameters,
             )
             return
         _scan_class_body(
@@ -689,6 +710,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         _scan_class_body(
             statement.orelse,
@@ -700,6 +722,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         return
     if isinstance(statement, (ast.For, ast.AsyncFor)):
@@ -725,10 +748,11 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         _scan_class_body(
             statement.orelse,
-            loop_bound | _class_suite_bindings(statement.body),
+            bound,
             module_names,
             referenced,
             fixtures,
@@ -736,6 +760,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         return
     if isinstance(statement, ast.While):
@@ -760,10 +785,11 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         _scan_class_body(
             statement.orelse,
-            bound | _class_suite_bindings(statement.body),
+            bound,
             module_names,
             referenced,
             fixtures,
@@ -771,6 +797,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         return
     if isinstance(statement, (ast.With, ast.AsyncWith)):
@@ -799,6 +826,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         return
     if isinstance(statement, (ast.Try, ast.TryStar)):
@@ -812,6 +840,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         for handler in statement.handlers:
             if handler.type is not None:
@@ -837,6 +866,7 @@ def _scan_class_statement(
                 reference_sites,
                 deferred,
                 outer_bound,
+                class_direct_parameters,
             )
         body_bound = bound | _class_suite_bindings(statement.body)
         _scan_class_body(
@@ -849,6 +879,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         final_bound = body_bound | _class_suite_bindings(statement.orelse)
         _scan_class_body(
@@ -861,6 +892,7 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
+            class_direct_parameters,
         )
         return
     if isinstance(statement, ast.Match):
@@ -910,6 +942,7 @@ def _scan_class_statement(
                 reference_sites,
                 deferred,
                 outer_bound,
+                class_direct_parameters,
             )
         return
     _scan(
@@ -922,6 +955,8 @@ def _scan_class_statement(
         reference_sites,
         outer_bound,
         deferred,
+        None,
+        class_direct_parameters,
     )
 
 
@@ -949,6 +984,12 @@ def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
         body_names = _class_suite_bindings(statement.body)
         else_names = _class_suite_bindings(statement.orelse)
         return body_names & else_names
+    if isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
+        return (
+            _class_suite_bindings(statement.orelse)
+            if not _loop_body_has_break(statement.body)
+            else frozenset()
+        )
     names: set[str] = set()
     declared_global: set[str] = set()
     stack = [statement]
@@ -975,6 +1016,18 @@ def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
             names.add(child.name)
         stack.extend(ast.iter_child_nodes(child))
     return frozenset(names - declared_global)
+
+
+def _loop_body_has_break(statements: Sequence[ast.stmt]) -> bool:
+    pending: list[ast.AST] = list(statements)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, ast.Break):
+            return True
+        if isinstance(node, (*_SCOPE_NODES, ast.For, ast.AsyncFor, ast.While)):
+            continue
+        pending.extend(ast.iter_child_nodes(node))
+    return False
 
 
 def _record(
@@ -1023,7 +1076,7 @@ def _direct_parametrize_names(
 ) -> frozenset[str]:
     """Test arguments supplied as values do not request same-named fixtures."""
 
-    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         return frozenset()
     direct: set[str] = set()
     for decorator in node.decorator_list:
@@ -1031,10 +1084,9 @@ def _direct_parametrize_names(
             not isinstance(decorator, ast.Call)
             or _canonical_pytest_name(decorator.func, pytest_aliases)
             != "pytest.mark.parametrize"
-            or not decorator.args
         ):
             continue
-        parameter_names = _parameter_names(decorator.args[0])
+        parameter_names = _parametrize_argnames(decorator)
         indirect_keyword = next(
             (item.value for item in decorator.keywords if item.arg == "indirect"),
             None,

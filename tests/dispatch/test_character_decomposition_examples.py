@@ -1,8 +1,8 @@
 """Value-specific assertions for published character-decomposition examples.
 
 These check the example's exact output values, which the catalog-wide
-example lane does not assert. They live here rather than under tests/math
-because they boot the product catalog and dispatch boundary.
+example lane does not assert. They live in the dispatch lane rather than
+under tests/math because they are direct operation-ID execution regressions.
 """
 
 from jacobian.catalog.catalog import Catalog

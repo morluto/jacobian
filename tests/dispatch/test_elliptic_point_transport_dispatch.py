@@ -1,6 +1,6 @@
 """Dispatch-level publication check for the elliptic point transport operation.
 
-This exercises the published operation boundary, so it lives in the catalog
+This exercises the published operation boundary, so it lives in the dispatch
 lane rather than under ``tests/math``.
 """
 

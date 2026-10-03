@@ -299,8 +299,7 @@ measure mathematical correctness or agent selection. The catalog conformance
 sweep has an explicit 120-second budget because it queries every authored
 multiword phrase rather than one ordinary lookup.
 
-Some existing catalog modules, including
-`tests/catalog/test_periodic_congruence_operations.py`, still contain direct
+Some existing catalog modules still contain direct
 dispatch and example-execution checks. These are legacy placements that have
 not been comprehensively migrated. Put new execution regressions in the lanes
 above; when moving legacy tests, preserve their fixtures and select the owning

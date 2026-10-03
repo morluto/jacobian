@@ -20,8 +20,15 @@ import argparse
 import ast
 import json
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
+
+try:  # pragma: no cover - import style depends on how the tool is invoked
+    from tools.match_recorder import merge_record
+except ImportError:  # invoked as a script: python tools/rewrite_match_pins.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools.match_recorder import merge_record
 
 GENERIC_CODES = frozenset(
     {
@@ -39,8 +46,15 @@ DEFAULT_BINDING = "exc_info"
 def load(path: Path) -> dict[str, dict[str, object]]:
     recorded: dict[str, dict[str, object]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            recorded.update(json.loads(line))
+        if not line.strip():
+            continue
+        # Each xdist worker writes one JSON object per session, so the same
+        # site can appear in several lines. Union them rather than letting the
+        # last worker overwrite the others: a coded observation must not hide
+        # an earlier code-less one, which is what makes an unsafe single-code
+        # assert look justified.
+        for key, info in json.loads(line).items():
+            recorded[key] = merge_record(recorded.get(key), info)
     return recorded
 
 

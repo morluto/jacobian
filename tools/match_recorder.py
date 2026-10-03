@@ -73,26 +73,33 @@ class _RecordingRaises:
             if record["code"] is None and isinstance(reason, str):
                 record["reason"] = reason
             if self._key:
-                previous = RECORD.get(self._key)
-                if previous is None:
-                    RECORD[self._key] = record
-                else:
-                    # A site executed more than once may raise different codes
-                    # (parametrized cases, loops). Keep every observed code so
-                    # the rewriter can refuse an ambiguous single-code assert.
-                    observed = previous.get("codes")
-                    codes: set[str | None] = (
-                        set(observed) if isinstance(observed, list) else set()
-                    )
-                    codes.add(_as_code(previous.get("code")))
-                    codes.add(_as_code(record.get("code")))
-                    merged = dict(previous)
-                    merged["codes"] = sorted(
-                        codes, key=lambda item: (item is not None, item or "")
-                    )
-                    merged["code"] = next(iter(codes)) if len(codes) == 1 else None
-                    RECORD[self._key] = merged
+                RECORD[self._key] = merge_record(RECORD.get(self._key), record)
         return self._ctx.__exit__(exc_type, exc, tb)
+
+
+def merge_record(
+    previous: dict[str, object] | None, record: dict[str, object]
+) -> dict[str, object]:
+    """Union two observations of one site, keeping code-less executions.
+
+    A site executed more than once may raise different codes (parametrized
+    cases, loops, or separate xdist workers). Every observed code is kept so
+    the rewriter can refuse an ambiguous single-code assert. ``None`` is an
+    explicit member meaning "this execution raised no owner code" and must
+    survive the merge: dropping it is what let a coded observation hide an
+    earlier code-less one.
+    """
+
+    if previous is None:
+        return record
+    observed = previous.get("codes")
+    codes: set[str | None] = set(observed) if isinstance(observed, list) else set()
+    codes.add(_as_code(previous.get("code")))
+    codes.add(_as_code(record.get("code")))
+    merged = dict(previous)
+    merged["codes"] = sorted(codes, key=lambda item: (item is not None, item or ""))
+    merged["code"] = next(iter(codes)) if len(codes) == 1 else None
+    return merged
 
 
 def _as_code(value: object) -> str | None:

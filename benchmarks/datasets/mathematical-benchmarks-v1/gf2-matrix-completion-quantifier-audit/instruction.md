@@ -16,7 +16,7 @@ one of rank exactly 1 and one of rank exactly `n`.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+Choose an integer `dimension` from 8 through 14. Each of `pattern`, `low_rank_completion`, and `full_rank_completion` must have exactly `dimension` rows and exactly `dimension` entries in every row. All entries must be binary integers (0 or 1). The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

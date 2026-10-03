@@ -34,6 +34,25 @@ _WAIVER = "# dead-code:"
 # neither is referenced inside the module that declares it.
 _PYTEST_COLLECTED_PREFIX = "Test"
 _PYTEST_MODULE_NAMES = frozenset({"pytestmark"})
+_PYTEST_LIFECYCLE_HOOKS = frozenset(
+    {
+        "setup_module",
+        "teardown_module",
+        "setup_function",
+        "teardown_function",
+        "pytest_addoption",
+        "pytest_configure",
+        "pytest_unconfigure",
+        "pytest_generate_tests",
+        "pytest_collection_modifyitems",
+        "pytest_collection_finish",
+        "pytest_sessionstart",
+        "pytest_sessionfinish",
+        "pytest_runtest_setup",
+        "pytest_runtest_call",
+        "pytest_runtest_teardown",
+    }
+)
 # Every construct that opens a name scope for the reference walk below.
 _SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 _COMPREHENSIONS = (
@@ -101,6 +120,8 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
                 continue
             if node.name in _PYTEST_MODULE_NAMES:
                 continue
+            if node.name in _PYTEST_LIFECYCLE_HOOKS:
+                continue
             found.append((node.name, node.lineno, "function", node))
         elif isinstance(node, ast.Assign):
             for target in node.targets:
@@ -165,6 +186,8 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
         if name == "pytest.mark.usefixtures":
             for argument in node.args:
                 referenced.update(_string_values(argument))
+        elif name is not None and name.endswith(".getfixturevalue") and node.args:
+            referenced.update(_string_values(node.args[0]))
         elif name == "pytest.mark.parametrize":
             # Only indirect parameter names identify fixtures. The first
             # argument is a local parameter declaration, not a global helper.
@@ -432,12 +455,17 @@ def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
     stack = [statement]
     while stack:
         child = stack.pop()
-        if isinstance(child, (*_SCOPE_NODES, *_COMPREHENSIONS)):
+        if isinstance(child, _COMPREHENSIONS):
+            names.update(_comprehension_walrus_names(child))
+            continue
+        if isinstance(child, _SCOPE_NODES):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 names.add(child.name)
             continue
         if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
             names.add(child.id)
+        elif (pattern_name := _pattern_binding_name(child)) is not None:
+            names.add(pattern_name)
         elif isinstance(child, ast.Global):
             declared_global.update(child.names)
         elif isinstance(child, (ast.Import, ast.ImportFrom)):
@@ -517,7 +545,7 @@ def _direct_parametrize_names(node: ast.AST) -> frozenset[str]:
     return frozenset(direct)
 
 
-def _scope_bindings(node: ast.AST) -> frozenset[str]:
+def _scope_bindings(node: ast.AST) -> frozenset[str]:  # noqa: C901
     """Names a function, class, or lambda binds directly, nested scopes aside."""
 
     names: set[str] = set()
@@ -538,12 +566,17 @@ def _scope_bindings(node: ast.AST) -> frozenset[str]:
     stack = list(body) if isinstance(body, list) else []
     while stack:
         child = stack.pop()
-        if isinstance(child, (*_SCOPE_NODES, *_COMPREHENSIONS)):
+        if isinstance(child, _COMPREHENSIONS):
+            names.update(_comprehension_walrus_names(child))
+            continue
+        if isinstance(child, _SCOPE_NODES):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 names.add(child.name)
             continue
         if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
             names.add(child.id)
+        elif (pattern_name := _pattern_binding_name(child)) is not None:
+            names.add(pattern_name)
         elif isinstance(child, ast.Global):
             declared_global.update(child.names)
         elif isinstance(child, (ast.Import, ast.ImportFrom)):
@@ -558,12 +591,35 @@ def _scope_bindings(node: ast.AST) -> frozenset[str]:
     return frozenset(names - declared_global)
 
 
+def _pattern_binding_name(node: ast.AST) -> str | None:
+    if isinstance(node, (ast.MatchAs, ast.MatchStar)):
+        return node.name
+    if isinstance(node, ast.MatchMapping):
+        return node.rest
+    return None
+
+
 def _comprehension_target_names(target: ast.AST) -> frozenset[str]:
     return frozenset(
         child.id
         for child in ast.walk(target)
         if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store)
     )
+
+
+def _comprehension_walrus_names(node: ast.AST) -> frozenset[str]:
+    names: set[str] = set()
+    stack = list(ast.iter_child_nodes(node))
+    while stack:
+        child = stack.pop()
+        if isinstance(
+            child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            continue
+        if isinstance(child, ast.NamedExpr):
+            names.update(_assignment_names(child.target))
+        stack.extend(ast.iter_child_nodes(child))
+    return frozenset(names)
 
 
 def _header_expressions(node: ast.AST) -> tuple[ast.AST, ...]:

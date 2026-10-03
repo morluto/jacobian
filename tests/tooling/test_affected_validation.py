@@ -10,7 +10,11 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from tools.command_runner import ToolCommandResult, ToolCommandStatus
+from tools.command_runner import (
+    ToolCommandResult,
+    ToolCommandStatus,
+    run_operator_command,
+)
 
 ROOT = Path(__file__).parents[2]
 
@@ -57,6 +61,54 @@ def test_public_math_contract_selects_scoped_static_and_dispatch_evidence() -> N
         ("make", "test-integration", "TESTS=tests/integration/catalog/"),
         ("make", "test-dispatch"),
     )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/optimization/_general_models.py",
+        "src/jacobian/math/optimization/_linear_admission.py",
+        "src/jacobian/math/optimization/_tools.py",
+    ],
+)
+def test_linear_owner_projects_to_non_catalog_integration_command(path: str) -> None:
+    runner = _load()
+    plan = runner.build_plan(
+        event="pull_request",
+        base_revision="a" * 40,
+        head_revision="b" * 40,
+        changed_paths=[path],
+        repository=ROOT,
+    )
+    commands = runner.commands_for_plan(plan, paths=[path], repository=ROOT)
+
+    command = ("make", "test-integration")
+    assert command in commands
+    result = run_operator_command(
+        command[0],
+        (
+            "--no-print-directory",
+            "--dry-run",
+            *command[1:],
+            "TESTS=",
+            "PYTEST_ARGS=",
+        ),
+        cwd=ROOT,
+        timeout_seconds=10,
+        stdout_limit_bytes=64 * 1024,
+        stderr_limit_bytes=64 * 1024,
+    )
+    assert result.status is ToolCommandStatus.EXITED
+    assert result.exit_code == 0, result.stderr
+    pytest_command = shlex.split(result.stdout.decode().replace("\\\n", " "))
+    assert pytest_command[:4] == ["uv", "run", "--locked", "pytest"]
+    assert "tests/integration" in pytest_command
+    assert [
+        argument for argument in pytest_command if argument.startswith("--ignore")
+    ] == ["--ignore=tests/integration/catalog"]
+    assert (
+        ROOT / "tests/integration/linear/test_general_rational_linear_program.py"
+    ).is_file()
 
 
 def test_runtime_boundary_selection_preserves_full_math_fallback() -> None:

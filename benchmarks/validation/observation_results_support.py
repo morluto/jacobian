@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 _DIGEST = "sha256:" + "a" * 64
 _SNAPSHOT_ID = "sha256:" + "f" * 64
@@ -19,7 +20,7 @@ _JACOBIAN_IMAGE = {
 }
 
 
-def _trial(repetition: int, reward: float) -> dict:
+def _trial(repetition: int, reward: float) -> dict[str, Any]:
     return {
         "task": "case",
         "task_digest": _DIGEST,
@@ -52,7 +53,7 @@ def _trial(repetition: int, reward: float) -> dict:
     }
 
 
-def _evidence(condition: str, correctness: list[float]) -> dict:
+def _evidence(condition: str, correctness: list[float]) -> dict[str, Any]:
     return {
         "schema_version": "4",
         "evidence_class": "workflow-observation",
@@ -98,7 +99,7 @@ def _evidence(condition: str, correctness: list[float]) -> dict:
 
 def _write_observation_job(
     tmp_path: Path,
-    job: dict,
+    job: dict[str, Any],
     *,
     snapshot_id: str | None = _SNAPSHOT_ID,
     harbor_version: str | None = _HARBOR_VERSION,
@@ -157,7 +158,7 @@ def _write_result(
 
 def _write_trial_manifest(
     trial_dir: Path,
-    entries: list[dict],
+    entries: list[dict[str, Any]],
     *,
     artifacts_subdir: str = "artifacts",
 ) -> Path:
@@ -187,7 +188,7 @@ def _write_trial_manifest(
     return manifest_path
 
 
-def _artifact(source_path: str, trial: str, digest: str) -> dict:
+def _artifact(source_path: str, trial: str, digest: str) -> dict[str, Any]:
     return {
         "job": "job.json",
         "trial": trial,

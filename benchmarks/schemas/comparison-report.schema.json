@@ -4,14 +4,19 @@
   "title": "Jacobian paired public workflow comparison",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "evidence_class", "causal_claim_authorized", "status", "dataset", "source_sha", "conditions", "pair_count", "metrics", "validation_failures"],
+  "required": ["schema_version", "evidence_class", "causal_claim_authorized", "status", "dataset", "source_sha", "snapshot_id", "conditions", "pair_count", "metrics", "validation_failures"],
+  "allOf": [{
+    "if": {"properties": {"status": {"const": "VALID"}}},
+    "then": {"properties": {"snapshot_id": {"type": "string"}}}
+  }],
   "properties": {
-    "schema_version": {"const": "1"},
+    "schema_version": {"const": "2"},
     "evidence_class": {"enum": ["public-workflow-comparison", "held-out-comparison"]},
     "causal_claim_authorized": {"const": false},
     "status": {"enum": ["VALID", "INVALID"]},
     "dataset": {"type": ["string", "null"]},
     "source_sha": {"type": ["string", "null"]},
+    "snapshot_id": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
     "conditions": {"type": "object"},
     "pair_count": {"type": "integer", "minimum": 0},
     "metrics": {"type": "object"},

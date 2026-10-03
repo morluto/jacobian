@@ -66,5 +66,6 @@ def test_unified_evaluation_rejects_next_degree_and_implicit_point_coercion() ->
         invoke_operation("polynomial.map.evaluate", payload, Catalog.open())
     payload = _payload(65)
     payload["point"]["variables"] = ["x"]
-    with pytest.raises(OperationDomainValidationError, match="complete ordered axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation("polynomial.map.evaluate", payload, Catalog.open())
+    assert exc_info.value.errors()[0]["type"] == "polynomial.map_invariant"

@@ -219,6 +219,55 @@ def test_aliased_fixture_name_resolves_to_its_definition(tmp_path: Path) -> None
     assert _reported(tmp_path, "test_fixture_alias.py", body) == set()
 
 
+def test_fixture_lookup_by_name_resolves_to_its_definition(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture(name="item")
+    def _item():
+        return 1
+
+    def test_dynamic_fixture(request):
+        assert request.getfixturevalue("item") == 1
+    """
+    assert _reported(tmp_path, "test_getfixturevalue.py", body) == set()
+
+
+def test_pytest_lifecycle_hooks_are_not_dead_helpers(tmp_path: Path) -> None:
+    body = """\
+    def setup_module(module):
+        module.ready = True
+
+    def pytest_generate_tests(metafunc):
+        pass
+    """
+    assert _reported(tmp_path, "test_lifecycle.py", body) == set()
+
+
+def test_pattern_capture_shadows_module_helper(tmp_path: Path) -> None:
+    body = """\
+    helper = 1
+
+    def test_capture():
+        match 2:
+            case helper:
+                assert helper == 2
+    """
+    assert "helper" in _reported(tmp_path, "test_pattern_capture.py", body)
+
+
+def test_walrus_in_comprehension_binds_containing_scope(tmp_path: Path) -> None:
+    body = """\
+    helper = 1
+    values = (2,)
+
+    def test_walrus():
+        [(helper := value) for value in values]
+        assert helper == 2
+    """
+    assert "helper" in _reported(tmp_path, "test_walrus.py", body)
+
+
 def test_class_method_resolves_same_named_module_helper(tmp_path: Path) -> None:
     body = """\
     def helper() -> int:

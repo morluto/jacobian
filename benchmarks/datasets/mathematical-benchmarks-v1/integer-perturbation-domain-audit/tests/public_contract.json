@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "The integer witness has a period from 4 through 8. Each of a_values and b_values contains 4 through 8 integers, each between -100 and 100 inclusive. The verifier requires both vectors to have exactly period entries, every a value to be positive, every b value to be nonzero, both signs among b values, and at least two indices with a+b=0.",
     "schema_version": "1",
     "submission_path": "/app/submission.json",
     "submission_result": {
@@ -10,17 +10,27 @@
                 "properties": {
                     "a_values": {
                         "items": {
+                            "maximum": 100,
+                            "minimum": -100,
                             "type": "integer"
                         },
+                        "maxItems": 8,
+                        "minItems": 4,
                         "type": "array"
                     },
                     "b_values": {
                         "items": {
+                            "maximum": 100,
+                            "minimum": -100,
                             "type": "integer"
                         },
+                        "maxItems": 8,
+                        "minItems": 4,
                         "type": "array"
                     },
                     "period": {
+                        "maximum": 8,
+                        "minimum": 4,
                         "type": "integer"
                     }
                 },

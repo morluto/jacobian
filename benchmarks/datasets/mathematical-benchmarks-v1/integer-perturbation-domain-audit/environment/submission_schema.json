@@ -10,17 +10,27 @@
           "properties": {
             "a_values": {
               "items": {
+                "maximum": 100,
+                "minimum": -100,
                 "type": "integer"
               },
+              "maxItems": 8,
+              "minItems": 4,
               "type": "array"
             },
             "b_values": {
               "items": {
+                "maximum": 100,
+                "minimum": -100,
                 "type": "integer"
               },
+              "maxItems": 8,
+              "minItems": 4,
               "type": "array"
             },
             "period": {
+              "maximum": 8,
+              "minimum": 4,
               "type": "integer"
             }
           },

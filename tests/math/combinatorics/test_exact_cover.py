@@ -521,8 +521,8 @@ def test_schema_publishes_the_exact_cover_contract() -> None:
     assert "UNKNOWN" in schema["description"]
 
 
-def test_dense_cyclic_instance_refuses_before_the_residual_scan() -> None:
-    """A dense residual degree scan must be refused, not executed."""
+def test_dense_cyclic_residual_degree_scan_is_linear() -> None:
+    """The dense residual-degree pass completes with linear scan cost."""
     import time
 
     primary = 2048

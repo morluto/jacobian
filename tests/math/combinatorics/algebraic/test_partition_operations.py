@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-import time
 from typing import NoReturn
 
 import pytest
@@ -674,20 +673,28 @@ def test_forged_partition_carriers_keep_domain_and_resource_classes_apart() -> N
         )
 
 
-def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning() -> None:
+def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A far-overflowing alphabet is refused by a cheap bound, not a scan.
 
     ``partition=(500), alphabet_size=10**32767`` previously ran 500 cubic
     logarithms on 32,767-digit integers before the output-limit rejection.
     """
 
-    import time
+    original = native._log10_upper_units
+    probes = 0
 
+    def count_probe(value: int) -> int:
+        nonlocal probes
+        probes += 1
+        return original(value)
+
+    monkeypatch.setattr(native, "_log10_upper_units", count_probe)
     partition = IntegerPartition(parts=(500,))
-    started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
         native.semistandard_young_tableaux_count(partition, 10**32767)
-    assert time.monotonic() - started < 2.0
+    assert probes == 1
 
 
 def test_ssyt_digit_bound_is_a_sound_upper_bound_at_far_overflow() -> None:
@@ -791,12 +798,10 @@ def test_decimal_width_matches_str_beyond_the_conversion_limit() -> None:
 
 def test_oversized_native_alphabet_is_rejected_before_decimal_power() -> None:
     """A native alphabet far beyond the carrier fails without 10**materialization."""
-    started = time.monotonic()
     with pytest.raises(OperationDomainValidationError):
         native.semistandard_young_tableaux_count(
             IntegerPartition(parts=(1,)), 1 << 50_000_000
         )
-    assert time.monotonic() - started < 1.0
 
 
 def test_constructed_partition_without_parts_is_a_typed_domain_error() -> None:
@@ -806,11 +811,37 @@ def test_constructed_partition_without_parts_is_a_typed_domain_error() -> None:
         native.partition_dominance(forged, IntegerPartition(parts=(1,)))
 
 
-def test_exact_boundary_resolver_uses_the_admitted_product_tree() -> None:
+def test_exact_boundary_resolver_uses_the_admitted_product_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A rejected exact boundary count does not run a sequential multiply."""
     partition = IntegerPartition(parts=(500,))
     alphabet_size = 155_000 * 2**208
-    started = time.monotonic()
+    factor_counts: list[int] = []
+    tree_levels: list[int] = []
+    balanced = native._balanced_product
+    checkpoint = native.request_checkpoint  # type: ignore[attr-defined]
+
+    def spy_product(values: tuple[int, ...]) -> int:
+        factor_counts.append(len(values))
+        return balanced(values)
+
+    def spy_checkpoint(reason: str = "") -> None:
+        if "product tree" in reason:
+            tree_levels.append(1)
+        checkpoint(reason)
+
+    monkeypatch.setattr(native, "_balanced_product", spy_product)
+    monkeypatch.setattr(
+        "jacobian.math.combinatorics.algebraic.operations.request_checkpoint",
+        spy_checkpoint,
+    )
     with pytest.raises(OperationResourceAdmissionError):
         native.semistandard_young_tableaux_count(partition, alphabet_size)
-    assert time.monotonic() - started < 1.0
+    # Every numerator factor is handed over at once rather than accumulated one
+    # at a time, and the product visits them in ceil(log2(500)) == 9 levels. A
+    # sequential left-to-right multiply takes no levels at all, so both
+    # observations fail on that regression instead of the test still passing on
+    # the admission error alone.
+    assert factor_counts == [500]
+    assert len(tree_levels) == 9

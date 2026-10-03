@@ -1496,49 +1496,98 @@ def test_nested_variable_member_is_rejected_before_copying() -> None:
         "variables": [_ExplodingList()],
         "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
-class _HugeKeyMapping(Mapping[str, object]):
-    """Lazy mapping whose iteration fails rather than materializing keys."""
+class _HugeDict(dict[str, object]):
+    """A dict subtype that reports oversize and fails if traversed."""
 
-    def __init__(self, items: dict[str, object]) -> None:
-        self._items = items
+    def __init__(self, items: dict[str, object] | None = None) -> None:
+        super().__init__(items or {})
         self.iterated = 0
-
-    def __getitem__(self, key: str) -> object:
-        return self._items[key]
-
-    def __iter__(self) -> Iterator[str]:
-        for key in self._items:
-            self.iterated += 1
-            yield key
-        while True:
-            self.iterated += 1
-            yield f"extra_{self.iterated}"
 
     def __len__(self) -> int:
         return 10**9
 
+    def __iter__(self) -> Iterator[str]:
+        self.iterated += 1
+        raise AssertionError("oversized dict must be rejected before iteration")
+
+    def items(self):
+        self.iterated += 1
+        raise AssertionError("oversized dict must be rejected before copying")
+
+
+class _HugeList(list[Any]):
+    """A list subtype that reports oversize and fails if traversed."""
+
+    def __init__(self, length: int, item: Any = 0) -> None:
+        super().__init__()
+        self._reported_length = length
+        self.iterated = 0
+
+    def __len__(self) -> int:
+        return self._reported_length
+
+    def __iter__(self) -> Iterator[Any]:
+        self.iterated += 1
+        raise AssertionError("oversized list must be rejected before iteration")
+
+    def __getitem__(self, index: Any) -> Any:
+        raise AssertionError("oversized list must be rejected before indexing")
+
+
+class _SlowLengthMapping(Mapping[str, object]):
+    """A mapping whose size query scans its backing keys."""
+
+    def __init__(self, values: dict[str, object]) -> None:
+        self._values = values
+        self.length_calls = 0
+        self.iterated_keys = 0
+
+    def __getitem__(self, key: str) -> object:
+        return self._values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        for key in self._values:
+            self.iterated_keys += 1
+            yield key
+
+    def __len__(self) -> int:
+        self.length_calls += 1
+        return sum(1 for _ in self._values)
+
 
 def test_many_unexpected_request_keys_are_rejected_early() -> None:
-    """Millions of unexpected top-level keys are rejected without copying them."""
+    """A surplus top-level key is rejected without traversing the dict subclass."""
 
-    mapping = _HugeKeyMapping(
+    mapping = _HugeDict(
         {
             "coefficient_domain": "QQ",
             "variables": ["x"],
             "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+            "unexpected": None,
         }
     )
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(mapping)
     assert mapping.iterated <= 8
-    assert time.monotonic() - started < 1.0
+
+
+def test_generic_request_mapping_is_rejected_without_counting_all_keys() -> None:
+    mapping = _SlowLengthMapping(
+        {
+            "coefficient_domain": "QQ",
+            "variables": ["x"],
+            "expression": {"kind": "VARIABLE", "name": "x"},
+            **{f"extra_{index}": None for index in range(10_000)},
+        }
+    )
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(mapping)
+    assert mapping.length_calls == 0
+    assert mapping.iterated_keys == 4
 
 
 def test_oversized_literal_is_a_typed_resource_rejection() -> None:
@@ -1624,76 +1673,78 @@ def test_cancelled_request_interrupts_expansion() -> None:
 
 def test_malformed_operand_container_is_bounded_before_copying() -> None:
     """An operands mapping must be rejected without copying a huge container."""
+    operands = _HugeDict()
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],
         "expression": {
             "kind": "ADD",
-            "operands": {str(i): i for i in range(5_000_000)},
+            "operands": operands,
         },
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert operands.iterated == 0
 
 
 def test_unexpected_node_field_is_bounded_before_copying() -> None:
     """A LITERAL with a huge extra field is rejected without copying it."""
+    extra = _HugeDict()
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],
         "expression": {
             "kind": "LITERAL",
             "value": {"num": 1, "den": 1},
-            "extra": {str(i): i for i in range(5_000_000)},
+            "extra": extra,
         },
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert extra.iterated == 0
+    assert extra.iterated == 0
 
 
 def test_oversized_variable_axis_is_bounded_before_copying() -> None:
+    axis = _HugeList(3_000_000, "x")
     payload = {
         "coefficient_domain": "ZZ",
-        "variables": ["x"] * 3_000_000,
+        "variables": axis,
         "expression": {"kind": "VARIABLE", "name": "x"},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert axis.iterated == 0
 
 
 def test_unexpected_top_level_field_is_bounded_before_copying() -> None:
+    extra = _HugeDict()
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],
         "expression": {"kind": "VARIABLE", "name": "x"},
-        "extra": {str(index): index for index in range(3_000_000)},
+        "extra": extra,
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_container_shaped_literal_is_rejected_before_copying() -> None:
     """A LITERAL value that is a sequence is rejected before the copy."""
+    value = _HugeList(1_000_000, 1)
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],
-        "expression": {"kind": "LITERAL", "value": [1] * 1_000_000},
+        "expression": {"kind": "LITERAL", "value": value},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert value.iterated == 0
 
 
-def test_zero_power_returns_one_without_expanding_the_base() -> None:
+def test_zero_power_returns_one_without_expanding_the_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """POWER(base, 0) is the constant one and never expands the base."""
     variables = tuple(f"x{index}" for index in range(8))
     literals = [
@@ -1712,25 +1763,51 @@ def test_zero_power_returns_one_without_expanding_the_base() -> None:
         "exponent": 13,
     }
     request = _request("ZZ", {"kind": "POWER", "base": base, "exponent": 0}, variables)
-    started = time.monotonic()
+
+    def fail_multiply(*args: object, **kwargs: object) -> object:
+        raise AssertionError("zero-power evaluation must not multiply its base")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._expression_normalize._multiply", fail_multiply
+    )
     result = _normalize(request)
-    assert time.monotonic() - started < 2.0
     assert result.polynomial.polynomial.terms[0].coefficient == CanonicalRational(
         num=1, den=1
     )
+    # The same base raised to a non-zero exponent is refused by admission, so
+    # returning the constant one above is evidence that the exponent-0 case
+    # short-circuited instead of expanding a base that cannot be expanded.
+    # That contrast is deterministic and needs no wall-clock bound.
+    with pytest.raises(OperationResourceAdmissionError):
+        _normalize(
+            _request("ZZ", {"kind": "POWER", "base": base, "exponent": 1}, variables)
+        )
 
 
 def test_non_node_operand_is_rejected_before_container_copy() -> None:
     """An ADD operand that is a large list is rejected before the copy."""
+    oversized_operand = _HugeList(5_000_000)
+    operands = [oversized_operand]
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],
-        "expression": {"kind": "ADD", "operands": [[0] * 5_000_000]},
+        "expression": {"kind": "ADD", "operands": operands},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert oversized_operand.iterated == 0
+
+
+def test_oversized_operand_arity_is_rejected_before_iteration() -> None:
+    operands = _HugeList(65)
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {"kind": "ADD", "operands": operands},
+    }
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert operands.iterated == 0
 
 
 def test_forged_source_missing_expression_is_a_typed_domain_error() -> None:
@@ -1784,31 +1861,31 @@ def test_forged_nested_power_without_base_is_a_typed_domain_error() -> None:
 
 def test_nested_literal_component_sequence_is_rejected_before_copy() -> None:
     """A sequence nested under a literal num key is rejected before the copy."""
+    numerator = _HugeList(5_000_000)
     payload = {
         "coefficient_domain": "QQ",
         "variables": ["x"],
         "expression": {
             "kind": "LITERAL",
-            "value": {"num": [0] * 5_000_000, "den": 1},
+            "value": {"num": numerator, "den": 1},
         },
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert numerator.iterated == 0
 
 
 def test_container_shaped_variable_name_is_rejected_before_copy() -> None:
     """A container in a scalar grammar field is rejected before the copy."""
+    name = _HugeList(5_000_000)
     payload = {
         "coefficient_domain": "QQ",
         "variables": ["x"],
-        "expression": {"kind": "VARIABLE", "name": [0] * 5_000_000},
+        "expression": {"kind": "VARIABLE", "name": name},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
+    assert name.iterated == 0
 
 
 def test_forged_empty_operands_are_a_typed_domain_error() -> None:

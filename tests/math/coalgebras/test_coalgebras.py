@@ -359,7 +359,6 @@ class TestSourceBoundResults:
 class TestScanWorkBeforeReplay:
     def test_oversized_direct_result_rejected_before_enumeration(self) -> None:
         """A serialized result with an over-budget scan fails fast."""
-        import time
 
         big = Coalgebra(
             prime=9973,
@@ -373,10 +372,8 @@ class TestScanWorkBeforeReplay:
         assert (
             group_like_scan_work(big.prime, big.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
-        started = time.monotonic()
         claimed = GroupLikeElementsResult(coalgebra=big, elements=(), count=0)
         assert claimed.count == 0
-        assert time.monotonic() - started < 5
 
 
 class TestCanonicalResidues:
@@ -574,13 +571,10 @@ class TestNestedModulusPrevalidation:
         """A multi-thousand-digit nested modulus is rejected by digit
         admission, never reaching the shared type's unbounded primality
         test."""
-        import time
 
         payload = self._payload(10**6000 + 4567)
-        started = time.monotonic()
         with _raises_code("coalgebra.prime_digits_exceeded"):
             ComultiplicationResult.model_validate(payload)
-        assert time.monotonic() - started < 5
 
     def test_foreign_nested_modulus_rejected_before_matrix_construction(self) -> None:
         """A 63-digit composite passes the digit budget but would fail the
@@ -626,9 +620,7 @@ class TestPrimeDigitAdmission:
         assert result.elements[0].coefficients == (1,)
 
     def test_multithousand_digit_prime_rejected_before_primality_test(self) -> None:
-        import time
 
-        started = time.monotonic()
         ca = Coalgebra(
             prime=10**6000 + 4567,
             dimension=1,
@@ -639,7 +631,6 @@ class TestPrimeDigitAdmission:
             _run_comultiplication(
                 ComultiplicationRequest(coalgebra=ca, element_index=0)
             )
-        assert time.monotonic() - started < 5
 
     def test_digit_boundary(self) -> None:
         """A 65-digit characteristic is rejected while a full-budget

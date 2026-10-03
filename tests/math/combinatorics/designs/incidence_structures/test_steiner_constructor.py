@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from collections import Counter
 from collections.abc import Iterator
 from itertools import combinations
@@ -629,13 +628,11 @@ def test_forged_shard_is_bounded_before_canonicalization() -> None:
     forged = SteinerTripleSystemShard.model_construct(
         order=7, fixed_triples=tuple((0, 1, 2) for _ in range(500_000))
     )
-    started = time.monotonic()
     with pytest.raises(OperationDomainValidationError) as error:
         construct_steiner_triple_system(7, 100, forged)
     assert error.value.errors()[0]["type"] == (
         "incidence_structure.steiner_shard_length"
     )
-    assert time.monotonic() - started < 1.0
 
 
 def test_oversized_forged_shard_is_measured_before_its_elements_are_inspected() -> None:

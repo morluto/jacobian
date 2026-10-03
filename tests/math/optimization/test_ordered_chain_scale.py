@@ -165,6 +165,15 @@ def test_ordered_simplex_reaches_source_variable_boundary() -> None:
 # These cases target distinct structure instead: a total tie across every
 # vertex, a uniform ramp, each extreme axis alone, an alternating sign pattern,
 # and a uniform sign flip that discriminates MINIMIZE from MAXIMIZE.
+#
+# The last four are there for coverage the earlier objectives missed. Because
+# this test asserts only the objective *value*, a tied case proves nothing about
+# which vertex the backend visited: the constant vectors tie all five splits,
+# the first-axis objective ties splits 1-4, and the alternating objective ties
+# splits 1 and 3, so only splits 0 and 4 were ever uniquely selected. Each of
+# these four has a unique optimum at a distinct split -- MIN or MAX lands on
+# 0, 4, 4, 0 respectively while the other sense lands on 4, 1, 2, 3 -- so all
+# five chain vertices are now reached through a middle coordinate map.
 _OBJECTIVES = (
     (0, 0, 0, 0, 0),
     (1, 1, 1, 1, 1),
@@ -172,6 +181,10 @@ _OBJECTIVES = (
     (0, 0, 0, 0, 1),
     (1, -1, 1, -1, 1),
     (-1, -1, -1, -1, -1),
+    (-6, -6, -6, -5, -4),  # unique MIN at split 0, unique MAX at split 4
+    (-6, -4, -6, -5, -6),  # unique MAX at split 1
+    (-6, -6, -4, -5, -6),  # unique MAX at split 2
+    (-6, -6, -6, -4, -5),  # unique MAX at split 3
 )
 
 

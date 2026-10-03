@@ -257,6 +257,7 @@ _STATUS_CASES: tuple[tuple[list[list[int]], list[int], list[int]], ...] = (
     ([[1]], [0], [1]),  # forced to the origin
     ([], [], [1]),  # no constraints, bounded below at zero
     ([], [], [-1]),  # no constraints, unbounded below
+    ([[1, -1]], [0], [-1, -1]),  # one row that leaves the objective direction free
     ([[1], [-1]], [0, -1], [1]),  # contradictory bounds
     ([[0]], [1], [1]),  # zero row cannot bound anything
     ([[1], [1]], [2, 2], [1]),  # duplicated rows are rank deficient

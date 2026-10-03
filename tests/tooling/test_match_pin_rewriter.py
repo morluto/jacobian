@@ -211,6 +211,12 @@ def test_recorder_import_and_supported_raises_forms() -> None:
         if "check" in inspect.signature(original_raises).parameters:
             with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
                 int("still not an integer")
+        expected_line = sys._getframe().f_lineno + 1
+        with pytest.raises(ValueError, match="invalid literal"):
+            int("not an integer")
+        assert f"tests/tooling/test_match_pin_rewriter.py:{expected_line}" in (
+            recorder.RECORD
+        )
     finally:
         recorder.pytest_unconfigure(None)
     assert pytest.raises is original_raises

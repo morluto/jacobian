@@ -76,7 +76,10 @@ class BerryEsseenRequest(StrictModel):
         """Keep positivity in the value contract, independent of wire encoding."""
 
         if self.sample_count < 1:
-            raise _validation_error("Berry--Esseen sample_count must be positive")
+            raise _validation_error(
+                "Berry--Esseen sample_count must be positive",
+                "probability.berry_esseen.sample_count_positive",
+            )
         return self
 
     @classmethod
@@ -276,16 +279,24 @@ class BerryEsseenResult(StrictModel):
         lower = self.bound_lower.as_fraction()
         upper = self.bound_upper.as_fraction()
         if variance <= 0:
-            raise _validation_error("Berry--Esseen variance must be positive")
+            raise _validation_error(
+                "Berry--Esseen variance must be positive",
+                "probability.berry_esseen.variance_positive",
+            )
         if third <= 0:
             raise _validation_error(
-                "Berry--Esseen third absolute central moment must be positive"
+                "Berry--Esseen third absolute central moment must be positive",
+                "probability.berry_esseen.third_moment_positive",
             )
         if bound_squared <= 0:
-            raise _validation_error("Berry--Esseen squared bound must be positive")
+            raise _validation_error(
+                "Berry--Esseen squared bound must be positive",
+                "probability.berry_esseen.squared_bound_positive",
+            )
         if lower < 0 or upper < lower:
             raise _validation_error(
-                "Berry--Esseen outward bound interval must be ordered and nonnegative"
+                "Berry--Esseen outward bound interval must be ordered and nonnegative",
+                "probability.berry_esseen.bound_interval_ordered",
             )
         if not lower * lower <= bound_squared <= upper * upper:
             raise _validation_error(
@@ -297,14 +308,16 @@ class BerryEsseenResult(StrictModel):
         ).denominator != 1:
             raise _validation_error(
                 "Berry--Esseen bound endpoints must lie on the "
-                "2^-bound_precision_bits dyadic grid"
+                "2^-bound_precision_bits dyadic grid",
+                "probability.berry_esseen.bound_endpoints_dyadic",
             )
         if lower == upper:
             return self
         if upper - lower != Fraction(1, grid_scale):
             raise _validation_error(
                 "Berry--Esseen non-singleton bound endpoints must be consecutive "
-                "points on the 2^-bound_precision_bits grid"
+                "points on the 2^-bound_precision_bits grid",
+                "probability.berry_esseen.bound_endpoints_consecutive",
             )
         return self
 

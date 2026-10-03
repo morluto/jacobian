@@ -158,33 +158,59 @@ def test_ordered_simplex_reaches_source_variable_boundary() -> None:
     )
 
 
-@pytest.mark.parametrize("sense", ["MINIMIZE", "MAXIMIZE"])
-def test_chain_objectives_match_independent_vertices(sense: str) -> None:
-    from random import Random
+# Each objective below is constructed rather than sampled. A uniform draw over
+# five coefficients in [-7, 7] almost never produces the fully degenerate
+# objective, and it spent about 6.6s of this module's 7.7s ordinary-lane budget
+# on 40 near-identical worker spawns to prove the same analytic vertex formula.
+# These cases target distinct structure instead: a total tie across every
+# vertex, a uniform ramp, each extreme axis alone, an alternating sign pattern,
+# and a uniform sign flip that discriminates MINIMIZE from MAXIMIZE.
+#
+# The last four are there for coverage the earlier objectives missed. Because
+# this test asserts only the objective *value*, a tied case proves nothing about
+# which vertex the backend visited: the constant vectors tie all five splits,
+# the first-axis objective ties splits 1-4, and the alternating objective ties
+# splits 1 and 3, so only splits 0 and 4 were ever uniquely selected. Each of
+# these four has a unique optimum at a distinct split -- MIN or MAX lands on
+# 0, 4, 4, 0 respectively while the other sense lands on 4, 1, 2, 3 -- so all
+# five chain vertices are now reached through a middle coordinate map.
+_OBJECTIVES = (
+    (0, 0, 0, 0, 0),
+    (1, 1, 1, 1, 1),
+    (1, 0, 0, 0, 0),
+    (0, 0, 0, 0, 1),
+    (1, -1, 1, -1, 1),
+    (-1, -1, -1, -1, -1),
+    (-6, -6, -6, -5, -4),  # unique MIN at split 0, unique MAX at split 4
+    (-6, -4, -6, -5, -6),  # unique MAX at split 1
+    (-6, -6, -4, -5, -6),  # unique MAX at split 2
+    (-6, -6, -6, -4, -5),  # unique MAX at split 3
+)
 
-    rng = Random(3516)
-    for _ in range(20):
-        coefficients = [rng.randrange(-7, 8) for _ in range(5)]
-        payload = _program(size=5).model_dump(mode="json")
-        payload["objective"] = {
-            "sense": sense,
-            "coefficients": [{"num": str(v), "den": "1"} for v in coefficients],
-        }
-        source = GeneralFormRationalLinearProgram.model_validate_json(
-            json.dumps(payload)
+
+@pytest.mark.parametrize("coefficients", _OBJECTIVES)
+@pytest.mark.parametrize("sense", ["MINIMIZE", "MAXIMIZE"])
+def test_chain_objectives_match_independent_vertices(
+    coefficients: tuple[int, ...], sense: str
+) -> None:
+    payload = _program(size=5).model_dump(mode="json")
+    payload["objective"] = {
+        "sense": sense,
+        "coefficients": [{"num": str(v), "den": "1"} for v in coefficients],
+    }
+    source = GeneralFormRationalLinearProgram.model_validate_json(json.dumps(payload))
+    # The vertices consist of a lower-bound prefix and a constant suffix.
+    values = [
+        sum(
+            Fraction(1, 10) * coefficients[i]
+            if i < split
+            else (1 - Fraction(split, 10)) * coefficients[i] / (5 - split)
+            for i in range(5)
         )
-        # The vertices consist of a lower-bound prefix and a constant suffix.
-        values = [
-            sum(
-                Fraction(1, 10) * coefficients[i]
-                if i < split
-                else (1 - Fraction(split, 10)) * coefficients[i] / (5 - split)
-                for i in range(5)
-            )
-            for split in range(5)
-        ]
-        expected = (min if sense == "MINIMIZE" else max)(values)
-        result = general_linear_program(source)
-        assert result.status == "OPTIMAL"
-        assert result.primal_objective is not None
-        assert result.primal_objective.as_fraction() == expected
+        for split in range(5)
+    ]
+    expected = (min if sense == "MINIMIZE" else max)(values)
+    result = general_linear_program(source)
+    assert result.status == "OPTIMAL"
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == expected

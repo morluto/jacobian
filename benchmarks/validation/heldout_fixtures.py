@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from benchmarks.tooling.heldout_manifest import _digest, _tree_digest
 
 
-def _manifest() -> dict:
+def _manifest() -> dict[str, Any]:
     tasks = [
         {
             "id": f"held-out-{index}",
@@ -79,13 +80,13 @@ def _manifest() -> dict:
     }
 
 
-def _write(tmp_path: Path, value: dict) -> Path:
+def _write(tmp_path: Path, value: dict[str, Any]) -> Path:
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     return path
 
 
-def _bundle(tmp_path: Path, value: dict) -> Path:
+def _bundle(tmp_path: Path, value: dict[str, Any]) -> Path:
     root = tmp_path / "bundle"
     dataset = root / "dataset"
     dataset.mkdir(parents=True)

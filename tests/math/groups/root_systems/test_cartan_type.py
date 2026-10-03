@@ -23,6 +23,15 @@ from jacobian.math.groups.root_systems.operations import (
 
 
 def test_canonical_cartan_values_are_publicly_exported() -> None:
+    """The two canonical root-system values stay importable from their owner.
+
+    The recursive namespace sweep only resolves names that are still listed in
+    the owner package's ``__all__``, so dropping both a binding and its
+    ``__all__`` entry would pass unnoticed while every caller of these
+    canonical values broke. This import is the fixed check that they are
+    published, not merely present.
+    """
+
     from jacobian.math.groups.root_systems import CartanMatrix, FiniteCartanDatum
 
     assert CartanMatrix.__name__ == "CartanMatrix"

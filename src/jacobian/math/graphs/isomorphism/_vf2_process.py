@@ -15,6 +15,8 @@ from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
     OperationExecutionTimeoutError,
+    TimeoutOwner,
+    current_request_execution,
     lease_operation_phases,
     request_checkpoint,
     require_execution_deadline,
@@ -55,6 +57,18 @@ def _admit_graph_isomorphism(request: GraphIsomorphismRequest) -> None:
         )
 
 
+def _apply_vf2_timeout_context(
+    error: OperationExecutionTimeoutError,
+    *,
+    timeout_owner: TimeoutOwner,
+    source_wall_owns_deadline: bool,
+) -> None:
+    error.timeout_owner = timeout_owner
+    if not source_wall_owns_deadline:
+        error.configured_seconds = None
+        error.adjustable_field_path = None
+
+
 def _vertex_mapping(
     graph_a: SimpleGraph,
     graph_b: SimpleGraph,
@@ -74,10 +88,47 @@ def _vertex_mapping(
     )
 
     request_checkpoint("before graph isomorphism")
-    lease = lease_operation_phases(
-        _VF2_WALL_SECONDS,
-        admitted_response_bytes=_VF2_STDOUT_LIMIT,
-        validation_work=graph_a.vertex_count + len(graph_a.edges) + len(graph_b.edges),
+    # Retain the enclosing winner before the lease binds an operation deadline.
+    execution = current_request_execution()
+    enclosing_deadline = execution.deadline if execution is not None else None
+    enclosing_owner = (
+        execution.timeout_owner
+        if execution is not None
+        and execution.outer_deadline is not None
+        and enclosing_deadline == execution.outer_deadline
+        else TimeoutOwner.OPERATION_WALL
+    )
+    requested_deadline = (
+        execution.started_at + _VF2_WALL_SECONDS if execution is not None else None
+    )
+    source_wall_owns_deadline = (
+        requested_deadline is None
+        or enclosing_deadline is None
+        or requested_deadline < enclosing_deadline
+    )
+    timeout_owner = (
+        TimeoutOwner.OPERATION_WALL if source_wall_owns_deadline else enclosing_owner
+    )
+    try:
+        lease = lease_operation_phases(
+            _VF2_WALL_SECONDS,
+            admitted_response_bytes=_VF2_STDOUT_LIMIT,
+            validation_work=graph_a.vertex_count
+            + len(graph_a.edges)
+            + len(graph_b.edges),
+        )
+    except OperationExecutionTimeoutError as exc:
+        _apply_vf2_timeout_context(
+            exc,
+            timeout_owner=timeout_owner,
+            source_wall_owns_deadline=source_wall_owns_deadline,
+        )
+        raise
+    source_wall_owns_deadline = source_wall_owns_deadline and (
+        requested_deadline is None or lease.operation_deadline == requested_deadline
+    )
+    timeout_owner = (
+        TimeoutOwner.OPERATION_WALL if source_wall_owns_deadline else enclosing_owner
     )
     request = {
         "graph_a": {
@@ -97,7 +148,10 @@ def _vertex_mapping(
             if remaining_seconds <= 0:
                 raise OperationExecutionTimeoutError(
                     "graph isomorphism backend lease expired",
-                    configured_seconds=_VF2_WALL_SECONDS,
+                    timeout_owner=timeout_owner,
+                    configured_seconds=(
+                        _VF2_WALL_SECONDS if source_wall_owns_deadline else None
+                    ),
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_VF2_WORKER)],
@@ -113,15 +167,38 @@ def _vertex_mapping(
                 ),
                 cwd=worker_directory,
             )
+    except OperationExecutionTimeoutError:
+        # TimeoutError is an OSError; preserve an authored backend timeout.
+        raise
     except OSError as exc:
         raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     request_checkpoint("after graph isomorphism worker")
-    check_bounded_process_result(completed)
+    try:
+        check_bounded_process_result(completed)
+    except OperationExecutionTimeoutError as exc:
+        _apply_vf2_timeout_context(
+            exc,
+            timeout_owner=timeout_owner,
+            source_wall_owns_deadline=source_wall_owns_deadline,
+        )
+        raise
+
+    def check_delivery_deadline() -> None:
+        try:
+            require_execution_deadline(lease.operation_deadline)
+        except OperationExecutionTimeoutError as exc:
+            _apply_vf2_timeout_context(
+                exc,
+                timeout_owner=timeout_owner,
+                source_wall_owns_deadline=source_wall_owns_deadline,
+            )
+            raise
+
     try:
         response = decode_checked_worker_output(
             completed.stdout,
             decode_result=lambda value: value,
-            checkpoint=lambda: require_execution_deadline(lease.operation_deadline),
+            checkpoint=check_delivery_deadline,
         )
         request_checkpoint("during graph isomorphism response validation")
         mapping = response["mapping"] if response["ok"] is True else None

@@ -214,7 +214,8 @@ class FiniteDistributionAtom(StrictModel):
         )
         if self.probability.as_fraction() < 0:
             raise _validation_error(
-                "finite-distribution probabilities must be nonnegative"
+                "finite-distribution probabilities must be nonnegative",
+                "probability.distribution.mass_negative",
             )
         return self
 

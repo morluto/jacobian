@@ -7,20 +7,6 @@ import json
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids.delta.extra import BinaryMatrixResult
-from jacobian.math.matrices.cyclic_linear import (
-    RationalCyclotomicElement,
-    RationalCyclotomicField,
-)
-
-
-def _zero(field: RationalCyclotomicField) -> RationalCyclotomicElement:
-    return RationalCyclotomicElement(
-        field=field,
-        coefficients_ascending=(
-            {"num": 0, "den": 1},
-            {"num": 0, "den": 1},
-        ),
-    )
 
 
 def test_zero_matrix_twist_example_composes_through_catalog_dispatch() -> None:

@@ -154,6 +154,10 @@ def _targets(
         call = item.context_expr
         if not isinstance(call, ast.Call):
             continue
+        if any(keyword.arg == "check" for keyword in call.keywords):
+            # Code pins must not discard pytest's additional exception
+            # predicate. Keep the original match assertion for these sites.
+            continue
         code = sites.get(call.lineno)
         if code is None:
             continue

@@ -55,6 +55,7 @@ class _RecordingRaises:
         return self.excinfo
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> object:
+        accepted = self._ctx.__exit__(exc_type, exc, tb)
         if exc is not None:
             record: dict[str, object] = {
                 "expected": getattr(self._expected, "__name__", str(self._expected)),
@@ -78,7 +79,7 @@ class _RecordingRaises:
                 record["reason"] = reason
             if self._key:
                 RECORD[self._key] = merge_record(RECORD.get(self._key), record)
-        return self._ctx.__exit__(exc_type, exc, tb)
+        return accepted
 
 
 def _site_key() -> str | None:

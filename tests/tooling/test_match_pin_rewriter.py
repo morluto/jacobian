@@ -149,6 +149,28 @@ def test_recorder_refuses_multiple_validation_errors() -> None:
     assert pytest.raises is original_raises
 
 
+def test_recorder_does_not_record_exception_rejected_by_match() -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    class CodedError(ValueError):
+        def errors(self) -> list[dict[str, str]]:
+            return [{"type": "owner.specific"}]
+
+    original_raises = pytest.raises
+    recorder.pytest_configure(None)
+    try:
+        expected_line = sys._getframe().f_lineno + 2
+        with pytest.raises(AssertionError):  # noqa: SIM117
+            with pytest.raises(CodedError, match="expected text"):
+                raise CodedError("different text")
+        key = f"tests/tooling/test_match_pin_rewriter.py:{expected_line}"
+        assert key not in recorder.RECORD
+    finally:
+        recorder.pytest_unconfigure(None)
+    assert pytest.raises is original_raises
+
+
 def test_recorder_import_and_supported_raises_forms() -> None:
     import pytest
     import tools.match_recorder as recorder
@@ -210,6 +232,19 @@ def test_namespaced_catch_all_codes_are_not_convertible(tmp_path: Path) -> None:
     usable, rejected = convertible_sites(load(path))
     assert not usable
     assert rejected["generic_code"] == 1
+
+
+def test_rewriter_leaves_check_predicate_sites_pinned(tmp_path: Path) -> None:
+    path = tmp_path / "test_check.py"
+    path.write_text(
+        "with pytest.raises(ValueError, match='detail', check=predicate):\n"
+        "    raise ValueError('detail')\n",
+        encoding="utf-8",
+    )
+    rewritten, skipped = rewrite(path, {1: "owner.code"})
+    assert rewritten == 0
+    assert skipped == 0
+    assert "match='detail', check=predicate" in path.read_text(encoding="utf-8")
 
 
 def test_distinct_matches_across_executions_are_rejected(tmp_path: Path) -> None:

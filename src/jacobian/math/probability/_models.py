@@ -19,8 +19,18 @@ MAX_INPUT_RATIONAL_DIGITS = 128
 MAX_RESULT_RATIONAL_DIGITS = 512
 
 
-def _validation_error(message: str) -> PydanticCustomError:
-    return PydanticCustomError("probability.model_invariant", message)
+def _validation_error(
+    message: str,
+    code: str = "probability.model_invariant",
+) -> PydanticCustomError:
+    """Build one model-invariant rejection.
+
+    ``code`` defaults to the module-wide invariant code so existing callers keep
+    their contract. Callers whose rejection is distinguishable by a caller or a
+    test should pass a specific code rather than relying on the message text.
+    """
+
+    return PydanticCustomError(code, message)
 
 
 def _require_bounded_fraction(

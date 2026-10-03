@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from threading import Event
 
 import pytest
 
@@ -10,9 +11,13 @@ from jacobian._execution import (
     BackendFailureReason,
     ExecutionResource,
     OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
     OperationPhaseLease,
     OperationResourceExhaustedError,
+    bind_request_deadline,
     lease_operation_phases,
+    request_execution,
 )
 from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import encode_strict_json
@@ -338,6 +343,75 @@ def test_later_enclosing_deadline_does_not_replace_the_owner_envelope(
     assert seen == [lease.backend_deadline]
     assert lease.operation_deadline < enclosing_later
     assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
+
+
+def test_bound_operation_deadline_reserves_delivery_before_the_real_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _spy_lease(monkeypatch)
+    seen: list[float] = []
+
+    def capture_worker(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+        scaled_floor_digit_bound: int,
+    ) -> int:
+        seen.append(deadline)
+        return process.run_scaled_integer_part_worker(
+            polynomial=polynomial,
+            real_root_index=real_root_index,
+            scale=scale,
+            isolation_bits=isolation_bits,
+            deadline=deadline,
+            scaled_floor_digit_bound=scaled_floor_digit_bound,
+        )
+
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", capture_worker)
+    started = time.monotonic()
+    enclosing_deadline = started + 30
+    with request_execution(started) as execution:
+        bind_request_deadline(enclosing_deadline)
+        result = radix_prefix(_value((1, 0, -2), 1), 10, 5)
+        assert execution.deadline == enclosing_deadline
+
+    assert result.integer_part == 1
+    assert result.fractional_digits == (4, 1, 4, 2, 1)
+    lease = calls[0][1]
+    assert lease.operation_deadline == enclosing_deadline
+    assert seen == [lease.backend_deadline]
+    assert seen[0] == (
+        enclosing_deadline
+        - lease.delivery_reserve_seconds
+        - lease.teardown_reserve_seconds
+    )
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_exhausted_enclosing_reserves_fail_before_radix_worker_launch(
+    monkeypatch: pytest.MonkeyPatch,
+    cancelled: bool,
+) -> None:
+    def fail_to_launch(**_kwargs: object) -> int:
+        raise AssertionError("an exhausted phase lease must not launch a worker")
+
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fail_to_launch)
+    monkeypatch.setattr(time, "monotonic", lambda: 100.0)
+    cancellation_signal = Event()
+    if cancelled:
+        cancellation_signal.set()
+    with request_execution(100.0, cancellation_signal=cancellation_signal):
+        bind_request_deadline(100.02)
+        expected_error = (
+            OperationExecutionCancelledError
+            if cancelled
+            else OperationExecutionTimeoutError
+        )
+        with pytest.raises(expected_error):
+            radix_prefix(_value((1, 0, -2), 1), 10, 5)
 
 
 def test_in_process_refinement_exhaustion_is_a_backend_failure(

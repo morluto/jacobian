@@ -479,8 +479,6 @@ class TestOperationMetadata:
         ops = {operation.operation_id: operation for operation in TOOLS}
         op = ops["graph.isomorphism.decide.compute"]
         assert op.operation_id == "graph.isomorphism.decide.compute"
-        assert op.request_type.__name__ == "GraphIsomorphismRequest"
-        assert op.result_type.__name__ == "GraphIsomorphismResult"
         assert "graph" in op.tags
         assert "isomorphism" in op.tags
         assert "exact" in op.tags

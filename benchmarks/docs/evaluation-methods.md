@@ -22,3 +22,36 @@ modes, cost, and the limits of the task set separately. Atomic mathematical task
 correctness is normally binary; only explicit independent replayable subclaims
 justify partial credit. An evaluation score or solver outcome is evidence about
 the experiment, not a new mathematical conclusion returned by Jacobian.
+
+## Descriptive comparison and repeated observations
+
+Comparison report v3 is descriptive only. The previous pair-level bootstrap,
+McNemar p-value, and promotion to `comparative` after ten task/repetition pairs
+were invalid for the declared nested task/family design. Repetition counts do
+not establish independent task or family samples. The interval and p-value
+fields are now null for every comparison, with an explicit explanation.
+
+The report retains raw means and deltas, weighting each complete observed pair
+equally. It also reports each task's paired-repetition mean and an equal-task
+average of those means. Family summaries average observed task means equally
+within each declared family. No overall equal-family estimand is substituted.
+Optional metrics expose missing pair and task counts; available-case summaries
+do not represent missing observations. Unpaired trial keys still invalidate the
+comparison. Counts of family labels describe coverage, not statistical
+independence or an effective sample size.
+
+Normalized evidence v5 adds `task_family_binding`. Canonical held-out collection
+projects the selected stage's task IDs, digests, and family labels only after
+checking the exact manifest file digest against both plan and ledger and checking
+complete stage trial coverage. Ordinary observations have a null binding.
+Historical v4 evidence remains readable for descriptive comparisons, with
+unknown family identity; no labels or sampling assumptions are invented.
+Report v2 consumers must migrate to v3 and must not interpret null uncertainty as
+zero uncertainty or a nonsignificant statistical test.
+
+A future inferential analysis needs a frozen target estimand, task/family
+weighting, sampling or assignment assumptions, missingness policy, and a method
+appropriate to the number and structure of independent units. A family-label
+minimum or randomized execution order does not specify these choices. This
+repair prevents misleading certainty; it does not resolve that methodological
+choice or introduce a cluster-bootstrap guarantee.

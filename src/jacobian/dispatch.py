@@ -14,6 +14,8 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     ProgressSink,
     RequestCancellationSignal,
+    TimeoutOwner,
+    current_request_execution,
     request_cancellation,
     request_checkpoint,
     request_execution,
@@ -102,6 +104,18 @@ def execute_operation[ProjectedT](
     """Own one complete parse, invocation, and projection execution envelope."""
 
     started = time.monotonic()
+    parent = current_request_execution()
+    # Snapshot before the child scope resets the bound operation deadline.
+    # Keep the original clock for owner allowances and the fresh clock above
+    # for this invocation's reported runtime.
+    inherited_deadline = parent.deadline if parent is not None else None
+    inherited_owner = TimeoutOwner.CALLER_DEADLINE
+    if parent is not None:
+        inherited_owner = (
+            parent.timeout_owner
+            if inherited_deadline == parent.outer_deadline
+            else TimeoutOwner.OPERATION_WALL
+        )
     cancellation_context = (
         request_cancellation(cancellation_signal)
         if cancellation_signal is not None
@@ -109,7 +123,9 @@ def execute_operation[ProjectedT](
     )
     with (
         request_execution(
-            started,
+            parent.started_at if parent is not None else started,
+            outer_deadline=inherited_deadline,
+            timeout_owner=inherited_owner,
             cancellation_signal=cancellation_signal,
             progress_sink=progress_sink,
         ),

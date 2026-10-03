@@ -138,6 +138,35 @@ def test_real_checked_worker_cancellation_is_classified_before_decode() -> None:
         _run_real_checked_worker("print('never')", cancellation_event=cancellation)
 
 
+def test_envelope_worker_cancellation_is_classified_before_decode() -> None:
+    cancellation = threading.Event()
+    cancellation.set()
+
+    def fail_to_decode(_value: object) -> object:
+        raise AssertionError("cancelled request must not decode a worker result")
+
+    with (
+        request_execution(time.monotonic(), cancellation_signal=cancellation),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        # An ignored signal would let this child report an abnormal exit before
+        # the checked wrapper reaches its separate request checkpoint.
+        run_checked_worker_process(
+            [sys.executable, "-c", "raise SystemExit(7)"],
+            input_bytes=b"",
+            timeout_seconds=5,
+            environment=worker_environment(),
+            stdout_limit=1024,
+            stderr_limit=1024,
+            decode_result=fail_to_decode,
+        )
+
+
+def test_real_checked_worker_without_cancellation_decodes_result() -> None:
+    with request_execution(time.monotonic()):
+        assert _run_real_checked_worker('print(\'{"kind":"result","result":7}\')') == 7
+
+
 def test_real_checked_worker_output_overflow_is_classified_before_decode() -> None:
     script = "import sys; sys.stdout.write('x' * 4096); sys.stdout.flush()"
     with pytest.raises(OperationResourceExhaustedError):

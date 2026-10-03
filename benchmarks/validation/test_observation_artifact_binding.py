@@ -97,7 +97,7 @@ def test_observation_normalization_binds_fields(
 
     assert failures == []
     assert evidence["status"] == "VALID"
-    assert evidence["schema_version"] == "4"
+    assert evidence["schema_version"] == "5"
     assert evidence["fixed_invariants"]["model"] == "model"
     assert evidence["eval_args"]["selection_mode"] == "dataset-task-names"
     assert evidence["eval_args"]["selection"] == ["graph-counterexample"]
@@ -427,6 +427,7 @@ def test_trial_status_missing_status_fails_closed() -> None:
 
 def test_trial_status_non_string_status_fails_closed() -> None:
     """Non-string status values must be treated as ERROR, not COMPLETED."""
+    bad: object
     for bad in (0, 1, True, False, [], {}):
         assert _trial_status({"status": bad}, None) == "ERROR", (
             f"{bad!r} should be ERROR"

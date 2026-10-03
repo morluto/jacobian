@@ -27,6 +27,9 @@ def _invalid_matrices() -> list[tuple[dict[str, Any], int]]:
     return [
         ({"row_count": 2, "column_count": 2, "entries": [[scalar]]}, 1),
         ({"entries": [[{"num": "1", "den": "bad"}]]}, 1),
+        ({"entries": [scalar]}, 8),
+        ({"entries": [{"unknown": "x"}]}, 7),
+        ({"entries": [{"value": scalar}]}, 5),
         (
             {
                 "row_count": 1,

@@ -351,10 +351,37 @@ def _rank_matrix_branch(value: object) -> str | None:
     ):
         return None
     if all(type(entry) is list or type(entry) is tuple for entry in entries):
+        if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
+            return None
+        for row in entries:
+            if len(row) > MAX_RATIONAL_MATRIX_ORDER:
+                return None
+            for scalar in row:
+                if type(scalar) is CanonicalRational:
+                    continue
+                if (
+                    type(scalar) is not dict
+                    or len(scalar) > 3
+                    or any(type(key) is not str for key in scalar)
+                    or "row" in scalar
+                    or "column" in scalar
+                ):
+                    return None
         return "dense"
-    if all(type(entry) is dict for entry in entries):
-        return "sparse"
-    return None
+    # A mapping can instead be a rational whose enclosing dense row was omitted.
+    # Require coordinate evidence, including for incomplete sparse entries.
+    for entry in entries:
+        if (
+            type(entry) is not dict
+            or len(entry) > 3
+            or any(
+                type(key) is not str or key not in ("row", "column", "value")
+                for key in entry
+            )
+            or ("row" not in entry and "column" not in entry)
+        ):
+            return None
+    return "sparse"
 
 
 def _rank_matrix_message_context(message: str, context: object) -> bool:

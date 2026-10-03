@@ -122,6 +122,52 @@ def test_sparse_coordinate_relation_error_drops_only_dense_alternative() -> None
     assert errors[0]["msg"] == "sparse matrix coordinates exceed declared axes"
 
 
+@pytest.mark.parametrize(
+    "entries",
+    [
+        [{"num": "1", "den": "1"}],
+        [{"unknown": "x"}],
+        [{"value": {"num": "1", "den": "1"}}],
+        [{"row": 0, "value": {"num": "1", "den": "1"}}, {"num": "1", "den": "1"}],
+        [{}],
+    ],
+)
+@pytest.mark.parametrize("native", [False, True])
+def test_uncertain_entry_mappings_retain_missing_dense_row_error(
+    entries: list[dict[str, Any]], native: bool
+) -> None:
+    errors = _errors({"entries": entries}, native=native)
+    dense = [error for error in errors if error["msg"].startswith("Dense matrix: ")]
+    sparse = [error for error in errors if error["msg"].startswith("Sparse matrix: ")]
+    assert [(error["loc"], error["type"]) for error in dense] == [
+        (("matrix", "entries", index), "tuple_type") for index in range(len(entries))
+    ]
+    assert sparse
+    assert len(dense) + len(sparse) == len(errors)
+
+
+def test_coordinate_carrier_nested_in_native_row_retains_both_alternatives() -> None:
+    entry = SparseRationalMatrixEntry(
+        row=0, column=0, value=CanonicalRational(num=1, den=1)
+    )
+    errors = _errors({"entries": ((entry,),)}, native=True)
+    assert any(error["msg"].startswith("Dense matrix: ") for error in errors)
+    assert any(error["msg"].startswith("Sparse matrix: ") for error in errors)
+
+
+def test_coordinate_mapping_nested_in_json_row_keeps_raw_preflight_error() -> None:
+    errors = _errors(
+        {"entries": [[{"row": 0, "column": 0, "value": {"num": "1", "den": "1"}}]]}
+    )
+    assert [(error["loc"], error["type"], error["msg"]) for error in errors] == [
+        (
+            (),
+            "matrix.shape_mismatch",
+            "matrix input rational scalar contains unknown fields",
+        )
+    ]
+
+
 @pytest.mark.parametrize("entries", [None, [], [7], [[], {}]])
 @pytest.mark.parametrize("native", [False, True])
 def test_ambiguous_storage_retains_both_alternatives_outside_paths(
@@ -302,6 +348,12 @@ def test_branch_evidence_does_not_inspect_hostile_subclasses_or_scalars() -> Non
         def get(self, *args: Any) -> Any:
             raise AssertionError("custom lookup")
 
+    class HostileKey(str):
+        def __eq__(self, other: Any) -> bool:
+            raise AssertionError("custom key equality")
+
+        __hash__ = str.__hash__
+
     class HostileScalar(metaclass=HostileMetaclass):
         def __getattribute__(self, name: str) -> Any:
             raise AssertionError("custom class property")
@@ -315,6 +367,7 @@ def test_branch_evidence_does_not_inspect_hostile_subclasses_or_scalars() -> Non
                 raise AssertionError("native subclass property")
             return super().__getattribute__(name)
 
+    value: object
     for value in (
         HostileScalar(),
         HostileDict(entries=[]),
@@ -323,11 +376,21 @@ def test_branch_evidence_does_not_inspect_hostile_subclasses_or_scalars() -> Non
         {"entries": [HostileList()]},
         {"entries": [HostileDict()]},
         {"entries": [HostileScalar()]},
+        {"entries": [{HostileKey("row"): 0}]},
+        {"entries": [[{HostileKey("row"): 0}]]},
+        {"entries": [[HostileDict()]]},
+        {"entries": [[HostileScalar()]]},
+        {"entries": [{"row": 0, "column": 0, "value": {}, "unknown": 0}]},
+        {"entries": [[{"row": 0, "column": 0, "value": {}}]]},
+        {"entries": [[{}] * (MAX_RATIONAL_MATRIX_ORDER + 1)]},
+        {"entries": [[]] * (MAX_RATIONAL_MATRIX_ORDER + 1)},
         DenseSubclass.model_construct(),
         {"entries": [()] * (MAX_SPARSE_RATIONAL_MATRIX_NONZEROS + 1)},
     ):
         assert _rank_matrix_branch(value) is None
-    assert _rank_matrix_branch({"entries": [[HostileScalar()]]}) == "dense"
+    assert _rank_matrix_branch({"entries": [[{"num": 1, "den": 1}]]}) == "dense"
+    assert _rank_matrix_branch({"entries": [{"row": 0}]}) == "sparse"
+    assert _rank_matrix_branch({"entries": [{"column": 0}]}) == "sparse"
     assert _rank_matrix_branch(RationalMatrix()) == "dense"
     assert (
         _rank_matrix_branch(SparseRationalMatrix(row_count=0, column_count=0))

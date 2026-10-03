@@ -86,12 +86,23 @@ def _chromatic_bipartition_worker_stdout_limit(
 
 
 def _chromatic_bipartition_timeout(
-    message: str, request: ChromaticBipartitionRequest
+    message: str,
+    request: ChromaticBipartitionRequest,
+    *,
+    operation_wall_owns_deadline: bool,
 ) -> None:
     raise OperationExecutionTimeoutError(
         message,
-        configured_seconds=request.resource_budget.wall_seconds,
-        adjustable_field_path=("resource_budget", "wall_seconds"),
+        configured_seconds=(
+            request.resource_budget.wall_seconds
+            if operation_wall_owns_deadline
+            else None
+        ),
+        adjustable_field_path=(
+            ("resource_budget", "wall_seconds")
+            if operation_wall_owns_deadline
+            else None
+        ),
     )
 
 
@@ -110,12 +121,29 @@ def find_chromatic_bipartition(
         message="chromatic bipartitions checked",
     )
     stdout_limit = _chromatic_bipartition_worker_stdout_limit(request)
-    lease = lease_operation_phases(
-        request.resource_budget.wall_seconds,
-        admitted_response_bytes=stdout_limit,
-        validation_work=len(request.graph.vertices) + len(request.graph.edges),
+    enclosing_deadline = execution.deadline
+    requested_deadline = execution.started_at + request.resource_budget.wall_seconds
+    source_wall_precedes_enclosing = (
+        enclosing_deadline is None or requested_deadline < enclosing_deadline
     )
+    try:
+        lease = lease_operation_phases(
+            request.resource_budget.wall_seconds,
+            admitted_response_bytes=stdout_limit,
+            validation_work=len(request.graph.vertices) + len(request.graph.edges),
+        )
+    except OperationExecutionTimeoutError as exc:
+        if not source_wall_precedes_enclosing:
+            exc.configured_seconds = None
+            exc.adjustable_field_path = None
+        raise
     deadline = lease.operation_deadline
+    # The parent retains the original request start and enclosing bounds.
+    # A reserved backend deadline and the worker's fresh start cannot establish
+    # that the source wall controls this request. Enclosing bounds win ties.
+    operation_wall_owns_deadline = (
+        source_wall_precedes_enclosing and deadline == requested_deadline
+    )
     try:
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
             remaining_seconds = lease.backend_deadline - time.monotonic()
@@ -123,6 +151,7 @@ def find_chromatic_bipartition(
                 _chromatic_bipartition_timeout(
                     "chromatic bipartition deadline expired before the worker started",
                     request,
+                    operation_wall_owns_deadline=operation_wall_owns_deadline,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_BIPARTITION_WORKER)],
@@ -153,6 +182,7 @@ def find_chromatic_bipartition(
         _chromatic_bipartition_timeout(
             "chromatic bipartition deadline expired during the worker",
             request,
+            operation_wall_owns_deadline=operation_wall_owns_deadline,
         )
     request_checkpoint("after chromatic bipartition worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
@@ -163,6 +193,7 @@ def find_chromatic_bipartition(
         _chromatic_bipartition_timeout(
             "chromatic bipartition deadline expired after the worker returned",
             request,
+            operation_wall_owns_deadline=operation_wall_owns_deadline,
         )
     try:
         result = decode_checked_worker_output(
@@ -170,6 +201,11 @@ def find_chromatic_bipartition(
             decode_result=ChromaticBipartitionResult.model_validate,
             checkpoint=lambda: require_execution_deadline(deadline),
         )
+    except OperationExecutionTimeoutError as exc:
+        if not operation_wall_owns_deadline:
+            exc.configured_seconds = None
+            exc.adjustable_field_path = None
+        raise
     except (TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     if result.graph != request.graph or result.s != request.s or result.t != request.t:

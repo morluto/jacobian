@@ -860,7 +860,7 @@ def test_expired_request_deadline_stops_before_backend_launch() -> None:
         common_interlacing_profile(family)
 
 
-def test_active_worker_cancellation_is_preserved_as_execution_state() -> None:
+def test_supervisor_cancellation_is_preserved_as_execution_state() -> None:
     family = tuple(
         _split_source(f"source-{index}", tuple(range(-8, 8))) for index in range(8)
     )
@@ -878,6 +878,13 @@ def test_active_worker_cancellation_is_preserved_as_execution_state() -> None:
         timer.cancel()
         timer.join()
 
+    # The wall-time bound is the evidence, not a stopwatch for its own sake.
+    # Once the timer fires, cancellation may be reported during preflight or
+    # input spooling, or the parent supervisor may observe it after launch and
+    # terminate the child process tree. Returning the typed cancellation error
+    # promptly shows that the operation honors the parent-side cancellation
+    # request; this assertion does not establish that a running child observed
+    # the signal itself.
     assert time.monotonic() - started < 5.0
 
 

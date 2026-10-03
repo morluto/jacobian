@@ -521,8 +521,8 @@ def test_schema_publishes_the_exact_cover_contract() -> None:
     assert "UNKNOWN" in schema["description"]
 
 
-def test_dense_cyclic_instance_refuses_before_the_residual_scan() -> None:
-    """A dense residual degree scan must be refused, not executed."""
+def test_dense_cyclic_residual_degree_scan_is_linear() -> None:
+    """The dense residual-degree pass completes with linear scan cost."""
     import time
 
     primary = 2048
@@ -545,7 +545,10 @@ def test_dense_cyclic_instance_refuses_before_the_residual_scan() -> None:
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
-    # The previous per-primary row scan performed ~134 million comparisons here.
+    # The forcing bound is admitted, so the operation executes unit forcing and
+    # the residual-degree pass before the combined indexing/search estimate
+    # rejects the request. The wall-time bound distinguishes this linear pass
+    # from the former quadratic per-primary scan (~134 million comparisons).
     assert time.monotonic() - started < 2.0
 
 

@@ -628,6 +628,9 @@ def test_wheel_block_enumerates_directly_without_dfs() -> None:
     started = time.monotonic()
     result = enumerate_fixed_length_cycles(graph, 125)
     assert result.cycle_count == 124
+    # Fixed-cycle admission recognizes this wheel and `_wheel_cycles` emits the
+    # 124 Hamiltonian cycles directly. The wall-time bound protects that
+    # shortcut from regressing to generic depth-first search.
     assert time.monotonic() - started < 2.0
 
 
@@ -764,6 +767,10 @@ def test_complete_graph_four_cycle_admission_is_polynomial_time() -> None:
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError):
+        # Admission recognizes the complete multipartite block and computes its
+        # four-cycle count polynomially before result admission rejects it. The
+        # bound distinguishes that calculation from the former C(256, 4)
+        # subset enumeration.
         enumerate_fixed_length_cycles(graph, 4)
     assert time.monotonic() - started < 2.0
 

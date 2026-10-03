@@ -503,7 +503,9 @@ def test_collision_group_lcm_reduction_below_the_cap_is_admitted() -> None:
     )
 
 
-def test_collision_group_growth_is_bounded_before_materialization() -> None:
+def test_collision_group_growth_is_bounded_before_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """One collision group of unrelated denominators is refused early.
 
     Every pair of a 64-term ``(x^i y^-i)`` factor with a 64-term
@@ -514,7 +516,6 @@ def test_collision_group_growth_is_bounded_before_materialization() -> None:
     """
 
     import math
-    import time
 
     primes: list[int] = []
     candidate = 2
@@ -551,10 +552,22 @@ def test_collision_group_growth_is_bounded_before_materialization() -> None:
             )
         ),
     )
-    started = time.monotonic()
+    original_encoded_digits = laurent_module._laurent_encoded_digits
+    encoded_digit_checks = 0
+
+    def count_encoded_digit_checks(exponents: tuple[int, ...], value: Fraction) -> int:
+        nonlocal encoded_digit_checks
+        encoded_digit_checks += 1
+        if encoded_digit_checks > 64:
+            raise AssertionError("admission accumulated beyond the first 64 updates")
+        return original_encoded_digits(exponents, value)
+
+    monkeypatch.setattr(
+        laurent_module, "_laurent_encoded_digits", count_encoded_digit_checks
+    )
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
-    assert time.monotonic() - started < 2.0
+    assert encoded_digit_checks == 64
 
 
 def test_transient_collision_overflow_can_cancel_in_a_later_term() -> None:

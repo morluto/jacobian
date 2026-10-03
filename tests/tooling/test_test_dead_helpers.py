@@ -40,6 +40,31 @@ def test_attribute() -> None:
     assert Holder().helper is None
 '''
 
+STRING_LITERAL_IS_NOT_A_REFERENCE = '''\
+"""A string with the helper name does not call or load the helper."""
+
+
+def helper() -> int:
+    return 2
+
+
+def test_string_value_is_not_a_reference() -> None:
+    message = "helper"
+    assert message == "helper"
+'''
+
+COLLECTED_CLASS_REFERENCES_ITS_BASE = '''\
+"""The class base is evaluated in the module scope."""
+
+
+class Base:
+    pass
+
+
+class TestCase(Base):
+    pass
+'''
+
 LIVE_HELPERS = '''\
 """Live helpers, fixtures, and pytest collection must all survive."""
 
@@ -64,6 +89,16 @@ def test_fixture_argument(live_fixture: int) -> None:
 @pytest.mark.usefixtures("live_fixture")
 def test_fixture_by_name() -> None:
     assert live_helper() == 3
+
+
+@pytest.fixture
+def fixture_used_only_by_marker():
+    return 8
+
+
+@pytest.mark.usefixtures("fixture_used_only_by_marker")
+def test_fixture_used_only_by_marker() -> None:
+    pass
 
 
 def test_nested_scope_rebinds() -> None:
@@ -97,6 +132,21 @@ def test_parameter_shadowing_does_not_rescue_a_dead_variable(tmp_path: Path) -> 
 
 def test_attribute_access_does_not_rescue_a_dead_function(tmp_path: Path) -> None:
     assert "helper" in _reported(tmp_path, "test_shadow.py", SHADOWED_BY_ATTRIBUTE)
+
+
+def test_unrelated_string_literals_do_not_rescue_a_dead_function(
+    tmp_path: Path,
+) -> None:
+    assert "helper" in _reported(
+        tmp_path, "test_strings.py", STRING_LITERAL_IS_NOT_A_REFERENCE
+    )
+
+
+def test_collected_class_base_is_scanned_in_module_scope(tmp_path: Path) -> None:
+    assert (
+        _reported(tmp_path, "test_class_base.py", COLLECTED_CLASS_REFERENCES_ITS_BASE)
+        == set()
+    )
 
 
 def test_live_helpers_fixtures_and_pytest_collection_are_reported_clean(

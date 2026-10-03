@@ -133,12 +133,46 @@ def _definition_only_references(tree: ast.Module) -> set[str]:
 
     module_names = {name for name, _line, _kind, _node in _definition_names(tree)}
     referenced: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            # Fixture and marker arguments are strings, not resolved names.
-            referenced.add(node.value)
+    referenced.update(_pytest_string_references(tree))
     _scan(tree, frozenset(), module_names, referenced, _fixture_names(tree))
     return referenced
+
+
+def _pytest_string_references(tree: ast.Module) -> set[str]:
+    """Names that pytest resolves from supported string-bearing markers."""
+
+    referenced: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = _dotted_name(node.func)
+        if name == "pytest.mark.usefixtures":
+            for argument in node.args:
+                referenced.update(_string_values(argument))
+        elif name == "pytest.mark.parametrize":
+            # Only indirect parameter names identify fixtures. The first
+            # argument is a local parameter declaration, not a global helper.
+            for keyword in node.keywords:
+                if keyword.arg == "indirect":
+                    referenced.update(_string_values(keyword.value))
+    return referenced
+
+
+def _dotted_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _dotted_name(node.value)
+        return f"{parent}.{node.attr}" if parent else None
+    return None
+
+
+def _string_values(node: ast.AST) -> set[str]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return set().union(*(_string_values(item) for item in node.elts))
+    return set()
 
 
 def _fixture_names(tree: ast.Module) -> frozenset[str]:
@@ -172,9 +206,6 @@ def _scan(
         _record(node.id, node.ctx, bound, module_names, referenced)
         return
     if isinstance(node, ast.Constant):
-        # Fixture and marker arguments are strings, not resolved names.
-        if isinstance(node.value, str):
-            referenced.add(node.value)
         return
     children: Sequence[ast.AST] = (
         node if isinstance(node, Sequence) else list(ast.iter_child_nodes(node))
@@ -306,6 +337,8 @@ def _comprehension_targets(node: ast.AST) -> frozenset[str]:
 def _header_expressions(node: ast.AST) -> tuple[ast.AST, ...]:
     """Defaults and annotations, which evaluate outside the function scope."""
 
+    if isinstance(node, ast.ClassDef):
+        return (*node.bases, *(keyword.value for keyword in node.keywords))
     if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
         return ()
     arguments = node.args
@@ -323,9 +356,6 @@ def _header_expressions(node: ast.AST) -> tuple[ast.AST, ...]:
         found.extend(
             argument.annotation for argument in group if argument.annotation is not None
         )
-    if isinstance(node, ast.ClassDef):
-        found.extend(node.bases)
-        found.extend(keyword.value for keyword in node.keywords)
     return tuple(found)
 
 

@@ -20,6 +20,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models i
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring.operations import (
     verify_nonmonochromatic_coloring,
 )
+from jacobian.math.graphs.decks._models import UnlabelledDeck
 
 
 def test_tool_manifest_discovery_is_deterministic_and_owner_local() -> None:
@@ -36,6 +37,15 @@ def test_public_catalog_is_sorted_and_unique() -> None:
     assert operation_ids == tuple(sorted(set(operation_ids)))
     catalog = Catalog.open()
     assert all(catalog.operation(tool.operation_id) is tool for tool in BUILTIN_TOOLS)
+
+
+def test_unlabelled_deck_has_exactly_one_published_operation() -> None:
+    quotients = sorted(
+        tool.operation_id
+        for tool in BUILTIN_TOOLS
+        if tool.result_type is UnlabelledDeck
+    )
+    assert quotients == ["graph.deck.unlabelled.compute"]
 
 
 def test_hypergraph_coloring_has_one_bounded_decision_operation() -> None:

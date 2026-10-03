@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -34,6 +34,14 @@ _WAIVER = "# dead-code:"
 # neither is referenced inside the module that declares it.
 _PYTEST_COLLECTED_PREFIX = "Test"
 _PYTEST_MODULE_NAMES = frozenset({"pytestmark"})
+# Every construct that opens a name scope for the reference walk below.
+_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+_COMPREHENSIONS = (
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+)
 
 
 @dataclass(frozen=True)
@@ -111,39 +119,214 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
 
 
 def _definition_only_references(tree: ast.Module) -> set[str]:
-    """Names referenced by anything other than their own binding site."""
-    bound_at: dict[str, set[int]] = {}
-    for name, line, _kind, _node in _definition_names(tree):
-        bound_at.setdefault(name, set()).add(line)
+    """Module-level names that a *lexically resolved* load actually reaches.
 
+    A flat name set is not enough. A local parameter, assignment, or attribute
+    can share a module-level helper's name while Python resolves that
+    occurrence elsewhere, which would let an unused helper pass the gate: an
+    unused ``value = 1`` survives because some test declares a ``value``
+    parameter, and an unused function survives because the code writes
+    ``obj.function_name``. References are therefore resolved against the
+    scopes that enclose them, and pytest's name-based collection is handled
+    separately in :func:`_definition_names`.
+    """
+
+    module_names = {name for name, _line, _kind, _node in _definition_names(tree)}
     referenced: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Name):
-            # A bare Name in Store context at a definition line is the binding.
-            if isinstance(node.ctx, ast.Store) and node.lineno in bound_at.get(
-                node.id, set()
-            ):
-                continue
-            referenced.add(node.id)
-        elif isinstance(node, ast.Attribute):
-            referenced.add(node.attr)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            # Fixture and marker arguments are strings.
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            # Fixture and marker arguments are strings, not resolved names.
             referenced.add(node.value)
-        elif isinstance(node, ast.arg):
-            referenced.add(node.arg)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            # A definition is not a use of itself, but decorators and base
-            # classes inside its header are real references.
-            for dec in node.decorator_list:
-                for child in ast.walk(dec):
-                    if isinstance(child, ast.Name):
-                        referenced.add(child.id)
-                    elif isinstance(child, ast.Constant) and isinstance(
-                        child.value, str
-                    ):
-                        referenced.add(child.value)
+    _scan(tree, frozenset(), module_names, referenced, _fixture_names(tree))
     return referenced
+
+
+def _fixture_names(tree: ast.Module) -> frozenset[str]:
+    """Module-level helpers pytest injects by parameter name.
+
+    Only these are exempt from lexical resolution. A test parameter that
+    happens to share a name with a plain module-level assignment is not a
+    fixture reference, so that assignment stays subject to the dead-code gate.
+    """
+
+    names = set()
+    for node in _definition_names(tree):
+        _name, _line, kind, definition = node
+        if kind != "function":
+            continue
+        if any("fixture" in ast.dump(item) for item in definition.decorator_list):  # type: ignore[attr-defined]
+            names.add(_name)
+    return frozenset(names)
+
+
+def _scan(
+    node: ast.AST | Sequence[ast.AST],
+    bound: frozenset[str],
+    module_names: set[str],
+    referenced: set[str],
+    fixtures: frozenset[str],
+) -> None:
+    """Record module-level loads that no enclosing scope shadows."""
+
+    if isinstance(node, ast.Name):
+        _record(node.id, node.ctx, bound, module_names, referenced)
+        return
+    if isinstance(node, ast.Constant):
+        # Fixture and marker arguments are strings, not resolved names.
+        if isinstance(node.value, str):
+            referenced.add(node.value)
+        return
+    children: Sequence[ast.AST] = (
+        node if isinstance(node, Sequence) else list(ast.iter_child_nodes(node))
+    )
+    for child in children:
+        if isinstance(child, _SCOPE_NODES):
+            # Headers evaluate in the enclosing scope; the body does not.
+            for decorator in getattr(child, "decorator_list", ()):
+                _scan(decorator, bound, module_names, referenced, fixtures)
+            for default in _header_expressions(child):
+                _scan(default, bound, module_names, referenced, fixtures)
+            if _is_pytest_injected(child):
+                # pytest resolves a fixture by parameter name, so a requested
+                # fixture is referenced without any Name load in the body.
+                referenced.update(_argument_names(child) & fixtures)
+            _scan(
+                child.body,
+                bound | _scope_bindings(child),
+                module_names,
+                referenced,
+                fixtures,
+            )
+            continue
+        if isinstance(child, ast.Name):
+            _record(child.id, child.ctx, bound, module_names, referenced)
+            # A Store or Del name is a binding or rebinding, never a use.
+            continue
+        if isinstance(child, _COMPREHENSIONS):
+            # Comprehensions open their own scope from Python 3 onward.
+            inner = bound | _comprehension_targets(child)
+            for generator in child.generators:
+                _scan(generator.iter, inner, module_names, referenced, fixtures)
+                _scan(generator.ifs, inner, module_names, referenced, fixtures)
+            if isinstance(child, ast.DictComp):
+                _scan(child.key, inner, module_names, referenced, fixtures)
+                _scan(child.value, inner, module_names, referenced, fixtures)
+            else:
+                _scan(child.elt, inner, module_names, referenced, fixtures)
+            continue
+        # An attribute access never resolves to a module-level binding:
+        # `obj.name` reads a member, so it cannot reference a global helper.
+        if isinstance(child, ast.Attribute):
+            _scan(child.value, bound, module_names, referenced, fixtures)
+            continue
+        _scan(child, bound, module_names, referenced, fixtures)
+
+
+def _record(
+    name: str,
+    context: ast.expr_context,
+    bound: frozenset[str],
+    module_names: set[str],
+    referenced: set[str],
+) -> None:
+    if isinstance(context, ast.Load) and name in module_names and name not in bound:
+        referenced.add(name)
+
+
+def _is_pytest_injected(node: ast.AST) -> bool:
+    """Whether pytest resolves this function's parameters by name."""
+
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return False
+    if node.name.startswith("test_"):
+        return True
+    return any("fixture" in ast.dump(decorator) for decorator in node.decorator_list)
+
+
+def _argument_names(node: ast.AST) -> frozenset[str]:
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        return frozenset()
+    arguments = node.args
+    names = {
+        argument.arg
+        for group in (arguments.posonlyargs, arguments.args, arguments.kwonlyargs)
+        for argument in group
+    }
+    for extra in (arguments.vararg, arguments.kwarg):
+        if extra is not None:
+            names.add(extra.arg)
+    return frozenset(names)
+
+
+def _scope_bindings(node: ast.AST) -> frozenset[str]:
+    """Names a function, class, or lambda binds directly, nested scopes aside."""
+
+    names: set[str] = set()
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        arguments = node.args
+        for group in (arguments.posonlyargs, arguments.args, arguments.kwonlyargs):
+            names.update(argument.arg for argument in group)
+        for extra in (arguments.vararg, arguments.kwarg):
+            if extra is not None:
+                names.add(extra.arg)
+    if isinstance(node, ast.ClassDef):
+        # Only a class name is bound inside its own body. A `def` binds its name
+        # in the *enclosing* scope, so a method that calls a same-named
+        # module-level function resolves to that global, not to itself.
+        names.add(node.name)
+    declared_global: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Global):
+            declared_global.update(child.names)
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (*_SCOPE_NODES, *_COMPREHENSIONS)):
+            continue
+        if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+            names.add(child.id)
+        elif isinstance(child, (ast.Import, ast.ImportFrom)):
+            for alias in child.names:
+                bound = alias.asname or alias.name
+                names.add(bound.split(".")[0])
+        elif isinstance(child, ast.ExceptHandler) and child.name is not None:
+            names.add(child.name)
+    # `global name` means the assignment targets the module scope, so it does
+    # not shadow the module-level binding it writes to.
+    return frozenset(names - declared_global)
+
+
+def _comprehension_targets(node: ast.AST) -> frozenset[str]:
+    return frozenset(
+        target.id
+        for generator in node.generators  # type: ignore[attr-defined]
+        for target in ast.walk(generator.target)
+        if isinstance(target, ast.Name)
+    )
+
+
+def _header_expressions(node: ast.AST) -> tuple[ast.AST, ...]:
+    """Defaults and annotations, which evaluate outside the function scope."""
+
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        return ()
+    arguments = node.args
+    found: list[ast.expr] = [*arguments.defaults]
+    found.extend(item for item in arguments.kw_defaults if item is not None)
+    for extra in (arguments.vararg, arguments.kwarg):
+        if extra is not None and extra.annotation is not None:
+            found.append(extra.annotation)
+    if (
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.returns is not None
+    ):
+        found.append(node.returns)
+    for group in (arguments.posonlyargs, arguments.args, arguments.kwonlyargs):
+        found.extend(
+            argument.annotation for argument in group if argument.annotation is not None
+        )
+    if isinstance(node, ast.ClassDef):
+        found.extend(node.bases)
+        found.extend(keyword.value for keyword in node.keywords)
+    return tuple(found)
 
 
 def _waived(lines: list[str], line: int, node: ast.AST) -> bool:

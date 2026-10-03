@@ -362,14 +362,24 @@ def _invalid_request_error(
 ) -> ToolError:
     """Project one owner-bound rejection without reflecting caller values."""
 
-    issues = _bounded_validation_issues(error.errors())
+    records = error.errors()
+    issues = _bounded_validation_issues(records)
+    omitted_error_count = len(records) - len(issues)
     if isinstance(error, OperationResourceAdmissionError):
         data: OperationInvalidRequestData | OperationResourceAdmissionData = (
-            OperationResourceAdmissionData(operation_id=operation_id, errors=issues)
+            OperationResourceAdmissionData(
+                operation_id=operation_id,
+                errors=issues,
+                omitted_error_count=omitted_error_count,
+            )
         )
         message = "operation request exceeds its admitted resource envelope"
     else:
-        data = OperationInvalidRequestData(operation_id=operation_id, errors=issues)
+        data = OperationInvalidRequestData(
+            operation_id=operation_id,
+            errors=issues,
+            omitted_error_count=omitted_error_count,
+        )
         message = "operation payload failed validation"
     diagnostic = data.model_dump(mode="json")
     diagnostic["message"] = message

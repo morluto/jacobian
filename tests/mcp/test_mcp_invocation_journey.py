@@ -181,6 +181,7 @@ def test_mcp_describes_and_invokes_operations() -> None:
                 "code": "INVALID_REQUEST",
                 "stage": "operation_validation",
                 "operation_id": "integer.compute.extended_gcd",
+                "omitted_error_count": 0,
                 "errors": [
                     {
                         "location": ["private"],

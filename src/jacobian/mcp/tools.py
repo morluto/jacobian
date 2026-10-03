@@ -149,6 +149,18 @@ def _find_invalid_request_error(
     return ToolError(json.dumps(diagnostic, separators=(",", ":")))
 
 
+def _unknown_operation_error_detail(operation_id: str) -> OperationDiscoveryErrorDetail:
+    return OperationDiscoveryErrorDetail(
+        code="UNKNOWN_OPERATION",
+        stage="operation_resolution",
+        message=f"Unknown operation: {operation_id}",
+        hint=(
+            "Call math.find with a local mathematical need to match installed "
+            "operations."
+        ),
+    )
+
+
 async def math_find(
     query: OperationNeed | None = None,
     operation_id: OperationFindOperationId | None = None,
@@ -227,19 +239,10 @@ def _math_find_sync(
         )
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
-        hint = (
-            "Call math.find with a local mathematical need to match installed "
-            "operations."
-        )
         return OperationFindResponse(
             root=OperationDiscoveryError(
                 kind="error",
-                error=OperationDiscoveryErrorDetail(
-                    code="UNKNOWN_OPERATION",
-                    stage="operation_resolution",
-                    message=f"Unknown operation: {operation_id}",
-                    hint=hint,
-                ),
+                error=_unknown_operation_error_detail(operation_id),
             )
         )
     return OperationFindResponse(
@@ -281,7 +284,9 @@ async def math_run(
                 ctx,
             )
         except _OperationResolutionError as exc:
-            raise ToolError(str(exc)) from exc
+            raise ToolError(
+                _unknown_operation_error_detail(operation_id).model_dump_json()
+            ) from exc
 
 
 @contextmanager

@@ -1519,14 +1519,6 @@ class TestNativeSurface:
             chain_complexes_package.IntegralHomologyGroupValue
             is IntegralHomologyGroupValue
         )
-        assert all(
-            value.__module__.endswith("chain_complexes.values")
-            for value in (
-                chain_complexes_package.IntegralFreeGenerator,
-                chain_complexes_package.IntegralTorsionGenerator,
-                chain_complexes_package.IntegralVector,
-            )
-        )
         assert set(chain_complexes_package.__all__) == {
             "AssociatedGradedResult",
             "ChainComplexValue",

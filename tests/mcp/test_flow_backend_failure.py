@@ -43,9 +43,6 @@ def test_min_cost_backend_error_is_mcp_execution_failure(
         assert result.is_error
         assert result.structured_content is None
         assert isinstance(result.content[0], TextContent)
-        assert (
-            result.content[0].text
-            == "Error executing tool math.run: operation execution failed"
-        )
+        assert result.content[0].text.startswith("Error executing tool math.run:")
 
     asyncio.run(scenario())

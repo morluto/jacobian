@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
@@ -19,5 +20,7 @@ def test_pairing_operation_is_published_with_square_example() -> None:
     # Route through dispatch so operation-ID lookup, strict wire parsing, and
     # the serialized output envelope all have to accept the advertised example.
     result = invoke_operation(tool.operation_id, tool.examples[0].input, Catalog.open())
-    validated = tool.result_type.model_validate(result.output)
+    validated = tool.result_type.model_validate_json(
+        encode_strict_json(result.output), strict=True
+    )
     assert validated.facet_profile.dimension == 2

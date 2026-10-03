@@ -233,6 +233,7 @@ def _scan(
     module_names: set[str],
     referenced: set[str],
     fixtures: dict[str, str],
+    class_outer_bound: frozenset[str] | None = None,
 ) -> None:
     """Record module-level loads that no enclosing scope shadows."""
 
@@ -248,9 +249,23 @@ def _scan(
         if isinstance(child, _SCOPE_NODES):
             # Headers evaluate in the enclosing scope; the body does not.
             for decorator in getattr(child, "decorator_list", ()):
-                _scan(decorator, bound, module_names, referenced, fixtures)
+                _scan(
+                    decorator,
+                    bound,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
             for default in _header_expressions(child):
-                _scan(default, bound, module_names, referenced, fixtures)
+                _scan(
+                    default,
+                    bound,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
             if _is_pytest_injected(child):
                 # pytest resolves a fixture by parameter name, so a requested
                 # fixture is referenced without any Name load in the body.
@@ -258,12 +273,25 @@ def _scan(
                 referenced.update(
                     fixtures[name] for name in requested if name in fixtures
                 )
+            body_bound = bound | _scope_bindings(child)
+            body_class_outer_bound = class_outer_bound
+            if isinstance(child, ast.ClassDef):
+                body_class_outer_bound = bound
+            elif (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and class_outer_bound is not None
+            ):
+                # Python methods do not close over the class namespace. They
+                # resolve names from the scope that surrounded the class.
+                body_bound = class_outer_bound | _scope_bindings(child)
+                body_class_outer_bound = None
             _scan(
                 child.body,
-                bound | _scope_bindings(child),
+                body_bound,
                 module_names,
                 referenced,
                 fixtures,
+                body_class_outer_bound,
             )
             continue
         if isinstance(child, ast.Name):
@@ -274,20 +302,69 @@ def _scan(
             # Comprehensions open their own scope from Python 3 onward.
             inner = bound | _comprehension_targets(child)
             for generator in child.generators:
-                _scan(generator.iter, inner, module_names, referenced, fixtures)
-                _scan(generator.ifs, inner, module_names, referenced, fixtures)
+                _scan(
+                    generator.iter,
+                    inner,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
+                _scan(
+                    generator.ifs,
+                    inner,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
             if isinstance(child, ast.DictComp):
-                _scan(child.key, inner, module_names, referenced, fixtures)
-                _scan(child.value, inner, module_names, referenced, fixtures)
+                _scan(
+                    child.key,
+                    inner,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
+                _scan(
+                    child.value,
+                    inner,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
             else:
-                _scan(child.elt, inner, module_names, referenced, fixtures)
+                _scan(
+                    child.elt,
+                    inner,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    class_outer_bound,
+                )
             continue
         # An attribute access never resolves to a module-level binding:
         # `obj.name` reads a member, so it cannot reference a global helper.
         if isinstance(child, ast.Attribute):
-            _scan(child.value, bound, module_names, referenced, fixtures)
+            _scan(
+                child.value,
+                bound,
+                module_names,
+                referenced,
+                fixtures,
+                class_outer_bound,
+            )
             continue
-        _scan(child, bound, module_names, referenced, fixtures)
+        _scan(
+            child,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            class_outer_bound,
+        )
 
 
 def _record(

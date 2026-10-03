@@ -188,6 +188,21 @@ def test_aliased_fixture_name_resolves_to_its_definition(tmp_path: Path) -> None
     assert _reported(tmp_path, "test_fixture_alias.py", body) == set()
 
 
+def test_class_method_resolves_same_named_module_helper(tmp_path: Path) -> None:
+    body = """\
+    def helper() -> int:
+        return 3
+
+    class TestCase:
+        def helper(self) -> int:
+            return helper()
+
+        def test_helper(self) -> None:
+            assert self.helper() == 3
+    """
+    assert _reported(tmp_path, "test_method_scope.py", body) == set()
+
+
 def test_collected_class_base_is_scanned_in_module_scope(tmp_path: Path) -> None:
     assert (
         _reported(tmp_path, "test_class_base.py", COLLECTED_CLASS_REFERENCES_ITS_BASE)

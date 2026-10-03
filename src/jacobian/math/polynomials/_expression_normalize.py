@@ -269,7 +269,7 @@ def _bound_raw_request(value: Mapping[str, object]) -> None:
     """Bound every raw request field before the recursive canonicalization copy."""
 
     allowed = {"coefficient_domain", "variables", "expression"}
-    if len(value) > len(allowed):
+    if isinstance(value, dict) and dict.__len__(value) > len(allowed):
         raise ValueError("expression requests may not carry unexpected fields")
     # Iterate keys instead of materializing a set, and reject the first
     # unexpected key or any surplus key, so a request with millions of extra
@@ -338,12 +338,12 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
     }.get(kind if isinstance(kind, str) else "")
     if allowed is None:
         raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
-    if len(node) > len(allowed):
+    if isinstance(node, dict) and dict.__len__(node) > len(allowed):
         raise _MalformedExpressionError(
             "expression nodes may not carry unexpected fields"
         )
-    for key in node:
-        if key not in allowed:
+    for index, key in enumerate(node):
+        if index >= len(allowed) or key not in allowed:
             raise _MalformedExpressionError(
                 f"expression nodes may not carry the unexpected field {key!r}"
             )
@@ -353,14 +353,15 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
             raise _MalformedExpressionError(
                 "LITERAL value must be a num/den object, not a sequence"
             )
-        if isinstance(value, Mapping) and (
-            len(value) > 2 or set(value).difference({"num", "den"})
-        ):
-            raise _MalformedExpressionError(
-                "LITERAL value must contain only num and den"
-            )
         if isinstance(value, Mapping):
-            for component in value.values():
+            components: list[object] = []
+            for index, key in enumerate(value):
+                if index >= 2 or key not in {"num", "den"}:
+                    raise _MalformedExpressionError(
+                        "LITERAL value must contain only num and den"
+                    )
+                components.append(value[key])
+            for component in components:
                 if isinstance(component, (list, tuple, Mapping)):
                     raise _MalformedExpressionError(
                         "LITERAL components must be scalars, not containers"

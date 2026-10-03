@@ -1,7 +1,7 @@
 """Typed polynomial expression normalization tests."""
 
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from fractions import Fraction
 from itertools import product
 from math import comb, gcd, prod
@@ -1538,6 +1538,27 @@ class _HugeList(list[Any]):
         raise AssertionError("oversized list must be rejected before indexing")
 
 
+class _SlowLengthMapping(Mapping[str, object]):
+    """A mapping whose size query scans its backing keys."""
+
+    def __init__(self, values: dict[str, object]) -> None:
+        self._values = values
+        self.length_calls = 0
+        self.iterated_keys = 0
+
+    def __getitem__(self, key: str) -> object:
+        return self._values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        for key in self._values:
+            self.iterated_keys += 1
+            yield key
+
+    def __len__(self) -> int:
+        self.length_calls += 1
+        return sum(1 for _ in self._values)
+
+
 def test_many_unexpected_request_keys_are_rejected_early() -> None:
     """Millions of unexpected top-level keys are rejected without copying them."""
 
@@ -1551,6 +1572,21 @@ def test_many_unexpected_request_keys_are_rejected_early() -> None:
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(mapping)
     assert mapping.iterated <= 8
+
+
+def test_generic_request_mapping_is_rejected_without_counting_all_keys() -> None:
+    mapping = _SlowLengthMapping(
+        {
+            "coefficient_domain": "QQ",
+            "variables": ["x"],
+            "expression": {"kind": "VARIABLE", "name": "x"},
+            **{f"extra_{index}": None for index in range(10_000)},
+        }
+    )
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(mapping)
+    assert mapping.length_calls == 0
+    assert mapping.iterated_keys == 4
 
 
 def test_oversized_literal_is_a_typed_resource_rejection() -> None:
@@ -1705,7 +1741,9 @@ def test_container_shaped_literal_is_rejected_before_copying() -> None:
     assert value.iterated == 0
 
 
-def test_zero_power_returns_one_without_expanding_the_base() -> None:
+def test_zero_power_returns_one_without_expanding_the_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """POWER(base, 0) is the constant one and never expands the base."""
     variables = tuple(f"x{index}" for index in range(8))
     literals = [
@@ -1724,6 +1762,13 @@ def test_zero_power_returns_one_without_expanding_the_base() -> None:
         "exponent": 13,
     }
     request = _request("ZZ", {"kind": "POWER", "base": base, "exponent": 0}, variables)
+
+    def fail_multiply(*args: object, **kwargs: object) -> object:
+        raise AssertionError("zero-power evaluation must not multiply its base")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._expression_normalize._multiply", fail_multiply
+    )
     result = _normalize(request)
     assert result.polynomial.polynomial.terms[0].coefficient == CanonicalRational(
         num=1, den=1

@@ -58,6 +58,8 @@ def test_real_quadratic_rejection_and_recovery(overflow: bool) -> None:
             rejected = await client.call_tool(
                 "math.run", {"operation_id": operation_id, "payload": payload}
             )
+            assert rejected.is_error is True
+            assert rejected.structured_content is None
             diagnostic = json.loads(
                 _content_text(rejected.content[0]).removeprefix(
                     "Error executing tool math.run: "
@@ -69,6 +71,7 @@ def test_real_quadratic_rejection_and_recovery(overflow: bool) -> None:
             assert diagnostic["stage"] == (
                 "resource_admission" if overflow else "operation_validation"
             )
+            assert diagnostic["omitted_error_count"] == 0
             assert diagnostic["errors"] == [
                 {
                     "location": list(error["loc"]),

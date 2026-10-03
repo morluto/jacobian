@@ -218,8 +218,10 @@ class TestRejection:
     def test_unbounded_halfspace_representation_is_rejected(self) -> None:
         # Only x <= 1: the polytope is unbounded in every other direction.
         request = LatticePolytopeRequest(halfspaces=(_hs(((1, 1), (0, 1)), (1, 1)),))
-        with pytest.raises(ValueError, match="unbounded"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             count_lattice_points(request)
+        # Unbounded H-representations are rejected at admission.
+        assert exc_info.value.errors()[0]["type"] == "polytope.lattice_points.admission"
 
     def test_unbounded_quadrant_is_rejected(self) -> None:
         # x >= 0 and y >= 0 only: unbounded.
@@ -229,8 +231,10 @@ class TestRejection:
                 _hs(((0, 1), (-1, 1)), (0, 1)),
             ),
         )
-        with pytest.raises(ValueError, match="unbounded"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             count_lattice_points(request)
+        # Unbounded H-representations are rejected at admission.
+        assert exc_info.value.errors()[0]["type"] == "polytope.lattice_points.admission"
 
     def test_dimension_exceeds_bound(self) -> None:
         with pytest.raises(ValidationError):
@@ -271,10 +275,12 @@ class TestBudgets:
         # A 1D interval spanning more than MAX_BOUND_SPAN integer points.
         far = MAX_BOUND_SPAN + 5
         request = LatticePolytopeRequest(vertices=(_v((0, 1)), _v((far, 1))))
-        with pytest.raises(
-            OperationResourceAdmissionError, match="per-axis span bound"
-        ):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             count_lattice_points(request)
+        # Per-axis span bound refusal shares the scan-budget code.
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.lattice_points.scan_budget"
+        )
 
     @pytest.mark.scale
     def test_lattice_point_cap_enforced(self) -> None:
@@ -295,10 +301,14 @@ class TestBudgets:
         assert (side + 1) * (side + 1) > MAX_LATTICE_POINTS
         # Enumeration materializes the points, so it fails closed with a
         # typed budget outcome (the point cap or the output-size estimate).
-        with pytest.raises(OperationResourceAdmissionError, match="point budget"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             enumerate_lattice_points(
                 EnumerateLatticePointsRequest.model_validate(request.model_dump())
             )
+        # Materialization point-cap refusal shares the scan-budget code.
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.lattice_points.scan_budget"
+        )
 
 
 class TestMembershipWorkBudget:

@@ -96,13 +96,6 @@ def raises_code(code: str) -> Iterator[None]:
 
 
 @contextmanager
-def raises_pydantic_code(code: str) -> Iterator[None]:
-    with pytest.raises(ValidationError) as caught:
-        yield
-    assert caught.value.errors()[0]["type"] == code
-
-
-@contextmanager
 def raises_domain_code(code: str) -> Iterator[None]:
     with pytest.raises(OperationDomainValidationError) as caught:
         yield

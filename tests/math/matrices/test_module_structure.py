@@ -30,22 +30,6 @@ def _matrix(rows: tuple[tuple[int, ...], ...]) -> RationalMatrix:
     )
 
 
-def _poly_product(factors: Iterable[Any]) -> list[Fraction]:
-    from sympy import Poly, Symbol
-
-    x = Symbol("x")
-    product = Poly(1, x)
-    for entry in factors:
-        factor = entry.factor if hasattr(entry, "factor") else entry
-        poly = sum(
-            Fraction(term.coefficient.num, term.coefficient.den)
-            * x ** term.exponents[0]
-            for term in factor.polynomial.terms
-        )
-        product *= Poly(poly, x)
-    return [Fraction(c) for c in product.all_coeffs()[::-1]]
-
-
 def _monic_to_poly(factor: Any) -> Any:
     from sympy import Poly, Symbol
 

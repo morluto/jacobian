@@ -3,12 +3,19 @@
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RationalMatrix
 
 MAX_SEMIDEFINITE_CELLS = 131_072
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    """Reject a malformed system with a distinguishable owner code."""
+
+    return PydanticCustomError(code, message)
 
 
 class RationalSemidefiniteSystem(StrictModel):
@@ -38,16 +45,25 @@ class RationalSemidefiniteSystem(StrictModel):
     @model_validator(mode="after")
     def require_symmetric_equalities(self) -> Self:
         if len(self.matrices) != len(self.rhs):
-            raise ValueError("one right-hand side is required per equality")
+            raise _validation_error(
+                "semidefinite.face_rhs_count",
+                "one right-hand side is required per equality",
+            )
         for matrix in self.matrices:
             if matrix.row_count != self.order or matrix.column_count != self.order:
-                raise ValueError("constraint matrices must have the declared order")
+                raise _validation_error(
+                    "matrix.shape_mismatch",
+                    "constraint matrices must have the declared order",
+                )
             if any(
                 matrix.entries[i][j] != matrix.entries[j][i]
                 for i in range(self.order)
                 for j in range(i)
             ):
-                raise ValueError("constraint matrices must be symmetric")
+                raise _validation_error(
+                    "semidefinite.face_symmetry",
+                    "constraint matrices must be symmetric",
+                )
         return self
 
 

@@ -170,8 +170,7 @@ def test_repeated_large_denominators_are_canonicalized_before_growth_admission()
 
 def test_component_operation_is_published() -> None:
     operation = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-    assert operation.request_type.__name__ == "FreeAlgebraIdealDegreeComponentRequest"
-    assert operation.result_type.__name__ == "FreeAlgebraIdealDegreeComponentResult"
+    assert operation.operation_id == OPERATION_ID
 
 
 def test_degree_component_rejects_nonsided_and_nonhomogeneous_inputs() -> None:

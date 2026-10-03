@@ -246,8 +246,10 @@ jobs:
   oracle:
     name: Benchmark Oracle (${{ matrix.dataset }}/${{ matrix.shard }})
     needs: [plan, static, contracts]
+    # Superseded PR work must release the concurrency slot; the required
+    # aggregate below still runs after cancellation and fails closed.
     if: >-
-      ${{ always() &&
+      ${{ !cancelled() &&
       needs.plan.result == 'success' &&
       needs.static.result == 'success' &&
       needs.plan.outputs.run-benchmark-oracle == 'true' &&

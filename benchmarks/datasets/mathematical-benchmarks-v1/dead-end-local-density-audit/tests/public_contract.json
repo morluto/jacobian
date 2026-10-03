@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "Submit exactly one result for every case_id in /app/input.json. Case rows may appear in any order; each mathematical result must remain associated with its case_id. The verifier replays the task-specific mathematical predicate from the submitted result.",
     "schema_definitions": {
         "case": {
             "additionalProperties": false,
@@ -12,7 +12,13 @@
                     ]
                 },
                 "case_id": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "invertible-collisions",
+                        "singly-divisible",
+                        "square-divisible-vacuous",
+                        "square-divisible-obstructed"
+                    ]
                 },
                 "density_denominator": {
                     "minimum": 1,
@@ -56,7 +62,69 @@
                 },
                 "maxItems": 4,
                 "minItems": 4,
-                "type": "array"
+                "type": "array",
+                "allOf": [
+                    {
+                        "contains": {
+                            "type": "object",
+                            "required": [
+                                "case_id"
+                            ],
+                            "properties": {
+                                "case_id": {
+                                    "const": "invertible-collisions"
+                                }
+                            }
+                        },
+                        "minContains": 1,
+                        "maxContains": 1
+                    },
+                    {
+                        "contains": {
+                            "type": "object",
+                            "required": [
+                                "case_id"
+                            ],
+                            "properties": {
+                                "case_id": {
+                                    "const": "singly-divisible"
+                                }
+                            }
+                        },
+                        "minContains": 1,
+                        "maxContains": 1
+                    },
+                    {
+                        "contains": {
+                            "type": "object",
+                            "required": [
+                                "case_id"
+                            ],
+                            "properties": {
+                                "case_id": {
+                                    "const": "square-divisible-vacuous"
+                                }
+                            }
+                        },
+                        "minContains": 1,
+                        "maxContains": 1
+                    },
+                    {
+                        "contains": {
+                            "type": "object",
+                            "required": [
+                                "case_id"
+                            ],
+                            "properties": {
+                                "case_id": {
+                                    "const": "square-divisible-obstructed"
+                                }
+                            }
+                        },
+                        "minContains": 1,
+                        "maxContains": 1
+                    }
+                ]
             }
         },
         "required": [

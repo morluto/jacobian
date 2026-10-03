@@ -18,7 +18,7 @@ development.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+Submit exactly one result for every case_id in /app/input.json. Case rows may appear in any order; each mathematical result must remain associated with its case_id. The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

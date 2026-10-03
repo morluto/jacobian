@@ -65,12 +65,31 @@ operational failure, not a mathematical conclusion.
 ## Execution non-completion and recovery
 
 Distinguish protocol validity, operation admission, and execution capacity.
-Structural or mathematical admission failures use the model-visible tool error
-channel with a bounded diagnostic. The adapter raises SDK `ToolError`; the SDK
-encodes a result with wire field `isError: true` (Python attribute `is_error`).
+For `math.run`, structural or mathematical admission failures use the model-visible
+tool error channel with a bounded diagnostic. The adapter raises SDK `ToolError`;
+the SDK encodes a result with wire field `isError: true` (Python attribute `is_error`).
 Jacobian does not map ordinary operation-payload or domain rejections to
 JSON-RPC `INVALID_PARAMS`. Malformed protocol messages belong to the SDK's
 protocol error path, not the mathematical operation.
+
+Jacobian-owned diagnostics with `stage: operation_validation` and
+`code: INVALID_REQUEST`, or `stage: resource_admission` and
+`code: RESOURCE_ADMISSION_REJECTED`, contain at most 64 `errors`, each with
+`location`, `code`, and `message`.
+`omitted_error_count` is the exact number of available validation records left
+out of that list: zero means no records were omitted, including when exactly
+64 are reported. A positive count explicitly identifies an incomplete list;
+`len(errors) + omitted_error_count` gives the available record total. These are
+validation records, not distinct fields or a guarantee that correcting them
+will uncover no further errors. Locations and messages remain bounded; the
+item schema excludes raw Pydantic `input` and `ctx` records. Older diagnostics
+may omit the count; absence or `null` means completeness is unknown. New
+adapter diagnostics at these two stages always supply a nonnegative integer.
+
+These diagnostics are rendered once as JSON in the SDK's tool-error text;
+they do not change the tool's successful output schema. Tool-argument
+validation, such as a missing `payload` argument to `math.run`, belongs to the
+SDK and does not use this Jacobian-owned diagnostic contract.
 
 Timeout, cancellation, configured worker or host capacity exhaustion, and
 backend failure also use tool errors, with distinct diagnostics. A delivery
@@ -97,6 +116,22 @@ Search defaults to `search_mode: "precise"` for applicability filtering; use
 `INVALID_CURSOR` response can be recovered by restoring those original search
 settings, or by restarting the new search mode without a cursor. Cursors remain
 opaque; do not edit or construct them.
+
+An unknown operation ID has two explicit failure signals, according to the tool:
+
+- `math.find` inspection returns its declared `kind: "error"` response with
+  `error.code: "UNKNOWN_OPERATION"`; the MCP envelope remains `isError: false`.
+  Clients must check `kind` as well as the MCP error flag. `INVALID_CURSOR` uses
+  this same discovery error branch.
+- `math.run` raises SDK `ToolError`, producing `isError: true` with the diagnostic
+  rendered as JSON in the SDK's error text and no structured mathematical result.
+
+Both unknown-ID diagnostics carry the same `code: "UNKNOWN_OPERATION"`,
+`stage: "operation_resolution"`, `message`, and recovery `hint`. Neither is a
+mathematical result. Recover by searching with `math.find` and `query`, then
+inspecting the exact installed ID before executing it. A search with
+`kind: "matches"`, an empty `matches` list, and `total_matches: 0` is successful
+discovery with no candidates; it does not establish mathematical impossibility.
 
 ## Form a payload from an inspected contract
 

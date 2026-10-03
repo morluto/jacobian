@@ -340,51 +340,66 @@ class SequenceOrderShapeResult(StrictModel):
         if peaks != tuple(sorted(set(peaks))) or any(
             index < 0 or index >= size for index in peaks
         ):
-            raise ValueError(
-                "unimodal peak positions must be sorted, unique, and in range"
+            raise _validation_error(
+                "order_shape.peaks",
+                "unimodal peak positions must be sorted, unique, and in range",
             )
         expected_rows = tuple(range(1, max(size - 1, 1)))
         row_indices = tuple(row.index for row in self.log_concavity_rows)
         if row_indices != expected_rows:
-            raise ValueError(
-                "log-concavity rows must cover each interior index exactly once"
+            raise _validation_error(
+                "order_shape.log_concavity_rows",
+                "log-concavity rows must cover each interior index exactly once",
             )
         for field_name, index in (
             ("first_nondecreasing_violation", self.first_nondecreasing_violation),
             ("first_nonincreasing_violation", self.first_nonincreasing_violation),
         ):
             if index is not None and index >= max(size - 1, 0):
-                raise ValueError(f"{field_name} must identify an adjacent source pair")
+                raise _validation_error(
+                    f"order_shape.{field_name}",
+                    f"{field_name} must identify an adjacent source pair",
+                )
         if (
             self.first_nondecreasing_violation is not None
             and self.first_nondecreasing_violation == self.first_nonincreasing_violation
         ):
-            raise ValueError(
-                "one adjacent pair cannot violate both weak monotonicity directions"
+            raise _validation_error(
+                "order_shape.monotonicity_conflict",
+                "one adjacent pair cannot violate both weak monotonicity directions",
             )
         if self.first_negative_index is not None and self.first_negative_index >= size:
-            raise ValueError("negative index must identify a source position")
+            raise _validation_error(
+                "order_shape.first_negative_index",
+                "negative index must identify a source position",
+            )
         if self.first_internal_zero_index is not None and (
             self.first_internal_zero_index not in row_indices
         ):
-            raise ValueError("internal-zero index must identify an interior position")
+            raise _validation_error(
+                "order_shape.first_internal_zero_index",
+                "internal-zero index must identify an interior position",
+            )
         if self.is_nonnegative is (self.first_negative_index is not None):
-            raise ValueError(
-                "nonnegativity must agree with the presence of the first negative index"
+            raise _validation_error(
+                "order_shape.nonnegative_agreement",
+                "nonnegativity must agree with the presence of the first negative index",
             )
         if self.has_internal_zero is not (self.first_internal_zero_index is not None):
-            raise ValueError(
+            raise _validation_error(
+                "order_shape.internal_zero_agreement",
                 "internal-zero status must agree with the presence of the first "
-                "internal-zero index"
+                "internal-zero index",
             )
         first_false = next(
             (row.index for row in self.log_concavity_rows if not row.holds),
             None,
         )
         if self.first_log_concavity_violation != first_false:
-            raise ValueError(
+            raise _validation_error(
+                "order_shape.first_log_concavity_violation",
                 "first log-concavity violation must be the first interior row "
-                "whose comparison fails"
+                "whose comparison fails",
             )
         return self
 

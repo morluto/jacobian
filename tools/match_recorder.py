@@ -85,7 +85,7 @@ def _site_key() -> str | None:
     """Identify the ``pytest.raises`` call site from its caller frame."""
 
     try:
-        frame = sys._getframe(2)
+        frame = sys._getframe(3)
     except ValueError:
         return None
     filename = frame.f_code.co_filename

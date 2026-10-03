@@ -15,6 +15,7 @@ would drop those siblings and change what the test exercises.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from tools.match_records import merge_record
@@ -137,6 +138,12 @@ def test_importing_recorder_does_not_replace_pytest_raises() -> None:
         assert isinstance(info.value, ValueError)
         with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
             int("still not an integer")
+        expected_line = sys._getframe().f_lineno + 1
+        with pytest.raises(ValueError, match="invalid literal"):
+            int("not an integer")
+        assert f"tests/tooling/test_match_pin_rewriter.py:{expected_line}" in (
+            recorder.RECORD
+        )
     finally:
         recorder.pytest_unconfigure(None)
 

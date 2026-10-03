@@ -878,12 +878,13 @@ def test_active_worker_cancellation_is_preserved_as_execution_state() -> None:
         timer.cancel()
         timer.join()
 
-    # The wall-time bound is the evidence, not a stopwatch for its own sake. The
-    # cancellation timer fires 0.1s in, so this is not an admission guard
-    # running before any work: it is the in-flight worker observing the signal
-    # and being torn down. Returning the typed cancellation error well inside the
-    # worker's own lease is what shows cancellation reached the running child
-    # promptly rather than being ignored until that child finished on its own.
+    # The wall-time bound is the evidence, not a stopwatch for its own sake.
+    # Once the timer fires, cancellation may be reported during preflight or
+    # input spooling, or the parent supervisor may observe it after launch and
+    # terminate the child process tree. Returning the typed cancellation error
+    # promptly shows that the operation honors the parent-side cancellation
+    # request; this assertion does not establish that a running child observed
+    # the signal itself.
     assert time.monotonic() - started < 5.0
 
 

@@ -238,11 +238,10 @@ def test_model_construct_edge_endpoints_are_bounded_before_set_checks(
     request = AnonymousGraphCardMultisetRequest.model_construct(
         card_order=2, cards=(forged_graph,)
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError, match=message):
         anonymous_graph_card_multiset(
             getattr(request, "card_order", None), request.cards
         )
-    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_card_labels"
 
 
 def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(

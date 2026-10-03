@@ -166,6 +166,20 @@ def test_recorder_import_and_supported_raises_forms() -> None:
     assert pytest.raises is original_raises
 
 
+def test_recorder_preserves_check_only_base_exception_semantics() -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    original_raises = pytest.raises
+    recorder.pytest_configure(None)
+    try:
+        with pytest.raises(check=lambda exc: isinstance(exc, SystemExit)):
+            raise SystemExit(7)
+    finally:
+        recorder.pytest_unconfigure(None)
+    assert pytest.raises is original_raises
+
+
 def test_bare_pydantic_codes_are_not_convertible(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
@@ -180,6 +194,22 @@ def test_bare_pydantic_codes_are_not_convertible(tmp_path: Path) -> None:
     usable, rejected = convertible_sites(load(path))
     assert not usable
     assert rejected["non_owner_code"] == 1
+
+
+def test_namespaced_catch_all_codes_are_not_convertible(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        _line(
+            {
+                "code": "recurrence_solving.invalid_domain",
+                "codes": ["recurrence_solving.invalid_domain"],
+                "match": "initial value count",
+            }
+        ),
+    )
+    usable, rejected = convertible_sites(load(path))
+    assert not usable
+    assert rejected["generic_code"] == 1
 
 
 def test_distinct_matches_across_executions_are_rejected(tmp_path: Path) -> None:

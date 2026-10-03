@@ -522,9 +522,8 @@ def test_closed_form_contract_requires_every_initial_value() -> None:
         characteristic_coefficients=(_r(1), _r(-1), _r(-1)),
         initial_values=(_r(1),),
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError, match="initial value count"):
         compute_closed_form(request)
-    assert exc_info.value.errors()[0]["type"] == "recurrence_solving.invalid_domain"
 
 
 def _isolation_payload(coefficients: list[dict[str, str]]) -> dict[str, object]:

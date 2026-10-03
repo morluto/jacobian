@@ -102,7 +102,7 @@ def pytest_sessionfinish(session, exitstatus):
         handle.write(json.dumps(serialisable) + "\n")
 
 
-def _recording_raises(expected_exception=Exception, *args, **kwargs):
+def _recording_raises(expected_exception=None, *args, **kwargs):
     """Preserve pytest's function form and optional keyword-only forms."""
 
     if args or "func" in kwargs:

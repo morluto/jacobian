@@ -38,6 +38,8 @@ GENERIC_CODES = frozenset(
         "probability.model_invariant",
         "polynomial.multivariate_contract",
         "assertion_error",
+        "recurrence_solving.invalid_domain",
+        "matrix.budget_exceeded",
     }
 )
 _RAISES = re.compile(r"^(\s*)with pytest\.raises\((?P<err>[A-Za-z_][A-Za-z0-9_]*)\)")

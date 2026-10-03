@@ -15,6 +15,7 @@ import importlib
 from pathlib import Path
 
 import jacobian
+from jacobian import math as math_namespace
 
 ROOT_MATH_DOMAINS = (
     "analysis",
@@ -53,6 +54,7 @@ def test_root_math_namespace_is_exact() -> None:
     # advertised name must stay exported, but adding one is allowed.
     assert set(ROOT_MATH_DOMAINS) <= set(math.__all__)
     assert len(math.__all__) == len(set(math.__all__))
+    assert set(math.__all__) == math_namespace._SUBMODULES
 
 
 def test_no_private_names_in_any_public_all() -> None:

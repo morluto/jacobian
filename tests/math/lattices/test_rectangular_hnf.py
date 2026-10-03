@@ -133,12 +133,10 @@ def test_hnf_specific_excessive_envelopes(
     request = tool.request_type.model_validate(
         {"matrix": {"entries": [list(row) for row in entries]}}
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError, match=message):
         tool.run(request)
-    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError, match=message):
         hermite_normal_form(entries)
-    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
 
 
 def test_hnf_schema_publishes_shape_sensitive_axis_bounds() -> None:

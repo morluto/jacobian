@@ -78,12 +78,10 @@ def test_restriction_container_over_its_own_bound_is_refused(
         update={attribute: (getattr(sheaf, attribute)[0],) * (limit + 1)}
     )
     forged = clean.model_copy(update={"source": malformed})
-    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+    with pytest.raises(
+        OperationResourceAdmissionError, match=f"too many {attribute} rows"
+    ):
         image_of_morphism(forged)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "topology.cellular_sheaf.morphism_image.parent_cells"
-    )
 
 
 @pytest.mark.parametrize("container", ("cover_restrictions", "derived_restrictions"))

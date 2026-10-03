@@ -310,12 +310,8 @@ def test_request_rejects_outside_complete_domain(
         request = AllTerminalReliabilityRequest.model_validate_json(json.dumps(payload))
     except ValidationError:
         return
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError, match=message):
         compute_all_terminal_reliability(request)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "probability.all_terminal_reliability_not_admitted"
-    )
 
 
 def test_operation_executes_the_twenty_edge_boundary_with_exact_presolve() -> None:

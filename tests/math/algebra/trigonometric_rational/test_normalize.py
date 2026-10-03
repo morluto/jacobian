@@ -543,10 +543,10 @@ def test_high_degree_sparse_denominator_reduction_stays_within_deadline() -> Non
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError, match="expansion"):
         normalize_trigonometric_rational(request)
-    # The wall-time bound is the evidence, not a stopwatch for its own sake: the
-    # expensive work runs in a killable worker subprocess, so a parent-side
-    # sentinel cannot observe it. Returning the typed admission error this far
-    # below the worker lease is what shows the guard ran before that work.
+    # The support estimate admits this request, then the GCD worker performs
+    # the reduction before output admission rejects the returned pair. This
+    # bound measures the reduction and post-reduction rejection completing
+    # within the worker lease; it does not establish a pre-worker guard.
     assert time.monotonic() - started < 5.0
 
 
@@ -588,11 +588,9 @@ def test_reduced_canonical_exponent_is_admitted_before_result_construction() -> 
     )
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError, match="expansion"):
-        # The wall-time bound is the evidence, not a stopwatch for its own sake: the
-        # expensive work runs in a killable worker subprocess, so a parent-side
-        # sentinel cannot observe it. Returning the typed admission error this far
-        # below the worker lease is what shows the guard ran before that work.
         normalize_trigonometric_rational(request)
+    # The GCD worker finishes first; output admission then rejects the reduced
+    # quotient. The bound records both phases completing within the lease.
     assert time.monotonic() - started < 5.0
 
 

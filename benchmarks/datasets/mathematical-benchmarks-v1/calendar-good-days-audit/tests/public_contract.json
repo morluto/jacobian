@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "The answer is bounded by the 92 dates in the public calendar: good_dates has at most 92 rows and count is an integer from 0 through 92. Each row uses month 3, 4, or 5 and a day from 1 through that month's published day count (31, 30, or 31). The concatenated integer is between 31 and 331 for March, 41 and 430 for April, or 51 and 531 for May. These are feasibility bounds, not the number or identity of good dates. The verifier separately checks concatenation, divisibility, whether every good date is listed, exact count, and calendar order.",
     "schema_definitions": {},
     "schema_version": "1",
     "submission_path": "/app/submission.json",
@@ -8,7 +8,8 @@
         "properties": {
             "count": {
                 "minimum": 0,
-                "type": "integer"
+                "type": "integer",
+                "maximum": 92
             },
             "good_dates": {
                 "items": {
@@ -18,10 +19,16 @@
                             "type": "integer"
                         },
                         "day": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1
                         },
                         "month": {
-                            "type": "integer"
+                            "type": "integer",
+                            "enum": [
+                                3,
+                                4,
+                                5
+                            ]
                         }
                     },
                     "required": [
@@ -29,9 +36,54 @@
                         "day",
                         "concatenated"
                     ],
-                    "type": "object"
+                    "type": "object",
+                    "oneOf": [
+                        {
+                            "properties": {
+                                "month": {
+                                    "const": 3
+                                },
+                                "day": {
+                                    "maximum": 31
+                                },
+                                "concatenated": {
+                                    "minimum": 31,
+                                    "maximum": 331
+                                }
+                            }
+                        },
+                        {
+                            "properties": {
+                                "month": {
+                                    "const": 4
+                                },
+                                "day": {
+                                    "maximum": 30
+                                },
+                                "concatenated": {
+                                    "minimum": 41,
+                                    "maximum": 430
+                                }
+                            }
+                        },
+                        {
+                            "properties": {
+                                "month": {
+                                    "const": 5
+                                },
+                                "day": {
+                                    "maximum": 31
+                                },
+                                "concatenated": {
+                                    "minimum": 51,
+                                    "maximum": 531
+                                }
+                            }
+                        }
+                    ]
                 },
-                "type": "array"
+                "type": "array",
+                "maxItems": 92
             }
         },
         "required": [

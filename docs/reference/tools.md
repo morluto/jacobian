@@ -72,8 +72,10 @@ Jacobian does not map ordinary operation-payload or domain rejections to
 JSON-RPC `INVALID_PARAMS`. Malformed protocol messages belong to the SDK's
 protocol error path, not the mathematical operation.
 
-Jacobian-owned `INVALID_REQUEST` and `RESOURCE_ADMISSION_REJECTED` diagnostics
-contain at most 64 `errors`, each with `location`, `code`, and `message`.
+Jacobian-owned diagnostics with `stage: operation_validation` and
+`code: INVALID_REQUEST`, or `stage: resource_admission` and
+`code: RESOURCE_ADMISSION_REJECTED`, contain at most 64 `errors`, each with
+`location`, `code`, and `message`.
 `omitted_error_count` is the exact number of available validation records left
 out of that list: zero means no records were omitted, including when exactly
 64 are reported. A positive count explicitly identifies an incomplete list;
@@ -82,7 +84,7 @@ validation records, not distinct fields or a guarantee that correcting them
 will uncover no further errors. Locations and messages remain bounded; the
 item schema excludes raw Pydantic `input` and `ctx` records. Older diagnostics
 may omit the count; absence or `null` means completeness is unknown. New
-adapter diagnostics always supply a nonnegative integer.
+adapter diagnostics at these two stages always supply a nonnegative integer.
 
 These diagnostics are rendered once as JSON in the SDK's tool-error text;
 they do not change the tool's successful output schema. Tool-argument

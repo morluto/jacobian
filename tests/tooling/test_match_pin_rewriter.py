@@ -15,6 +15,7 @@ would drop those siblings and change what the test exercises.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -200,11 +201,39 @@ def test_recorder_import_and_supported_raises_forms() -> None:
     original_raises = pytest.raises
     assert pytest.raises is original_raises
     recorder.pytest_configure(None)
+    installed_raises = pytest.raises
+    recorder.pytest_configure(None)
+    assert pytest.raises is installed_raises
     try:
         info = pytest.raises(ValueError, int, "not an integer")  # noqa: RUF061
         assert isinstance(info.value, ValueError)
         with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
             int("still not an integer")
+    finally:
+        recorder.pytest_unconfigure(None)
+    assert pytest.raises is original_raises
+
+
+def test_recorder_serializes_compiled_match_patterns() -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    original_raises = pytest.raises
+    recorder.pytest_configure(None)
+    try:
+        expected_line = sys._getframe().f_lineno + 1
+        with pytest.raises(ValueError, match=re.compile("compiled match", re.I)):
+            raise ValueError("compiled match")
+        key = f"tests/tooling/test_match_pin_rewriter.py:{expected_line}"
+        record = recorder.RECORD[key]
+        assert record["match"] == json.dumps(
+            {
+                "pattern": "compiled match",
+                "flags": re.compile("compiled match", re.I).flags,
+            },
+            sort_keys=True,
+        )
+        json.dumps(record)
     finally:
         recorder.pytest_unconfigure(None)
     assert pytest.raises is original_raises

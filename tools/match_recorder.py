@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from tools.match_records import merge_record
 _OUT = os.environ.get("MATCH_RECORDER_OUT")
 RECORD: dict[str, dict[str, object]] = {}
 _original_raises = None
+_manual_configuration = False
 
 # Codes too coarse to distinguish the guards they cover. A site whose only
 # observed code is one of these keeps its message match.
@@ -44,6 +46,7 @@ class _RecordingRaises:
     def __init__(self, expected: object, *args: object, **kwargs: object) -> None:
         self._expected = expected
         self._match = kwargs.get("match", args[1] if len(args) > 1 else None)
+        self._recorded_match = _record_match(self._match)
         self._key = _site_key()
         if _original_raises is None:
             raise RuntimeError("match recorder is not configured")
@@ -59,7 +62,7 @@ class _RecordingRaises:
         if isinstance(exc, BaseException) and _matches_expected(exc, self._expected):
             record: dict[str, object] = {
                 "expected": getattr(self._expected, "__name__", str(self._expected)),
-                "match": self._match,
+                "match": self._recorded_match,
                 "cls": type(exc).__name__,
                 "code": None,
             }
@@ -101,6 +104,18 @@ def _matches_expected(exc: BaseException, expected: object) -> bool:
     return False
 
 
+def _record_match(match: object) -> str | None:
+    """Serialize pytest's string and compiled-regex match forms safely."""
+
+    if isinstance(match, str):
+        return match
+    if isinstance(match, re.Pattern):
+        return json.dumps(
+            {"pattern": match.pattern, "flags": match.flags}, sort_keys=True
+        )
+    return None
+
+
 def _site_key() -> str | None:
     """Identify the ``pytest.raises`` call site from its caller frame."""
 
@@ -133,13 +148,19 @@ def _recording_raises(expected_exception=None, *args, **kwargs):
 
 
 def pytest_configure(config):
-    global _original_raises
+    global _manual_configuration, _original_raises
+    if _original_raises is not None:
+        return
     _original_raises = pytest.raises
+    _manual_configuration = config is None
     pytest.raises = _recording_raises
 
 
 def pytest_unconfigure(config):
-    global _original_raises
+    global _manual_configuration, _original_raises
+    if config is None and not _manual_configuration:
+        return
     if _original_raises is not None:
         pytest.raises = _original_raises
         _original_raises = None
+        _manual_configuration = False

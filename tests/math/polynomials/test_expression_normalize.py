@@ -1560,13 +1560,14 @@ class _SlowLengthMapping(Mapping[str, object]):
 
 
 def test_many_unexpected_request_keys_are_rejected_early() -> None:
-    """Millions of unexpected top-level keys are rejected without copying them."""
+    """A surplus top-level key is rejected without traversing the dict subclass."""
 
     mapping = _HugeDict(
         {
             "coefficient_domain": "QQ",
             "variables": ["x"],
             "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+            "unexpected": None,
         }
     )
     with pytest.raises(ValidationError):

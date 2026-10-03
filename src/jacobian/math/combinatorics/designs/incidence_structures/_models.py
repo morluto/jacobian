@@ -15,7 +15,11 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian._models import (
+    StrictModel,
+    canonicalize_json_containers,
+    project_owned_containers,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES as MAX_HYPERGRAPH_EDGES,
 )
@@ -219,11 +223,15 @@ class SteinerTripleSystemShard(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def canonicalize_fixed_triple_family(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
+        if type(data) is not dict:
+            return project_owned_containers(data, cls)
+        # Refuse extras before any raw admission error can expose their values
+        # in diagnostics. Only keys are inspected; the primitive owns refusal.
+        if any(type(key) is not str or key not in cls.model_fields for key in data):
+            return project_owned_containers(data, cls)
         triples = data.get("fixed_triples")
         if triples is None:
-            return data
+            return project_owned_containers(data, cls)
         # Require the exact built-in containers: a list/tuple subclass can
         # override ``__len__`` to report a value under the ceiling while
         # iteration still yields the whole underlying family, so any
@@ -253,13 +261,25 @@ class SteinerTripleSystemShard(StrictModel):
                     "steiner_shard_triple",
                     "continuation triples must contain exactly three points",
                 )
-        # Project strict-JSON arrays to canonical tuples. The bounds above
-        # make this copy admitted work.
-        data = canonicalize_json_containers(data)
-        normalized = tuple(sorted(data["fixed_triples"]))
-        payload = dict(data)
-        payload["fixed_triples"] = normalized
-        return payload
+        payload = data
+        # Leave malformed scalars to Pydantic, without comparing or traversing
+        # them. Integer subclasses have the same native meaning as integers;
+        # use builtin methods so their conversion/comparison hooks never run.
+        # Check the fixed point ceiling before making any integer sort keys.
+        if all(
+            issubclass(type(point), int)
+            and type(point) is not bool
+            and int.__ge__(point, 0)
+            and int.__lt__(point, MAX_STEINER_TRIPLE_ORDER)
+            for triple in triples
+            for point in triple
+        ):
+            payload = dict(data)
+            payload["fixed_triples"] = sorted(
+                triples,
+                key=lambda triple: tuple(int.__int__(point) for point in triple),
+            )
+        return project_owned_containers(payload, cls)
 
     @model_validator(mode="after")
     def require_canonical_prefix(self) -> Self:

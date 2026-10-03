@@ -101,11 +101,23 @@ def test_unknown_frontier_can_resume_exact_cover_search() -> None:
     limited = construct_steiner_triple_system(7, 1)
     assert limited.outcome.status == "UNKNOWN"
     assert limited.outcome.unresolved_frontier
-    resumed = construct_steiner_triple_system(
-        7, 100_000, limited.outcome.unresolved_frontier[0]
+    restored = SteinerTripleSystemResult.model_validate_json(
+        limited.model_dump_json(), strict=True
     )
+    assert restored == limited
+    assert restored.outcome.status == "UNKNOWN"
+    shard = restored.outcome.unresolved_frontier[0]
+    resumed = construct_steiner_triple_system(restored.order, 100_000, shard)
     assert resumed.outcome.status == "COMPUTED"
-    assert resumed.outcome.design is not None
+    design = resumed.outcome.design
+    assert design.points == tuple(f"p{point}" for point in range(restored.order))
+    assert all(
+        tuple(f"p{point}" for point in triple) in design.blocks
+        for triple in shard.fixed_triples
+    )
+    assert Counter(
+        pair for block in design.blocks for pair in combinations(block, 2)
+    ) == Counter(combinations(design.points, 2))
 
 
 def test_shard_requires_canonical_in_range_triples() -> None:
@@ -129,6 +141,137 @@ def test_fixed_triple_family_is_lexicographically_canonical() -> None:
     assert first == second
     assert first.fixed_triples == ((0, 1, 2), (0, 3, 6))
     assert first.model_dump(mode="json") == second.model_dump(mode="json")
+
+
+@pytest.mark.parametrize("container", (list, tuple))
+def test_fixed_triple_lists_and_tuples_round_trip_without_mutation(
+    container: type[list[Any]] | type[tuple[Any, ...]],
+) -> None:
+    source = container((container((0, 3, 6)), container((0, 1, 2))))
+    payload = {"order": 7, "fixed_triples": source}
+    shard = SteinerTripleSystemShard.model_validate(payload, strict=True)
+    from_json = SteinerTripleSystemShard.model_validate_json(
+        json.dumps(payload), strict=True
+    )
+    assert shard == from_json
+    assert shard.fixed_triples == ((0, 1, 2), (0, 3, 6))
+    assert source == container((container((0, 3, 6)), container((0, 1, 2))))
+    assert (
+        SteinerTripleSystemShard.model_validate_json(
+            shard.model_dump_json(), strict=True
+        )
+        == shard
+    )
+
+
+@pytest.mark.parametrize("triple_kind", ("missing", "valid", "oversized", "malformed"))
+@pytest.mark.parametrize("unknown_kind", ("hostile", "deep", "cyclic"))
+def test_shard_refuses_unknown_storage_without_traversal(
+    unknown_kind: str, triple_kind: str
+) -> None:
+    touched: list[str] = []
+
+    class HostileStorage(list[Any]):
+        def __iter__(self) -> Iterator[Any]:
+            touched.append("iteration")
+            raise AssertionError("unknown storage was traversed")
+
+        def __repr__(self) -> str:
+            touched.append("repr")
+            raise AssertionError("unknown storage was rendered")
+
+    unknown: list[Any] = HostileStorage()
+    if unknown_kind == "deep":
+        for _ in range(300):
+            unknown = [unknown]
+    elif unknown_kind == "cyclic":
+        unknown = []
+        unknown.append(unknown)
+    payload: dict[str, Any] = {"order": 7, "unknown": unknown}
+    if triple_kind == "valid":
+        payload["fixed_triples"] = [[0, 1, 2]]
+    elif triple_kind == "oversized":
+        payload["fixed_triples"] = [[0, 1, 2]] * (MAX_STEINER_BLOCKS + 1)
+    elif triple_kind == "malformed":
+        payload["fixed_triples"] = [[0, 1]]
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard.model_validate(payload, strict=True)
+    errors = error.value.errors()
+    assert len(errors) == 1
+    assert errors[0]["type"] == "extra_forbidden"
+    assert errors[0]["loc"] == ("unknown",)
+    assert errors[0]["input"] is None
+    str(error.value)
+    assert not touched
+
+
+@pytest.mark.parametrize("triple_count", (1, MAX_STEINER_BLOCKS + 1))
+def test_strict_json_shard_refuses_extras_without_retaining_unknown_input(
+    triple_count: int,
+) -> None:
+    payload = {
+        "order": 7,
+        "fixed_triples": [[0, 1, 2]] * triple_count,
+        "unknown": ["unowned"],
+    }
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard.model_validate_json(json.dumps(payload), strict=True)
+    errors = error.value.errors()
+    assert len(errors) == 1
+    assert errors[0]["type"] == "extra_forbidden"
+    assert errors[0]["loc"] == ("unknown",)
+    assert errors[0]["input"] is None
+
+
+@pytest.mark.parametrize("point", ("0", 0.0, True, None, [], {}))
+def test_malformed_fixed_triple_scalar_is_a_field_error(point: Any) -> None:
+    payload = {"order": 7, "fixed_triples": [[0, 3, 6], [point, 1, 2]]}
+    for json_mode in (False, True):
+        with pytest.raises(ValidationError) as error:
+            if json_mode:
+                SteinerTripleSystemShard.model_validate_json(
+                    json.dumps(payload), strict=True
+                )
+            else:
+                SteinerTripleSystemShard.model_validate(payload, strict=True)
+        assert error.value.errors()[0]["type"] == "int_type"
+        assert error.value.errors()[0]["loc"] == ("fixed_triples", 1, 0)
+
+
+def test_integer_subclasses_keep_the_canonical_fixed_triple_order() -> None:
+    class Point(int):
+        def __int__(self) -> int:
+            raise AssertionError("point conversion must use the integer value")
+
+        def __index__(self) -> int:
+            raise AssertionError("point indexing must use the integer value")
+
+        def __lt__(self, other: int) -> bool:
+            raise AssertionError("point comparison must use the integer value")
+
+        def __ge__(self, other: int) -> bool:
+            raise AssertionError("point comparison must use the integer value")
+
+    shard = SteinerTripleSystemShard.model_validate(
+        {"order": 7, "fixed_triples": [[0, 3, 6], [Point(0), Point(1), Point(2)]]},
+        strict=True,
+    )
+    assert shard.fixed_triples == ((0, 1, 2), (0, 3, 6))
+    assert all(type(point) is int for triple in shard.fixed_triples for point in triple)
+
+
+def test_spoofed_integer_class_stays_a_scalar_validation_error() -> None:
+    class Spoof:
+        @property  # type: ignore[misc]
+        def __class__(self) -> type[int]:  # type: ignore[override]
+            return int
+
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard.model_validate(
+            {"order": 7, "fixed_triples": [[Spoof(), 1, 2]]}, strict=True
+        )
+    assert error.value.errors()[0]["type"] == "int_type"
+    assert error.value.errors()[0]["loc"] == ("fixed_triples", 0, 0)
 
 
 def test_native_continuation_rejects_mismatched_shard_order() -> None:
@@ -876,6 +1019,7 @@ def test_result_retains_the_canonicalized_source_shard() -> None:
         order=7,
         outcome=SteinerTripleSystemNotFound(source_shard=forged),
     )
+    assert isinstance(result.outcome, SteinerTripleSystemNotFound)
     assert result.outcome.source_shard is not None
     assert result.outcome.source_shard.fixed_triples == ((0, 1, 4), (0, 2, 3))
 
@@ -883,11 +1027,11 @@ def test_result_retains_the_canonicalized_source_shard() -> None:
 def test_computed_result_rejects_lying_block_family() -> None:
     """A forged block tuple subclass is rejected before any block scan."""
 
-    class _LyingBlocks(tuple):
+    class _LyingBlocks(tuple[tuple[str, ...], ...]):
         def __len__(self) -> int:
             return 7
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[tuple[str, ...]]:
             while True:
                 yield ("p0", "p1", "p2")
 
@@ -904,11 +1048,11 @@ def test_computed_result_rejects_lying_block_family() -> None:
 def test_result_rejects_forged_unresolved_frontier_subclass() -> None:
     """A forged frontier tuple subclass is rejected before iteration."""
 
-    class _LyingFrontier(tuple):
+    class _LyingFrontier(tuple[SteinerTripleSystemShard, ...]):
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[SteinerTripleSystemShard]:
             while True:
                 yield SteinerTripleSystemShard(order=7, fixed_triples=())
 
@@ -922,11 +1066,11 @@ def test_result_rejects_forged_unresolved_frontier_subclass() -> None:
 def test_computed_result_rejects_forged_inner_block_subclass() -> None:
     """A forged inner block tuple subclass is rejected before scanning."""
 
-    class _LyingBlock(tuple):
+    class _LyingBlock(tuple[str, ...]):
         def __len__(self) -> int:
             return 3
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[str]:
             while True:
                 yield "p0"
 

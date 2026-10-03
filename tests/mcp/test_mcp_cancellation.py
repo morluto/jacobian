@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import os
 import sys
@@ -11,7 +10,6 @@ import time
 from pathlib import Path
 
 import pytest
-from mcp.shared.exceptions import MCPError
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = Path(__file__).with_name("_cancellation_server.py")
@@ -72,8 +70,13 @@ def test_stdio_cancellation_reaps_tree_and_server_remains_responsive(
                     )
                 )
                 pids = await _read_pids(marker)
-                call.cancel()
-                with contextlib.suppress(asyncio.CancelledError, MCPError):
+                # Cancellation must be what ends this call. A call that had
+                # already completed, or that the server aborted and cleaned up
+                # on its own, would still leave the tree reaped and the
+                # follow-up responsive, so neither is accepted as evidence that
+                # client cancellation did the work.
+                assert call.cancel(), "in-flight tool call had already finished"
+                with pytest.raises(asyncio.CancelledError):
                     await call
                 await _assert_pids_exit(pids)
             follow_up = await client.call_tool(

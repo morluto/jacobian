@@ -302,6 +302,46 @@ def test_aliased_fixture_name_resolves_to_its_definition(tmp_path: Path) -> None
     assert _reported(tmp_path, "test_fixture_alias.py", body) == set()
 
 
+def test_unused_fixture_dependency_does_not_make_either_fixture_live(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def inner():
+        return 1
+
+    @pytest.fixture
+    def outer(inner):
+        return inner
+    """
+    assert _reported(tmp_path, "test_fixture_dependency.py", body) == {
+        "inner",
+        "outer",
+    }
+
+
+def test_unused_dynamic_fixture_dependency_does_not_make_inner_live(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def inner():
+        return 1
+
+    @pytest.fixture
+    def outer(request):
+        return request.getfixturevalue("inner")
+    """
+    assert _reported(tmp_path, "test_dynamic_fixture_dependency.py", body) == {
+        "inner",
+        "outer",
+    }
+
+
 def test_fixture_import_alias_resolves_to_its_definition(tmp_path: Path) -> None:
     body = """\
     from pytest import fixture as fx
@@ -464,6 +504,57 @@ def test_nested_eager_calls_keep_the_binding_used_during_import(
     path = _write(tmp_path, "test_nested_eager_call.py", body)
     violations = _check_file(tmp_path, path)
     assert [(item.name, item.line) for item in violations] == [("helper", 11)]
+
+
+def test_forward_defined_eager_call_chain_uses_import_time_bindings(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def first():
+        return second()
+
+    def second():
+        return third()
+
+    def third():
+        return 1
+
+    VALUE = first()
+    third = None
+
+    def test_value():
+        assert VALUE == 1
+    """
+    path = _write(tmp_path, "test_forward_eager_chain.py", body)
+    violations = _check_file(tmp_path, path)
+    assert [(item.name, item.line) for item in violations] == [("third", 11)]
+
+
+def test_unused_helper_class_does_not_rescue_method_dependencies(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class Support:
+        def value(self):
+            return helper()
+    """
+    assert _reported(tmp_path, "test_helper_class.py", body) == {"Support", "helper"}
+
+
+def test_multiline_assignment_reads_the_previous_binding(tmp_path: Path) -> None:
+    body = """\
+    helper = 1
+    helper = (
+        helper + 1
+    )
+
+    def test_helper():
+        assert helper == 2
+    """
+    assert _reported(tmp_path, "test_multiline_binding.py", body) == set()
 
 
 def test_default_pytest_filename_pattern_is_scanned(tmp_path: Path) -> None:

@@ -66,9 +66,9 @@ def _run_z3_check(solver: Any, stage: str) -> Any:
     so an in-process backend cannot outlive its request envelope.
     """
     execution = current_request_execution()
-    cancellation = current_request_cancellation() or (
-        execution.cancellation_signal if execution is not None else None
-    )
+    cancellation = current_request_cancellation()
+    if cancellation is None and execution is not None:
+        cancellation = execution.cancellation_signal
     deadline = execution.deadline if execution is not None else None
     stop = Event()
     interrupted_for: list[str | None] = [None]

@@ -196,7 +196,9 @@ TOOLS = (
         title="Raise a truncated formal power series to a nonnegative integer power",
         description=(
             "Compute the exact power of a truncated series in QQ[[x]]/(x^N) via "
-            "binary exponentiation."
+            "binary exponentiation. Orders through 2048 are admitted when full "
+            "product growth, limb-weighted work, and retained coefficient bounds "
+            "fit; source/result components retain 256/4096 digits."
         ),
         request_type=SeriesPowerRequest,
         result_type=SeriesPowerResult,

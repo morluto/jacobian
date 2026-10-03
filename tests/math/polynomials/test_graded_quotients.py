@@ -100,8 +100,9 @@ def test_standard_monomials_reject_nonhomogeneous_initial_input() -> None:
             ),
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         initial_monomial_ideal(nonhomogeneous)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.nonhomogeneous"
 
 
 def test_hilbert_series_polynomial_dimension_multiplicity_and_h_vector() -> None:
@@ -220,10 +221,9 @@ def test_native_standard_monomial_degree_bounds_precede_ideal_inspection(
         raise AssertionError("inadmissible degrees must not inspect the monomial ideal")
 
     monkeypatch.setattr(graded_operations, "_require_monomial_ideal", fail)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="degrees from 0 through 32"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         standard_monomials(_ideal((2, 0)), degree)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.monomial_degree_budget"
 
 
 @pytest.mark.parametrize("degree", (1.5, True))
@@ -236,8 +236,9 @@ def test_native_standard_monomial_degree_rejects_non_integers_before_arithmetic(
         raise AssertionError("non-integer degrees must not inspect the monomial ideal")
 
     monkeypatch.setattr(graded_operations, "_require_monomial_ideal", fail)
-    with pytest.raises(OperationDomainValidationError, match="must be an integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         standard_monomials(_ideal((2, 0)), degree)  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.degree_type"
 
 
 def test_hilbert_function_request_defaults_max_degree_to_zero() -> None:
@@ -285,10 +286,9 @@ def test_hilbert_series_rejects_reduced_numerator_beyond_exponent_bound() -> Non
     generators = tuple(
         tuple(20 if axis == index else 0 for axis in range(8)) for index in range(8)
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="rational-function envelope"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         hilbert_series(_ideal(*generators))
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_degree_budget"
 
 
 def test_hilbert_series_admits_reduced_degree_below_rational_function_envelope() -> (
@@ -309,8 +309,12 @@ def test_hilbert_series_result_binds_ambient_denominator_to_source_ring() -> Non
     forged = result.model_dump()
     forged["ambient_denominator_exponent"] = 99
 
-    with pytest.raises(ValidationError, match="source-ring dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graded_ideal.ambient_denominator_exponent"
+    )
 
 
 @pytest.mark.parametrize(
@@ -349,10 +353,9 @@ def test_hilbert_series_rejects_nine_minimal_monomials_before_groebner(
         raise AssertionError("series generator overflow must not expand Groebner")
 
     monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="at most 8 minimal generators"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         hilbert_series(ideal, prefix_degree=1)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_generator_budget"
 
 
 def test_hilbert_function_rejects_eight_variable_degree_eleven_before_groebner(
@@ -382,10 +385,9 @@ def test_hilbert_function_rejects_eight_variable_degree_eleven_before_groebner(
         raise AssertionError("function slice overflow must not expand Groebner")
 
     monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="standard-monomial domain"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         hilbert_function(ideal, max_degree=11)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.monomial_domain_budget"
 
 
 def test_wide_unit_coefficient_remains_admitted_for_graded_series() -> None:
@@ -455,21 +457,25 @@ def test_hilbert_polynomial_binds_source_ring_and_m_axis() -> None:
     )
     payload = result.model_dump()
     payload["initial_ideal"] = other.initial_ideal.model_dump()
-    with pytest.raises(ValidationError, match="source ring"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.source_ring"
     forged = result.model_dump()
     forged["polynomial"]["variables"] = ["t"]
-    with pytest.raises(ValidationError, match="m axis"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialResult.model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.polynomial_axis"
 
 
 def test_hilbert_polynomial_request_omits_series_prefix() -> None:
     schema = HilbertPolynomialRequest.model_json_schema()
     assert "prefix_degree" not in schema["properties"]
-    with pytest.raises(ValidationError, match="extra"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialRequest.model_validate(
             {"ideal": _ideal((2, 0)).model_dump(), "prefix_degree": 17}
         )
+    # Series prefixes are not part of the polynomial request.
+    assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
     HilbertSeriesRequest.model_validate(
         {"ideal": _ideal((2, 0)).model_dump(), "prefix_degree": 16}
     )
@@ -501,8 +507,9 @@ def test_hilbert_series_rejects_noncanonical_denominator_shape() -> None:
     payload["series"]["denominator"]["terms"] = [
         {"coefficient": {"num": 1, "den": 1}, "exponents": [degree]}
     ]
-    with pytest.raises(ValidationError, match="denominator"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_denominator_shape"
 
 
 def test_explicit_unit_generator_short_circuits_before_homogeneity() -> None:
@@ -604,11 +611,13 @@ def test_native_monomial_order_is_validated_before_ideal_inspection(
         raise AssertionError("invalid monomial orders must not inspect the ideal")
 
     monkeypatch.setattr(graded_operations, "_require_homogeneous", fail)
-    with pytest.raises(OperationDomainValidationError, match="lex, grlex, or grevlex"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         initial_monomial_ideal(_ideal((2, 0)), "degrevlex")  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.monomial_order"
     unit = _ideal((0,))
-    with pytest.raises(OperationDomainValidationError, match="lex, grlex, or grevlex"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         initial_monomial_ideal(unit, "degrevlex")  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.monomial_order"
 
 
 @pytest.mark.parametrize(
@@ -632,8 +641,9 @@ def test_hilbert_projection_results_bind_the_source_ring(
     other = initial_monomial_ideal(_ideal((2, 0, 0)))
     payload = result.model_dump()
     payload["initial_ideal"] = other.initial_ideal.model_dump()
-    with pytest.raises(ValidationError, match="source ring"):
+    with pytest.raises(ValidationError) as exc_info:
         result_type.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.source_ring"
 
 
 @pytest.mark.parametrize(
@@ -703,8 +713,9 @@ def test_initial_ideal_result_rejects_multiterm_generators() -> None:
         {"coefficient": {"num": 1, "den": 1}, "exponents": [1, 0]},
         {"coefficient": {"num": 1, "den": 1}, "exponents": [0, 1]},
     ]
-    with pytest.raises(ValidationError, match="unit monomials"):
+    with pytest.raises(ValidationError) as exc_info:
         InitialMonomialIdealResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.unit_monomial_generators"
 
 
 def test_hilbert_results_bound_dimension_by_the_ambient_ring() -> None:
@@ -717,13 +728,17 @@ def test_hilbert_results_bound_dimension_by_the_ambient_ring() -> None:
         {"coefficient": {"num": 3, "den": 1}, "exponents": [1]},
         {"coefficient": {"num": -1, "den": 1}, "exponents": [0]},
     ]
-    with pytest.raises(ValidationError, match="source-ring dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_dimension_bound"
     polynomial = hilbert_polynomial(_ideal((2, 0)))
     poly_payload = polynomial.model_dump()
     poly_payload["dimension"] = 3
-    with pytest.raises(ValidationError, match="source-ring dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialResult.model_validate(poly_payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graded_ideal.polynomial_dimension_bound"
+    )
 
 
 def test_catalog_examples_state_homogeneity_and_monomial_shape() -> None:
@@ -746,10 +761,9 @@ def test_standard_monomial_result_rejects_divisible_exponents() -> None:
     payload = standard_monomials(_ideal((2, 0)), 2).model_dump()
     payload["monomials"] = [(2, 0)]
     payload["count"] = 1
-    with pytest.raises(
-        ValidationError, match="divisible by an initial-ideal generator"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         StandardMonomialsResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.divisible_monomial"
 
 
 def test_hilbert_series_admits_after_source_leadings_reduce() -> None:
@@ -818,10 +832,9 @@ def test_nonzero_monomial_coefficients_count_toward_series_preflight(
         raise AssertionError("scalar monomials must preflight before Groebner")
 
     monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="at most 8 minimal generators"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         hilbert_series(ideal, prefix_degree=1)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_generator_budget"
 
 
 def test_graded_binds_one_deadline_before_groebner(
@@ -930,8 +943,9 @@ def test_hilbert_function_reports_nonhomogeneous_before_slice_budget() -> None:
         ),
     )
     ideal = RationalPolynomialIdeal(variables=variables, generators=(generator,))
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         hilbert_function(ideal, max_degree=11)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.nonhomogeneous"
 
 
 def test_hilbert_series_ambient_numerator_must_reduce_to_series() -> None:
@@ -1060,8 +1074,9 @@ def test_series_rejects_common_t_minus_one_factor() -> None:
             {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
         ]
     }
-    with pytest.raises(ValidationError, match=r"t-1"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate_json(json.dumps(base))
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_reduced_numerator"
 
 
 def test_series_prefix_must_match_the_h_numerator() -> None:
@@ -1069,8 +1084,9 @@ def test_series_prefix_must_match_the_h_numerator() -> None:
     series = hilbert_series(_ideal((2, 0)), prefix_degree=3)
     payload = series.model_dump()
     payload["prefix"] = [value + 1 for value in payload["prefix"]]
-    with pytest.raises(ValidationError, match="prefix"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_prefix"
 
 
 def test_series_rejects_fractional_h_numerator() -> None:

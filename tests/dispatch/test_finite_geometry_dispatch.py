@@ -5,7 +5,12 @@ from jsonschema.validators import Draft202012Validator
 
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation, parse_operation_input
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import (
+    OperationRequestValidationError,
+    invoke_operation,
+    parse_operation_input,
+)
 from jacobian.math.geometry.finite._models import (
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
@@ -67,10 +72,14 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
         "space": {"field_order": 257, "axis": ["x", "y"]}
     }
     assert not list(validator.iter_errors(structurally_valid_but_too_large))
-    with pytest.raises(ValueError, match="vector enumeration envelope"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(
             operation.operation_id, structurally_valid_but_too_large, Catalog.open()
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_geometry.enumeration_vector_count_exceeds_bound"
+    )
 
 
 def test_dispatch_returns_maximal_enumeration() -> None:
@@ -93,9 +102,10 @@ def test_dispatch_rejects_oversized_axis_labels_as_invalid_request() -> None:
         "space": {"field_order": 2, "axis": ["x", "y" * (9 * 1024 * 1024)]},
     }
 
-    with pytest.raises(ValueError, match="payload failed validation"):
+    with pytest.raises(OperationRequestValidationError) as exc_info:
         invoke_operation(
             "finite_geometry.projective_space.enumerate_points",
             payload,
             Catalog.open(),
         )
+    assert exc_info.value.errors()[0]["type"] == "string_too_long"

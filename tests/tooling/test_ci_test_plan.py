@@ -84,6 +84,103 @@ def test_public_math_change_selects_owner_and_public_boundary_evidence(
     assert plan.boundary_lanes == ()
 
 
+@pytest.mark.parametrize(
+    ("path", "public_contract", "process_boundary"),
+    [
+        ("src/jacobian/math/optimization/__init__.py", False, False),
+        ("src/jacobian/math/optimization/_arithmetic.py", False, False),
+        ("src/jacobian/math/optimization/_general_linear_program.py", False, False),
+        ("src/jacobian/math/optimization/_general_models.py", False, False),
+        ("src/jacobian/math/optimization/_general_normalization.py", False, False),
+        ("src/jacobian/math/optimization/_linear_admission.py", False, False),
+        ("src/jacobian/math/optimization/_models.py", True, False),
+        ("src/jacobian/math/optimization/_optimality.py", False, False),
+        ("src/jacobian/math/optimization/_ppl.py", False, False),
+        ("src/jacobian/math/optimization/_ppl_process.py", False, True),
+        ("src/jacobian/math/optimization/_ppl_worker.py", False, True),
+        ("src/jacobian/math/optimization/_tools.py", True, False),
+        ("src/jacobian/math/optimization/operations.py", True, False),
+    ],
+)
+def test_linear_optimization_source_selects_existing_integration_evidence(
+    path: str, public_contract: bool, process_boundary: bool
+) -> None:
+    # No integration-test change may mask the source owner's dependency.
+    plan = _plan([path])
+
+    assert plan.run_math is True
+    assert plan.math_tests == ("tests/math/optimization",)
+    assert [(shard.group, shard.splits) for shard in plan.math_shards] == [(1, 1)]
+    assert plan.run_catalog is public_contract
+    assert plan.run_catalog_examples is public_contract
+    assert plan.python_lanes == (
+        ("dispatch", "integration") if public_contract else ("integration",)
+    )
+    assert plan.boundary_lanes == (("process",) if process_boundary else ())
+    assert plan.run_scale is False
+    assert plan.run_singular is False
+    assert plan.run_qepcad is False
+    assert plan.run_wheel is False
+
+
+def test_lp_carrier_change_selects_integration_without_changing_its_tests() -> None:
+    # Source changes from #4456 widened carriers while retaining solver admission.
+    # The existing general LP integration tests were missed until after merge.
+    plan = _plan(
+        [
+            "src/jacobian/math/graphs/flows/multicommodity/_lp_solve.py",
+            "src/jacobian/math/optimization/_general_linear_program.py",
+            "src/jacobian/math/optimization/_general_models.py",
+            "src/jacobian/math/optimization/_general_normalization.py",
+            "src/jacobian/math/optimization/_linear_admission.py",
+            "src/jacobian/math/optimization/_models.py",
+            "src/jacobian/math/optimization/_optimality.py",
+            "src/jacobian/math/optimization/_ppl_worker.py",
+            "src/jacobian/math/optimization/_tools.py",
+        ]
+    )
+
+    assert plan.math_tests == (
+        "tests/math/graphs/flows/multicommodity",
+        "tests/math/optimization",
+    )
+    assert plan.run_catalog is True
+    assert plan.run_catalog_examples is True
+    assert plan.python_lanes == ("dispatch", "integration")
+    assert plan.boundary_lanes == ("process",)
+
+
+@pytest.mark.parametrize(
+    ("path", "math_tests", "lanes"),
+    [
+        (
+            "src/jacobian/math/optimization/submodular/_models.py",
+            "tests/math/optimization/submodular",
+            ("dispatch",),
+        ),
+        (
+            "src/jacobian/math/optimization/submodular/operations.py",
+            "tests/math/optimization/submodular",
+            ("dispatch",),
+        ),
+        (
+            "src/jacobian/math/graphs/flows/multicommodity/_lp_solve.py",
+            "tests/math/graphs/flows/multicommodity",
+            (),
+        ),
+        ("src/jacobian/math/logic/_cnf.py", "tests/math/logic", ("dispatch",)),
+    ],
+)
+def test_other_math_owners_do_not_inherit_linear_integration_evidence(
+    path: str, math_tests: str, lanes: tuple[str, ...]
+) -> None:
+    plan = _plan([path])
+
+    assert plan.math_tests == (math_tests,)
+    assert plan.python_lanes == lanes
+    assert plan.boundary_lanes == ()
+
+
 def test_nested_math_owner_selects_its_top_level_test_root() -> None:
     plan = _plan(["src/jacobian/math/matrices/canonical_forms/_models.py"])
 

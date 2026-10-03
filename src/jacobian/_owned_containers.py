@@ -242,15 +242,17 @@ class _Projection:
     ) -> Any:
         from jacobian._models import StrictModel
 
-        if isinstance(value, StrictModel) or plan.kind == "scalar":
+        # Transparent wrappers do not own storage. Resolve them before input
+        # type checks, which can invoke a scalar's user-defined __class__.
+        while plan.kind in {"default", "nullable"}:
+            plan = plan.children[0]
+        if plan.kind == "scalar" or isinstance(value, StrictModel):
             return value
         if depth > _MAX_PROJECTION_DEPTH:
             raise CanonicalizationError(
                 f"owned container nesting exceeds {_MAX_PROJECTION_DEPTH} levels"
             )
-        if plan.kind in {"default", "nullable", "function-after"}:
-            if value is None and plan.kind == "nullable":
-                return value
+        if plan.kind == "function-after":
             return self.project(value, plan.children[0], loc, depth)
         if plan.kind == "tagged-union":
             return self.tagged(value, plan, loc, depth)

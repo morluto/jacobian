@@ -181,6 +181,7 @@ def test_mcp_describes_and_invokes_operations() -> None:
                 "code": "INVALID_REQUEST",
                 "stage": "operation_validation",
                 "operation_id": "integer.compute.extended_gcd",
+                "omitted_error_count": 0,
                 "errors": [
                     {
                         "location": ["private"],
@@ -341,7 +342,10 @@ def test_mcp_describes_and_invokes_operations() -> None:
             )
             assert unknown.is_error is True
             unknown_text = _text_content(unknown.content[0])
-            assert "unknown operation" in unknown_text
+            unknown_data = json.loads(
+                unknown_text.removeprefix("Error executing tool math.run: ")
+            )
+            assert unknown_data["code"] == "UNKNOWN_OPERATION"
             assert len(unknown_text.encode("utf-8")) < 2_048
             assert unknown.structured_content is None
 

@@ -1393,8 +1393,9 @@ def test_nonreduced_matrix_entry_parses_then_determinant_rejects_it() -> None:
     )
     matrix = _matrix(((nonreduced,),), variables)
 
-    with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         symbolic_determinant(matrix.entries, matrix.variables)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.not_coprime"
 
 
 def test_nonreduced_matrix_entry_is_rejected_before_product_growth(
@@ -1416,8 +1417,9 @@ def test_nonreduced_matrix_entry_is_rejected_before_product_growth(
         pytest.fail("noncanonical values must be rejected before product growth")
 
     monkeypatch.setattr(_models, "_projected_product_cells", growth_must_not_run)
-    with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         symbolic_matrix_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.not_coprime"
 
 
 def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable_roots() -> None:

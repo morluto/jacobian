@@ -56,13 +56,15 @@ def lease_operation_phases(
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()
     operation_deadline = started + wall_seconds
-    if execution is not None and execution.outer_deadline is not None:
-        operation_deadline = min(operation_deadline, execution.outer_deadline)
+    if execution is not None and execution.deadline is not None:
+        operation_deadline = min(operation_deadline, execution.deadline)
     delivery_reserve = 0.02 + admitted_response_bytes / 20_000_000
     teardown_reserve = 0.02 + validation_work / 10_000_000
     backend_deadline = operation_deadline - delivery_reserve - teardown_reserve
     bind_request_deadline(operation_deadline)
     if backend_deadline <= time.monotonic():
+        if request_cancelled():
+            request_checkpoint("before backend phase lease")
         raise OperationExecutionTimeoutError(
             "operation has no remaining admitted backend lease",
             timeout_owner=TimeoutOwner.OPERATION_WALL,
@@ -167,9 +169,9 @@ def request_cancelled() -> bool:
     """Report whether the current request has been cancelled."""
 
     envelope = current_request_execution()
-    event = current_request_cancellation() or (
-        envelope.cancellation_signal if envelope is not None else None
-    )
+    event = current_request_cancellation()
+    if event is None and envelope is not None:
+        event = envelope.cancellation_signal
     return event is not None and event.is_set()
 
 
@@ -231,13 +233,15 @@ def request_checkpoint(
         now = time.monotonic()
         if now < deadline:
             return
+        # A late checkpoint can observe both deadlines expired. The earliest
+        # bound still owns the timeout; the outer bound wins ties.
         raise OperationExecutionTimeoutError(
             f"request deadline expired {stage}",
             stage=resolved_stage,
             timeout_owner=(
                 execution.timeout_owner
                 if execution.outer_deadline is not None
-                and now >= execution.outer_deadline
+                and execution.outer_deadline == deadline
                 else TimeoutOwner.OPERATION_WALL
             ),
             elapsed_seconds=max(0.0, now - execution.started_at),

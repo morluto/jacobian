@@ -33,6 +33,7 @@ from jacobian.math.polynomials.series._models import (
     SeriesTruncateRequest,
     TruncatedSeries,
 )
+from jacobian.math.polynomials.series._power_bounds import MAX_POWER_ORDER
 
 
 def _coeff(num: int, den: int = 1) -> CanonicalRational:
@@ -195,7 +196,7 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
         multiply(wide, wide)
     assert error.value.errors()[0]["type"] == "formal_power_series.multiplication_work"
     with pytest.raises(OperationDomainValidationError) as error:
-        power(wide, 2)
+        power(_ascending(MAX_POWER_ORDER + 1), 2)
     assert error.value.errors()[0]["type"] == "formal_power_series.input_order"
     with pytest.raises(OperationDomainValidationError) as error:
         compose(wide, wide)
@@ -291,7 +292,7 @@ def test_native_and_wire_boundaries_reject_the_same_oversized_series() -> None:
 
     from jacobian.math.polynomials.series._tools import TOOLS
 
-    wide = _ascending(MAX_TRUNCATION_ORDER + 1)
+    wide = _ascending(MAX_POWER_ORDER + 1)
     with pytest.raises(OperationDomainValidationError) as native:
         power(wide, 2)
     tool = next(

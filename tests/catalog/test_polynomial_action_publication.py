@@ -7,7 +7,6 @@ dispatch, and canonicalization boundaries.
 """
 
 import json
-from fractions import Fraction
 
 import pytest
 
@@ -80,13 +79,6 @@ def _poly(
             },
         }
     )
-
-
-def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fraction]:
-    return {
-        tuple(term.exponents): term.coefficient.as_fraction()
-        for term in polynomial.polynomial.terms
-    }
 
 
 def test_support_is_admitted_before_projection_and_catalog_publishes_operation() -> (

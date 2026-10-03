@@ -22,8 +22,6 @@ from jacobian.math.free_algebras._models import (
 from jacobian.math.free_algebras.polynomial_subtract import operations
 from jacobian.math.free_algebras.polynomial_subtract.operations import subtract
 
-OPERATION_ID = "free_algebra.polynomial.subtract.compute"
-
 
 def test_package_exports_only_the_native_subtraction_operation() -> None:
     assert polynomial_subtract.__all__ == ["subtract"]

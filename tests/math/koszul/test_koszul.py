@@ -28,8 +28,6 @@ from jacobian.math.polynomials.values import (
 )
 from jacobian.math.topology.chain_complexes import homology_groups
 
-OPERATION_ID = "koszul.complex.construct.compute"
-
 
 def _poly(
     variables: tuple[str, ...], terms: dict[tuple[int, ...], Fraction]

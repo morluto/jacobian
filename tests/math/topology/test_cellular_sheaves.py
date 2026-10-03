@@ -27,8 +27,6 @@ from jacobian.math.topology.cellular_sheaves._models import (
     FromCoverMapsRequest,
 )
 
-OPERATION_ID = "cellular_sheaf.from_cover_maps.compute"
-
 _INTERVAL = canonical_complex(("a", "b"), (("a", "b"),))
 _TRIANGLE = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
 

@@ -74,8 +74,6 @@ def _product_num(
 
 ONE = _rf(((1, 0),))
 N = _rf(((1, 1),))
-N_PLUS_1 = _rf(((1, 1), (1, 0)))
-
 RfPair = tuple[dict[int, Fraction], dict[int, Fraction]]
 
 

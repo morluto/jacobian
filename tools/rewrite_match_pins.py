@@ -25,10 +25,10 @@ from collections import defaultdict
 from pathlib import Path
 
 try:  # pragma: no cover - import style depends on how the tool is invoked
-    from tools.match_recorder import merge_record
+    from tools.match_records import merge_record
 except ImportError:  # invoked as a script: python tools/rewrite_match_pins.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from tools.match_recorder import merge_record
+    from tools.match_records import merge_record
 
 GENERIC_CODES = frozenset(
     {

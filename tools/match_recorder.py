@@ -19,9 +19,11 @@ from pathlib import Path
 
 import pytest
 
+from tools.match_records import merge_record
+
 _OUT = os.environ.get("MATCH_RECORDER_OUT")
 RECORD: dict[str, dict[str, object]] = {}
-_original_raises = pytest.raises
+_original_raises = None
 
 # Codes too coarse to distinguish the guards they cover. A site whose only
 # observed code is one of these keeps its message match.
@@ -43,6 +45,8 @@ class _RecordingRaises:
         self._expected = expected
         self._match = kwargs.get("match", args[1] if len(args) > 1 else None)
         self._key = _site_key()
+        if _original_raises is None:
+            raise RuntimeError("match recorder is not configured")
         self._ctx = _original_raises(expected, *args, **kwargs)  # type: ignore[call-overload]
         self.excinfo = None
 
@@ -77,69 +81,6 @@ class _RecordingRaises:
         return self._ctx.__exit__(exc_type, exc, tb)
 
 
-def merge_record(
-    previous: dict[str, object] | None, record: dict[str, object]
-) -> dict[str, object]:
-    """Union two observations of one site, keeping code-less executions.
-
-    A site executed more than once may raise different codes (parametrized
-    cases, loops, or separate xdist workers). Every observed code is kept so
-    the rewriter can refuse an ambiguous single-code assert. ``None`` is an
-    explicit member meaning "this execution raised no owner code" and must
-    survive the merge: dropping it is what let a coded observation hide an
-    earlier code-less one.
-
-    Observed ``match`` texts are unioned the same way. A parametrized site
-    asserting two different messages behind one owner code is guarded only by
-    its wording, so retaining the first message would let the rewriter delete
-    the sole distinction between those guards.
-    """
-
-    if previous is None:
-        return record
-    observed = previous.get("codes")
-    codes: set[str | None] = set(observed) if isinstance(observed, list) else set()
-    codes.add(_as_code(previous.get("code")))
-    codes.add(_as_code(record.get("code")))
-    merged = dict(previous)
-    merged["codes"] = sorted(codes, key=lambda item: (item is not None, item or ""))
-    merged["code"] = next(iter(codes)) if len(codes) == 1 else None
-    matches = _observed_matches(previous, record)
-    if matches:
-        merged["matches"] = matches
-        if previous.get("match") is not None:
-            merged["match"] = previous["match"]
-    return merged
-
-
-def _observed_matches(
-    previous: dict[str, object], record: dict[str, object]
-) -> list[str]:
-    """Return every ``match`` text observed for one site, sorted and unique."""
-
-    seen = previous.get("matches")
-    matches: set[str] = (
-        {item for item in seen if isinstance(item, str) and item}
-        if isinstance(seen, list)
-        else set()
-    )
-    for source in (previous.get("match"), record.get("match")):
-        if isinstance(source, str) and source:
-            matches.add(source)
-    return sorted(matches)
-
-
-def _as_code(value: object) -> str | None:
-    """Normalise a recorded code; ``None`` marks a code-less execution.
-
-    A site that raises a code-less error in one parametrization and a coded
-    error in another cannot be pinned to a single assert, so a code-less
-    execution must survive the merge as an explicit ``None``.
-    """
-
-    return value if isinstance(value, str) and value else None
-
-
 def _site_key() -> str | None:
     """Identify the ``pytest.raises`` call site from its caller frame."""
 
@@ -161,4 +102,24 @@ def pytest_sessionfinish(session, exitstatus):
         handle.write(json.dumps(serialisable) + "\n")
 
 
-pytest.raises = _RecordingRaises
+def _recording_raises(expected_exception=Exception, *args, **kwargs):
+    """Preserve pytest's function form and optional keyword-only forms."""
+
+    if args or "func" in kwargs:
+        if _original_raises is None:
+            raise RuntimeError("match recorder is not configured")
+        return _original_raises(expected_exception, *args, **kwargs)
+    return _RecordingRaises(expected_exception, *args, **kwargs)
+
+
+def pytest_configure(config):
+    global _original_raises
+    _original_raises = pytest.raises
+    pytest.raises = _recording_raises
+
+
+def pytest_unconfigure(config):
+    global _original_raises
+    if _original_raises is not None:
+        pytest.raises = _original_raises
+        _original_raises = None

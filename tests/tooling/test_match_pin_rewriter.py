@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools.match_recorder import merge_record
+from tools.match_records import merge_record
 from tools.rewrite_match_pins import convertible_sites, load, rewrite
 
 SITE = "tests/example/test_module.py:42:8"
@@ -122,6 +122,15 @@ def test_merge_record_preserves_codeless_member() -> None:
     merged = merge_record({"code": None, "codes": [None]}, {"code": "ops.limit"})
     assert merged["codes"] == [None, "ops.limit"]
     assert merged["code"] is None
+
+
+def test_importing_recorder_does_not_replace_pytest_raises() -> None:
+    import pytest
+
+    original_raises = pytest.raises
+    import tools.match_recorder  # noqa: F401
+
+    assert pytest.raises is original_raises
 
 
 def test_distinct_matches_across_executions_are_rejected(tmp_path: Path) -> None:

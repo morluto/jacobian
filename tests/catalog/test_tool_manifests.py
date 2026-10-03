@@ -148,3 +148,102 @@ def test_tool_loading_rejects_duplicate_operation_ids(
 
     with pytest.raises(ValueError, match="built-in operation IDs must be unique"):
         _load_tools(("jacobian.math.example._tools",))
+
+
+def test_operations_retain_a_fixed_public_catalog_membership() -> None:
+    """Every operation this branch un-named in tests stays published.
+
+    Retiring the stale ``moved_from_math`` duplicate tree removed the last
+    literal reference to each of these operation IDs. Both catalog-wide
+    sweeps derive their parameters from the catalog itself -- the advertised
+    example runner from the current ``BUILTIN_TOOLS`` and the conformance
+    sweep from the current snapshot -- so an operation dropped from its owner
+    manifest simply disappears from both, while the math tests keep
+    exercising only the native kernel. This list is the fixed expectation
+    that closes that path.
+    """
+
+    catalog = Catalog.open()
+    expected = (
+        "affine_semigroup.group_lattice.compute",
+        "affine_semigroup.minimal_generators.compute",
+        "approximation.lagrange.basis.compute",
+        "approximation.lagrange.interpolate.compute",
+        "arithmetic.real_quadratic.embeddings.compute",
+        "arithmetic.real_quadratic.order.compute",
+        "braid.word.artin_action.compute",
+        "braid.word.closure.compute",
+        "braid.word.inverse.compute",
+        "braid.word.multiply.compute",
+        "braid.word.permutation.compute",
+        "cellular_sheaf.constant.compute",
+        "cellular_sheaf.from_cover_maps.compute",
+        "cellular_sheaf.hodge_laplacians.compute",
+        "cellular_sheaf.morphism.cohomology_map.compute",
+        "cellular_sheaf.morphism.compute",
+        "character.tensor_product.compute",
+        "class_function.add.compute",
+        "class_function.conjugate.compute",
+        "class_function.pointwise_multiply.compute",
+        "class_function.scale.compute",
+        "crystallographic.extension.affine_realization.compute",
+        "crystallographic.extension.polytope_facet_pairings.compute",
+        "crystallographic.extension.torsion_freeness.decide",
+        "crystallographic.mapping_torus.chain_complex.compute",
+        "crystallographic.quotient_face_orbits.compute",
+        "crystallographic.translation_torus.quotient_chains.compute",
+        "differential_geometry.rational_tensor.lie_derivative.compute",
+        "finite_abelian_group.character_table.compute",
+        "finite_matrix_group.extension.general_linear.construct",
+        "finite_matrix_group.extension.general_linear.projective_action.compute",
+        "finite_matrix_group.extension.special_linear.construct",
+        "finite_matrix_group.extension.special_linear.projective_action.compute",
+        "finite_matrix_group.general_linear.construct",
+        "finite_matrix_group.general_linear.nonzero_vector_action.compute",
+        "finite_matrix_group.special_linear.construct",
+        "finite_matrix_group.special_linear.nonzero_vector_action.compute",
+        "free_algebra.polynomial.subtract.compute",
+        "free_algebra.two_sided_quotient.truncated_algebra.compute",
+        "function_field.element.add.compute",
+        "function_field.hyperelliptic_affine_places.enumerate",
+        "graph.deck.unlabelled.compute",
+        "homological.filtered_chain_complex.direct_sum.compute",
+        "homological.koszul.homology_map.compute",
+        "homological.koszul.module_direct_sum.compute",
+        "homological.koszul.module_map.compute",
+        "incidence.trade.check",
+        "integer.factor.certified_compute",
+        "integer.friable.enumerate",
+        "integer.primality.certificate.compute",
+        "integer_configuration.toric_ideal.compute",
+        "koszul.complex.construct.compute",
+        "lattice.canonical_basis.compute",
+        "lattice.direct_sum.compute",
+        "lattice.discriminant_group.compute",
+        "lattice.dual.compute",
+        "lattice.orthogonal_complement.compute",
+        "lattice.orthogonal_sum.compute",
+        "lattice.rank_gram.compute",
+        "lattice.saturation.compute",
+        "lattice.sublattice_index.compute",
+        "link_diagram.alexander_polynomial.compute",
+        "link_diagram.goeritz_matrix.compute",
+        "link_diagram.seifert_circles.compute",
+        "link_diagram.wirtinger_presentation.compute",
+        "piecewise_polynomial.scalar_multiply.compute",
+        "polyhedral_complex.spline.coordinates.compute",
+        "polynomial.quartic.cubic_resolvent.compute",
+        "quadratic_form.integral.rational_extension.compute",
+        "relational.core.compute",
+        "relational.embedding.search.compute",
+        "relational.homomorphism.check",
+        "relational.homomorphism.count.compute",
+        "relational.homomorphism.search.compute",
+        "relational_structure.reduct.compute",
+        "topology.cubical_complex.face_poset.compute",
+        "topology.discrete_morse.matching.construct",
+        "topology.simplicial_set.subset.from_degree_families.compute",
+        "tropical.polynomial.essential_part.compute",
+        "weyl_group.element.order.compute",
+    )
+    assert [tool for tool in expected if catalog.operation(tool) is None] == []

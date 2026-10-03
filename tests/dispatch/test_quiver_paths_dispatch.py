@@ -1,7 +1,9 @@
 """Public admission boundary for sparse fixed-length quiver paths."""
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
+from jacobian.math.graphs.quivers._models import FixedLengthPathsResult
 
 
 def test_math_run_admits_sparse_cycle_at_motivating_scale() -> None:
@@ -27,3 +29,10 @@ def test_math_run_admits_sparse_cycle_at_motivating_scale() -> None:
         ]
         for row in range(vertex_count)
     ]
+    serialized = encode_strict_json(output)
+    assert (
+        FixedLengthPathsResult.model_validate_json(serialized, strict=True).model_dump(
+            mode="json"
+        )
+        == output
+    )

@@ -167,9 +167,9 @@ def request_cancelled() -> bool:
     """Report whether the current request has been cancelled."""
 
     envelope = current_request_execution()
-    event = current_request_cancellation() or (
-        envelope.cancellation_signal if envelope is not None else None
-    )
+    event = current_request_cancellation()
+    if event is None and envelope is not None:
+        event = envelope.cancellation_signal
     return event is not None and event.is_set()
 
 

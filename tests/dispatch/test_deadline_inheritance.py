@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from jacobian import dispatch
+from jacobian import _execution, dispatch
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionStage,
@@ -172,6 +172,67 @@ def test_runtime_still_measures_only_this_dispatch(
         assert result.runtime_ms == 125
         assert current_request_execution() is parent
         assert parent.deadline == now + 60
+
+
+@pytest.mark.parametrize(
+    ("child_deadline", "observed_at", "owner"),
+    [
+        (102.0, 103.0, TimeoutOwner.OPERATION_WALL),
+        (102.0, 106.0, TimeoutOwner.OPERATION_WALL),
+        (105.0, 106.0, TimeoutOwner.CALLER_DEADLINE),
+        (108.0, 109.0, TimeoutOwner.CALLER_DEADLINE),
+    ],
+    ids=["child-first", "child-observed-late", "tied", "outer-first"],
+)
+def test_child_local_deadline_keeps_its_winning_owner(
+    monkeypatch: pytest.MonkeyPatch,
+    child_deadline: float,
+    observed_at: float,
+    owner: TimeoutOwner,
+) -> None:
+    catalog = Catalog.open()
+    clock = 100.0
+    local_time = SimpleNamespace(monotonic=lambda: clock)
+    monkeypatch.setattr(_execution, "time", local_time)
+    monkeypatch.setattr(dispatch, "time", local_time)
+
+    def project(
+        _operation_id: str, result: StrictModel, _started: float
+    ) -> StrictModel:
+        nonlocal clock
+        assert result.model_dump(mode="json") == {
+            "determinant": {"num": "-2", "den": "1"}
+        }
+        child = current_request_execution()
+        assert child is not None and child.outer_deadline == 105.0
+        assert child.deadline == 105.0
+        bind_request_deadline(child_deadline)
+        assert child.deadline == min(child_deadline, 105.0)
+        clock = observed_at
+        return result
+
+    with request_execution(100.0, outer_deadline=105.0) as parent:
+        with pytest.raises(OperationExecutionTimeoutError) as error:
+            execute_operation(
+                "matrix.determinant.compute",
+                {
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
+                            [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
+                        ],
+                    }
+                },
+                catalog,
+                projector=project,
+            )
+        assert error.value.timeout_owner is owner
+        assert error.value.stage is OperationExecutionStage.RESULT_PROJECTION
+        assert error.value.elapsed_seconds == observed_at - 100.0
+        assert current_request_execution() is parent
+        assert parent.deadline == 105.0
+    assert current_request_execution() is None
 
 
 class _Progress:

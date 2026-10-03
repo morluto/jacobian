@@ -27,22 +27,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     SplineDimensionRequest,
     SplineDimensionResult,
 )
-from jacobian.math.matrices.cyclic_linear import (
-    RationalCyclotomicElement,
-    RationalCyclotomicField,
-)
 from jacobian.math.polynomials.values import RationalPolynomial
-
-
-def _zero(field: RationalCyclotomicField) -> RationalCyclotomicElement:
-    return RationalCyclotomicElement(
-        field=field,
-        coefficients_ascending=(
-            {"num": 0, "den": 1},
-            {"num": 0, "den": 1},
-        ),
-    )
-
 
 _OPERATION_ID = "polytope.face_lattice.compute"
 

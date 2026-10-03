@@ -250,7 +250,7 @@ def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:
     # Constraint matrices must be symmetric.
     with pytest.raises(ValidationError) as exc_info:
         _system((_matrix([[0, 1], [0, 0]]),), (0,))
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_symmetry"
     with pytest.raises(OperationDomainValidationError):
         reduce_exposed_face(
             RationalSemidefiniteSystem(order=0, matrices=(), rhs=()), ()
@@ -273,7 +273,7 @@ def test_raw_request_preflight_rejects_over_budget_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 128,
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_raw_request_preflight_rejects_oversized_scalar_lists() -> None:
@@ -290,7 +290,7 @@ def test_raw_request_preflight_rejects_oversized_scalar_lists() -> None:
                 "multipliers": [zero],
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_equality_envelope"
 
 
 def test_raw_request_preflight_scans_mapping_wrapped_system() -> None:
@@ -309,7 +309,7 @@ def test_raw_request_preflight_scans_mapping_wrapped_system() -> None:
     # Dense cell envelope.
     with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
     request = SemidefiniteFaceReductionRequest.model_validate(
         UserDict(
             {
@@ -346,7 +346,7 @@ def test_raw_request_preflight_counts_actual_nested_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 9,
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_python_mode_generators_reduce_the_issue_fixture_face() -> None:
@@ -396,7 +396,7 @@ def test_raw_request_preflight_rejects_over_budget_generated_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 9,
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_raw_request_preflight_bounds_range_sequences() -> None:
@@ -412,7 +412,7 @@ def test_raw_request_preflight_bounds_range_sequences() -> None:
                 "multipliers": [{"num": "1", "den": "1"}],
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
     # Dense cell envelope.
     with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
@@ -425,7 +425,7 @@ def test_raw_request_preflight_bounds_range_sequences() -> None:
                 "multipliers": [{"num": "1", "den": "1"}],
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
@@ -444,7 +444,7 @@ def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
                 "multipliers": [{"num": "1", "den": "1"}],
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_digit_envelope"
     # Aggregate digit envelope.
     with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
@@ -459,7 +459,7 @@ def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
                 "multipliers": (huge for _ in range(8192)),
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_digit_envelope"
 
 
 def test_raw_request_preflight_counts_generated_row_cells() -> None:
@@ -483,7 +483,7 @@ def test_raw_request_preflight_counts_generated_row_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 16,
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "value_error"
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_inactive_constraint_denominators_are_charged_during_compression() -> None:

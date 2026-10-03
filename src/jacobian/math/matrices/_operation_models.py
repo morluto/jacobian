@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from math import isfinite
 from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import Field, WithJsonSchema, field_validator, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import (
+    Field,
+    Tag,
+    ValidationError,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    WithJsonSchema,
+    WrapValidator,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -313,15 +324,159 @@ class MatrixDeterminantRequest(_MatrixRequest):
     _raw_matrix_axis_limit: ClassVar[int] = MAX_DETERMINANT_MATRIX_DIMENSION
 
 
+_MATRIX_BRANCH_PREFIXES = {"dense": "Dense matrix: ", "sparse": "Sparse matrix: "}
+_MAX_RANK_ERROR_MESSAGE_LENGTH = 4096
+
+
+def _rank_matrix_branch(value: object) -> str | None:
+    """Recognize only bounded, unambiguous storage, never choose a parser."""
+
+    if type(value) is RationalMatrix:
+        return "dense"
+    if type(value) is SparseRationalMatrix:
+        return "sparse"
+    # Exact keys avoid caller-defined hashing/equality during the lookup. Native
+    # subclasses and unusual containers provide no evidence for dropping errors.
+    if (
+        type(value) is not dict
+        or len(value) > 4
+        or any(type(key) is not str for key in value)
+    ):
+        return None
+    entries = value.get("entries")
+    if (
+        (type(entries) is not list and type(entries) is not tuple)
+        or not entries
+        or len(entries) > MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
+    ):
+        return None
+    if all(type(entry) is list or type(entry) is tuple for entry in entries):
+        return "dense"
+    if all(type(entry) is dict for entry in entries):
+        return "sparse"
+    return None
+
+
+def _rank_matrix_message_context(message: str, context: object) -> bool:
+    """Avoid re-interpreting a rendered message or touching custom context."""
+
+    if len(message) > _MAX_RANK_ERROR_MESSAGE_LENGTH:
+        return False
+    if context is None:
+        return True
+    if type(context) is not dict or len(context) > 8:
+        return False
+    for key, value in context.items():
+        if (
+            type(key) is not str
+            or len(key) > 128
+            or "{" + key + "}" in message
+            or (
+                type(value) is not str
+                and type(value) is not int
+                and type(value) is not float
+                and type(value) is not bool
+                and value is not None
+            )
+        ):
+            return False
+        if (
+            (type(value) is str and len(value) > 1024)
+            or (type(value) is int and value.bit_length() > 1024)
+            or (type(value) is float and not isfinite(value))
+        ):
+            return False
+    return True
+
+
+def _rank_matrix_validation(
+    value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+) -> Any:
+    """Project only the provenance introduced by this field's tagged union.
+
+    Successful union parsing, including its carrier preference, is untouched.
+    Ambiguous failures keep both alternatives, named in messages instead of
+    caller paths. A future custom context that cannot be reconstructed exactly
+    leaves the original error intact. Prefixed built-in errors retain their
+    code/context/input but, as custom errors, have no Pydantic documentation URL.
+    """
+
+    try:
+        return handler(value)
+    except ValidationError as exc:
+        branch = _rank_matrix_branch(value)
+        records: list[InitErrorDetails] = []
+        tags: list[str] = []
+        for error in exc.errors():
+            location = error["loc"]
+            if (
+                not location
+                or not isinstance(location[0], str)
+                or location[0] not in _MATRIX_BRANCH_PREFIXES
+            ):
+                raise
+            tag = location[0]
+            if branch is not None and tag != branch:
+                continue
+            code = error["type"]
+            record: InitErrorDetails = {
+                "type": code,
+                "loc": location[1:],
+                "input": error["input"],
+            }
+            context = error.get("ctx")
+            if context is not None:
+                record["ctx"] = context
+            if branch is None and not _rank_matrix_message_context(
+                error["msg"], context
+            ):
+                raise
+            # Pydantic supplies documentation URLs only for native errors.
+            # A custom error may reuse a native code with a different message.
+            if "url" not in error:
+                message = error["msg"]
+                if not _rank_matrix_message_context(message, context):
+                    raise
+                record["type"] = PydanticCustomError(code, message, context)
+            records.append(record)
+            tags.append(tag)
+        if not records:
+            raise
+        projected = ValidationError.from_exception_data(
+            exc.title, records, input_type=info.mode
+        )
+        if branch is None:
+            # Render native codes in the outer mode before adding a prefix:
+            # e.g. model_type has distinct JSON and Python messages.
+            for record, error, tag in zip(
+                records, projected.errors(include_url=False), tags, strict=True
+            ):
+                prefix = _MATRIX_BRANCH_PREFIXES[tag]
+                if len(error["msg"]) + len(prefix) > _MAX_RANK_ERROR_MESSAGE_LENGTH:
+                    raise
+                message = prefix + error["msg"]
+                context = error.get("ctx")
+                if not _rank_matrix_message_context(message, context):
+                    raise
+                record["type"] = PydanticCustomError(error["type"], message, context)
+            projected = ValidationError.from_exception_data(
+                exc.title, records, input_type=info.mode
+            )
+        raise projected from None
+
+
 class MatrixRankRequest(_MatrixRequest):
     """One bounded rectangular matrix whose exact rank is requested."""
 
-    matrix: (
+    matrix: Annotated[
         Annotated[
-            RationalMatrixInput, RationalMatrixInputEnvelope(MAX_RATIONAL_MATRIX_ORDER)
+            RationalMatrixInput,
+            RationalMatrixInputEnvelope(MAX_RATIONAL_MATRIX_ORDER),
+            Tag("dense"),
         ]
-        | SparseRationalMatrixInput
-    )
+        | Annotated[SparseRationalMatrixInput, Tag("sparse")],
+        WrapValidator(_rank_matrix_validation),
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_RATIONAL_MATRIX_ORDER
 
     @classmethod

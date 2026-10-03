@@ -137,6 +137,7 @@ def _definition_only_references(tree: ast.Module) -> set[str]:
     referenced.update(
         fixtures[name] for name in _pytest_string_references(tree) if name in fixtures
     )
+    referenced.update(_autouse_fixture_definitions(tree))
     _scan(tree, frozenset(), module_names, referenced, fixtures)
     return referenced
 
@@ -239,7 +240,30 @@ def _fixture_names(tree: ast.Module) -> dict[str, str]:
     return names
 
 
-def _scan(
+def _autouse_fixture_definitions(tree: ast.Module) -> frozenset[str]:
+    names: set[str] = set()
+    for _name, _line, kind, definition in _definition_names(tree):
+        if kind != "function" or not isinstance(
+            definition, (ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            continue
+        for decorator in definition.decorator_list:
+            if not isinstance(decorator, ast.Call) or "fixture" not in ast.dump(
+                decorator.func
+            ):
+                continue
+            if any(
+                keyword.arg == "autouse"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in decorator.keywords
+            ):
+                names.add(definition.name)
+                break
+    return frozenset(names)
+
+
+def _scan(  # noqa: C901
     node: ast.AST | Sequence[ast.AST],
     bound: frozenset[str],
     module_names: set[str],
@@ -285,11 +309,12 @@ def _scan(
                 referenced.update(
                     fixtures[name] for name in requested if name in fixtures
                 )
+            if isinstance(child, ast.ClassDef):
+                _scan_class_body(child.body, bound, module_names, referenced, fixtures)
+                continue
             body_bound = bound | _scope_bindings(child)
             body_class_outer_bound = class_outer_bound
-            if isinstance(child, ast.ClassDef):
-                body_class_outer_bound = bound
-            elif (
+            if (
                 isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and class_outer_bound is not None
             ):
@@ -297,6 +322,12 @@ def _scan(
                 # resolve names from the scope that surrounded the class.
                 body_bound = class_outer_bound | _scope_bindings(child)
                 body_class_outer_bound = None
+            elif (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and child.name in module_names
+            ):
+                # A definition cannot make itself live through recursion alone.
+                body_bound = body_bound | {child.name}
             _scan(
                 child.body,
                 body_bound,
@@ -378,6 +409,45 @@ def _scan(
             fixtures,
             class_outer_bound,
         )
+
+
+def _scan_class_body(
+    statements: Sequence[ast.stmt],
+    outer_bound: frozenset[str],
+    module_names: set[str],
+    referenced: set[str],
+    fixtures: dict[str, str],
+) -> None:
+    """Scan class statements in order because class locals bind when assigned."""
+
+    bound = outer_bound
+    for statement in statements:
+        _scan(statement, bound, module_names, referenced, fixtures, outer_bound)
+        bound = bound | _class_statement_bindings(statement)
+
+
+def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
+    names: set[str] = set()
+    declared_global: set[str] = set()
+    stack = [statement]
+    while stack:
+        child = stack.pop()
+        if isinstance(child, (*_SCOPE_NODES, *_COMPREHENSIONS)):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(child.name)
+            continue
+        if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+            names.add(child.id)
+        elif isinstance(child, ast.Global):
+            declared_global.update(child.names)
+        elif isinstance(child, (ast.Import, ast.ImportFrom)):
+            for alias in child.names:
+                bound = alias.asname or alias.name
+                names.add(bound.split(".")[0])
+        elif isinstance(child, ast.ExceptHandler) and child.name is not None:
+            names.add(child.name)
+        stack.extend(ast.iter_child_nodes(child))
+    return frozenset(names - declared_global)
 
 
 def _record(
@@ -521,9 +591,8 @@ def _header_expressions(node: ast.AST) -> tuple[ast.AST, ...]:
     return tuple(found)
 
 
-def _waived(lines: list[str], line: int, node: ast.AST) -> bool:
-    end = getattr(node, "end_lineno", None) or line
-    return any(_WAIVER in text for text in lines[line - 1 : end])
+def _waived(lines: list[str], line: int) -> bool:
+    return _WAIVER in lines[line - 1]
 
 
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
@@ -536,10 +605,10 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     lines = source.splitlines()
     referenced = _definition_only_references(tree)
     violations: list[Violation] = []
-    for name, line, kind, node in _definition_names(tree):
+    for name, line, kind, _node in _definition_names(tree):
         if name in referenced:
             continue
-        if _waived(lines, line, node):
+        if _waived(lines, line):
             continue
         violations.append(Violation(relative, line, name, kind))
     return tuple(violations)

@@ -234,6 +234,37 @@ def test_class_method_resolves_same_named_module_helper(tmp_path: Path) -> None:
     assert _reported(tmp_path, "test_method_scope.py", body) == set()
 
 
+def test_autouse_fixture_is_referenced_implicitly(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture(autouse=True)
+    def setup_environment():
+        return 1
+    """
+    assert _reported(tmp_path, "test_autouse.py", body) == set()
+
+
+def test_class_body_bindings_apply_in_execution_order(tmp_path: Path) -> None:
+    body = """\
+    def helper() -> int:
+        return 3
+
+    class TestCase:
+        value = helper()
+        helper = 2
+    """
+    assert _reported(tmp_path, "test_class_order.py", body) == set()
+
+
+def test_self_recursion_does_not_rescue_unused_helper(tmp_path: Path) -> None:
+    body = """\
+    def helper() -> int:
+        return helper()
+    """
+    assert _reported(tmp_path, "test_self_recursive.py", body) == {"helper"}
+
+
 def test_collected_class_base_is_scanned_in_module_scope(tmp_path: Path) -> None:
     assert (
         _reported(tmp_path, "test_class_base.py", COLLECTED_CLASS_REFERENCES_ITS_BASE)
@@ -254,6 +285,17 @@ def test_waiver_comment_exempts_a_deliberate_helper(tmp_path: Path) -> None:
         "    return 1\n"
     )
     assert _reported(tmp_path, "test_waived.py", body) == set()
+
+
+def test_waiver_comment_inside_body_does_not_exempt_definition(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def kept() -> int:
+        # dead-code: unrelated comment inside the body
+        return 1
+    """
+    assert _reported(tmp_path, "test_body_comment.py", body) == {"kept"}
 
 
 def test_check_reports_a_summary_for_the_whole_tree() -> None:

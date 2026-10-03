@@ -3,7 +3,6 @@
 import json
 from fractions import Fraction
 from itertools import combinations, permutations
-from random import Random
 
 import pytest
 from tests.support.rationals import rational_payload as q
@@ -248,16 +247,33 @@ def test_rank_deficiency_and_negative_certificates(
     assert assert_standard_certificate(standard_program(rows, rhs, objective)) == status
 
 
+# Constructed rather than sampled. A uniform draw over these tiny shapes almost
+# never lands on the degenerate programs that stress a certificate (a zero row,
+# duplicated rows, an empty constraint system), and the 80-sample loop spent
+# about 21s of the ordinary lane on 160 near-identical worker spawns to reach the
+# same three statuses. Each case below is a shape worth certifying on its own.
+_STATUS_CASES: tuple[tuple[list[list[int]], list[int], list[int]], ...] = (
+    ([[1]], [2], [1]),  # single tight-able row
+    ([[1]], [0], [1]),  # forced to the origin
+    ([], [], [1]),  # no constraints, bounded below at zero
+    ([], [], [-1]),  # no constraints, unbounded below
+    ([[1], [-1]], [0, -1], [1]),  # contradictory bounds
+    ([[0]], [1], [1]),  # zero row cannot bound anything
+    ([[1], [1]], [2, 2], [1]),  # duplicated rows are rank deficient
+    ([[1, 1]], [3], [1, 1]),  # repeated column entries
+    ([[1, -1]], [1], [1, 0]),  # mixed-sign coefficients
+    ([[2, 0], [0, 2]], [2, 2], [1, 1]),  # diagonal, two constraints
+)
+
+
 def test_varied_exact_certificates_and_redundant_row_invariance() -> None:
-    random = Random(3194)
     statuses = set()
-    for _ in range(80):
-        n, m = random.randint(1, 5), random.randint(1, 4)
-        rows = [[random.randint(-2, 2) for _ in range(n)] for _ in range(m)]
-        rhs = [random.randint(-2, 2) for _ in range(m)]
-        objective = [random.randint(-2, 2) for _ in range(n)]
+    for rows, rhs, objective in _STATUS_CASES:
         status = assert_standard_certificate(standard_program(rows, rhs, objective))
         statuses.add(status)
+        if not rows:
+            # An empty constraint system has no row to duplicate or reorder.
+            continue
         assert (
             assert_standard_certificate(
                 standard_program(

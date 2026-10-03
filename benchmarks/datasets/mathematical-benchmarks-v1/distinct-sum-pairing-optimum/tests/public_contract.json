@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "The public ground set is the 15 integers from 1 through 15. Submit at most 7 pairs, with each member in that ground set. These packing and member bounds precede mathematical checks of disjointness, distinct sums, the sum limit, optimality, and canonical ordering.",
     "schema_definitions": {},
     "schema_version": "1",
     "submission_path": "/app/submission.json",
@@ -12,15 +12,20 @@
                     "minItems": 2,
                     "prefixItems": [
                         {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 15
                         },
                         {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 15
                         }
                     ],
                     "type": "array"
                 },
-                "type": "array"
+                "type": "array",
+                "maxItems": 7
             }
         },
         "required": [

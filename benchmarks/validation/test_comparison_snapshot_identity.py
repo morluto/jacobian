@@ -29,7 +29,7 @@ def test_equal_snapshots_remain_pairable_and_report_the_identity(
     report = compare_evidence(control, treatment)
     assert report["status"] == "VALID"
     assert report["snapshot_id"] == control["snapshot_id"]
-    assert report["schema_version"] == "2"
+    assert report["schema_version"] == "3"
     assert control["snapshot_id"] in render_markdown(report)
     validate_report(report)
 

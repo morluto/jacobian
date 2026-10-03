@@ -1,8 +1,8 @@
 """Normalize and compare Harbor model-in-the-loop observation results.
 
-This is the strict normalized observation evidence *v4* implementation.  It
-replaces v2 atomically and tightens three classes of contract that v2 left
-implicit:
+This writes normalized observation evidence *v5*. Historical v4 remains
+readable for descriptive comparisons only; earlier versions are unsupported.
+The following structural contracts remain strict:
 
 * **Dataset/task selection** is normalized to exactly one of the two Harbor job
   forms -- ``datasets[].path`` with optional ``task_names`` or explicit
@@ -619,7 +619,8 @@ def build_observation_evidence(
     source_sha = _git_sha()
     failures.extend(_jacobian_image_failures(runtime))
     evidence = {
-        "schema_version": "4",
+        "schema_version": "5",
+        "task_family_binding": None,
         "evidence_class": evidence_class,
         "causal_claim_authorized": False,
         "status": "VALID" if not failures else "INCOMPLETE",

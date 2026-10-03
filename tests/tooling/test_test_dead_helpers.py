@@ -142,6 +142,52 @@ def test_unrelated_string_literals_do_not_rescue_a_dead_function(
     )
 
 
+def test_local_assignment_inside_statement_does_not_rescue_global_helper(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper() -> int:
+        return 1
+
+    def test_local_shadow() -> None:
+        if True:
+            helper = 2
+        assert helper == 2
+    """
+    assert "helper" in _reported(tmp_path, "test_local_shadow.py", body)
+
+
+def test_directly_parametrized_argument_does_not_rescue_fixture(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def item():
+        return 1
+
+    @pytest.mark.parametrize("item", [2])
+    def test_direct_value(item):
+        assert item == 2
+    """
+    assert "item" in _reported(tmp_path, "test_direct_param.py", body)
+
+
+def test_aliased_fixture_name_resolves_to_its_definition(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture(name="item")
+    def _item():
+        return 1
+
+    def test_fixture_argument(item):
+        assert item == 1
+    """
+    assert _reported(tmp_path, "test_fixture_alias.py", body) == set()
+
+
 def test_collected_class_base_is_scanned_in_module_scope(tmp_path: Path) -> None:
     assert (
         _reported(tmp_path, "test_class_base.py", COLLECTED_CLASS_REFERENCES_ITS_BASE)

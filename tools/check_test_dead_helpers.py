@@ -133,8 +133,11 @@ def _definition_only_references(tree: ast.Module) -> set[str]:
 
     module_names = {name for name, _line, _kind, _node in _definition_names(tree)}
     referenced: set[str] = set()
-    referenced.update(_pytest_string_references(tree))
-    _scan(tree, frozenset(), module_names, referenced, _fixture_names(tree))
+    fixtures = _fixture_names(tree)
+    referenced.update(
+        fixtures[name] for name in _pytest_string_references(tree) if name in fixtures
+    )
+    _scan(tree, frozenset(), module_names, referenced, fixtures)
     return referenced
 
 
@@ -154,7 +157,14 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
             # argument is a local parameter declaration, not a global helper.
             for keyword in node.keywords:
                 if keyword.arg == "indirect":
-                    referenced.update(_string_values(keyword.value))
+                    if (
+                        isinstance(keyword.value, ast.Constant)
+                        and (keyword.value.value is True)
+                        and node.args
+                    ):
+                        referenced.update(_parameter_names(node.args[0]))
+                    else:
+                        referenced.update(_string_values(keyword.value))
     return referenced
 
 
@@ -175,7 +185,16 @@ def _string_values(node: ast.AST) -> set[str]:
     return set()
 
 
-def _fixture_names(tree: ast.Module) -> frozenset[str]:
+def _parameter_names(node: ast.AST) -> set[str]:
+    return {
+        name.strip()
+        for value in _string_values(node)
+        for name in value.split(",")
+        if name.strip()
+    }
+
+
+def _fixture_names(tree: ast.Module) -> dict[str, str]:
     """Module-level helpers pytest injects by parameter name.
 
     Only these are exempt from lexical resolution. A test parameter that
@@ -183,14 +202,29 @@ def _fixture_names(tree: ast.Module) -> frozenset[str]:
     fixture reference, so that assignment stays subject to the dead-code gate.
     """
 
-    names = set()
+    names: dict[str, str] = {}
     for node in _definition_names(tree):
         _name, _line, kind, definition = node
         if kind != "function":
             continue
-        if any("fixture" in ast.dump(item) for item in definition.decorator_list):  # type: ignore[attr-defined]
-            names.add(_name)
-    return frozenset(names)
+        if not isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in definition.decorator_list:
+            if "fixture" not in ast.dump(decorator):
+                continue
+            fixture_name = definition.name
+            if isinstance(decorator, ast.Call):
+                for keyword in decorator.keywords:
+                    if (
+                        keyword.arg == "name"
+                        and isinstance(keyword.value, ast.Constant)
+                        and isinstance(keyword.value.value, str)
+                    ):
+                        fixture_name = keyword.value.value
+                        break
+            names[fixture_name] = definition.name
+            break
+    return names
 
 
 def _scan(
@@ -198,7 +232,7 @@ def _scan(
     bound: frozenset[str],
     module_names: set[str],
     referenced: set[str],
-    fixtures: frozenset[str],
+    fixtures: dict[str, str],
 ) -> None:
     """Record module-level loads that no enclosing scope shadows."""
 
@@ -220,7 +254,10 @@ def _scan(
             if _is_pytest_injected(child):
                 # pytest resolves a fixture by parameter name, so a requested
                 # fixture is referenced without any Name load in the body.
-                referenced.update(_argument_names(child) & fixtures)
+                requested = _argument_names(child) - _direct_parametrize_names(child)
+                referenced.update(
+                    fixtures[name] for name in requested if name in fixtures
+                )
             _scan(
                 child.body,
                 bound | _scope_bindings(child),
@@ -289,6 +326,37 @@ def _argument_names(node: ast.AST) -> frozenset[str]:
     return frozenset(names)
 
 
+def _direct_parametrize_names(node: ast.AST) -> frozenset[str]:
+    """Test arguments supplied as values do not request same-named fixtures."""
+
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return frozenset()
+    direct: set[str] = set()
+    for decorator in node.decorator_list:
+        if (
+            not isinstance(decorator, ast.Call)
+            or _dotted_name(decorator.func) != ("pytest.mark.parametrize")
+            or not decorator.args
+        ):
+            continue
+        parameter_names = _parameter_names(decorator.args[0])
+        indirect_keyword = next(
+            (item.value for item in decorator.keywords if item.arg == "indirect"),
+            None,
+        )
+        if (
+            isinstance(indirect_keyword, ast.Constant)
+            and indirect_keyword.value is True
+        ):
+            indirect = parameter_names
+        elif indirect_keyword is not None:
+            indirect = _parameter_names(indirect_keyword)
+        else:
+            indirect = set()
+        direct.update(parameter_names - indirect)
+    return frozenset(direct)
+
+
 def _scope_bindings(node: ast.AST) -> frozenset[str]:
     """Names a function, class, or lambda binds directly, nested scopes aside."""
 
@@ -306,20 +374,25 @@ def _scope_bindings(node: ast.AST) -> frozenset[str]:
         # module-level function resolves to that global, not to itself.
         names.add(node.name)
     declared_global: set[str] = set()
-    for child in ast.walk(node):
-        if isinstance(child, ast.Global):
-            declared_global.update(child.names)
-    for child in ast.iter_child_nodes(node):
+    body = getattr(node, "body", ())
+    stack = list(body) if isinstance(body, list) else []
+    while stack:
+        child = stack.pop()
         if isinstance(child, (*_SCOPE_NODES, *_COMPREHENSIONS)):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(child.name)
             continue
         if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
             names.add(child.id)
+        elif isinstance(child, ast.Global):
+            declared_global.update(child.names)
         elif isinstance(child, (ast.Import, ast.ImportFrom)):
             for alias in child.names:
                 bound = alias.asname or alias.name
                 names.add(bound.split(".")[0])
         elif isinstance(child, ast.ExceptHandler) and child.name is not None:
             names.add(child.name)
+        stack.extend(ast.iter_child_nodes(child))
     # `global name` means the assignment targets the module scope, so it does
     # not shadow the module-level binding it writes to.
     return frozenset(names - declared_global)

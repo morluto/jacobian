@@ -130,6 +130,12 @@ def _site_key() -> str | None:
 def pytest_sessionfinish(session, exitstatus):
     if not _OUT:
         return
+    if exitstatus != 0:
+        # Workers cannot know whether another worker failed, so the controller
+        # invalidates the shared file after every incomplete session.
+        if not hasattr(session.config, "workerinput"):
+            Path(_OUT).write_text("", encoding="utf-8")
+        return
     serialisable = {
         key: value for key, value in RECORD.items() if value.get("match") is not None
     }

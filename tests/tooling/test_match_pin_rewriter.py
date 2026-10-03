@@ -286,6 +286,21 @@ def test_recorder_clears_old_output_once_before_recording(
     )
 
 
+def test_recorder_discards_partial_output_after_failed_session(
+    monkeypatch, tmp_path: Path
+) -> None:
+    import tools.match_recorder as recorder
+
+    output = tmp_path / "record.jsonl"
+    output.write_text('{"tests/current.py:2": {"code": "partial"}}\n', encoding="utf-8")
+    monkeypatch.setattr(recorder, "_OUT", str(output))
+    session = type("Session", (), {"config": object()})()
+
+    recorder.pytest_sessionfinish(session, 1)
+
+    assert output.read_text(encoding="utf-8") == ""
+
+
 def test_bare_pydantic_codes_are_not_convertible(tmp_path: Path) -> None:
     path = _write(
         tmp_path,

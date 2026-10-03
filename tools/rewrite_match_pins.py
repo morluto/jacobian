@@ -173,7 +173,13 @@ def main() -> int:
         if args.dry_run:
             total += len(sites)
             continue
-        count = rewrite(target, sites)
+        try:
+            count = rewrite(target, sites)
+        except SyntaxError:
+            # A rewritten file must still parse; a decorator that merely
+            # references pytest.raises can collide with a recorded line number.
+            print(f"{relative}: SKIPPED (rewrite would not parse)")
+            continue
         total += count
         print(f"{relative}: rewrote {count}")
     print(f"total rewritten: {total}")

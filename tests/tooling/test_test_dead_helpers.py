@@ -167,6 +167,23 @@ def test_comprehension_iterator_loads_before_target_binding(tmp_path: Path) -> N
     assert _reported(tmp_path, "test_comprehension.py", body) == set()
 
 
+def test_class_comprehension_body_uses_scope_surrounding_class(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper() -> int:
+        return 1
+
+    class TestCase:
+        helper = 2
+        values = [helper() for _ in (0,)]
+
+        def test_values(self):
+            assert self.values == [1]
+    """
+    assert _reported(tmp_path, "test_class_comprehension.py", body) == set()
+
+
 def test_lambda_parameter_shadows_module_helper(tmp_path: Path) -> None:
     body = """\
     helper = 1
@@ -219,6 +236,20 @@ def test_aliased_fixture_name_resolves_to_its_definition(tmp_path: Path) -> None
     assert _reported(tmp_path, "test_fixture_alias.py", body) == set()
 
 
+def test_fixture_import_alias_resolves_to_its_definition(tmp_path: Path) -> None:
+    body = """\
+    from pytest import fixture as fx
+
+    @fx
+    def item():
+        return 1
+
+    def test_fixture_argument(item):
+        assert item == 1
+    """
+    assert _reported(tmp_path, "test_fixture_import_alias.py", body) == set()
+
+
 def test_fixture_lookup_by_name_resolves_to_its_definition(tmp_path: Path) -> None:
     body = """\
     import pytest
@@ -242,6 +273,37 @@ def test_pytest_lifecycle_hooks_are_not_dead_helpers(tmp_path: Path) -> None:
         pass
     """
     assert _reported(tmp_path, "test_lifecycle.py", body) == set()
+
+
+def test_all_default_pytest_test_function_prefixes_are_collected(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    def testThing():
+        assert helper() == 1
+
+    def test():
+        assert helper() == 1
+    """
+    assert _reported(tmp_path, "test_function_prefix.py", body) == set()
+
+
+def test_overwritten_module_binding_is_reported_even_when_name_is_used(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    helper = 1
+    helper = 2
+
+    def test_helper():
+        assert helper == 2
+    """
+    path = _write(tmp_path, "test_overwritten.py", body)
+    violations = _check_file(tmp_path, path)
+    assert [(item.name, item.line) for item in violations] == [("helper", 1)]
 
 
 def test_pattern_capture_shadows_module_helper(tmp_path: Path) -> None:

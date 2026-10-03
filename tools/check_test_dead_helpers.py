@@ -114,9 +114,11 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             # pytest collects test functions and Test* classes by name, so they
             # have no in-file reference and reporting them would flag the suite.
-            if node.name.startswith("test_") or node.name.startswith(
+            if node.name.startswith("test") or node.name.startswith(
                 _PYTEST_COLLECTED_PREFIX
             ):
+                continue
+            if _is_overload_declaration(node):
                 continue
             if node.name in _PYTEST_MODULE_NAMES:
                 continue
@@ -137,6 +139,18 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
                 if name not in _PYTEST_MODULE_NAMES
             )
     return found
+
+
+def _is_overload_declaration(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Overload signatures do not create runtime bindings of their own."""
+
+    for decorator in node.decorator_list:
+        name = _dotted_name(decorator)
+        if isinstance(decorator, ast.Call):
+            name = _dotted_name(decorator.func)
+        if name in {"overload", "typing.overload", "typing_extensions.overload"}:
+            return True
+    return False
 
 
 def _definition_only_references(tree: ast.Module) -> set[str]:
@@ -179,10 +193,11 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
     """Names that pytest resolves from supported string-bearing markers."""
 
     referenced: set[str] = set()
+    aliases = _pytest_import_aliases(tree)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        name = _dotted_name(node.func)
+        name = _canonical_pytest_name(node.func, aliases)
         if name == "pytest.mark.usefixtures":
             for argument in node.args:
                 referenced.update(_string_values(argument))
@@ -202,6 +217,34 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
                     else:
                         referenced.update(_string_values(keyword.value))
     return referenced
+
+
+def _pytest_import_aliases(tree: ast.Module) -> dict[str, str]:
+    """Map local pytest import spellings to their canonical names."""
+
+    aliases: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for item in node.names:
+                if item.name == "pytest":
+                    local_name = item.asname or item.name
+                    aliases[local_name] = "pytest"
+        elif isinstance(node, ast.ImportFrom) and node.module == "pytest":
+            for item in node.names:
+                local_name = item.asname or item.name
+                aliases[local_name] = f"pytest.{item.name}"
+    return aliases
+
+
+def _canonical_pytest_name(node: ast.AST, aliases: dict[str, str]) -> str | None:
+    """Resolve a pytest API name through direct import aliases."""
+
+    name = _dotted_name(node)
+    if name is None:
+        return None
+    root, separator, suffix = name.partition(".")
+    canonical_root = aliases.get(root, root)
+    return canonical_root + (separator + suffix if separator else "")
 
 
 def _dotted_name(node: ast.AST) -> str | None:
@@ -239,6 +282,7 @@ def _fixture_names(tree: ast.Module) -> dict[str, str]:
     """
 
     names: dict[str, str] = {}
+    aliases = _pytest_import_aliases(tree)
     for node in _definition_names(tree):
         _name, _line, kind, definition = node
         if kind != "function":
@@ -246,7 +290,10 @@ def _fixture_names(tree: ast.Module) -> dict[str, str]:
         if not isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for decorator in definition.decorator_list:
-            if "fixture" not in ast.dump(decorator):
+            fixture_decorator = (
+                decorator.func if isinstance(decorator, ast.Call) else decorator
+            )
+            if _canonical_pytest_name(fixture_decorator, aliases) != "pytest.fixture":
                 continue
             fixture_name = definition.name
             if isinstance(decorator, ast.Call):
@@ -265,14 +312,16 @@ def _fixture_names(tree: ast.Module) -> dict[str, str]:
 
 def _autouse_fixture_definitions(tree: ast.Module) -> frozenset[str]:
     names: set[str] = set()
+    aliases = _pytest_import_aliases(tree)
     for _name, _line, kind, definition in _definition_names(tree):
         if kind != "function" or not isinstance(
             definition, (ast.FunctionDef, ast.AsyncFunctionDef)
         ):
             continue
         for decorator in definition.decorator_list:
-            if not isinstance(decorator, ast.Call) or "fixture" not in ast.dump(
-                decorator.func
+            if (
+                not isinstance(decorator, ast.Call)
+                or _canonical_pytest_name(decorator.func, aliases) != "pytest.fixture"
             ):
                 continue
             if any(
@@ -325,7 +374,7 @@ def _scan(  # noqa: C901
                     fixtures,
                     class_outer_bound,
                 )
-            if _is_pytest_injected(child):
+            if _is_pytest_injected(child, fixtures):
                 # pytest resolves a fixture by parameter name, so a requested
                 # fixture is referenced without any Name load in the body.
                 requested = _argument_names(child) - _direct_parametrize_names(child)
@@ -366,15 +415,16 @@ def _scan(  # noqa: C901
             continue
         if isinstance(child, _COMPREHENSIONS):
             # Comprehensions open their own scope from Python 3 onward.
-            inner = bound
-            for generator in child.generators:
+            first_iter_bound = bound
+            inner = class_outer_bound if class_outer_bound is not None else bound
+            for index, generator in enumerate(child.generators):
                 _scan(
                     generator.iter,
-                    inner,
+                    first_iter_bound if index == 0 else inner,
                     module_names,
                     referenced,
                     fixtures,
-                    class_outer_bound,
+                    class_outer_bound if index == 0 else None,
                 )
                 inner = inner | _comprehension_target_names(generator.target)
                 _scan(
@@ -383,7 +433,7 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
-                    class_outer_bound,
+                    None,
                 )
             if isinstance(child, ast.DictComp):
                 _scan(
@@ -392,7 +442,7 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
-                    class_outer_bound,
+                    None,
                 )
                 _scan(
                     child.value,
@@ -400,7 +450,7 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
-                    class_outer_bound,
+                    None,
                 )
             else:
                 _scan(
@@ -409,7 +459,7 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
-                    class_outer_bound,
+                    None,
                 )
             continue
         # An attribute access never resolves to a module-level binding:
@@ -489,14 +539,14 @@ def _record(
         referenced.add(name)
 
 
-def _is_pytest_injected(node: ast.AST) -> bool:
+def _is_pytest_injected(node: ast.AST, fixtures: dict[str, str]) -> bool:
     """Whether pytest resolves this function's parameters by name."""
 
     if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return False
-    if node.name.startswith("test_"):
+    if node.name.startswith("test"):
         return True
-    return any("fixture" in ast.dump(decorator) for decorator in node.decorator_list)
+    return node.name in fixtures.values()
 
 
 def _argument_names(node: ast.AST) -> frozenset[str]:
@@ -661,12 +711,13 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     lines = source.splitlines()
     referenced = _definition_only_references(tree)
     violations: list[Violation] = []
-    for name, line, kind, _node in _definition_names(tree):
-        if name in referenced:
-            continue
-        if _waived(lines, line):
-            continue
-        violations.append(Violation(relative, line, name, kind))
+    definitions = _definition_names(tree)
+    last_binding = {name: index for index, (name, *_rest) in enumerate(definitions)}
+    for index, (name, line, kind, _node) in enumerate(definitions):
+        if not _waived(lines, line) and (
+            last_binding[name] != index or name not in referenced
+        ):
+            violations.append(Violation(relative, line, name, kind))
     return tuple(violations)
 
 

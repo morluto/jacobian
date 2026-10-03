@@ -126,7 +126,7 @@ def _observed_matches(info: dict[str, object]) -> list[str]:
 
 def _targets(
     tree: ast.Module, sites: dict[int, str]
-) -> tuple[list[tuple[int, int, int, str, str, str]], int]:
+) -> tuple[list[tuple[int, int, int, str, str, str, str]], int]:
     """Locate each ``with pytest.raises(..., match=...)`` header by AST.
 
     Returns ``(targets, multi_item_with)``. ``multi_item_with`` counts the
@@ -134,8 +134,9 @@ def _targets(
     sibling contexts.
     """
 
-    found: list[tuple[int, int, int, str, str, str]] = []
+    found: list[tuple[int, int, int, str, str, str, str]] = []
     multi_item_with = 0
+    reserved_bindings: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.With):
             continue
@@ -170,13 +171,48 @@ def _targets(
         if isinstance(item.optional_vars, ast.Name):
             binding = item.optional_vars.id
         else:
-            binding = DEFAULT_BINDING
+            binding = _fresh_binding(tree, node, reserved_bindings)
+        reserved_bindings.add(binding)
+        qualifier = ast.unparse(call.func)
         body_end: int = node.body[-1].end_lineno if node.body else call.lineno
         if body_end is None:
             continue
         header_end: int = call.end_lineno or call.lineno
-        found.append((call.lineno, header_end, body_end, error_class, code, binding))
+        found.append(
+            (call.lineno, header_end, body_end, error_class, code, binding, qualifier)
+        )
     return found, multi_item_with
+
+
+def _fresh_binding(tree: ast.Module, node: ast.With, reserved: set[str]) -> str:
+    """Choose an exception binding unused in the enclosing lexical scope."""
+
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    scope: ast.AST = tree
+    current: ast.AST | None = node
+    while current is not None:
+        current = parents.get(current)
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            scope = current
+            break
+    occupied = set(reserved)
+    for child in ast.walk(scope):
+        if isinstance(child, ast.Name):
+            occupied.add(child.id)
+        elif isinstance(child, ast.arg):
+            occupied.add(child.arg)
+        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            occupied.add(child.name)
+    candidate = DEFAULT_BINDING
+    suffix = 2
+    while candidate in occupied:
+        candidate = f"{DEFAULT_BINDING}_{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _is_raises_call(item: ast.withitem) -> bool:
@@ -202,22 +238,24 @@ def rewrite(path: Path, sites: dict[int, str]) -> tuple[int, int]:
         return 0, multi_item_with
     # Process outermost-first and never let one rewrite swallow another.
     targets.sort(key=lambda item: (item[0], -item[2]))
-    filtered: list[tuple[int, int, int, str, str, str]] = []
+    filtered: list[tuple[int, int, int, str, str, str, str]] = []
     reach = 0
-    for start, header_end, body_end, error_class, code, binding in targets:
+    for start, header_end, body_end, error_class, code, binding, qualifier in targets:
         if start <= reach:
             continue
-        filtered.append((start, header_end, body_end, error_class, code, binding))
+        filtered.append(
+            (start, header_end, body_end, error_class, code, binding, qualifier)
+        )
         reach = body_end
     targets = filtered
     out: list[str] = []
     cursor = 0
     changed = 0
-    for start, header_end, body_end, error_class, code, binding in targets:
+    for start, header_end, body_end, error_class, code, binding, qualifier in targets:
         out.extend(lines[cursor : start - 1])
         leading = re.match(r"\s*", lines[start - 1])
         indent = leading.group(0) if leading else ""
-        out.append(f"{indent}with pytest.raises({error_class}) as {binding}:\n")
+        out.append(f"{indent}with {qualifier}({error_class}) as {binding}:\n")
         # guarded body, 1-indexed header_end+1 .. body_end
         out.extend(lines[header_end:body_end])
         out.append(f'{indent}assert {binding}.value.errors()[0]["type"] == "{code}"\n')

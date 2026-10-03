@@ -468,3 +468,39 @@ def test_single_item_with_still_rewrites(tmp_path: Path) -> None:
     assert "with pytest.raises(ValueError) as exc_info:" in path.read_text(
         encoding="utf-8"
     )
+
+
+def test_rewrite_preserves_aliased_pytest_qualifier(tmp_path: Path) -> None:
+    path = tmp_path / "test_alias.py"
+    path.write_text(
+        "import pytest as pt\n\n"
+        "def test_bounded():\n"
+        '    with pt.raises(ValueError, match="boom"):\n'
+        "        compute()\n",
+        encoding="utf-8",
+    )
+
+    changed, _ = rewrite(path, {4: "ops.limit"})
+
+    assert changed == 1
+    assert "with pt.raises(ValueError) as exc_info:" in path.read_text(encoding="utf-8")
+
+
+def test_rewrite_avoids_existing_exc_info_local(tmp_path: Path) -> None:
+    path = tmp_path / "test_binding.py"
+    path.write_text(
+        "import pytest\n\n"
+        "def test_bounded():\n"
+        '    exc_info = "keep me"\n'
+        '    with pytest.raises(ValueError, match="boom"):\n'
+        "        compute()\n"
+        "    assert exc_info == 'keep me'\n",
+        encoding="utf-8",
+    )
+
+    changed, _ = rewrite(path, {5: "ops.limit"})
+
+    assert changed == 1
+    rewritten = path.read_text(encoding="utf-8")
+    assert "with pytest.raises(ValueError) as exc_info_2:" in rewritten
+    assert "assert exc_info == 'keep me'" in rewritten

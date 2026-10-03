@@ -158,6 +158,18 @@ def test_merge_record_collects_every_observed_match() -> None:
     assert merged["code"] == "ops.limit"
 
 
+def test_merge_record_preserves_incoming_aggregated_matches() -> None:
+    merged = merge_record(
+        {"code": "ops.limit", "match": "zap"},
+        {
+            "code": "ops.limit",
+            "match": "bang",
+            "matches": ["bang", "boom"],
+        },
+    )
+    assert merged["matches"] == ["bang", "boom", "zap"]
+
+
 def test_agreeing_matches_still_convert(tmp_path: Path) -> None:
     path = _write(
         tmp_path,

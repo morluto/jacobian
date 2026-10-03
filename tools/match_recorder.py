@@ -117,15 +117,14 @@ def _observed_matches(
 ) -> list[str]:
     """Return every ``match`` text observed for one site, sorted and unique."""
 
-    seen = previous.get("matches")
-    matches: set[str] = (
-        {item for item in seen if isinstance(item, str) and item}
-        if isinstance(seen, list)
-        else set()
-    )
-    for source in (previous.get("match"), record.get("match")):
-        if isinstance(source, str) and source:
-            matches.add(source)
+    matches: set[str] = set()
+    for source in (previous, record):
+        seen = source.get("matches")
+        if isinstance(seen, list):
+            matches.update(item for item in seen if isinstance(item, str) and item)
+        match = source.get("match")
+        if isinstance(match, str) and match:
+            matches.add(match)
     return sorted(matches)
 
 

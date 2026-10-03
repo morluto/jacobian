@@ -126,9 +126,19 @@ def test_merge_record_preserves_codeless_member() -> None:
 
 def test_importing_recorder_does_not_replace_pytest_raises() -> None:
     import pytest
+    import tools.match_recorder as recorder
 
     original_raises = pytest.raises
-    import tools.match_recorder  # noqa: F401
+    assert pytest.raises is original_raises
+
+    recorder.pytest_configure(None)
+    try:
+        info = pytest.raises(ValueError, int, "not an integer")  # noqa: RUF061
+        assert isinstance(info.value, ValueError)
+        with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
+            int("still not an integer")
+    finally:
+        recorder.pytest_unconfigure(None)
 
     assert pytest.raises is original_raises
 

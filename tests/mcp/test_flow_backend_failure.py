@@ -43,6 +43,14 @@ def test_min_cost_backend_error_is_mcp_execution_failure(
         assert result.is_error
         assert result.structured_content is None
         assert isinstance(result.content[0], TextContent)
-        assert result.content[0].text.startswith("Error executing tool math.run:")
+        # The classification must be the generic execution failure: a prefix
+        # match alone also passes for an invalid-request projection, and the
+        # backend's private message must not leak through the MCP surface. The
+        # SDK prefix is kept loose on purpose, since it is not this module's
+        # contract; the classification and the leak check are.
+        text = result.content[0].text
+        assert text.startswith("Error executing tool math.run:")
+        assert text.endswith("operation execution failed")
+        assert "private network backend failure" not in text
 
     asyncio.run(scenario())

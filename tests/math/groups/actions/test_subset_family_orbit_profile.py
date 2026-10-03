@@ -8,7 +8,6 @@ from sympy.combinatorics import Permutation, PermutationGroup
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
-    ActionBoundSubset,
     FinitePermutationAction,
     SubsetFamilyOrbitProfileRequest,
     SubsetFamilyOrbitProfileResult,
@@ -40,12 +39,6 @@ def _symmetric_s3() -> FinitePermutationAction:
         domain=("p0", "p1", "p2"),
         generators=((1, 2, 0), (1, 0, 2)),
     )
-
-
-def _bound(
-    action: FinitePermutationAction, positions: tuple[int, ...]
-) -> ActionBoundSubset:
-    return ActionBoundSubset(action=action, positions=positions)
 
 
 def _request(

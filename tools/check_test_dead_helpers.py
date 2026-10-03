@@ -153,7 +153,9 @@ def _is_overload_declaration(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bo
     return False
 
 
-def _definition_only_references(tree: ast.Module) -> set[str]:
+def _definition_only_references(
+    tree: ast.Module,
+) -> tuple[set[str], set[tuple[str, int, bool]]]:
     """Module-level names that a *lexically resolved* load actually reaches.
 
     A flat name set is not enough. A local parameter, assignment, or attribute
@@ -173,8 +175,27 @@ def _definition_only_references(tree: ast.Module) -> set[str]:
         fixtures[name] for name in _pytest_string_references(tree) if name in fixtures
     )
     referenced.update(_autouse_fixture_definitions(tree))
-    _scan(tree, frozenset(), module_names, referenced, fixtures)
-    return referenced
+    aliases = _pytest_import_aliases(tree)
+    reference_sites: set[tuple[str, int, bool]] = set()
+    _scan(
+        tree, frozenset(), module_names, referenced, fixtures, aliases, reference_sites
+    )
+    synthetic_line = (
+        max(
+            (
+                getattr(node, "end_lineno", None) or getattr(node, "lineno", 0)
+                for node in ast.walk(tree)
+            ),
+            default=0,
+        )
+        + 1
+    )
+    for definition in _autouse_fixture_definitions(tree):
+        reference_sites.add((definition, synthetic_line, True))
+    for fixture_name in _pytest_string_references(tree):
+        if fixture_name in fixtures:
+            reference_sites.add((fixtures[fixture_name], synthetic_line, True))
+    return referenced, reference_sites
 
 
 def _assignment_names(target: ast.expr) -> frozenset[str]:
@@ -341,12 +362,24 @@ def _scan(  # noqa: C901
     module_names: set[str],
     referenced: set[str],
     fixtures: dict[str, str],
+    pytest_aliases: dict[str, str],
+    reference_sites: set[tuple[str, int, bool]],
     class_outer_bound: frozenset[str] | None = None,
+    deferred: bool = False,
 ) -> None:
-    """Record module-level loads that no enclosing scope shadows."""
+    """Record module-level loads and the binding each load can reach."""
 
     if isinstance(node, ast.Name):
-        _record(node.id, node.ctx, bound, module_names, referenced)
+        _record(
+            node.id,
+            node.ctx,
+            node.lineno,
+            bound,
+            module_names,
+            referenced,
+            reference_sites,
+            deferred,
+        )
         return
     if isinstance(node, ast.Constant):
         return
@@ -355,7 +388,8 @@ def _scan(  # noqa: C901
     )
     for child in children:
         if isinstance(child, _SCOPE_NODES):
-            # Headers evaluate in the enclosing scope; the body does not.
+            # Headers evaluate where the definition appears; function bodies
+            # resolve module names after module initialization has completed.
             for decorator in getattr(child, "decorator_list", ()):
                 _scan(
                     decorator,
@@ -363,7 +397,10 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
+                    pytest_aliases,
+                    reference_sites,
                     class_outer_bound,
+                    deferred,
                 )
             for default in _header_expressions(child):
                 _scan(
@@ -372,17 +409,30 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
+                    pytest_aliases,
+                    reference_sites,
                     class_outer_bound,
+                    deferred,
                 )
             if _is_pytest_injected(child, fixtures):
-                # pytest resolves a fixture by parameter name, so a requested
-                # fixture is referenced without any Name load in the body.
-                requested = _argument_names(child) - _direct_parametrize_names(child)
-                referenced.update(
-                    fixtures[name] for name in requested if name in fixtures
+                requested = _argument_names(child) - _direct_parametrize_names(
+                    child, pytest_aliases
                 )
+                for name in requested:
+                    if name in fixtures:
+                        referenced.add(fixtures[name])
+                        reference_sites.add((fixtures[name], child.lineno, True))
             if isinstance(child, ast.ClassDef):
-                _scan_class_body(child.body, bound, module_names, referenced, fixtures)
+                _scan_class_body(
+                    child.body,
+                    bound,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    pytest_aliases,
+                    reference_sites,
+                    deferred,
+                )
                 continue
             body_bound = bound | _scope_bindings(child)
             body_class_outer_bound = class_outer_bound
@@ -390,15 +440,12 @@ def _scan(  # noqa: C901
                 isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and class_outer_bound is not None
             ):
-                # Python methods do not close over the class namespace. They
-                # resolve names from the scope that surrounded the class.
                 body_bound = class_outer_bound | _scope_bindings(child)
                 body_class_outer_bound = None
             elif (
                 isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and child.name in module_names
             ):
-                # A definition cannot make itself live through recursion alone.
                 body_bound = body_bound | {child.name}
             _scan(
                 child.body,
@@ -406,17 +453,28 @@ def _scan(  # noqa: C901
                 module_names,
                 referenced,
                 fixtures,
+                pytest_aliases,
+                reference_sites,
                 body_class_outer_bound,
+                True,
             )
             continue
         if isinstance(child, ast.Name):
-            _record(child.id, child.ctx, bound, module_names, referenced)
-            # A Store or Del name is a binding or rebinding, never a use.
+            _record(
+                child.id,
+                child.ctx,
+                child.lineno,
+                bound,
+                module_names,
+                referenced,
+                reference_sites,
+                deferred,
+            )
             continue
         if isinstance(child, _COMPREHENSIONS):
-            # Comprehensions open their own scope from Python 3 onward.
             first_iter_bound = bound
             inner = class_outer_bound if class_outer_bound is not None else bound
+            lazy = deferred or isinstance(child, ast.GeneratorExp)
             for index, generator in enumerate(child.generators):
                 _scan(
                     generator.iter,
@@ -424,7 +482,10 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
+                    pytest_aliases,
+                    reference_sites,
                     class_outer_bound if index == 0 else None,
+                    deferred if index == 0 else lazy,
                 )
                 inner = inner | _comprehension_target_names(generator.target)
                 _scan(
@@ -433,37 +494,28 @@ def _scan(  # noqa: C901
                     module_names,
                     referenced,
                     fixtures,
+                    pytest_aliases,
+                    reference_sites,
                     None,
+                    lazy,
                 )
-            if isinstance(child, ast.DictComp):
+            for expression in (
+                (child.key, child.value)
+                if isinstance(child, ast.DictComp)
+                else (child.elt,)
+            ):
                 _scan(
-                    child.key,
+                    expression,
                     inner,
                     module_names,
                     referenced,
                     fixtures,
+                    pytest_aliases,
+                    reference_sites,
                     None,
-                )
-                _scan(
-                    child.value,
-                    inner,
-                    module_names,
-                    referenced,
-                    fixtures,
-                    None,
-                )
-            else:
-                _scan(
-                    child.elt,
-                    inner,
-                    module_names,
-                    referenced,
-                    fixtures,
-                    None,
+                    lazy,
                 )
             continue
-        # An attribute access never resolves to a module-level binding:
-        # `obj.name` reads a member, so it cannot reference a global helper.
         if isinstance(child, ast.Attribute):
             _scan(
                 child.value,
@@ -471,7 +523,10 @@ def _scan(  # noqa: C901
                 module_names,
                 referenced,
                 fixtures,
+                pytest_aliases,
+                reference_sites,
                 class_outer_bound,
+                deferred,
             )
             continue
         _scan(
@@ -480,7 +535,10 @@ def _scan(  # noqa: C901
             module_names,
             referenced,
             fixtures,
+            pytest_aliases,
+            reference_sites,
             class_outer_bound,
+            deferred,
         )
 
 
@@ -490,13 +548,83 @@ def _scan_class_body(
     module_names: set[str],
     referenced: set[str],
     fixtures: dict[str, str],
+    pytest_aliases: dict[str, str],
+    reference_sites: set[tuple[str, int, bool]],
+    deferred: bool,
 ) -> None:
     """Scan class statements in order because class locals bind when assigned."""
 
     bound = outer_bound
     for statement in statements:
-        _scan(statement, bound, module_names, referenced, fixtures, outer_bound)
+        _scan_class_statement(
+            statement,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            outer_bound,
+            deferred,
+        )
         bound = bound | _class_statement_bindings(statement)
+
+
+def _scan_class_statement(
+    statement: ast.stmt,
+    bound: frozenset[str],
+    module_names: set[str],
+    referenced: set[str],
+    fixtures: dict[str, str],
+    pytest_aliases: dict[str, str],
+    reference_sites: set[tuple[str, int, bool]],
+    outer_bound: frozenset[str],
+    deferred: bool,
+) -> None:
+    if isinstance(statement, ast.If):
+        _scan(
+            statement.test,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            outer_bound,
+            deferred,
+        )
+        _scan_class_body(
+            statement.body,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+        )
+        _scan_class_body(
+            statement.orelse,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+        )
+        return
+    _scan(
+        [statement],
+        bound,
+        module_names,
+        referenced,
+        fixtures,
+        pytest_aliases,
+        reference_sites,
+        outer_bound,
+        deferred,
+    )
 
 
 def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
@@ -531,12 +659,16 @@ def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
 def _record(
     name: str,
     context: ast.expr_context,
+    line: int,
     bound: frozenset[str],
     module_names: set[str],
     referenced: set[str],
+    reference_sites: set[tuple[str, int, bool]],
+    deferred: bool,
 ) -> None:
     if isinstance(context, ast.Load) and name in module_names and name not in bound:
         referenced.add(name)
+        reference_sites.add((name, line, deferred))
 
 
 def _is_pytest_injected(node: ast.AST, fixtures: dict[str, str]) -> bool:
@@ -564,7 +696,9 @@ def _argument_names(node: ast.AST) -> frozenset[str]:
     return frozenset(names)
 
 
-def _direct_parametrize_names(node: ast.AST) -> frozenset[str]:
+def _direct_parametrize_names(
+    node: ast.AST, pytest_aliases: dict[str, str]
+) -> frozenset[str]:
     """Test arguments supplied as values do not request same-named fixtures."""
 
     if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -573,7 +707,8 @@ def _direct_parametrize_names(node: ast.AST) -> frozenset[str]:
     for decorator in node.decorator_list:
         if (
             not isinstance(decorator, ast.Call)
-            or _dotted_name(decorator.func) != ("pytest.mark.parametrize")
+            or _canonical_pytest_name(decorator.func, pytest_aliases)
+            != "pytest.mark.parametrize"
             or not decorator.args
         ):
             continue
@@ -709,14 +844,25 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     except (OSError, SyntaxError):
         return ()
     lines = source.splitlines()
-    referenced = _definition_only_references(tree)
+    _referenced, reference_sites = _definition_only_references(tree)
     violations: list[Violation] = []
     definitions = _definition_names(tree)
-    last_binding = {name: index for index, (name, *_rest) in enumerate(definitions)}
+    bindings: dict[str, list[tuple[int, int]]] = {}
+    for index, (name, line, _kind, _node) in enumerate(definitions):
+        bindings.setdefault(name, []).append((index, line))
+    referenced_bindings: set[int] = set()
+    for name, line, deferred in reference_sites:
+        choices = bindings.get(name, [])
+        if not choices:
+            continue
+        if deferred:
+            referenced_bindings.add(choices[-1][0])
+        else:
+            eligible = [index for index, binding_line in choices if binding_line < line]
+            if eligible:
+                referenced_bindings.add(eligible[-1])
     for index, (name, line, kind, _node) in enumerate(definitions):
-        if not _waived(lines, line) and (
-            last_binding[name] != index or name not in referenced
-        ):
+        if not _waived(lines, line) and index not in referenced_bindings:
             violations.append(Violation(relative, line, name, kind))
     return tuple(violations)
 
@@ -731,9 +877,10 @@ def _test_files(root: Path) -> Iterable[Path]:
     tests_root = root / _TESTS_ROOT
     if not tests_root.is_dir():
         return ()
+    paths = set(tests_root.rglob("test_*.py")) | set(tests_root.rglob("*_test.py"))
     return (
         path
-        for path in sorted(tests_root.rglob("test_*.py"))
+        for path in sorted(paths)
         if not any(part in _GENERATED_DIRECTORIES for part in path.parts)
     )
 

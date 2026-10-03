@@ -13,7 +13,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from tools.check_test_dead_helpers import Violation, _check_file, check
+from tools.check_test_dead_helpers import Violation, _check_file, _test_files, check
 
 SHADOWED_BY_PARAMETER = '''\
 """A parameter that shares a module-level name is not a reference to it."""
@@ -184,6 +184,19 @@ def test_class_comprehension_body_uses_scope_surrounding_class(
     assert _reported(tmp_path, "test_class_comprehension.py", body) == set()
 
 
+def test_class_compound_statement_updates_bindings_in_order(tmp_path: Path) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class TestCase:
+        if True:
+            helper = 2
+            value = helper
+    """
+    assert "helper" in _reported(tmp_path, "test_class_compound.py", body)
+
+
 def test_lambda_parameter_shadows_module_helper(tmp_path: Path) -> None:
     body = """\
     helper = 1
@@ -250,6 +263,23 @@ def test_fixture_import_alias_resolves_to_its_definition(tmp_path: Path) -> None
     assert _reported(tmp_path, "test_fixture_import_alias.py", body) == set()
 
 
+def test_aliased_parametrize_marks_fixture_parameter_as_direct(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest as pt
+
+    @pt.fixture
+    def item():
+        return 1
+
+    @pt.mark.parametrize("item", [2])
+    def test_direct_value(item):
+        assert item == 2
+    """
+    assert _reported(tmp_path, "test_alias_parametrize.py", body) == {"item"}
+
+
 def test_fixture_lookup_by_name_resolves_to_its_definition(tmp_path: Path) -> None:
     body = """\
     import pytest
@@ -304,6 +334,31 @@ def test_overwritten_module_binding_is_reported_even_when_name_is_used(
     path = _write(tmp_path, "test_overwritten.py", body)
     violations = _check_file(tmp_path, path)
     assert [(item.name, item.line) for item in violations] == [("helper", 1)]
+
+
+def test_earlier_module_binding_used_before_reassignment_is_live(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    CASES = (1,)
+
+    @pytest.mark.parametrize("value", CASES)
+    def test_value(value):
+        assert value
+
+    CASES = (2,)
+    """
+    path = _write(tmp_path, "test_binding_order.py", body)
+    violations = _check_file(tmp_path, path)
+    assert [(item.name, item.line) for item in violations] == [("CASES", 9)]
+
+
+def test_default_pytest_filename_pattern_is_scanned(tmp_path: Path) -> None:
+    _write(tmp_path, "sample_test.py", "helper = 1\n")
+
+    assert [path.name for path in _test_files(tmp_path)] == ["sample_test.py"]
 
 
 def test_pattern_capture_shadows_module_helper(tmp_path: Path) -> None:

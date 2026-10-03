@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.catalog import Catalog
+from jacobian.dispatch import invoke_operation
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafField,
@@ -116,8 +119,14 @@ def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> Non
         if tool.operation_id == "cellular_sheaf.morphism.compose"
     )
     request = SheafMorphismComposeRequest(first=first_copy, second=second_copy)
-    tool_result = tool.run(request)
-    assert tool_result == composed
+    # Route through dispatch so operation-ID lookup, strict wire parsing, and
+    # the output envelope all have to accept these serialized values.
+    dispatched = invoke_operation(
+        tool.operation_id, request.model_dump(mode="json"), Catalog.open()
+    )
+    assert (
+        tool.result_type.model_validate_json(json.dumps(dispatched.output)) == composed
+    )
 
 
 def test_natural_morphism_induces_axis_bound_cochain_matrices() -> None:
@@ -153,4 +162,7 @@ def test_natural_morphism_induces_axis_bound_cochain_matrices() -> None:
         for tool in BUILTIN_TOOLS
         if tool.operation_id == "cellular_sheaf.morphism.cochain_map"
     )
-    assert tool.run(request) == result
+    dispatched = invoke_operation(
+        tool.operation_id, request.model_dump(mode="json"), Catalog.open()
+    )
+    assert tool.result_type.model_validate_json(json.dumps(dispatched.output)) == result

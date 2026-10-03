@@ -85,47 +85,6 @@ from jacobian.math.quantum._models import ExactStabilizerGroup
 _FIELD = RationalCyclotomicField(order=6)
 
 
-_GENERIC_BASIS = "gamma0-cyclotomic-character-sturm-rref-v1"
-
-
-_EXPECTED = {
-    (2, 26, 2): (((0, 0), (0, -2)), ((1, 0), (-1, -1))),
-    (10, 26, 2): (((0, 0), (-2, 2)), ((1, 0), (-2, 1))),
-    (2, 26, 13): (((-1, -3), (0, 0)), ((0, 0), (-1, -3))),
-    (10, 26, 13): (((-4, 3), (0, 0)), ((0, 0), (-4, 3))),
-    (2, 39, 3): (
-        ((0, 0), (2, -1), (0, -3)),
-        ((0, 0), (1, -1), (-2, -2)),
-        ((1, 0), (-1, -1), (-2, 2)),
-    ),
-    (10, 39, 3): (
-        ((0, 0), (1, 1), (-3, 3)),
-        ((0, 0), (0, 1), (-4, 2)),
-        ((1, 0), (-2, 1), (0, -2)),
-    ),
-    (2, 39, 13): (
-        ((4, -1), (0, 0), (7, -5)),
-        ((4, -1), (-1, -3), (3, -4)),
-        ((0, 0), (0, 0), (-1, -3)),
-    ),
-    (10, 39, 13): (
-        ((3, 1), (0, 0), (2, 5)),
-        ((3, 1), (-4, 3), (-1, 4)),
-        ((0, 0), (0, 0), (-4, 3)),
-    ),
-}
-
-
-def _space(coordinate: int, level: int) -> ModularFormSpace:
-    return ModularFormSpace(
-        level=level,
-        weight=2,
-        kind="S",
-        character=_inflated_character(coordinate, level),
-        coefficient_domain=_FIELD,
-    )
-
-
 def _unit(field: RationalCyclotomicField) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
@@ -251,16 +210,6 @@ def test_face_lattice_operation_is_catalogued_and_runs_its_example() -> None:
     result = invoke_operation(_OPERATION_ID, operation.examples[0].input, catalog)
     assert result.output["faces"]
     assert len(result.output["covers"]) == 32
-
-
-# --- relocated from tests/math/geometry/polytopes/test_piecewise_polynomial_addition.py
-
-
-def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fraction]:
-    return {
-        term.exponents: term.coefficient.as_fraction()
-        for term in polynomial.polynomial.terms
-    }
 
 
 def test_catalog_addition_example_executes_through_typed_contract():

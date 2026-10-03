@@ -875,7 +875,15 @@ def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None
     )
 
 
-def admit_native_reversion(series: TruncatedSeries) -> None:
+def _admit_reversion_envelope(
+    series: TruncatedSeries,
+) -> tuple[tuple[CoefficientHeight, ...], int] | None:
+    """Admit a source and retain necessary Lagrange bounds for claim replay."""
+    from ._unit_bounds import require_series
+
+    require_series(
+        series, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="reversion"
+    )
     linear_source = _has_degree_at_most(series, 1)
     _require_native_input_series(
         series,
@@ -897,7 +905,7 @@ def admit_native_reversion(series: TruncatedSeries) -> None:
             "reversion requires nonzero linear coefficient",
         )
     if linear_source:
-        return
+        return None
     result_vector, common_denominator, common_numerator = (
         _reversion_lagrange_height_vector(series)
     )
@@ -925,6 +933,11 @@ def admit_native_reversion(series: TruncatedSeries) -> None:
             "reversion_backend_work",
             "reversion backend arithmetic exceeds the bounded work limit",
         )
+    return result_vector, common_denominator
+
+
+def admit_native_reversion(series: TruncatedSeries) -> None:
+    _admit_reversion_envelope(series)
 
 
 def admit_native_integral(series: TruncatedSeries, output_order: int) -> None:

@@ -25,7 +25,10 @@ MAX_UNIT_STORAGE_BITS = 1 << 32
 
 
 def _reject(
-    reason: str, message: str, *, family: Literal["unit", "power", "compose"] = "unit"
+    reason: str,
+    message: str,
+    *,
+    family: Literal["unit", "power", "compose", "reversion"] = "unit",
 ) -> None:
     raise OperationResourceAdmissionError(
         location=(), code=f"formal_power_series.{family}_{reason}", message=message
@@ -44,7 +47,7 @@ def require_series(
     series: TruncatedSeries,
     *,
     maximum_digits: int,
-    resource_family: Literal["unit", "power", "compose"] = "unit",
+    resource_family: Literal["unit", "power", "compose", "reversion"] = "unit",
 ) -> None:
     """Bound native copies before shape shortcuts, LCMs, and backend conversion."""
     from ._models import MAX_TRUNCATE_SOURCE_ORDER, TruncatedSeries

@@ -252,10 +252,10 @@ class TestMultivariateGcd:
         terms = tuple((f"{i + 1}/1", (i, 0)) for i in range(599, -1, -1))
         left = _poly(("x", "y"), terms[:600])
         right = _poly(("x", "y"), (("1/1", (0, 0)),))
-        with pytest.raises(
-            OperationDomainValidationError, match="term operation budget"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _compute_gcd(MultivariateGcdRequest(left=left, right=right))
+
+        assert exc_info.value.errors()[0]["type"] == "polynomial.multivariate_admission"
 
 
 # --------------------------------------------------------------------------- #
@@ -637,12 +637,17 @@ class TestMultivariateResultant:
         terms_right = tuple(("1/1", (i, 0)) for i in range(39, -1, -1))
         left = _poly(("x", "y"), terms_left)
         right = _poly(("x", "y"), terms_right)
-        with pytest.raises(OperationDomainValidationError, match="Sylvester degree"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _compute_resultant(
                 MultivariateResultantRequest(
                     left=left, right=right, elimination_variable="x"
                 )
             )
+
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial.multivariate_resultant.degree_budget"
+        )
 
     def test_resultant_rejects_unbounded_remaining_variable_expansion(self) -> None:
         """Reject a resultant whose possible monomial support exceeds its output budget."""
@@ -657,12 +662,17 @@ class TestMultivariateResultant:
         right_terms = [("1/1", (31, *zeroes[1:])), ("-1/1", zeroes)]
         left = _poly(variables, tuple(left_terms))
         right = _poly(variables, tuple(right_terms))
-        with pytest.raises(OperationDomainValidationError, match="resultant output"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _compute_resultant(
                 MultivariateResultantRequest(
                     left=left, right=right, elimination_variable="x"
                 )
             )
+
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial.multivariate_resultant.support_budget"
+        )
 
 
 # --------------------------------------------------------------------------- #

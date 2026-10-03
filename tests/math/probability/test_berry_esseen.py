@@ -196,8 +196,12 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
     )
     assert distribution.sample_count == MAX_BERRY_ESSEEN_SAMPLE_COUNT
 
-    with pytest.raises(OperationResourceAdmissionError, match="squared bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         berry_esseen_bound(distribution)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.rational_height_bound"
+    )
 
     over_digits = "1" + "0" * 512
     with pytest.raises(ValueError, match="digit bound"):
@@ -220,15 +224,17 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
                 }
             )
         )
-    with pytest.raises(
-        OperationDomainValidationError, match="sample_count must be positive"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(
                 distribution=distribution.distribution,
                 sample_count=0,
             )
         )
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.nonpositive_sample_count"
+    )
 
 
 def test_sample_count_uses_the_exact_integer_wire_contract() -> None:
@@ -271,8 +277,13 @@ def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
     overflow_request = BerryEsseenRequest.model_validate(
         {"distribution": over_bound, "sample_count": 1}
     )
-    with pytest.raises(OperationResourceAdmissionError, match="16384"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         berry_esseen_bound(overflow_request)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.atom_work_bound"
+    )
+
     schema = BerryEsseenRequest.model_json_schema()
     finite_atoms = schema["$defs"]["FiniteRationalDistribution"]["properties"]["atoms"]
     assert finite_atoms["maxItems"] == 32_768
@@ -326,15 +337,17 @@ def test_input_height_is_checked_before_normalization(
 def test_native_sample_count_rejects_non_integers() -> None:
     request = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
     for sample_count in ("4", True):
-        with pytest.raises(
-            OperationDomainValidationError, match="sample_count must be an integer"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             berry_esseen_bound(
                 BerryEsseenRequest.model_construct(
                     distribution=request.distribution,
                     sample_count=sample_count,
                 )
             )
+
+        assert exc_info.value.errors()[0]["type"] == (
+            "probability.berry_esseen.sample_count_type"
+        )
 
 
 def test_native_sample_count_rejects_over_digit_cap() -> None:
@@ -356,10 +369,14 @@ def test_native_sample_count_rejects_over_digit_cap() -> None:
 
 
 def test_native_distribution_must_be_a_finite_rational_law() -> None:
-    with pytest.raises(OperationDomainValidationError, match="finite rational law"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(distribution="bad", sample_count=1)
         )
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.distribution_type"
+    )
 
 
 def test_result_schema_projects_the_owner_atom_cap() -> None:
@@ -472,12 +489,21 @@ def test_result_rejects_structurally_invalid_claims(
 def test_zero_variance_and_bad_normalization_are_rejected_at_operation_boundary() -> (
     None
 ):
-    with pytest.raises(OperationDomainValidationError, match="positive variance"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         berry_esseen_bound(_request(_distribution((7, Fraction(1, 1)))))
-    with pytest.raises(OperationDomainValidationError, match="sum exactly to 1"):
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.zero_variance_distribution"
+    )
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 1)), (1, Fraction(1, 1))))
         )
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.input_distribution"
+    )
 
 
 def test_normalization_intermediate_height_is_a_resource_refusal() -> None:
@@ -488,7 +514,7 @@ def test_normalization_intermediate_height_is_a_resource_refusal() -> None:
         10**127 + 111,
         10**127 + 139,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="intermediate bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         berry_esseen_bound(
             _request(
                 _distribution(
@@ -499,6 +525,10 @@ def test_normalization_intermediate_height_is_a_resource_refusal() -> None:
                 )
             )
         )
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.berry_esseen.normalization_height"
+    )
 
 
 def test_operation_declaration_pins_iid_constant_and_contract() -> None:

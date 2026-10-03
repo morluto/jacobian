@@ -23,6 +23,7 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_VERTICES,
     FacetIncidenceRequest,
     FacetIncidenceResult,
+    PolytopeAdmissionError,
     PolytopeSupportRequest,
     PolytopeSupportResult,
     PolytopeVolumeRequest,
@@ -335,7 +336,7 @@ class TestFacetIncidence:
     def test_lower_dimensional_input_and_work_overflow_reject_during_execution(
         self,
     ) -> None:
-        with pytest.raises(ValueError, match="not full-dimensional"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_facet_incidence(
                 FacetIncidenceRequest(
                     vertices=(
@@ -344,6 +345,9 @@ class TestFacetIncidence:
                     )
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
+        )
         vertices = (
             _v(*((0, 1),) * 7),
             *(
@@ -352,8 +356,11 @@ class TestFacetIncidence:
             ),
             *(_v(*(((index, 1),) * 7)) for index in range(1, 57)),
         )
-        with pytest.raises(ValueError, match="output bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
+        )
 
     @pytest.mark.scale
     def test_interior_source_rows_are_admitted_and_bind_no_facet(self) -> None:
@@ -395,8 +402,11 @@ class TestFacetIncidence:
         failed only inside execution."""
         vertices = tuple(_v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16))
 
-        with pytest.raises(ValueError, match="output bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
+        )
 
     def test_padded_seven_simplex_admits_distinct_candidates_and_binds_every_row(
         self,
@@ -647,13 +657,14 @@ class TestRejection:
     def test_empty_system_is_classified_before_its_recession_cone(self) -> None:
         """An infeasible strip is empty, not a nonempty unbounded polyhedron."""
 
-        with pytest.raises(ValueError, match="empty polytope"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _volume_via_halfspaces(
                 (
                     _h((1, 1), (0, 1), offset=(0, 1)),
                     _h((-1, 1), (0, 1), offset=(-1, 1)),
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "polytope.h_representation"
 
     def test_unbounded_halfspace_representation(self) -> None:
         """An unbounded H-representation (no upper bounds) is rejected."""
@@ -738,7 +749,7 @@ class TestRejection:
         conversion after acceptance."""
 
         huge = 10**20000
-        with pytest.raises(ValueError, match="result bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _volume_via_vertices(
                 (
                     Vertex(coordinates=(_cr0(), _cr0())),
@@ -756,6 +767,9 @@ class TestRejection:
                     ),
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.volume.volume_result_bound"
+        )
 
     @pytest.mark.scale
     def test_large_but_representable_triangle_is_returned(self) -> None:
@@ -880,8 +894,11 @@ class TestDimensionOne:
             return Vertex(coordinates=(CanonicalRational(num=1, den=den),))
 
         big = 10**16400
-        with pytest.raises(ValueError, match="result bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _volume_via_vertices((endpoint(big), endpoint(big + 1)))
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.volume.volume_result_bound"
+        )
 
     @pytest.mark.scale
     def test_representable_large_denominator_interval_computed(self) -> None:
@@ -952,8 +969,11 @@ class TestDimensionOne:
             return Vertex(coordinates=(CanonicalRational(num=num, den=1),))
 
         huge = 10**32768 - 1
-        with pytest.raises(ValueError, match="result bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _volume_via_vertices((endpoint(huge), endpoint(-huge)))
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.volume.volume_result_bound"
+        )
 
 
 class TestDenominatorGrowth:
@@ -972,7 +992,7 @@ class TestDenominatorGrowth:
             )
 
         big = 10**8500
-        with pytest.raises(ValueError, match="result bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _volume_via_vertices(
                 (
                     Vertex(coordinates=(_cr0(), _cr0())),
@@ -980,6 +1000,9 @@ class TestDenominatorGrowth:
                     small_fraction(big + 3),
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.volume.volume_result_bound"
+        )
 
 
 class TestNativeApi:
@@ -1132,8 +1155,11 @@ class TestDuplicateVertexAdmission:
             ),
         )
         duplicated = tuple(vertex for vertex in corners for _ in range(2))
-        with pytest.raises(ValueError, match="result bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _volume_via_vertices(duplicated)
+        assert (
+            exc_info.value.errors()[0]["type"] == "polytope.volume.volume_result_bound"
+        )
 
     def test_duplicated_representable_square_is_still_computed(self) -> None:
         """Exact deduplication keeps ordinary duplicate-laden inputs working."""
@@ -1195,7 +1221,7 @@ class TestNativeApiAdmission:
         from jacobian.math.geometry.polytopes import convex_hull_volume
 
         huge = Fraction(10) ** 20000
-        with pytest.raises(ValueError, match="result bound"):
+        with pytest.raises(PolytopeAdmissionError) as exc_info:
             convex_hull_volume(
                 (
                     (Fraction(0), Fraction(0)),
@@ -1203,6 +1229,7 @@ class TestNativeApiAdmission:
                     (Fraction(0), huge),
                 )
             )
+        assert exc_info.value.reason == "volume_result_bound"
 
     @pytest.mark.scale
     def test_native_still_returns_representable_volumes(self) -> None:
@@ -1698,8 +1725,9 @@ class TestCanonicalVPolytopeComposition:
             ),
         )
 
-        with pytest.raises(ValueError, match="exceeds the dimension bound"):
+        with pytest.raises(ValidationError) as exc_info:
             PolytopeVolumeRequest(vertices=cube, dimension_bound=2)
+        assert exc_info.value.errors()[0]["type"] == "polytope.dimension_bound"
 
     def test_over_dimension_canonical_value_rejects_before_nested_parsing(self) -> None:
         """The canonical space may carry ``MAX_FACET_DIMENSION`` axes for
@@ -1727,15 +1755,14 @@ class TestCanonicalVPolytopeComposition:
             vertices=tuple(rows),
         )
 
-        with pytest.raises(
-            ValueError, match=rf"dimension {MAX_DIMENSION + 1} exceeds the dimension"
-        ):
+        with pytest.raises(ValidationError) as exc_info:
             PolytopeVolumeRequest.model_validate_json(
                 json.dumps({"vertices": simplex.model_dump(mode="json")})
             )
+        assert exc_info.value.errors()[0]["type"] == "polytope.dimension_bound"
 
     def test_canonical_value_remains_mutually_exclusive_with_halfspaces(self) -> None:
-        with pytest.raises(ValueError, match="exactly one of"):
+        with pytest.raises(ValidationError) as exc_info:
             PolytopeVolumeRequest(
                 vertices=_support_square_result().polytope,
                 halfspaces=(
@@ -1745,6 +1772,7 @@ class TestCanonicalVPolytopeComposition:
                     ),
                 ),
             )
+        assert exc_info.value.errors()[0]["type"] == "polytope.halfspaces"
 
     def test_schema_publishes_canonical_v_polytope_acceptance(self) -> None:
         schema = PolytopeVolumeRequest.model_json_schema()
@@ -1933,8 +1961,9 @@ class TestCanonicalVPolytopeFacetComposition:
             )
 
     def test_canonical_value_still_respects_dimension_bound(self) -> None:
-        with pytest.raises(ValueError, match="exceeds the dimension bound"):
+        with pytest.raises(ValidationError) as exc_info:
             FacetIncidenceRequest(vertices=_cube(), dimension_bound=2)
+        assert exc_info.value.errors()[0]["type"] == "polytope.dimension_bound"
 
     def test_schema_publishes_canonical_v_polytope_acceptance(self) -> None:
         schema = FacetIncidenceRequest.model_json_schema()

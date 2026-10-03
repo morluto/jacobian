@@ -73,3 +73,12 @@ outputs, trajectories, reports, and other regenerable evidence belong under
 ignored `benchmarks/results/` or external artifact storage. A benchmark result
 is evidence about the experiment; it is not a new mathematical or product
 contract for Jacobian.
+
+Paired observation comparisons require identical content-addressed snapshot IDs
+and Harbor versions, in addition to the existing experiment invariants. Matching
+selected task/runtime fields cannot substitute for matching the complete lock.
+Comparison report schema version 2 retains the agreed `snapshot_id`; a mismatch
+produces `INVALID` with a null snapshot and a specific invariant failure.
+Historical version-1 reports are unchanged, but consumers of newly generated
+reports must accept version 2. This identity gate does not establish a causal
+claim or change the statistical analysis of paired observations.

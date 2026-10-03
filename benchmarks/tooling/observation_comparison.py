@@ -118,7 +118,7 @@ def _comparison_failures(
     )
     failures.extend(
         f"fixed invariant differs: {key}"
-        for key in ("source_sha", "dataset")
+        for key in ("source_sha", "dataset", "snapshot_id", "harbor_version")
         if control.get(key) != treatment.get(key)
     )
     if control.get("fixed_invariants") != treatment.get("fixed_invariants"):
@@ -228,12 +228,17 @@ def compare_evidence(
         if metrics[metric]["pair_count"] != len(pairs):
             failures.append(f"core metric is missing from a complete pair: {metric}")
     return {
-        "schema_version": "1",
+        "schema_version": "2",
         "evidence_class": _derived_comparison_class(control, treatment),
         "causal_claim_authorized": False,
         "status": "VALID" if not failures else "INVALID",
         "dataset": control.get("dataset"),
         "source_sha": control.get("source_sha"),
+        "snapshot_id": (
+            control["snapshot_id"]
+            if control["snapshot_id"] == treatment["snapshot_id"]
+            else None
+        ),
         "conditions": {
             "control": control.get("condition"),
             "treatment": treatment.get("condition"),
@@ -249,6 +254,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "# Jacobian workflow comparison",
         "",
         f"Status: **{report['status']}**. This report remains evaluation evidence; it does not itself authorize a causal operation claim.",
+        "",
+        f"Benchmark snapshot: {report['snapshot_id'] or 'no agreed snapshot'}",
         "",
         "| Metric | Pairs | Control | Treatment | Paired delta | Interpretation |",
         "| --- | ---: | ---: | ---: | ---: | --- |",

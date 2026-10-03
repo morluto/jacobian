@@ -10,6 +10,7 @@ import hashlib
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 from benchmarks.validation.mathematical_benchmarks_v1._paths import AGENT_TASKS, TASKS
 
@@ -58,7 +59,7 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
-def _bind_result_evidence(app: Path, submission: dict) -> None:
+def _bind_result_evidence(app: Path, submission: dict[str, Any]) -> None:
     evidence_path = app / "evidence" / "answer.txt"
     lines = evidence_path.read_text().splitlines()
     marker = "RESULT_JSON: " + json.dumps(

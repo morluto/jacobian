@@ -73,7 +73,25 @@ class _RecordingRaises:
             if record["code"] is None and isinstance(reason, str):
                 record["reason"] = reason
             if self._key:
-                RECORD[self._key] = record
+                previous = RECORD.get(self._key)
+                if previous is None:
+                    RECORD[self._key] = record
+                else:
+                    # A site executed more than once may raise different codes
+                    # (parametrized cases, loops). Keep every observed code so
+                    # the rewriter can refuse an ambiguous single-code assert.
+                    observed = previous.get("codes")
+                    codes: set[str] = (
+                        set(observed) if isinstance(observed, list) else set()
+                    )
+                    if isinstance(previous.get("code"), str):
+                        codes.add(previous["code"])
+                    if isinstance(record.get("code"), str):
+                        codes.add(record["code"])
+                    merged = dict(previous)
+                    merged["codes"] = sorted(codes)
+                    merged["code"] = None if len(codes) != 1 else next(iter(codes))
+                    RECORD[self._key] = merged
         return self._ctx.__exit__(exc_type, exc, tb)
 
 

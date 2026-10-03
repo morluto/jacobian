@@ -33,6 +33,7 @@ GENERIC_CODES = frozenset(
     }
 )
 _RAISES = re.compile(r"^(\s*)with pytest\.raises\((?P<err>[A-Za-z_][A-Za-z0-9_]*)\)")
+DEFAULT_BINDING = "exc_info"
 
 
 def load(path: Path) -> dict[str, dict[str, object]]:
@@ -67,6 +68,12 @@ def convertible_sites(
         path, _, lineno = key.rpartition(":")
         code = info.get("code")
         match = info.get("match")
+        codes = info.get("codes")
+        # A site that raised more than one code across its executions (a
+        # parametrized case or a loop) cannot be pinned to a single assert.
+        if isinstance(codes, list) and len(codes) > 1:
+            rejected["multiple_codes_across_executions"] += 1
+            continue
         if not isinstance(code, str) or not code:
             rejected["no_code"] += 1
             continue
@@ -82,12 +89,12 @@ def convertible_sites(
 
 def _targets(
     tree: ast.Module, sites: dict[int, str]
-) -> list[tuple[int, int, int, str, str]]:
+) -> list[tuple[int, int, int, str, str, str]]:
     """Locate each ``with pytest.raises(..., match=...)`` header by AST.
 
     Returns ``(start_line, end_line, error_class, code)`` 1-indexed and inclusive.
     """
-    found: list[tuple[int, int, int, str, str]] = []
+    found: list[tuple[int, int, int, str, str, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.With):
             continue
@@ -104,14 +111,22 @@ def _targets(
             if code is None:
                 continue
             first = call.args[0] if call.args else None
-            name = first.id if isinstance(first, ast.Name) else None
-            if name is None:
+            error_class = first.id if isinstance(first, ast.Name) else None
+            if error_class is None:
                 continue
+            # Reuse an existing `as <name>` binding; introducing a second name
+            # would orphan assertions the test already makes on the original.
+            if isinstance(item.optional_vars, ast.Name):
+                binding = item.optional_vars.id
+            else:
+                binding = DEFAULT_BINDING
             body_end: int = node.body[-1].end_lineno if node.body else call.lineno
             if body_end is None:
                 continue
             header_end: int = call.end_lineno or call.lineno
-            found.append((call.lineno, header_end, body_end, name, code))
+            found.append(
+                (call.lineno, header_end, body_end, error_class, code, binding)
+            )
     return found
 
 
@@ -124,25 +139,25 @@ def rewrite(path: Path, sites: dict[int, str]) -> int:
         return 0
     # Process outermost-first and never let one rewrite swallow another.
     targets.sort(key=lambda item: (item[0], -item[2]))
-    filtered: list[tuple[int, int, int, str, str]] = []
+    filtered: list[tuple[int, int, int, str, str, str]] = []
     reach = 0
-    for start, header_end, body_end, error_class, code in targets:
+    for start, header_end, body_end, error_class, code, binding in targets:
         if start <= reach:
             continue
-        filtered.append((start, header_end, body_end, error_class, code))
+        filtered.append((start, header_end, body_end, error_class, code, binding))
         reach = body_end
     targets = filtered
     out: list[str] = []
     cursor = 0
     changed = 0
-    for start, header_end, body_end, error_class, code in targets:
+    for start, header_end, body_end, error_class, code, binding in targets:
         out.extend(lines[cursor : start - 1])
         leading = re.match(r"\s*", lines[start - 1])
         indent = leading.group(0) if leading else ""
-        out.append(f"{indent}with pytest.raises({error_class}) as exc_info:\n")
+        out.append(f"{indent}with pytest.raises({error_class}) as {binding}:\n")
         # guarded body, 1-indexed header_end+1 .. body_end
         out.extend(lines[header_end:body_end])
-        out.append(f'{indent}assert exc_info.value.errors()[0]["type"] == "{code}"\n')
+        out.append(f'{indent}assert {binding}.value.errors()[0]["type"] == "{code}"\n')
         cursor = body_end
         changed += 1
     out.extend(lines[cursor:])

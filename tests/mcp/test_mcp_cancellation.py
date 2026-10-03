@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -25,7 +26,9 @@ def _pid_exists(pid: int) -> bool:
 
 
 async def _read_pids(marker: Path) -> list[int]:
-    deadline = time.monotonic() + 3
+    # Generous: the marker appears only after the stdio server has started, the
+    # catalog has resolved the operation, and the bounded worker has forked.
+    deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         if marker.exists() and (text := marker.read_text().strip()):
             return list(json.loads(text))
@@ -34,7 +37,10 @@ async def _read_pids(marker: Path) -> list[int]:
 
 
 async def _assert_pids_exit(pids: list[int]) -> None:
-    deadline = time.monotonic() + 4
+    # Must stay well inside the worker's own 20s run_bounded_process timeout.
+    # If this deadline were longer, a surviving worker would exit on its own
+    # timeout and the assertion would pass without cancellation reaping it.
+    deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         if all(not _pid_exists(pid) for pid in pids):
             return
@@ -55,16 +61,21 @@ def test_stdio_cancellation_reaps_tree_and_server_remains_responsive(
         async with Client(stdio_client(parameters), raise_exceptions=True) as client:
             for attempt in range(3):
                 marker = tmp_path / f"request-{attempt}.json"
-                with pytest.raises(MCPError, match="timed out"):
-                    await client.call_tool(
+                call = asyncio.ensure_future(
+                    client.call_tool(
                         "math.run",
                         {
                             "operation_id": "test.process.wait",
                             "payload": {"marker": str(marker)},
                         },
-                        read_timeout_seconds=0.5,
+                        read_timeout_seconds=30,
                     )
-                await _assert_pids_exit(await _read_pids(marker))
+                )
+                pids = await _read_pids(marker)
+                call.cancel()
+                with contextlib.suppress(asyncio.CancelledError, MCPError):
+                    await call
+                await _assert_pids_exit(pids)
             follow_up = await client.call_tool(
                 "math.run",
                 {

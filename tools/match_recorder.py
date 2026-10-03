@@ -151,6 +151,12 @@ def pytest_configure(config):
     global _manual_configuration, _original_raises
     if _original_raises is not None:
         return
+    if config is not None:
+        RECORD.clear()
+        # xdist workers share this output path. The controller starts a fresh
+        # recording run once; workers then append their own observations.
+        if _OUT and not hasattr(config, "workerinput"):
+            Path(_OUT).write_text("", encoding="utf-8")
     _original_raises = pytest.raises
     _manual_configuration = config is None
     pytest.raises = _recording_raises

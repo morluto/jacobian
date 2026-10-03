@@ -14,6 +14,7 @@ would drop those siblings and change what the test exercises.
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 import sys
@@ -207,8 +208,9 @@ def test_recorder_import_and_supported_raises_forms() -> None:
     try:
         info = pytest.raises(ValueError, int, "not an integer")  # noqa: RUF061
         assert isinstance(info.value, ValueError)
-        with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
-            int("still not an integer")
+        if "check" in inspect.signature(original_raises).parameters:
+            with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
+                int("still not an integer")
     finally:
         recorder.pytest_unconfigure(None)
     assert pytest.raises is original_raises
@@ -244,6 +246,8 @@ def test_recorder_preserves_check_only_base_exception_semantics() -> None:
     import tools.match_recorder as recorder
 
     original_raises = pytest.raises
+    if "check" not in inspect.signature(original_raises).parameters:
+        pytest.skip("pytest.raises(check=...) requires pytest 8.4 or newer")
     recorder.pytest_configure(None)
     try:
         with pytest.raises(check=lambda exc: isinstance(exc, SystemExit)):
@@ -251,6 +255,35 @@ def test_recorder_preserves_check_only_base_exception_semantics() -> None:
     finally:
         recorder.pytest_unconfigure(None)
     assert pytest.raises is original_raises
+
+
+def test_recorder_clears_old_output_once_before_recording(
+    monkeypatch, tmp_path: Path
+) -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    output = tmp_path / "record.jsonl"
+    output.write_text('{"old.py:1": {"code": "stale"}}\n', encoding="utf-8")
+    monkeypatch.setattr(recorder, "_OUT", str(output))
+    original_raises = pytest.raises
+
+    recorder.pytest_configure(object())
+    try:
+        assert pytest.raises is not original_raises
+        assert output.read_text(encoding="utf-8") == ""
+        recorder.RECORD["tests/current.py:2"] = {
+            "code": "current",
+            "match": "detail",
+        }
+        recorder.pytest_sessionfinish(None, 0)
+    finally:
+        recorder.pytest_unconfigure(object())
+
+    assert output.read_text(encoding="utf-8") == (
+        json.dumps({"tests/current.py:2": {"code": "current", "match": "detail"}})
+        + "\n"
+    )
 
 
 def test_bare_pydantic_codes_are_not_convertible(tmp_path: Path) -> None:

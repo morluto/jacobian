@@ -417,10 +417,7 @@ def test_result_deserialization_rejects_a_noncanonical_mass() -> None:
 
     with pytest.raises(ValidationError) as caught:
         BerryEsseenResult.model_validate(payload)
-    assert (
-        caught.value.errors()[0]["type"]
-        == "probability.distribution.mass_negative"
-    )
+    assert caught.value.errors()[0]["type"] == "probability.distribution.mass_negative"
 
 
 def test_result_requires_consecutive_dyadic_grid_endpoints() -> None:

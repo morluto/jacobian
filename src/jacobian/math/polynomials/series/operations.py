@@ -25,6 +25,7 @@ from jacobian.math.polynomials.series._flint import (
 from jacobian.math.polynomials.series._flint import (
     inverse_backend as _inverse_backend,
 )
+from jacobian.math.polynomials.series._flint import power_backend as _power_backend
 from jacobian.math.polynomials.series._flint import (
     product_residual_backend as _product_residual_backend,
 )
@@ -210,25 +211,13 @@ def power(series: TruncatedSeries, exponent: int) -> SeriesPowerResult:
     """Compute series^exponent via binary exponentiation modulo x^N."""
     _run_admission(lambda: admit_native_power(series, exponent))
     n = series.truncation_order
-    a = _series_fractions(series)
-
-    result_coeffs = [Fraction(1)] + [Fraction(0)] * (n - 1)
-    base = a[:]
-    multiplications = 0
-    e = exponent
-    while e > 0:
-        if e & 1:
-            result_coeffs = _cauchy_convolve(result_coeffs, base, n)
-            multiplications += 1
-        e >>= 1
-        if e > 0:
-            base = _cauchy_convolve(base, base, n)
-            multiplications += 1
-
-    return SeriesPowerResult(
-        result=_series_result(series.variable, n, result_coeffs),
-        multiplication_count=multiplications,
+    coefficients, count = _power_backend(tuple(_series_fractions(series)), exponent)
+    result = SeriesPowerResult(
+        result=_series_result(series.variable, n, coefficients),
+        multiplication_count=count,
     )
+    request_checkpoint("after exact series power construction")
+    return result
 
 
 # ---------------------------------------------------------------------------

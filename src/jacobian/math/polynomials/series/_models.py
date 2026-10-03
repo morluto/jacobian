@@ -714,13 +714,18 @@ def admit_native_scalar_multiply(
 
 
 def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
-    _require_native_input_series(series)
+    from ._power_bounds import MAX_POWER_ORDER, power_envelope
+    from ._unit_bounds import require_series
+
+    require_series(series, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="power")
+    _require_native_input_series(series, maximum_order=MAX_POWER_ORDER)
     _require_native_scalar(exponent, "exponent")
     if not 0 <= exponent <= MAX_POWER_EXPONENT:
         raise _validation_error(
             "power_exponent", f"exponent must be between 0 and {MAX_POWER_EXPONENT}"
         )
     if exponent == 0:
+        power_envelope(series, exponent, 0, 0).checked()
         return
     denominator, coefficients = _cleared_series(series, "power")
     # Write f=A/D. The l1 norm is submultiplicative, even under
@@ -736,6 +741,7 @@ def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
         ),
         "power",
     )
+    power_envelope(series, exponent, norm_bits, denominator_bits).checked()
 
 
 def admit_native_inverse(series: TruncatedSeries) -> None:
@@ -1069,6 +1075,12 @@ class SeriesScalarMultiplyResult(StrictModel):
 
 
 class SeriesPowerRequest(StrictModel):
+    """Compute a nonnegative integer power through order 2048 when bounds fit.
+
+    Source components retain 256 digits and results 4096 digits. Full binary
+    products, limb-weighted work and retained coefficients are admitted first.
+    """
+
     series: TruncatedSeries
     exponent: StrictInt = Field(ge=0)
 

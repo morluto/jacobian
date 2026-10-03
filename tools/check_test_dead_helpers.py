@@ -194,9 +194,7 @@ def _definition_only_references(
     )
     for definition in _autouse_fixture_definitions(tree):
         reference_sites.add((definition, synthetic_line, True, None))
-    for fixture_name in _pytest_string_references(tree):
-        if fixture_name in fixtures:
-            reference_sites.add((fixtures[fixture_name], synthetic_line, True, None))
+    reference_sites.update(_pytest_fixture_reference_sites(tree, fixtures))
     return referenced, reference_sites
 
 
@@ -240,6 +238,58 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
                     else:
                         referenced.update(_string_values(keyword.value))
     return referenced
+
+
+def _pytest_fixture_reference_sites(
+    tree: ast.Module, fixtures: dict[str, str]
+) -> set[tuple[str, int, bool, int | None]]:
+    """Preserve the fixture function that owns each string-based request."""
+
+    aliases = _pytest_import_aliases(tree)
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    sites: set[tuple[str, int, bool, int | None]] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = _canonical_pytest_name(node.func, aliases)
+        if name == "pytest.mark.usefixtures":
+            requested = set().union(*(_string_values(arg) for arg in node.args))
+        elif name is not None and name.endswith(".getfixturevalue") and node.args:
+            requested = _string_values(node.args[0])
+        elif name == "pytest.mark.parametrize":
+            requested = set()
+            for keyword in node.keywords:
+                if keyword.arg != "indirect":
+                    continue
+                if (
+                    isinstance(keyword.value, ast.Constant)
+                    and keyword.value.value is True
+                    and node.args
+                ):
+                    requested.update(_parameter_names(node.args[0]))
+                else:
+                    requested.update(_string_values(keyword.value))
+        else:
+            continue
+        owner_line = None
+        current = node
+        while current in parents:
+            current = parents[current]
+            if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                owner_line = current.lineno
+                break
+            if isinstance(current, ast.ClassDef):
+                break
+        sites.update(
+            (fixtures[fixture_name], node.lineno, True, owner_line)
+            for fixture_name in requested
+            if fixture_name in fixtures
+        )
+    return sites
 
 
 def _pytest_import_aliases(tree: ast.Module) -> dict[str, str]:
@@ -427,7 +477,9 @@ def _scan(  # noqa: C901
                 for name in requested:
                     if name in fixtures:
                         referenced.add(fixtures[name])
-                        reference_sites.add((fixtures[name], child.lineno, True, None))
+                        reference_sites.add(
+                            (fixtures[name], child.lineno, True, child.lineno)
+                        )
             if isinstance(child, ast.ClassDef):
                 _scan_class_body(
                     child.body,
@@ -1144,7 +1196,7 @@ def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[in
             stack.extend(ast.iter_child_nodes(node))
         return found
 
-    pending = calls(tree.body)
+    pending = [(name, line) for name, line in calls(tree.body)]
     visited: set[tuple[int, int]] = set()
     invocation_lines: set[int] = set()
     while pending:
@@ -1163,7 +1215,7 @@ def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[in
         visited.add(state)
         if target.lineno == function_line:
             invocation_lines.add(invocation_line)
-        pending.extend(calls(target.body))
+        pending.extend((name, invocation_line) for name, _line in calls(target.body))
     return tuple(sorted(invocation_lines))
 
 
@@ -1178,6 +1230,30 @@ def _reachable_bindings(roots: set[int], edges: dict[int, set[int]]) -> set[int]
     return reachable
 
 
+def _class_binding_for_method(
+    line: int | None,
+    function_nodes: dict[int, ast.FunctionDef | ast.AsyncFunctionDef],
+    parents: dict[ast.AST, ast.AST],
+    class_bindings: dict[int, int],
+) -> int | None:
+    current = function_nodes.get(line) if line is not None else None
+    owner = None
+    while current is not None:
+        current = parents.get(current)
+        if isinstance(current, ast.ClassDef) and current.lineno in class_bindings:
+            owner = class_bindings[current.lineno]
+    return owner
+
+
+def _binding_before(choices: list[tuple[int, int, int]], line: int) -> int | None:
+    eligible = [
+        index
+        for index, start_line, end_line in choices
+        if start_line < line and not start_line <= line <= end_line
+    ]
+    return eligible[-1] if eligible else None
+
+
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     relative = path.relative_to(root).as_posix()
     try:
@@ -1187,11 +1263,42 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return ()
     lines = source.splitlines()
     _referenced, reference_sites = _definition_only_references(tree)
-    violations: list[Violation] = []
     definitions = _definition_names(tree)
-    bindings: dict[str, list[tuple[int, int]]] = {}
+    referenced_bindings = _referenced_bindings(tree, definitions, reference_sites)
+    return tuple(
+        Violation(relative, line, name, kind)
+        for index, (name, line, kind, _node) in enumerate(definitions)
+        if not _waived(lines, line) and index not in referenced_bindings
+    )
+
+
+def _referenced_bindings(
+    tree: ast.Module,
+    definitions: list[tuple[str, int, str, ast.AST]],
+    reference_sites: set[tuple[str, int, bool, int | None]],
+) -> set[int]:
+    """Resolve loads to bindings reachable from test and module execution roots."""
+
+    bindings: dict[str, list[tuple[int, int, int]]] = {}
     for index, (name, line, _kind, _node) in enumerate(definitions):
-        bindings.setdefault(name, []).append((index, line))
+        end_line = getattr(_node, "end_lineno", None) or line
+        bindings.setdefault(name, []).append((index, line, end_line))
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    class_bindings = {
+        node.lineno: index
+        for index, (_name, _line, kind, node) in enumerate(definitions)
+        if kind == "function" and isinstance(node, ast.ClassDef)
+    }
+    function_nodes = {
+        node.lineno: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
     function_bindings = {
         node.lineno: index
         for index, (_name, _line, kind, node) in enumerate(definitions)
@@ -1207,34 +1314,33 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         if not choices:
             continue
         source = function_bindings.get(scope_line) if scope_line is not None else None
+        if source is None:
+            source = _class_binding_for_method(
+                scope_line, function_nodes, parents, class_bindings
+            )
         if deferred:
             if source is None:
                 runtime_roots.add(choices[-1][0])
             else:
                 runtime_edges.setdefault(source, set()).add(choices[-1][0])
             for call_line in _module_eager_calls(tree, scope_line):
-                eligible = [
-                    index for index, binding_line in choices if binding_line < call_line
-                ]
-                if eligible:
+                target = _binding_before(choices, call_line)
+                if target is not None:
                     if source is None:
-                        module_roots.add(eligible[-1])
+                        module_roots.add(target)
                     else:
-                        module_edges.setdefault(source, set()).add(eligible[-1])
+                        module_edges.setdefault(source, set()).add(target)
         else:
-            eligible = [index for index, binding_line in choices if binding_line < line]
-            if eligible:
+            target = _binding_before(choices, line)
+            if target is not None:
                 if source is None:
-                    module_roots.add(eligible[-1])
+                    module_roots.add(target)
                 else:
-                    runtime_edges.setdefault(source, set()).add(eligible[-1])
+                    runtime_edges.setdefault(source, set()).add(target)
     referenced_bindings = _reachable_bindings(
         module_roots, module_edges
     ) | _reachable_bindings(runtime_roots, runtime_edges)
-    for index, (name, line, kind, _node) in enumerate(definitions):
-        if not _waived(lines, line) and index not in referenced_bindings:
-            violations.append(Violation(relative, line, name, kind))
-    return tuple(violations)
+    return referenced_bindings
 
 
 def _test_files(root: Path) -> Iterable[Path]:

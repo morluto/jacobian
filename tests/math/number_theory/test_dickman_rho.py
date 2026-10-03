@@ -120,11 +120,11 @@ def test_unattainable_width_is_rejected_before_publication() -> None:
 
 
 def test_width_below_the_degree_envelope_is_a_typed_resource_failure() -> None:
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="degree-256 enclosure",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _compute(_request(2, -500, precision_bits=512))
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_theory.dickman_rho.degree_bound"
+    )
 
 
 def test_result_rejects_a_structurally_excessive_remainder() -> None:
@@ -233,20 +233,26 @@ def test_dickman_native_api_exports_canonical_value_family() -> None:
 def test_native_endpoint_outside_the_contract_is_a_typed_domain_error() -> None:
     from jacobian._exact import CanonicalRational
 
-    with pytest.raises(OperationDomainValidationError, match=r"\[0, 8\]"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=9, den=1),
             ExactDyadic(mantissa=1, exponent=-5),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_theory.dickman_rho.endpoint_range"
+    )
 
 
 def test_native_noncanonical_argument_types_are_rejected() -> None:
 
-    with pytest.raises(OperationDomainValidationError, match="CanonicalRational"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dickman_rho_piecewise_enclosure(
             Fraction(2),  # type: ignore[arg-type]
             ExactDyadic(mantissa=1, exponent=-5),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_theory.dickman_rho.endpoint_type"
+    )
 
 
 def test_endpoint_eight_work_estimate_is_admitted() -> None:
@@ -261,31 +267,45 @@ def test_endpoint_eight_work_estimate_is_admitted() -> None:
 
 
 def test_extreme_dyadic_target_width_is_rejected_without_fraction_expansion() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=-(MAX_DYADIC_EXPONENT)),
         )
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.dickman_rho.target_width_representation"
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=MAX_DYADIC_EXPONENT),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.dickman_rho.target_width_representation"
+    )
 
 
 def test_precision_bits_must_be_a_strict_int() -> None:
-    with pytest.raises(OperationDomainValidationError, match="int"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=-5),
             precision_bits="128",  # type: ignore[arg-type]
         )
-    with pytest.raises(OperationDomainValidationError, match="int"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_theory.dickman_rho.precision_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=-5),
             precision_bits=128.0,  # type: ignore[arg-type]
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_theory.dickman_rho.precision_type"
+    )
 
 
 def test_near_maximal_positive_target_exponent_is_rejected_at_parse() -> None:

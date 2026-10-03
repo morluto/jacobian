@@ -100,8 +100,12 @@ def test_nonhomogeneous_generators_are_rejected() -> None:
     ideal = FreeAlgebraIdeal(
         alphabet=alphabet, generators=(nonhomogeneous,), side="two-sided"
     )
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ideal_membership(ideal, _poly(alphabet, {("x",): 1}))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.membership_requires_homogeneous_generators"
+    )
 
 
 def test_resource_incompletion_returns_unknown_without_a_conclusion(

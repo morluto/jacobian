@@ -585,7 +585,7 @@ def test_zero_gaussian_terms_are_rejected() -> None:
         GaussianRationalPolynomialTerm,
     )
 
-    with pytest.raises(ValidationError, match="zero polynomial terms"):
+    with pytest.raises(ValidationError) as exc_info:
         GaussianRationalPolynomial(
             terms=(
                 GaussianRationalPolynomialTerm(
@@ -596,6 +596,10 @@ def test_zero_gaussian_terms_are_rejected() -> None:
                 ),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.sup_norm_zero_term"
+    )
 
 
 def test_flint_resultant_matches_an_independent_sylvester_determinant() -> None:

@@ -56,8 +56,12 @@ def test_class_power_map_reestablishes_input_partition() -> None:
     request = GroupConjugacyClassesRequest.model_validate(group)
     partition = compute_group_conjugacy_classes(request)
     altered = partition.model_copy(update={"classes": partition.classes[:-1]})
-    with pytest.raises(Exception, match="partition"):
+    with pytest.raises(Exception) as exc_info:
         class_power_map(altered, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.partition_not_group_bound"
+    )
 
 
 def test_power_exponent_is_bounded_before_execution() -> None:
@@ -71,9 +75,12 @@ def test_native_power_map_rejects_malformed_inputs_without_pydantic_leak() -> No
     partition = compute_group_conjugacy_classes(
         GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0), (1, 0, 2)))
     )
-    with pytest.raises(OperationDomainValidationError, match="exponent"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         class_power_map(partition, 0)
-    with pytest.raises(OperationDomainValidationError, match="exponent"):
+    assert exc_info.value.errors()[0]["type"] == "groups.characters.power_map_exponent"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         class_power_map(partition, 1_000_001)
-    with pytest.raises(OperationDomainValidationError, match="partition"):
+    assert exc_info.value.errors()[0]["type"] == "groups.characters.power_map_exponent"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         class_power_map({"degree": 3}, 2)
+    assert exc_info.value.errors()[0]["type"] == "groups.characters.partition_type"

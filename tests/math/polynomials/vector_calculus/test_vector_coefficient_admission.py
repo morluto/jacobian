@@ -154,5 +154,6 @@ def test_expanded_vector_claims_still_bind_sources_axes_and_result(
 def test_scalar_source_coefficient_envelope_is_unchanged() -> None:
     source = _polynomial({(1, 0, 0): 10**128})
     for compute in (operations.gradient, operations.laplacian):
-        with pytest.raises(OperationDomainValidationError, match="128-digit"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute(source)
+        assert exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.admission"

@@ -272,10 +272,16 @@ def test_shifted_quadratic_square_root_pair_selects_the_distance() -> None:
 
 def test_native_pair_budget_matches_catalog_range() -> None:
     polynomial = _polynomial((3, 1), (0, -1))
-    with pytest.raises(OperationDomainValidationError, match=r"0\.\.64"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         root_critical_distance_profile(polynomial, max_pair_rows=65)
-    with pytest.raises(OperationDomainValidationError, match="non-boolean"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.root_critical.pair_row_range"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         root_critical_distance_profile(polynomial, max_pair_rows="64")  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.root_critical.pair_row_type"
+    )
 
 
 def test_root_rectangles_ignore_crootof_cache_refinement() -> None:
@@ -412,13 +418,19 @@ def test_fourth_root_radical_is_certified_by_the_enclose_grammar() -> None:
 
 
 def test_native_arguments_are_validated_before_worker_serialization() -> None:
-    with pytest.raises(OperationDomainValidationError, match="rational polynomial"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         root_critical_distance_profile("not a polynomial")  # type: ignore[arg-type]
-    with pytest.raises(OperationDomainValidationError, match="non-boolean"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.root_critical.polynomial_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         root_critical_distance_profile(
             _polynomial((3, 1), (0, -1)),
             max_pair_rows="64",  # type: ignore[arg-type]
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.root_critical.pair_row_type"
+    )
 
 
 def test_worker_decoder_rejects_source_unbound_distance(monkeypatch) -> None:
@@ -480,8 +492,12 @@ def test_cleared_coefficient_height_is_bounded_before_factorization() -> None:
     primitive = source.clear_denoms(convert=True)[1]
     assert max(len(str(abs(int(c)))) for c in primitive.all_coeffs()) > 256
     polynomial = rational_polynomial_from_sympy(source, ("z",))
-    with pytest.raises(OperationResourceAdmissionError, match="cleared primitive"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         root_critical_distance_profile(polynomial)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.root_critical.factor_coefficient_bound"
+    )
 
 
 def test_cancellation_signal_is_forwarded_to_the_kernel_worker() -> None:

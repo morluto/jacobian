@@ -160,10 +160,14 @@ def test_rational_function_ode_coefficients_are_rejected() -> None:
             {"coefficient": {"num": 1, "den": 1}, "exponents": [0]},
         ]
     }
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficients"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_operator_to_coefficient_recurrence(
             {"variable": "x", "terms": [{"order": 0, "coefficient": rational}]}
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.coefficient_recurrence_polynomial_domain"
+    )
 
 
 def test_catalog_example_dispatches_the_exact_recurrence_value() -> None:
@@ -239,8 +243,11 @@ def test_boundary_work_is_admitted_before_any_boundary_expansion() -> None:
     operator = _operator(
         *((order, [(order + step, 1) for step in range(17)]) for order in range(16))
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         differential_operator_to_coefficient_recurrence(operator)
+    assert (
+        exc_info.value.errors()[0]["type"] == "ore_algebra.coefficient_recurrence_work"
+    )
 
 
 def test_transform_result_composes_unchanged_with_prefix_generation() -> None:
@@ -276,10 +283,12 @@ def test_generated_coefficients_stay_within_downstream_shift_envelope() -> None:
     # Although each input coefficient fits 64 digits, 10^63*(n+16)_16 has
     # a 78-digit constant coefficient and cannot be consumed as a shift op.
     operator = _operator((0, [(0, 1)]), (16, [(0, 10**63)]))
-    with pytest.raises(
-        OperationResourceAdmissionError, match="coefficient recurrence coefficient"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         differential_operator_to_coefficient_recurrence(operator)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.coefficient_recurrence_coefficient_digits"
+    )
 
 
 def test_output_uses_canonical_shift_operator_through_maximum_shift_span() -> None:

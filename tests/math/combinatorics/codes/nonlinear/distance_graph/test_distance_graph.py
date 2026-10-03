@@ -114,8 +114,9 @@ def test_result_rejects_inconsistent_edge_count() -> None:
         BinaryCodeDistanceGraphResult,
     )
 
-    with pytest.raises(ValidationError, match="edge_count"):
+    with pytest.raises(ValidationError) as exc_info:
         BinaryCodeDistanceGraphResult.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "code.edge_count_matches_graph"
 
 
 def test_result_preserves_source() -> None:

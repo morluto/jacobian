@@ -306,8 +306,12 @@ def test_flint_stationary_solve_exceeds_the_previous_state_ceiling() -> None:
 def test_stationary_solve_work_rejects_before_flint() -> None:
     request = _wire(StationaryDistributionRequest, _lazy_cycle_request(101))
 
-    with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_stationary_distribution(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "markov_chain.stationary_solve_work_exceeds_bound"
+    )
 
 
 def test_generic_markov_requests_keep_the_32_state_carrier() -> None:
@@ -499,8 +503,12 @@ def test_stationary_sums_work_across_closed_classes(
         for i in range(size)
     )
     if not admitted:
-        with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             stationary_distribution_result(rational_matrix_from_fractions(matrix))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "markov_chain.stationary_solve_work_exceeds_bound"
+        )
         return
     result = stationary_distribution_result(rational_matrix_from_fractions(matrix))
     assert [item.closed_class for item in result.extreme_distributions] == [

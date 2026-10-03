@@ -168,5 +168,6 @@ def test_aggregate_work_is_admitted_before_factorization_enumeration(
         lambda *_args: pytest.fail("fiber enumerated before aggregate admission"),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="aggregate work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         minimal_generators(_semigroup(((1,), (2,))))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.atom_work"

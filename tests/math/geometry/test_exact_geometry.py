@@ -420,8 +420,12 @@ class TestPinnedLineDistance:
                 }
             )
         )
-        with pytest.raises(OperationDomainValidationError, match="planar"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_pinned_line_distance_profile(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.pinned_line_distance_profile_requires_a"
+        )
 
     def test_result_rejects_nonplanar_retained_configuration(self) -> None:
         import pytest

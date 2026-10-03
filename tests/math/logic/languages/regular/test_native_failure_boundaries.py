@@ -59,7 +59,15 @@ def test_transition_profile_resource_refusal_propagates_through_consumers() -> N
         entries=(),
         total_path_count=0,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="profile-cell"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_transition_parikh_profile(request)
-    with pytest.raises(OperationResourceAdmissionError, match="profile-cell"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.transition_profile_not_admitted"
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_transition_parikh_profile(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.transition_profile_not_admitted"
+    )

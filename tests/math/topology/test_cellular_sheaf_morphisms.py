@@ -136,10 +136,12 @@ def test_morphism_revalidates_authored_parent_diamonds() -> None:
     )
     forged = valid.model_copy(update={"cover_restrictions": covers})
     identity = tuple((cell, ((_q("1"),),)) for cell in forged.canonical_face_order)
-    with pytest.raises(
-        OperationDomainValidationError, match="does not define a cellular sheaf"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         morphism(forged, forged, identity)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.authored_sheaf_not_functorial"
+    )
 
 
 def test_morphism_bounds_only_cover_coefficients_not_derived_composites() -> None:
@@ -289,8 +291,12 @@ def test_cochain_map_json_rejects_overrank_parent_before_axis_expansion() -> Non
     with pytest.raises(ValidationError):
         SheafCochainMapResult.model_validate_json(forged_result.model_dump_json())
 
-    with pytest.raises(OperationResourceAdmissionError, match="stalk rank"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cochain_map(forged_morphism)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.cochain_map.stalk_rank_bound"
+    )
 
 
 def test_cochain_map_admits_face_count_before_zero_rank_axes() -> None:
@@ -316,8 +322,12 @@ def test_cochain_map_admits_face_count_before_zero_rank_axes() -> None:
         obstruction=None,
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="simplex bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cochain_map(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.cochain_map.face_count_bound"
+    )
 
 
 def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:

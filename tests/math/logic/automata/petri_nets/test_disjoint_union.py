@@ -180,8 +180,9 @@ def test_union_accepts_the_full_carrier_matrix_boundary() -> None:
 def test_union_rejects_combined_axes_outside_the_carrier_before_matrix_build() -> None:
     wide = PetriNet(place_count=64, transition_count=0, pre=((),) * 64, post=((),) * 64)
     one_place = PetriNet(place_count=1, transition_count=0, pre=((),), post=((),))
-    with pytest.raises(OperationResourceAdmissionError, match="disjoint union exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         disjoint_union(wide, one_place)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.union_axis_bound"
 
 
 def test_disjoint_union_manifest_declares_typed_pair_operation() -> None:
@@ -212,10 +213,9 @@ def test_marked_union_accounts_for_recursively_retained_parent_nets() -> None:
         post=((),),
     )
     marking = Marking(tokens=(0,), net=net)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="result representation-size bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         disjoint_union(net, net, marking, marking)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.union_output_bound"
 
 
 def test_output_growth_is_rejected_before_union_matrix_materialization() -> None:
@@ -227,12 +227,11 @@ def test_output_growth_is_rejected_before_union_matrix_materialization() -> None
         pre=((),),
         post=((),),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="result representation-size bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         disjoint_union(
             net, PetriNet(place_count=0, transition_count=0, pre=(), post=())
         )
+    assert exc_info.value.errors()[0]["type"] == "petri_net.union_output_bound"
 
 
 def test_malformed_axis_encoding_precedes_union_resource_admission() -> None:

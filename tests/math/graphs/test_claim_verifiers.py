@@ -144,8 +144,9 @@ def test_symmetry_verifier_propagates_action_resource_admission() -> None:
 
     from jacobian.catalog.models import OperationResourceAdmissionError
 
-    with pytest.raises(OperationResourceAdmissionError, match="action entries"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_graph_symmetry_orbits(claim)
+    assert exc_info.value.errors()[0]["type"] == "graph.symmetry.work_bound"
 
 
 def test_multigraph_flow_checker_diagnoses_invalid_candidate_and_verifies_roundtrip() -> (

@@ -137,13 +137,21 @@ def test_serialized_mixed_jacobi_result_binds_source_parent_and_field() -> None:
     result = dirichlet_character_mixed_jacobi_sum((character,) * 3)
     payload = result.model_dump()
     payload["characters"] = (character, character, _principal_character(3))
-    with pytest.raises(ValidationError, match="parent_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         DirichletCharacterMixedJacobiSumResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.mixed_jacobi_sum.parent_mismatch"
+    )
 
     payload = result.model_dump()
     payload["value"] = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=2),
         coefficients_ascending=(CanonicalRational(num=13, den=1),),
     )
-    with pytest.raises(ValidationError, match="field_parent_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         DirichletCharacterMixedJacobiSumResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.mixed_jacobi_sum.field_parent_mismatch"
+    )

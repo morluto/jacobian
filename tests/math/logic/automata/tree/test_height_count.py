@@ -159,8 +159,11 @@ def test_integer_growth_is_admitted_before_recurrence() -> None:
         ),
         final_states=(0,),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="all-trees upper bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         accepted_tree_height_profile(automaton, 19)
+    assert (
+        exc_info.value.errors()[0]["type"] == "tree_automata.height_count_integer_bound"
+    )
 
 
 def test_aggregate_profile_digit_allocation_is_admitted_before_recurrence(
@@ -168,8 +171,12 @@ def test_aggregate_profile_digit_allocation_is_admitted_before_recurrence(
 ) -> None:
     monkeypatch.setattr(tree_operations, "MAX_TREE_COUNT_PROFILE_DIGITS", 1)
 
-    with pytest.raises(OperationResourceAdmissionError, match="aggregate exact-digit"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         accepted_tree_height_profile(_fixture(), 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "tree_automata.height_count_profile_digits_bound"
+    )
 
 
 def test_out_of_range_height_is_a_resource_refusal() -> None:
@@ -182,5 +189,8 @@ def test_out_of_range_height_is_a_resource_refusal() -> None:
 @pytest.mark.parametrize("invalid", [False, True, 3.0, Fraction(3, 1), None])
 def test_non_integer_height_is_a_domain_error(invalid: Any) -> None:
     automaton = _fixture()
-    with pytest.raises(OperationDomainValidationError, match="integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         accepted_tree_height_profile(automaton, invalid)
+    assert (
+        exc_info.value.errors()[0]["type"] == "tree_automata.height_count_height_type"
+    )

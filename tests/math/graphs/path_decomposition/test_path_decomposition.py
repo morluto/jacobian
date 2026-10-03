@@ -114,10 +114,9 @@ def test_dense_graph_is_rejected_by_path_enumeration_ledger() -> None:
         for right in range(left + 1, 12)
     ]
 
-    with pytest.raises(
-        OperationDomainValidationError, match=r"bounded (?:work|incidence) envelope"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_minimum_path_decomposition(_graph(vertices, edges))
+    assert exc_info.value.errors()[0]["type"] == "path_decomposition.search_work_bound"
 
 
 def test_path_orientation_is_canonical() -> None:

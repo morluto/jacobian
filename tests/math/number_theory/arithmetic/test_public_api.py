@@ -117,17 +117,23 @@ def test_integerize_rational_vector_uses_one_lcm_for_mixed_denominators() -> Non
 
 
 def test_primitive_integer_vector_rejects_zero_vector() -> None:
-    with pytest.raises(OperationDomainValidationError, match="nonzero"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         arithmetic.primitive_integer_vector((Fraction(0), Fraction(0)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic.primitive_vector_requires_nonzero"
+    )
 
 
 def test_native_integer_admission_uses_typed_domain_errors() -> None:
     value = arithmetic.IntegerValue(value=8)
 
-    with pytest.raises(OperationDomainValidationError, match="base must be"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         arithmetic_operations.base_digits(value, 1)
-    with pytest.raises(OperationDomainValidationError, match="degree must be"):
+    assert exc_info.value.errors()[0]["type"] == "arithmetic.base_out_of_range"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         arithmetic_operations.nth_root(value, 0)
+    assert exc_info.value.errors()[0]["type"] == "arithmetic.root_degree_out_of_range"
 
 
 @pytest.mark.parametrize(

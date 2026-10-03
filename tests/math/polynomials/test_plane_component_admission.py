@@ -359,7 +359,7 @@ def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
     with pytest.raises(ValidationError):
         PlaneComponentProfileResult.model_validate(unknown_status)
 
-    with pytest.raises(ValidationError, match="one disposition per supplied sample"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileResult(
             semialgebraic_set=semialgebraic_set,
             samples=(_sample(0),),
@@ -367,6 +367,9 @@ def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
                 components=(), sample_dispositions=()
             ),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "plane_semialgebraic.sample_result_count"
+    )
 
 
 def test_term_and_total_term_boundaries_reject_before_backend_execution() -> None:
@@ -387,8 +390,9 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
             "exponents": [MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1, 0],
         }
     )
-    with pytest.raises(ValidationError, match="term"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate_json(encode_strict_json(raw))
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.term_count"
 
     boundary_counts = (12, 12, 12, 12)
     assert sum(boundary_counts) == MAX_PLANE_COMPONENT_TOTAL_TERMS
@@ -427,22 +431,27 @@ def test_plane_dimension_polynomial_and_sign_row_bounds_reject_raw_excess() -> N
 
     over_dimension = boundary.model_dump(mode="json")
     over_dimension["semialgebraic_set"]["axis"].append("z")
-    with pytest.raises(ValidationError, match="axis"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate(over_dimension)
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.axis"
 
     over_polynomials = boundary.model_dump(mode="json")
     over_polynomials["semialgebraic_set"]["polynomials"].append(
         raw["semialgebraic_set"]["polynomials"][0]
     )
-    with pytest.raises(ValidationError, match="polynomial family"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate(over_polynomials)
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.polynomial_count"
 
     assert len(raw["semialgebraic_set"]["sign_conditions"]) == 3**4
     raw["semialgebraic_set"]["sign_conditions"].append(
         raw["semialgebraic_set"]["sign_conditions"][0]
     )
-    with pytest.raises(ValidationError, match="sign table"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate_json(encode_strict_json(raw))
+    assert (
+        exc_info.value.errors()[0]["type"] == "plane_semialgebraic.sign_condition_count"
+    )
 
 
 def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
@@ -453,8 +462,9 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
 
     raw = _whole_plane_request((), samples=samples).model_dump(mode="json")
     raw["samples"].append(raw["samples"][0])
-    with pytest.raises(ValidationError, match="samples"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate_json(encode_strict_json(raw))
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.sample_count"
 
     degree_boundary = _sample(0, degree=MAX_PLANE_COMPONENT_SAMPLE_DEGREE)
     assert (
@@ -469,10 +479,14 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
         *("0" for _ in range(MAX_PLANE_COMPONENT_SAMPLE_DEGREE)),
         "-2",
     ]
-    with pytest.raises(ValidationError, match="coordinate polynomial"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate_json(
             encode_strict_json(raw_over_degree)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "plane_semialgebraic.sample_coordinate_degree"
+    )
 
     height_boundary = _sample(
         0,
@@ -488,10 +502,13 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
     raw_over_height["samples"][0]["coordinates"][0]["polynomial"][0] = str(
         10**MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS
     )
-    with pytest.raises(ValidationError, match="coefficient"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate_json(
             encode_strict_json(raw_over_height)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "plane_semialgebraic.coefficient_digits"
+    )
 
 
 def test_projection_cell_envelope_distinguishes_admitted_and_rejected_families() -> (
@@ -509,13 +526,14 @@ def test_projection_cell_envelope_distinguishes_admitted_and_rejected_families()
         polynomials=(_polynomial(((1, (1, 0)),)),),
         sign_conditions=(PlaneSignCondition(signs=(PlaneSign.POSITIVE,)),),
     )
-    with pytest.raises(OperationDomainValidationError, match="CAD cell bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _profile(
             PlaneComponentProfileRequest(
                 semialgebraic_set=nondegenerate,
                 samples=tuple(_sample(index, degree=5) for index in range(8)),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.projection_cells"
 
 
 def test_maximal_sign_table_fits_the_worker_formula_envelope() -> None:

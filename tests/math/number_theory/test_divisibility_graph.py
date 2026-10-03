@@ -77,8 +77,9 @@ def test_rejects_non_positive_canonical_integer(value: object) -> None:
 @pytest.mark.parametrize("value", [0, -1])
 def test_native_operation_rejects_non_positive_integer(value: int) -> None:
     request = DivisibilityIncidenceGraphRequest(left_family=(value,), right_family=(1,))
-    with pytest.raises(OperationDomainValidationError, match="positive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_divisibility_incidence_graph(request)
+    assert exc_info.value.errors()[0]["type"] == "number_theory.non_positive_family"
 
 
 def test_rejects_combined_vertex_budget() -> None:
@@ -88,8 +89,9 @@ def test_rejects_combined_vertex_budget() -> None:
             "right_family": [1],
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="total values"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_divisibility_incidence_graph(request)
+    assert exc_info.value.errors()[0]["type"] == "number_theory.graph_vertex_budget"
 
 
 @pytest.mark.parametrize(

@@ -179,14 +179,21 @@ def test_polynomial_sparse_eight_axis_boundary_avoids_dense_expansion() -> None:
 def test_monomial_denominator_near_exponent_boundary() -> None:
     result = _identity(_monomial_source(("x", "y"), (0, 64), (63, 0)))
     assert result.partial_derivatives[0].denominator.terms[0].exponents == (64, 0)
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         gradient(_monomial_source(("x", "y"), (0, 64), (128, 0)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function.gradient.result_exponent"
+    )
 
 
 def test_true_output_coefficient_boundary() -> None:
     _identity(_monomial_source(("x",), (64,), (0,), 10**125))
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         gradient(_monomial_source(("x",), (64,), (0,), 10**127))
+    assert (
+        exc_info.value.errors()[0]["type"] == "rational_function.gradient.result_height"
+    )
 
 
 def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
@@ -218,18 +225,24 @@ def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
         -33 / (x + y) ** 34, ("x", "y")
     )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
-    with pytest.raises(OperationDomainValidationError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         gradient(source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.not_coprime"
     x, y = symbols("x y")
     p = rational_function_from_sympy((x - y) * (x + 1), ("x", "y"))
     q = rational_function_from_sympy(x - y, ("x", "y"))
     authored = RationalFunction(
         variables=("x", "y"), numerator=p.numerator, denominator=q.numerator
     )
-    with pytest.raises(OperationDomainValidationError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         gradient(authored)
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    assert exc_info.value.errors()[0]["type"] == "not_coprime"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         gradient(rational_function_from_sympy(1 / (x + 1) ** 64, ("x",)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function.gradient.result_exponent"
+    )
 
 
 def test_dense_source_box_rejects_before_coprimality_worker(
@@ -268,8 +281,9 @@ def test_dense_source_box_rejects_before_coprimality_worker(
             )
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work") as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         gradient(source)
+    assert error.value.errors()[0]["type"] == "rational_function.gradient.work_budget"
     assert error.value.errors()[0]["type"].endswith("work_budget")
 
 
@@ -282,12 +296,20 @@ def test_univariate_binomial_power_cancellation() -> None:
     x, y = symbols("x y")
     numerator = sum(x ** (2 * i) for i in range(32)) * sum(y**j for j in range(5))
     source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))
-    with pytest.raises(OperationResourceAdmissionError, match="term"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         gradient(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function.gradient.result_support"
+    )
     even_grid = sum(x ** (2 * a) * y ** (2 * b) for a in range(16) for b in range(16))
     source = rational_function_from_sympy(even_grid / (x + y) ** 33, ("x", "y"))
-    with pytest.raises(OperationResourceAdmissionError, match="term"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         gradient(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function.gradient.result_support"
+    )
 
 
 def test_shared_request_deadline() -> None:

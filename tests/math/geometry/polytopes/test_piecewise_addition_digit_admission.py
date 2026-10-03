@@ -74,5 +74,6 @@ def test_addition_rejects_large_aggregate_without_decimal_formatting(
     # This sentinel observes the allocation boundary; the mathematical input,
     # declared resource limit and domain computation are unchanged.
     monkeypatch.setattr(spline_kernel, "decimal_digit_width", forbidden_format)
-    with pytest.raises(OperationResourceAdmissionError, match="sum polynomial output"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         spline_kernel.piecewise_polynomial_add(request)
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_output"

@@ -129,20 +129,28 @@ def test_transport_replays_triangle_relators_as_target_conjugates():
 
 def test_transport_path_rejects_wrong_endpoints_and_non_edges():
     complex_ = _wedge_of_two_circles()
-    with pytest.raises(ValidationError, match="run from the source"):
+    with pytest.raises(ValidationError) as exc_info:
         PresentationBasepointChangePath(
             complex=complex_,
             source_base_vertex="a",
             target_base_vertex="a",
             path_vertices=("a", "b"),
         )
-    with pytest.raises(ValidationError, match="each consecutive path pair"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.basepoint_path_endpoints"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         PresentationBasepointChangePath(
             complex=complex_,
             source_base_vertex="a",
             target_base_vertex="e",
             path_vertices=("a", "b", "e"),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.basepoint_path_edge"
+    )
 
 
 def test_basepoint_transport_is_a_typed_composable_math_tool():

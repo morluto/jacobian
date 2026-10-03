@@ -130,16 +130,17 @@ def test_forged_transform_result_rejects_a_foreign_lattice() -> None:
         )
         for vertex in ("a", "b", "c")
     )
-    with pytest.raises(ValueError, match="transform_parent"):
+    with pytest.raises(ValueError) as exc_info:
         GaugeTransformResult.model_validate(
             {"source": field, "transformed": foreign, "vertex_values": frames}
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.transform_parent"
 
 
 def test_forged_plaquette_result_rejects_unbound_curvature_degree() -> None:
     field = _field()
     path = _path()
-    with pytest.raises(ValueError, match="plaquette_degree"):
+    with pytest.raises(ValueError) as exc_info:
         PlaquetteResult.model_validate(
             {
                 "field": field,
@@ -148,6 +149,7 @@ def test_forged_plaquette_result_rejects_unbound_curvature_degree() -> None:
                 "start": "a",
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.plaquette_degree"
 
 
 def test_native_transform_rejects_forged_nested_values() -> None:

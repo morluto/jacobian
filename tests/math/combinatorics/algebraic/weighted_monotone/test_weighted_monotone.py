@@ -47,11 +47,9 @@ def test_admission_reserves_a_digit_for_rational_addition_carry() -> None:
         [Fraction(q - 1, q), Fraction(r - 1, r)],
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="rational growth exceeds",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_endpoint_profile(source)
+    assert exc_info.value.errors()[0]["type"] == "weighted_word.result_growth_exceeded"
 
 
 def test_increasing_letters() -> None:

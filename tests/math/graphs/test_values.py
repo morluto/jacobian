@@ -17,8 +17,12 @@ def test_graph_rejects_non_nfc_vertices() -> None:
 
 
 def test_graph_rejects_unencodable_surrogate_vertices() -> None:
-    with pytest.raises(ValidationError, match="valid Unicode scalar values"):
+    with pytest.raises(ValidationError) as exc_info:
         SimpleUndirectedGraph(vertices=("\ud800",), edges=())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.kind_must_be_valid_unicode_scalar_text"
+    )
 
 
 def test_graph_rejects_duplicate_vertices() -> None:
@@ -32,8 +36,12 @@ def test_graph_rejects_edges_with_undeclared_vertices() -> None:
 
 
 def test_graph_rejects_edges_out_of_order() -> None:
-    with pytest.raises(ValidationError, match="lexicographic label order"):
+    with pytest.raises(ValidationError) as exc_info:
         SimpleUndirectedGraph(vertices=("x", "r"), edges=(("x", "r"),))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.edges_must_contain_two_declared_vertices_in_orde"
+    )
 
 
 def test_graph_edge_orientation_is_independent_of_vertex_and_edge_list_order() -> None:
@@ -102,8 +110,12 @@ def test_indexed_graph_requires_canonical_edge_orientation() -> None:
     value composes on serialized equality, so ``(1, 0)`` and ``(0, 1)``
     cannot both represent the same undirected edge."""
 
-    with pytest.raises(ValidationError, match="left < right"):
+    with pytest.raises(ValidationError) as exc_info:
         IndexedSimpleUndirectedGraph(vertex_count=2, edges=((1, 0),))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.indexed_edges_must_be_canonical_pairs_with_left"
+    )
 
 
 def test_indexed_graph_rejects_duplicate_edges_across_orientation() -> None:
@@ -113,8 +125,12 @@ def test_indexed_graph_rejects_duplicate_edges_across_orientation() -> None:
 
     with pytest.raises(ValidationError):
         IndexedSimpleUndirectedGraph(vertex_count=2, edges=((1, 0), (0, 1)))
-    with pytest.raises(ValidationError, match="left < right"):
+    with pytest.raises(ValidationError) as exc_info:
         IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (2, 0)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.indexed_edges_must_be_canonical_pairs_with_left"
+    )
 
 
 def test_indexed_canonical_edges_round_trip_serialization() -> None:

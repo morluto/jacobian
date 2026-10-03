@@ -230,10 +230,15 @@ def test_normalization_preserves_full_source_through_model_and_json_round_trips(
 
 
 def test_normalization_requires_full_rank_and_bounded_hilbert_search() -> None:
-    with pytest.raises(OperationDomainValidationError, match="full-rank"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         normalization(_semigroup(((1, 0), (2, 0))))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.normalization_domain"
 
     # The group lattice is Z^2 due to the interior vector, while the cone rays
     # have determinant 1,001. The request is rejected before Hilbert enumeration.
-    with pytest.raises(OperationResourceAdmissionError, match="determinant"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         normalization(_semigroup(((1, 0), (1, 1001), (2, 1))))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.normalization_hilbert_determinant"
+    )

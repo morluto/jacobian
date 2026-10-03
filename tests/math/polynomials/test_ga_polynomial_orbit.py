@@ -99,11 +99,15 @@ def test_invariant_and_zero_polynomials_retain_extended_parent() -> None:
 
 def test_orbit_rejects_wrong_ordered_ring_and_invalid_action() -> None:
     action = _translation_action()
-    with pytest.raises(ValueError, match="ordered source ring"):
+    with pytest.raises(ValueError) as exc_info:
         GaPolynomialOrbitRequest(
             action=action,
             polynomial=_polynomial(("y", "x"), {(1, 0): 1}),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_orbit.ordered_ring_mismatch"
+    )
 
     invalid = PolynomialGaAction(
         source_variables=("x",),
@@ -149,8 +153,11 @@ def test_orbit_bounds_repeated_image_denominator_before_expansion() -> None:
     )
     source = _polynomial(("x", "y"), {(12, 0): 1})
 
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient growth"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_polynomial_orbit(action, source)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_ga_orbit.coefficient_growth"
+    )
 
 
 def test_orbit_admits_a_merged_support_within_the_envelope() -> None:
@@ -190,8 +197,9 @@ def test_orbit_rejects_expansion_before_substitution(
         pytest.fail("orbit expansion started before resource admission")
 
     monkeypatch.setattr(operations, "_expand", expansion_must_not_start)
-    with pytest.raises(OperationResourceAdmissionError, match="expansion count"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_polynomial_orbit(action, source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial_ga_orbit.expansion_budget"
 
 
 def test_catalog_declaration_example_is_typed_and_computes_the_orbit() -> None:
@@ -226,5 +234,8 @@ def test_orbit_bounds_denominators_for_terms_with_overlapping_support() -> None:
         ("x", "y", "z"), {(1, 0, 0): Fraction(1, p), (0, 1, 0): Fraction(1, q)}
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient growth"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_polynomial_orbit(action, source)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_ga_orbit.coefficient_growth"
+    )

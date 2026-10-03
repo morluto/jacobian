@@ -71,8 +71,14 @@ def convertible_sites(
         codes = info.get("codes")
         # A site that raised more than one code across its executions (a
         # parametrized case or a loop) cannot be pinned to a single assert.
+        # A ``None`` entry means one execution was code-less, which is equally
+        # disqualifying: the assert could not hold for that execution.
         if isinstance(codes, list) and len(codes) > 1:
-            rejected["multiple_codes_across_executions"] += 1
+            rejected[
+                "mixed_code_presence_across_executions"
+                if None in codes
+                else "multiple_codes_across_executions"
+            ] += 1
             continue
         if not isinstance(code, str) or not code:
             rejected["no_code"] += 1

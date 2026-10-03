@@ -21,5 +21,9 @@ def test_permutation_rsk_round_trips_all_small_permutations(size: int) -> None:
 
 
 def test_permutation_rsk_requires_canonical_finite_permutation() -> None:
-    with pytest.raises(Exception, match="finite permutation"):
+    with pytest.raises(Exception) as exc_info:
         permutation_rsk((1, 2, 3))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.permutation_carrier_required"
+    )

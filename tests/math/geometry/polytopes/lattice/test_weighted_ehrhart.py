@@ -112,10 +112,14 @@ def test_weighted_square_known_answer() -> None:
 
 def test_insufficient_degree_bound_rejected() -> None:
     vertices = (_vertex(0), _vertex(1))
-    with pytest.raises(OperationDomainValidationError, match="degree_bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weighted_ehrhart_polynomial(
             _request(vertices, _weight(("x0",), (1, (1,))), 1, 3)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytope.weighted_ehrhart.degree_insufficient"
+    )
 
 
 def test_weight_axis_mismatch_rejected() -> None:

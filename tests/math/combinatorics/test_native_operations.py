@@ -87,10 +87,18 @@ def test_largest_bell_number_projects_as_a_canonical_public_json_integer() -> No
 
 
 def test_native_classical_numbers_reject_noninteger_or_negative_indices() -> None:
-    with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         bell_number(-1)
-    with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "combinatorics.nonnegative_integer_required"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         bell_number(True)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "combinatorics.nonnegative_integer_required"
+    )
 
 
 def test_bell_number_enforces_the_native_counting_index_bound() -> None:
@@ -105,7 +113,7 @@ def test_bell_number_enforces_the_native_counting_index_bound() -> None:
 def test_native_recurrence_admission_uses_typed_domain_errors() -> None:
     rational = CanonicalRational(num=1, den=1)
 
-    with pytest.raises(OperationDomainValidationError, match="convention"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_linear_recurrence(
             (rational,),
             (rational,),
@@ -113,3 +121,4 @@ def test_native_recurrence_admission_uses_typed_domain_errors() -> None:
             "PREFIX",
             term_count=1,
         )
+    assert exc_info.value.errors()[0]["type"] == "combinatorics.recurrence_convention"

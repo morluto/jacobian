@@ -68,10 +68,12 @@ def test_second_indicator_rejects_a_forged_incomplete_character_table() -> None:
         update={"values": (table.rows[2].values[0],) * 3}
     )
     forged = table.model_copy(update={"rows": (*table.rows[:2], changed_row)})
-    with pytest.raises(
-        OperationDomainValidationError, match="complete canonical table"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         frobenius_schur_indicator(forged, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.indicator_incomplete_table"
+    )
 
 
 def test_second_indicator_rejects_nonexistent_row() -> None:
@@ -79,8 +81,12 @@ def test_second_indicator_rejects_nonexistent_row() -> None:
         GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0),))
     )
     table = character_table(partition)
-    with pytest.raises(OperationDomainValidationError, match="row_index"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         frobenius_schur_indicator(table, 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.indicator_row_out_of_range"
+    )
 
 
 def test_catalog_example_is_runnable() -> None:
@@ -102,9 +108,20 @@ def test_native_indicator_rejects_malformed_inputs_without_pydantic_leak() -> No
         GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0),))
     )
     table = character_table(partition)
-    with pytest.raises(OperationDomainValidationError, match="row_index"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         frobenius_schur_indicator(table, -1)
-    with pytest.raises(OperationDomainValidationError, match="row_index"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.indicator_row_out_of_range"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         frobenius_schur_indicator(table, True)
-    with pytest.raises(OperationDomainValidationError, match="table"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.indicator_row_out_of_range"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         frobenius_schur_indicator({"partition": None}, 0)
+    assert (
+        exc_info.value.errors()[0]["type"] == "groups.characters.indicator_table_type"
+    )

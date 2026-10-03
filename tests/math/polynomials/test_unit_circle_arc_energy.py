@@ -179,12 +179,18 @@ def test_large_unwrapped_turn_is_reduced_before_cyclotomic_recurrence() -> None:
 
 
 def test_arc_admission_rejects_excessive_conductor() -> None:
-    with pytest.raises(OperationDomainValidationError, match="conductor"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         energy((1, 1), Fraction(0), Fraction(1, 33))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.unit_circle.conductor_bound"
+    )
 
     # Endpoint denominators alone fit, but adjoining i requires conductor 36.
-    with pytest.raises(OperationDomainValidationError, match="conductor"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         energy((1, 1), Fraction(0), Fraction(1, 18))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.unit_circle.conductor_bound"
+    )
 
 
 def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> None:
@@ -193,10 +199,14 @@ def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> Non
         start_turn=q(0),
         end_turn=q(1),
     )
-    with pytest.raises(OperationDomainValidationError, match="exact-growth"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         unit_circle_arc_energy(
             oversized.polynomial, oversized.start_turn, oversized.end_turn
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.coefficient_growth_bound"
+    )
 
     many_denominators = UnitCircleArcEnergyRequest(
         polynomial=rational_polynomial(
@@ -205,12 +215,16 @@ def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> Non
         start_turn=q(0),
         end_turn=q(Fraction(1, 4)),
     )
-    with pytest.raises(OperationDomainValidationError, match="denominators"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         unit_circle_arc_energy(
             many_denominators.polynomial,
             many_denominators.start_turn,
             many_denominators.end_turn,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.denominator_growth_bound"
+    )
 
 
 def test_serialized_claim_forgery_is_structural_but_fails_verification() -> None:

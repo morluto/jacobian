@@ -134,10 +134,12 @@ def test_direct_sum_admits_derived_coefficients_by_output_digit_work() -> None:
 
 
 def test_direct_sum_rejects_different_field_or_complex() -> None:
-    with pytest.raises(
-        OperationDomainValidationError, match="same exact coefficient field"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         direct_sum(_constant_interval(), _constant_interval(field=SheafField.RATIONAL))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.direct_sum.field_mismatch"
+    )
     other = from_cover_maps(
         canonical_complex(("x",), (("x",),)),
         SheafField.PRIME_FIELD,
@@ -146,8 +148,12 @@ def test_direct_sum_rejects_different_field_or_complex() -> None:
         (),
     ).sheaf
     assert other is not None
-    with pytest.raises(OperationDomainValidationError, match="same simplicial complex"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         direct_sum(_constant_interval(), other)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.direct_sum.complex_mismatch"
+    )
 
 
 def test_direct_sum_doubles_a_stalk_past_public_rank_bound_before_expansion() -> None:
@@ -159,8 +165,12 @@ def test_direct_sum_doubles_a_stalk_past_public_rank_bound_before_expansion() ->
         (),
     ).sheaf
     assert source is not None
-    with pytest.raises(OperationResourceAdmissionError, match="direct-sum stalk"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         direct_sum(source, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.direct_sum.stalk_rank_bound"
+    )
 
 
 def test_direct_sum_counts_each_shared_complex_map_once(monkeypatch) -> None:

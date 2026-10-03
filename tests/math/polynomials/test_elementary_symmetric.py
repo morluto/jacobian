@@ -41,10 +41,18 @@ def test_empty_axis_e_zero_is_a_canonical_constant() -> None:
 
 
 def test_request_rejects_duplicate_variables_and_degree_above_axis() -> None:
-    with pytest.raises(ValidationError, match="variables must be unique"):
+    with pytest.raises(ValidationError) as exc_info:
         ElementarySymmetricFamilyRequest(variables=("x", "x"), maximum_degree=1)
-    with pytest.raises(ValidationError, match="cannot exceed the variable count"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.symmetric.elementary.duplicate_variables"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ElementarySymmetricFamilyRequest(variables=("x",), maximum_degree=2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.symmetric.elementary.degree_exceeds_axis"
+    )
 
 
 def test_dynamic_recurrence_matches_prefix_recurrence() -> None:
@@ -164,8 +172,12 @@ def test_result_rejects_forged_nonunit_e_zero_without_replaying_the_family() -> 
     )
     forged = result.model_dump()
     forged["polynomials"][0]["polynomial"]["terms"][0]["coefficient"]["num"] = 2
-    with pytest.raises(ValidationError, match="canonical constant one"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.symmetric.elementary.result_e_zero"
+    )
 
 
 def test_native_entry_rejects_invalid_domain_values_with_typed_errors() -> None:

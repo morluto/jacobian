@@ -42,18 +42,22 @@ def _space(weight: int, kind: str = "M") -> ModularFormSpace:
 
 
 def test_global_equality_rejects_incomplete_constructed_coordinate_values() -> None:
-    with pytest.raises(OperationDomainValidationError, match="canonical tuple axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_equal(
             ModularFormCoordinates.model_construct(),
             ModularFormCoordinates.model_construct(),
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_form.coordinates_shape"
 
     incomplete_space = ModularFormSpace.model_construct(weight=4, kind="M")
     malformed = ModularFormCoordinates.model_construct(
         space=incomplete_space, basis_id=BASIS_ID, coordinates=()
     )
-    with pytest.raises(OperationDomainValidationError, match="required fields"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_equal(malformed, malformed)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.coordinates_carrier_invalid"
+    )
 
 
 def test_global_equality_bounds_coordinate_axis_before_revalidation(
@@ -591,8 +595,11 @@ def test_operator_image_rejects_non_level_one_source() -> None:
         basis_id="gamma0-two-weight-2-4-monomials-v1",
         coordinates=_coordinate_values((1, 1), (0, 1)),
     )
-    with pytest.raises(OperationDomainValidationError, match="level-one"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_operator_image(higher_level, "U", 3)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.operator_image_source_level"
+    )
 
 
 def test_operator_image_rejects_composite_prime_and_insufficient_source_order() -> None:

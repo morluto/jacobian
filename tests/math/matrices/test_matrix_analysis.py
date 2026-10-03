@@ -152,12 +152,13 @@ class TestFarkas:
     def test_rejects_unrepresentable_dot_product_before_expansion(self) -> None:
         huge = CanonicalRational(num=10**20000 - 1, den=1)
         one = CanonicalRational(num=1, den=1)
-        with pytest.raises(OperationDomainValidationError, match="result envelope"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             check_farkas_certificate_native(
                 RationalMatrix(entries=((huge,),)),
                 (one,),
                 (huge,),
             )
+        assert exc_info.value.errors()[0]["type"] == "matrix.farkas_growth"
 
     def test_valid_certificate(self) -> None:
         # System: x1 + x2 <= -1, x1 + x2 >= 1 is infeasible.
@@ -462,8 +463,9 @@ def test_inertia_rejects_request_above_digit_work_bound() -> None:
             }
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="digit-work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_inertia(request)
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 @pytest.mark.parametrize("columns", [1, 32, 256])

@@ -245,8 +245,12 @@ def test_decoded_profile_enforces_the_aggregate_witness_node_bound() -> None:
         for row in payload["witnesses"]
     ]
 
-    with pytest.raises(ValueError, match="language_profile_witness_nodes"):
+    with pytest.raises(ValueError) as exc_info:
         TreeLanguageProfile.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "tree_automata.language_profile_witness_nodes"
+    )
 
     assert TreeLanguageProfile.model_validate(genuine.model_dump()) == genuine
 

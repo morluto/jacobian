@@ -153,8 +153,12 @@ def test_singular_one_variable_generator_is_rejected_by_scalar_admission() -> No
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((0,),), columns=1),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="invertible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         homogeneous_fixed_subspace(action, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.linear_action_generator_invertible"
+    )
 
 
 def test_multiple_generators_compute_their_simultaneous_fixed_space() -> None:
@@ -254,8 +258,12 @@ def test_singular_generator_is_rejected_by_operation_admission() -> None:
         ),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="invertible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         homogeneous_fixed_subspace(action, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.linear_action_generator_invertible"
+    )
 
 
 def test_oversized_homogeneous_basis_is_rejected_by_derived_axis_bound() -> None:
@@ -269,8 +277,12 @@ def test_oversized_homogeneous_basis_is_rejected_by_derived_axis_bound() -> None
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=identity, columns=8),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="equations exceed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         homogeneous_fixed_subspace(action, 6)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.fixed_subspace_equation_axis_bound"
+    )
 
 
 def test_stacked_equation_axis_is_rejected_before_polynomial_expansion() -> None:
@@ -433,16 +445,18 @@ def test_native_action_rejects_a_prime_the_worker_cannot_serialize() -> None:
             ),
         )
 
-        with pytest.raises(
-            OperationDomainValidationError, match="worker JSON integer serialization"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             homogeneous_fixed_subspace(action, 1)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "finite_field.linear_action_prime_serialization_bound"
+        )
     finally:
         sys.set_int_max_str_digits(prior_limit)
 
 
 def test_catalog_action_rejects_non_word_safe_prime_before_nested_work() -> None:
-    with pytest.raises(ValidationError, match="word-safe backend bound"):
+    with pytest.raises(ValidationError) as exc_info:
         HomogeneousFixedSubspaceRequest.model_validate(
             {
                 "action": {
@@ -457,6 +471,9 @@ def test_catalog_action_rejects_non_word_safe_prime_before_nested_work() -> None
                 "degree": 1,
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_field.linear_action_prime_bound"
+    )
 
 
 def test_catalog_action_rejects_non_word_safe_canonical_action() -> None:
@@ -471,8 +488,11 @@ def test_catalog_action_rejects_non_word_safe_canonical_action() -> None:
         ),
     )
 
-    with pytest.raises(ValidationError, match="word-safe backend bound"):
+    with pytest.raises(ValidationError) as exc_info:
         HomogeneousFixedSubspaceRequest(action=action, degree=1)
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_field.linear_action_prime_bound"
+    )
 
 
 def test_raw_action_malformed_matrix_row_is_a_validation_error() -> None:

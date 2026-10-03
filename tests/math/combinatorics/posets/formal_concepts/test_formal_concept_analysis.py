@@ -97,8 +97,12 @@ class TestDerivation:
         )
         forged = result.model_dump(mode="json")
         forged["subset"]["context"] = _diagonal_context().model_dump(mode="json")
-        with pytest.raises(ValidationError, match="retained context"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(forged)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "formal_concept_analysis.result_context_mismatch"
+        )
 
     def test_empty_attribute_set_derives_all_objects(self) -> None:
         result = compute_attribute_derivation(

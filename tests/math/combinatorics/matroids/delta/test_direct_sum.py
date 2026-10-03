@@ -51,12 +51,18 @@ def test_overlapping_labels_rejected_instead_of_silently_tagged() -> None:
 
     left = FiniteDeltaMatroid(ground=("x",), feasible=((), (0,)))
     right = FiniteDeltaMatroid(ground=("x",), feasible=((), (0,)))
-    with pytest.raises(OperationDomainValidationError, match="disjoint"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         direct_sum(left, right)
-    with pytest.raises(OperationDomainValidationError, match="disjoint"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "delta_matroid.direct_sum_ground_overlap"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _run_direct_sum(
             DeltaMatroidDirectSumRequest.model_construct(left=left, right=right)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "delta_matroid.direct_sum_ground_overlap"
+    )
 
 
 def test_catalog_path_returns_typed_result() -> None:

@@ -11,7 +11,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.posets.core._maximal_chains import (
-    MAX_MAXIMAL_CHAIN_ELEMENT_SLOTS,
     MaximalChainEnumerationResult,
     enumerate_maximal_chains,
 )
@@ -187,8 +186,9 @@ def test_serialized_result_round_trips_and_rejects_tampered_cover_claim() -> Non
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
     tampered = poset.model_copy(update={"cover_relations": ()})
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_maximal_chains(tampered)
+    assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.source_claims"
 
 
 def test_serialized_result_rejects_contradictory_structural_row() -> None:
@@ -201,8 +201,9 @@ def test_serialized_result_rejects_contradictory_structural_row() -> None:
     result = enumerate_maximal_chains(poset)
     payload = result.model_dump(mode="json")
     payload["chains"][0]["length"] = 1
-    with pytest.raises(ValidationError, match="chain length"):
+    with pytest.raises(ValidationError) as exc_info:
         MaximalChainEnumerationResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.row_length"
 
 
 def test_serialized_result_rejects_noncover_chain() -> None:
@@ -220,13 +221,17 @@ def test_serialized_result_rejects_noncover_chain() -> None:
     payload["chains"][0]["elements"] = ["a", "c"]
     payload["chains"][0]["cover_relations"] = [{"lower": "a", "upper": "c"}]
     payload["chains"][0]["length"] = 2
-    with pytest.raises(ValidationError, match="source Hasse"):
+    with pytest.raises(ValidationError) as exc_info:
         MaximalChainEnumerationResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "poset.maximal_chains.chain_covers_source"
+    )
 
 
 def test_direct_native_guard_rejects_untyped_request() -> None:
-    with pytest.raises(OperationDomainValidationError, match="typed finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_maximal_chains(cast(Any, None))
+    assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.request_type"
 
 
 def test_complete_profile_rejects_predicted_result_explosion() -> None:
@@ -248,11 +253,11 @@ def test_complete_profile_rejects_predicted_result_explosion() -> None:
         RelationInterpretation.COVER_EDGES,
         ReflexivePairPolicy.FORBIDDEN,
     )
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match=str(MAX_MAXIMAL_CHAIN_ELEMENT_SLOTS),
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_maximal_chains(poset)
+    assert (
+        exc_info.value.errors()[0]["type"] == "poset.maximal_chains.element_slots_bound"
+    )
 
 
 def test_complete_profile_accepts_fifteen_layer_binary_boundary() -> None:

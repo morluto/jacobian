@@ -97,8 +97,9 @@ class TestCompleteConstructor:
 
         payload = result.model_dump(mode="json")
         payload["hypergraph"]["vertices"] = payload["hypergraph"]["vertices"][1:]
-        with pytest.raises(ValueError, match="declared vertex"):
+        with pytest.raises(ValueError) as exc_info:
             CliqueCandidateHypergraphResult.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "hypergraph.edge_members"
 
     def test_serialized_result_rejects_oversized_candidate_axes(self) -> None:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))

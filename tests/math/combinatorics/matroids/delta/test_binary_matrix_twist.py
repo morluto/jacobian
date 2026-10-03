@@ -145,7 +145,7 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
         json.dumps({"matrix": {"ground": ground, "entries": matrix}})
     ).matrix.entries == tuple(tuple(row) for row in matrix)
 
-    with pytest.raises(ValidationError, match="at most 8 items"):
+    with pytest.raises(ValidationError) as exc_info:
         BinaryMatrixTwistRequest.model_validate_json(
             json.dumps(
                 {
@@ -156,7 +156,8 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
                 }
             )
         )
-    with pytest.raises(ValidationError, match="at most 8 items"):
+    assert exc_info.value.errors()[0]["type"] == "too_long"
+    with pytest.raises(ValidationError) as exc_info:
         BinaryMatrixTwistRequest.model_validate_json(
             json.dumps(
                 {
@@ -167,13 +168,15 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
                 }
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "too_long"
 
 
 @pytest.mark.parametrize("entry", [True, "1", 1.0])
 def test_native_twist_rejects_forged_coerced_matrix_entries(entry: object) -> None:
     matrix = BinarySymmetricMatrix.model_construct(ground=("e0",), entries=((entry,),))
-    with pytest.raises(Exception, match="canonical symmetric binary matrix"):
+    with pytest.raises(Exception) as exc_info:
         binary_matrix_twist(matrix)
+    assert exc_info.value.errors()[0]["type"] == "delta_matroid.binary_carrier"
 
 
 def test_result_twist_rejects_coerced_non_integer_indices() -> None:

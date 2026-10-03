@@ -88,5 +88,9 @@ def test_stabilizer_distance_k_zero_has_no_distance() -> None:
 def test_stabilizer_distance_rejects_search_beyond_ten_qubits() -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(11)))
     value = CheckSpaceValue(register=register, basis=())
-    with pytest.raises(OperationResourceAdmissionError, match="complete mixed-Pauli"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         stabilizer_exact_distance(value)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quantum.stabilizer.distance.search_over_envelope"
+    )

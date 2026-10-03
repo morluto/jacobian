@@ -132,13 +132,16 @@ def test_shared_carrier_does_not_expand_solver_shortcuts(
         zero_certificate(n, m, standard=standard)
     )
     assert check_linear_optimality(candidate).is_optimal
-    with pytest.raises(OperationResourceAdmissionError, match="search admits at most"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         from jacobian.math.optimization._models import StandardFormRationalLinearProgram
 
         if isinstance(candidate.program, StandardFormRationalLinearProgram):
             linear_program(candidate.program)
         else:
             general_linear_program(candidate.program)
+    assert (
+        exc_info.value.errors()[0]["type"] == "optimization.linear.solver_shape_bound"
+    )
 
 
 @pytest.mark.parametrize("standard", [False, True])
@@ -226,8 +229,11 @@ def test_prebuilt_constraint_rows_pay_the_same_cell_bound() -> None:
     payload["constraints"] = tuple(
         RationalLinearConstraint.model_validate(row) for row in payload["constraints"]
     )
-    with pytest.raises(ValidationError, match="16384-entry bound"):
+    with pytest.raises(ValidationError) as exc_info:
         GeneralFormRationalLinearProgram.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "general_linear_program.raw_input_bound"
+    )
 
 
 def test_large_result_requires_structural_axes_without_rechecking_claim() -> None:

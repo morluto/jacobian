@@ -51,8 +51,12 @@ def test_path_profile_rejects_unbounded_dense_search() -> None:
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
     request = PathProfileRequest(graph=graph, path_length=10)
-    with pytest.raises(OperationDomainValidationError, match="work budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         path_profile(request.graph, request.path_length)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.path_profile_search_exceeds_work_budget"
+    )
 
 
 @pytest.mark.parametrize("length", [0, 2, 5])

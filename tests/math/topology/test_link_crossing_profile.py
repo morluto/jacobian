@@ -165,8 +165,9 @@ def test_crossing_profile_result_rejects_wrong_component_pair() -> None:
     result = link_crossing_profile(_hopf())
     payload = result.model_dump(mode="json")
     payload["crossings"][0]["over_component_id"] = "missing"
-    with pytest.raises(ValidationError, match="over/under component IDs"):
+    with pytest.raises(ValidationError) as exc_info:
         LinkCrossingProfileResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "link_diagram.crossing_profile_roles"
 
 
 def test_crossing_profile_is_published_in_native_operation_manifest() -> None:

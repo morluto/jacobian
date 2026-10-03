@@ -684,10 +684,11 @@ def test_characteristic_polynomial_rejects_predicted_coefficient_growth() -> Non
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_characteristic_polynomial(
             CharacteristicPolynomialRequest(matrix=source)
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_characteristic_polynomial_rejects_coprime_denominator_lcm_growth() -> None:
@@ -710,10 +711,11 @@ def test_characteristic_polynomial_rejects_coprime_denominator_lcm_growth() -> N
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_characteristic_polynomial(
             CharacteristicPolynomialRequest(matrix=source)
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_characteristic_polynomial_admits_shared_denominator_scaled_identity() -> None:
@@ -797,10 +799,11 @@ def test_characteristic_polynomial_stops_denominator_lcm_once_rejection_is_certa
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical digit budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_characteristic_polynomial(
             CharacteristicPolynomialRequest(matrix=source)
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:

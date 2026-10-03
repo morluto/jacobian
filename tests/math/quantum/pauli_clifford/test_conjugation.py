@@ -150,5 +150,6 @@ def test_gate_axes_are_bound_to_the_exact_register() -> None:
         phase=0,
     )
     request = PauliCliffordConjugationRequest(pauli=pauli, gate="H", qubits=("q1",))
-    with pytest.raises(OperationDomainValidationError, match="register elements"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         conjugate_pauli(request.pauli, request.gate, request.qubits)
+    assert exc_info.value.errors()[0]["type"] == "quantum.pauli_clifford.invalid_axes"

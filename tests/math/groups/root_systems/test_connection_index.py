@@ -109,13 +109,17 @@ def test_result_model_rejects_inconsistent_index_and_basis_map() -> None:
     result = root_system_connection_index(_cartan(((2, -1), (-1, 2))))
     payload = json.loads(result.model_dump_json())
     payload["connection_index"] = "2"
-    with pytest.raises(ValidationError, match="product of quotient invariant factors"):
+    with pytest.raises(ValidationError) as exc_info:
         RootSystemConnectionIndexResult.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "root_system.connection_index.index"
 
     payload = json.loads(result.model_dump_json())
     payload["root_to_weight"]["entries"][0][0] = "1"
-    with pytest.raises(ValidationError, match="equal the retained Cartan matrix"):
+    with pytest.raises(ValidationError) as exc_info:
         RootSystemConnectionIndexResult.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_system.connection_index.inclusion"
+    )
 
 
 def test_non_finite_cartan_data_are_rejected() -> None:

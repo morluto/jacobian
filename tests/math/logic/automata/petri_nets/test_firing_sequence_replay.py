@@ -110,8 +110,12 @@ class TestAdversarial:
             post=((0,),),
         )
         bound = Marking(tokens=(0,), net=net)
-        with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             replay_firing_sequence(net, bound, (0,) * 1024)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "petri_net.firing_sequence_output_bound"
+        )
         result = replay_firing_sequence(net, bound, (0, 0))
         assert result.status == "FIRES"
         assert len(result.prefix_markings) == 2

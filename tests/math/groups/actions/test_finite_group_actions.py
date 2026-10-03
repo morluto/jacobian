@@ -511,10 +511,12 @@ class TestBounds:
 
     def test_element_index_out_of_range_rejected(self) -> None:
         action = _cyclic_c3()
-        with pytest.raises(
-            OperationDomainValidationError, match="out of range"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             _run_element_cycles(ElementCyclesRequest(action=action, element=3))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_group_action.element_out_of_range"
+        )
         assert error.value.errors()[0]["loc"] == ("element",)
         assert (
             error.value.errors()[0]["type"]
@@ -526,10 +528,11 @@ class TestBounds:
             PolyaInventoryRequest(action=_cyclic_c3(), colors=0)
 
     def test_colors_above_bound_rejected_by_native_operation(self) -> None:
-        with pytest.raises(
-            OperationDomainValidationError, match="between 1 and"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             polya_inventory(_cyclic_c3(), MAX_COLORS + 1)
+        assert (
+            error.value.errors()[0]["type"] == "finite_group_action.colors_out_of_range"
+        )
         assert (
             error.value.errors()[0]["type"] == "finite_group_action.colors_out_of_range"
         )
@@ -538,10 +541,12 @@ class TestBounds:
         # Five fixed points with twenty colours have more than MAX_TERMS
         # distinct colour-multiplicity monomials. The bounded kernel rejects
         # this before constructing an unbounded result.
-        with pytest.raises(
-            OperationDomainValidationError, match="more than the bounded maximum"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             polya_inventory(_trivial(5), 20)
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_group_action.polya_terms_exceeded"
+        )
         assert (
             error.value.errors()[0]["type"]
             == "finite_group_action.polya_terms_exceeded"
@@ -573,10 +578,11 @@ class TestBounds:
         monkeypatch.setattr(
             action_operations, "_permutation_cycle_type", counting_cycle_type
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="dynamic-programming work"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             polya_inventory(action, 2)
+        assert (
+            error.value.errors()[0]["type"] == "finite_group_action.polya_work_exceeded"
+        )
         assert (
             error.value.errors()[0]["type"] == "finite_group_action.polya_work_exceeded"
         )
@@ -591,10 +597,12 @@ class TestBounds:
             domain=tuple(f"p{i}" for i in range(8)),
             generators=((1, 2, 3, 4, 5, 6, 7, 0), (1, 0, 2, 3, 4, 5, 6, 7)),
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="exceeds the bounded maximum"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             _run_cycle_index(CycleIndexRequest(action=action))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_group_action.group_order_exceeds_bound"
+        )
         assert error.value.errors()[0]["loc"] == ("action",)
         assert (
             error.value.errors()[0]["type"]

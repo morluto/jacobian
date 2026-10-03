@@ -79,8 +79,9 @@ def test_borel_subalgebra_has_exact_induced_structure_constants_and_inclusion() 
 
 
 def test_subspace_that_is_not_closed_is_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="bracket escapes"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         lie_subalgebra(SL2, _subspace([[1, 0, 0], [0, 1, 0]]), ["e", "f"])
+    assert exc_info.value.errors()[0]["type"] == "lie_algebra.not_a_subalgebra"
 
 
 def test_induced_bracket_transports_under_an_invertible_rational_basis_change() -> None:

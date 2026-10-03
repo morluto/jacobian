@@ -176,10 +176,9 @@ class TestExactBarComplex:
             prime=4,
             max_degree=2,
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="prime must be a prime integer"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             compute_group_cohomology(request)
+        assert error.value.errors()[0]["type"] == "group_cohomology.prime_not_prime"
         assert error.value.errors()[0]["loc"] == ("prime",)
         assert error.value.errors()[0]["type"] == "group_cohomology.prime_not_prime"
 
@@ -195,10 +194,12 @@ class TestExactBarComplex:
             prime=2,
             max_degree=1,
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="exceeds the bounded maximum"
-        ) as error:
+        with pytest.raises(OperationDomainValidationError) as error:
             compute_group_cohomology(request)
+        assert (
+            error.value.errors()[0]["type"]
+            == "group_cohomology.group_order_exceeds_bound"
+        )
         assert error.value.errors()[0]["loc"] == ("group",)
         assert (
             error.value.errors()[0]["type"]
@@ -222,11 +223,12 @@ class TestExactBarComplex:
             prime=2,
             max_degree=4,
         )
-        with pytest.raises(
-            OperationDomainValidationError,
-            match="exceeds the work-derived degree budget",
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_group_cohomology(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "group_cohomology.max_degree_exceeds_work_budget"
+        )
 
     def test_dense_bar_matrix_budget_rejected(self) -> None:
         """Order 4 at max_degree 5 fits no derived envelope: its degree-5
@@ -237,11 +239,12 @@ class TestExactBarComplex:
             prime=2,
             max_degree=5,
         )
-        with pytest.raises(
-            OperationDomainValidationError,
-            match="exceeds the work-derived degree budget",
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_group_cohomology(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "group_cohomology.max_degree_exceeds_work_budget"
+        )
 
     def test_dense_bar_matrix_budget_admits_bounded_requests(self) -> None:
         """C2 at the maximum degree and C4 at degree 3 stay inside the cells."""
@@ -265,11 +268,12 @@ class TestExactBarComplex:
             prime=2,
             max_degree=8,
         )
-        with pytest.raises(
-            OperationDomainValidationError,
-            match="exceeds the work-derived degree budget",
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_group_cohomology(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "group_cohomology.max_degree_exceeds_work_budget"
+        )
 
     def test_derived_budget_boundary_admitted(self) -> None:
         """Order 32 at its work-derived maximum degree 1 stays inside both

@@ -59,8 +59,9 @@ def test_loop_family_rejects_inconsistent_or_foreign_basepoints(
     payload = result.model_dump()
     payload["loops"][0]["path"]["basepoint"] = path_basepoint
     payload["loops"][0]["basepoint"] = entry_basepoint
-    with pytest.raises(ValidationError, match="loop_family_path"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.loop_family_path"
 
 
 @pytest.mark.parametrize("empty", (False, True))

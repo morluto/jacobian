@@ -196,8 +196,12 @@ def test_work_and_height_are_admitted_before_conjugacy_expansion(
     monkeypatch.setattr(
         ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
-    with pytest.raises(OperationResourceAdmissionError, match=r"height|envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         class_function_character_decomposition(oversized)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.inner_product_work_exceeds_envelope"
+    )
 
 
 def test_maximum_supported_cyclic_group_decomposes_exactly() -> None:
@@ -235,8 +239,12 @@ def test_group_order_above_table_envelope_rejects_before_class_expansion(
     monkeypatch.setattr(
         ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
-    with pytest.raises(OperationResourceAdmissionError, match="group order"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         class_function_character_decomposition(function)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.ring_decomposition_group_order_exceeds_envelope"
+    )
 
 
 def test_ring_element_coordinates_are_strict_integers() -> None:

@@ -81,8 +81,11 @@ def test_non_exact_divisor_is_rejected() -> None:
         basis_id="gamma0-rational-gamma0-sturm-rref-v1",
         coordinates=(),
     )
-    with pytest.raises(OperationDomainValidationError, match="exact divisor"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_atkin_lehner(form, 2)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.atkin_lehner_exact_divisor"
+    )
 
 
 def test_output_height_is_admitted_before_the_backend(
@@ -102,10 +105,12 @@ def test_output_height_is_admitted_before_the_backend(
         "jacobian.math.number_theory.modular_forms.basis.pari_gamma0_atkin_matrix",
         backend_must_not_run,
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="worst-case Atkin-Lehner"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         modular_form_coordinates_atkin_lehner(form, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.atkin_lehner_coordinate_growth_bound"
+    )
 
 
 def test_catalog_declares_the_fricke_transform() -> None:

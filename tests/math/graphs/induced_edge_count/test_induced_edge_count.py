@@ -106,16 +106,24 @@ def test_native_admission_rejects_excessive_subset_edge_work() -> None:
             for right in range(left + 1, 20)
         ],
     )
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_induced_edge_count_profile(g, 10)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.induced_edge_count.enumeration_work_exceeded"
+    )
 
 
 def test_rejects_excessive_retained_label_allocation() -> None:
     label = "x" * (MAX_RETAINED_LABEL_CHARACTERS // 2 + 1)
     graph = _graph((label,), ())
 
-    with pytest.raises(OperationDomainValidationError, match="retained label"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_induced_edge_count_profile(graph, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.induced_edge_count.retained_labels_exceeded"
+    )
 
 
 def test_result_preserves_source() -> None:

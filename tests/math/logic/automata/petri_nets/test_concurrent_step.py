@@ -134,8 +134,9 @@ def test_occurrence_cap_is_enforced_before_step_expansion():
         pre=((0,),),
         post=((0,),),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="multiplicity"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         concurrent_step(net, Marking(tokens=(0,)), (1001,))
+    assert exc_info.value.errors()[0]["type"] == "petri_net.step_occurrence_bound"
 
 
 @pytest.mark.parametrize(

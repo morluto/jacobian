@@ -165,8 +165,9 @@ def test_nonreduced_request_parses_then_owner_admission_rejects_it() -> None:
     )
     request = HermiteReductionRequest(function=function)
 
-    with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_hermite_reduction(request)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.not_coprime"
 
 
 def test_result_round_trip_remains_canonical_for_the_next_consumer() -> None:

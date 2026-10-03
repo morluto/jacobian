@@ -82,13 +82,17 @@ def _request() -> CrystallographicPolytopePairingRequest:
 
 def test_pairing_native_boundary_revalidates_affine_realization():
     request = _request()
-    with pytest.raises(OperationDomainValidationError, match="must be canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         pair_crystallographic_polytope_facets(
             CrystallographicAffineRealization.model_construct(),
             request.polytope,
             request.lattice_axes,
             request.pairings,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.polytope_pairing_input"
+    )
 
 
 def test_oversized_pairing_coordinates_are_resource_refusals():
@@ -106,15 +110,17 @@ def test_oversized_pairing_coordinates_are_resource_refusals():
         ),
     )
 
-    with pytest.raises(
-        OperationResourceAdmissionError, match="facet-profile digit bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         pair_crystallographic_polytope_facets(
             request.affine_realization,
             large_polytope,
             request.lattice_axes,
             request.pairings,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.polytope_pairing_coordinate_over_envelope"
+    )
 
 
 def _pair(request: CrystallographicPolytopePairingRequest):
@@ -162,8 +168,12 @@ def test_unit_square_translation_pairings_are_exact_and_source_bound() -> None:
 def test_pairing_rejects_wrong_axis_binding() -> None:
     request = _request().model_copy(update={"lattice_axes": ("y", "x")})
 
-    with pytest.raises(OperationDomainValidationError, match="ordered polytope axes"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _pair(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.polytope_pairing_axes"
+    )
 
 
 def test_pairing_rejects_noninverse_or_mismatched_facet_map() -> None:
@@ -172,10 +182,12 @@ def test_pairing_rejects_noninverse_or_mismatched_facet_map() -> None:
     pairings[3] = pairings[3].model_copy(update={"lattice_translation": (0, 0)})
     request = request.model_copy(update={"pairings": tuple(pairings)})
 
-    with pytest.raises(
-        OperationDomainValidationError, match="exact two-sided group inverse"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _pair(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.polytope_pairing_inverse"
+    )
 
 
 def test_pairing_rejects_inverse_elements_that_miss_target_facet() -> None:
@@ -185,20 +197,23 @@ def test_pairing_rejects_inverse_elements_that_miss_target_facet() -> None:
     pairings[3] = pairings[3].model_copy(update={"lattice_translation": (-2, 0)})
     request = request.model_copy(update={"pairings": tuple(pairings)})
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="complete source facet vertex set",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _pair(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.polytope_pairing_image"
+    )
 
 
 def test_pairing_rejects_incomplete_ledger() -> None:
     request = _request().model_copy(update={"pairings": _request().pairings[:-1]})
 
-    with pytest.raises(
-        OperationDomainValidationError, match="one entry per computed facet"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _pair(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.polytope_pairing_complete"
+    )
 
 
 def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:
@@ -279,8 +294,12 @@ def test_negative_fundamental_domain_result_requires_explanation() -> None:
         CrystallographicFundamentalDomainResult,
     )
 
-    with pytest.raises(ValueError, match="negative result requires"):
+    with pytest.raises(ValueError) as exc_info:
         CrystallographicFundamentalDomainResult.model_validate(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.fundamental_domain_result"
+    )
 
 
 def test_fundamental_domain_check_rejects_stale_facet_profile() -> None:

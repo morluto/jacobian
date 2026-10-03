@@ -283,8 +283,12 @@ def test_hyperedge_bound_is_owned_by_operation_admission() -> None:
         {edge_id: Fraction(1, 2) for edge_id, _ in edges},
         ("v0", "v1"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="hyperedge bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_hypergraph_bond_connection_probability(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.hypergraph_reliability.hyperedge_bound"
+    )
 
 
 def test_isolated_declared_vertices_are_charged_as_retained_source_only() -> None:
@@ -315,8 +319,12 @@ def test_hypergraph_ledger_allocation_is_admitted_before_enumeration(
         {"ab": Fraction(1, 2)},
         ("a", "b"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_hypergraph_bond_connection_probability(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.hypergraph_reliability.output_bound"
+    )
 
 
 def test_hypergraph_enumeration_observes_an_expired_deadline() -> None:

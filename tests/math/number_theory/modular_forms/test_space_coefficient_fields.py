@@ -126,7 +126,7 @@ def test_space_defers_the_complete_group_proof_to_relying_operations() -> None:
 
 def test_space_requires_explicit_character_inflation_to_the_level() -> None:
     character = dirichlet_character(character_group(13), (2,))
-    with pytest.raises(ValidationError, match="must equal the Gamma0 level"):
+    with pytest.raises(ValidationError) as exc_info:
         ModularFormSpace(
             level=26,
             weight=2,
@@ -134,10 +134,13 @@ def test_space_requires_explicit_character_inflation_to_the_level() -> None:
             character=character,
             coefficient_domain=RationalCyclotomicField(order=6),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_forms.character_level_mismatch"
+    )
 
 
 def test_space_bounds_cyclotomic_field_before_any_form_expansion() -> None:
-    with pytest.raises(ValidationError, match="degree at most 32"):
+    with pytest.raises(ValidationError) as exc_info:
         ModularFormSpace(
             level=13,
             weight=2,
@@ -145,6 +148,7 @@ def test_space_bounds_cyclotomic_field_before_any_form_expansion() -> None:
             character=_character_order_six(),
             coefficient_domain=RationalCyclotomicField(order=128),
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_forms.coefficient_field_bound"
 
 
 def test_existing_qq_operations_reject_the_new_parent_without_claiming_support() -> (
@@ -195,13 +199,16 @@ def test_shared_coordinate_carrier_preserves_cyclotomic_parent_and_scalar_type()
         == coordinates
     )
 
-    with pytest.raises(ValidationError, match="must belong to the declared space"):
+    with pytest.raises(ValidationError) as exc_info:
         ModularFormCoordinates(
             space=space,
             basis_id="gamma0-13-even-order6-character-sturm-v1",
             coordinates=(CanonicalRational(num=1, den=1),),
         )
-    with pytest.raises(ValidationError, match="requires a QQ space"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_forms.coordinate_scalar_parent"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ModularQExpansion(
             space=space,
             weight=2,
@@ -211,6 +218,7 @@ def test_shared_coordinate_carrier_preserves_cyclotomic_parent_and_scalar_type()
                 coefficients=(CanonicalRational(num=0, den=1),),
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_forms.rational_value_parent"
 
 
 def test_sturm_result_accepts_cyclotomic_space() -> None:

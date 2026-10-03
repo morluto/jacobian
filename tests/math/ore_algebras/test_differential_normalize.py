@@ -139,7 +139,11 @@ def test_normalization_rejects_nonpolynomial_rational_function_coefficients() ->
             },
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficients"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_operator_normalize_polynomial_coefficients(
             _operator(((0, rational),))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.differential_polynomial_coefficients"
+    )

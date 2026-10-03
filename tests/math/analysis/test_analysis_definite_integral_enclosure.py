@@ -714,8 +714,9 @@ def test_domain_unproven_result_cannot_smuggle_a_global_enclosure() -> None:
         "upper": {"mantissa": "0", "exponent": 0},
     }
 
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+    with pytest.raises(ValidationError) as exc_info:
         _validate_json(DefiniteIntegralEnclosureResult, payload)
+    assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
 
 
 def test_domain_failure_evidence_is_bound_to_the_expression_node() -> None:
@@ -804,11 +805,12 @@ def test_precision_work_boundary_is_derived_from_actual_subproblems() -> None:
         precision_bits=accepted_precision + 1,
         max_leaves=MAX_DEFINITE_INTEGRAL_LEAVES,
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="precision work",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _admit_definite_integral(rejected, started_at=monotonic())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "analysis.definite_integral.precision_work"
+    )
 
 
 def test_widened_box_endpoints_retain_definite_integral_admission() -> None:

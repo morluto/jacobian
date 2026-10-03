@@ -128,8 +128,9 @@ def test_nonhomogeneous_source_is_rejected() -> None:
         "surface": {"points": []},
         "projective_coordinate_variables": ["x", "y", "z"],
     }
-    with pytest.raises(ValidationError, match="must be homogeneous"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneCurveStrictTransformRequest.model_validate(raw)
+    assert exc_info.value.errors()[0]["type"] == "plane_curve_divisor.inhomogeneous"
 
 
 def test_operation_manifest_uses_the_plane_curve_divisor_id() -> None:

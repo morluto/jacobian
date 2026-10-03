@@ -174,8 +174,9 @@ def test_factorization_result_parses_structurally() -> None:
     payload = result.model_dump()
     payload["field_order"] = 4
     assert GaloisFactorResult.model_validate(payload).field_order == 4
-    with pytest.raises(OperationDomainValidationError, match="prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _galois_factor(GaloisFactorRequest(field_order=4, coefficients=(1, 0, 1)))
+    assert exc_info.value.errors()[0]["type"] == "galois_theory.field_order_not_prime"
 
 
 def test_factor_producer_runs_the_backend_once(monkeypatch: pytest.MonkeyPatch) -> None:

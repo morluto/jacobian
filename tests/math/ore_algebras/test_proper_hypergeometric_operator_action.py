@@ -178,8 +178,12 @@ def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected():
         20, 4
     ) == _direct_binomial(29, 4)
 
-    with pytest.raises(OperationResourceAdmissionError, match="256-term"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         proper_hypergeometric_operator_action(_operator(16), _binomial_term())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.hypergeometric_action_term_budget"
+    )
 
 
 def test_sparse_univariate_shift_product_uses_its_actual_axis_support():
@@ -229,5 +233,8 @@ def test_n_action_does_not_require_admission_of_the_k_quotient():
 
 
 def test_native_boundary_rejects_noncanonical_term_values_with_owner_error():
-    with pytest.raises(OperationDomainValidationError, match="canonical proper"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         proper_hypergeometric_operator_action(_operator(0), None)
+    assert (
+        exc_info.value.errors()[0]["type"] == "ore_algebra.proper_hypergeometric_term"
+    )

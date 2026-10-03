@@ -168,8 +168,9 @@ def test_height_bound() -> None:
         [[1, Fraction(1, 3**22000)], [Fraction(1, 3**22000), Fraction(1, 2**20000)]],
         [(0, 1)],
     )
-    with pytest.raises(OperationDomainValidationError, match="height"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         decompose_chordal_psd(matrix, graph)
+    assert exc_info.value.errors()[0]["type"] == "matrix.chordal_psd.height_bound"
 
 
 def test_large_singleton_and_independent_denominators() -> None:

@@ -232,17 +232,25 @@ def test_coordinate_axis_permutation_transports_components() -> None:
 def test_shape_singularity_and_authored_nonreduced_source_rejections() -> None:
     with pytest.raises(ValidationError, match="symmetric"):
         metric([1, 1, 0, 1])
-    with pytest.raises(OperationDomainValidationError, match="determinant"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         curvature_profile(metric([1, x, x, x * x]))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.curvature.singular_metric"
+    )
     source = metric([x], ("x",)).model_dump(mode="json")
     field = source["tensor"]["components"][0]
     field["numerator"]["terms"][0]["exponents"] = [2]
     field["denominator"]["terms"][0]["exponents"] = [1]
     source["tensor"]["retained_nonzero_denominators"] = [field["denominator"]]
-    with pytest.raises(OperationDomainValidationError, match="reduced canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         curvature_profile(
             RationalCoordinateMetric.model_validate_json(json.dumps(source))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.curvature.noncanonical_source"
+    )
     unreduced = RationalFunction(
         variables=("x",),
         numerator=rational_function_from_sympy(x**64 - 1, ("x",)).numerator,
@@ -335,8 +343,9 @@ def test_oversized_raw_pair_rejected_before_backend_execution(
         "jacobian.math.geometry.differential.metrics.operations.recognize_canonical_rational_functions",
         lambda *args, **kwargs: pytest.fail("backend execution must follow admission"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match=r"allocation|work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         curvature_profile(source)
+    assert exc_info.value.errors()[0]["type"] == "differential_geometry.curvature.work"
 
 
 def test_four_dimensional_hyperbolic_metric() -> None:
@@ -373,8 +382,9 @@ def test_complete_locus_admitted_before_curvature_expansion() -> None:
     # Shared formal denominator factors can reduce to distinct canonical
     # denominators. The inherited family already saturates the 768-guard
     # budget, so the independent xy determinant cannot be retained.
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         curvature_profile(source)
+    assert exc_info.value.errors()[0]["type"] == "differential_geometry.curvature.locus"
 
 
 def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -> None:
@@ -475,5 +485,6 @@ def test_conformal_flat_metric_counts_complete_denominator_powers() -> None:
             ),
         )
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         curvature_profile(saturated)
+    assert exc_info.value.errors()[0]["type"] == "differential_geometry.curvature.locus"

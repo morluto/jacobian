@@ -177,12 +177,17 @@ def test_component_operation_is_published() -> None:
 def test_degree_component_rejects_nonsided_and_nonhomogeneous_inputs() -> None:
     alphabet = ("x", "y")
     relation = _poly(alphabet, {("x", "y"): 1, ("y",): -1})
-    with pytest.raises(OperationDomainValidationError, match="two-sided"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ideal_degree_component(
             FreeAlgebraIdeal(alphabet=alphabet, generators=(), side="left"), 1
         )
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.component_requires_two_sided"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ideal_degree_component(_ideal(alphabet, (relation,)), 2)
+    assert exc_info.value.errors()[0]["type"] == "free_algebra.component_homogeneity"
 
 
 def test_degree_component_rejects_oversized_ambient_word_axis_before_expansion() -> (

@@ -59,10 +59,12 @@ def test_spectral_request_rejects_the_shared_value_outside_its_envelope() -> Non
     graph = _graph(33, tuple((index, index + 1) for index in range(32)))
 
     request = GraphSpectrumRequest(graph=graph)
-    with pytest.raises(
-        OperationDomainValidationError, match="spectral operations support"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_adjacency_spectrum(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.spectral_vertex_count_exceeds_operation_bound"
+    )
 
 
 def test_producer_spectra_retain_source() -> None:

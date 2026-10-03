@@ -142,10 +142,14 @@ def test_mismatched_alphabet_context_is_rejected() -> None:
     wrong_parent = dfa.model_copy(
         update={"alphabet_id": "other", "alphabet": other_alphabet}
     )
-    with pytest.raises(ValidationError, match="domain_alphabet_identity_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsequentialDomainRestrictionRequest(
             transducer=source, domain_dfa=wrong_parent
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_state_transducer.domain_alphabet_identity_mismatch"
+    )
 
 
 def test_product_larger_than_result_carrier_is_refused_exactly() -> None:

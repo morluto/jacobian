@@ -196,10 +196,18 @@ def test_lr_request_enforces_exact_cell_and_search_envelopes() -> None:
     assert MAX_LR_SKEW_CELLS == 8
     assert MAX_LR_SEARCH_STATES == 100_000
     assert _coefficient((8,), (), (8,)) == 1
-    with pytest.raises(OperationResourceAdmissionError, match="content size"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _coefficient((5,), (), (9,))
-    with pytest.raises(OperationResourceAdmissionError, match="prefix bound"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_functions.lr_content_size_exceeded"
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _coefficient((8,), (), (1,) * 8)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_functions.lr_search_states_exceeded"
+    )
 
 
 def test_lr_operation_is_published_in_its_owner_manifest() -> None:
@@ -260,10 +268,14 @@ def test_schur_product_unit_and_operation_example() -> None:
 
 
 def test_schur_product_admits_total_degree_before_candidate_search() -> None:
-    with pytest.raises(ValidationError, match="total degree"):
+    with pytest.raises(ValidationError) as exc_info:
         SchurProductRequest(
             left=IntegerPartition(parts=(9,)), right=IntegerPartition(parts=())
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_function.schur_product_size_exceeded"
+    )
 
 
 def test_lr_admits_tiny_skew_inside_large_ambient_diagrams() -> None:
@@ -274,8 +286,12 @@ def test_lr_admits_tiny_skew_inside_large_ambient_diagrams() -> None:
     assert _independent_lr_character_oracle((9,), (8,), (1,)) == 1
     assert _coefficient((500,), (492,), (8,)) == 1
     assert _coefficient((10,), (2,), (7,)) == 0  # sizes disagree: no search
-    with pytest.raises(OperationResourceAdmissionError, match="skew size"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _coefficient((9,), (), (9,))  # nine search cells exceeds the envelope
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_functions.lr_skew_size_exceeded"
+    )
 
 
 def test_schur_product_admission_is_invariant_under_operand_order() -> None:

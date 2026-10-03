@@ -179,8 +179,12 @@ def test_precision_81_boundary_is_admitted_for_level39_t8():
 def test_hecke_paths_reject_rational_parent_before_coordinate_admission():
     request = _request(character_coordinate=6)
     rational_space = request.space.model_copy(update={"coefficient_domain": "QQ"})
-    with pytest.raises(OperationDomainValidationError, match="quadratic cyclotomic"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_hecke_matrix_multidimensional(rational_space, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_hecke_coefficient_field"
+    )
 
     from jacobian.math.number_theory.modular_forms.character_basis import (
         _rref_character_coordinates_hecke,
@@ -188,5 +192,9 @@ def test_hecke_paths_reject_rational_parent_before_coordinate_admission():
     from jacobian.math.number_theory.modular_forms.values import ModularFormCoordinates
 
     form = ModularFormCoordinates.model_construct(space=rational_space)
-    with pytest.raises(OperationDomainValidationError, match="quadratic cyclotomic"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _rref_character_coordinates_hecke(form, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_hecke_coefficient_field"
+    )

@@ -134,8 +134,9 @@ def test_rejects_non_convex_or_collinear() -> None:
 
 def test_rejects_self_intersecting_left_turn_ring() -> None:
     polygon = _poly([("0", "3"), ("-2", "-3"), ("3", "1"), ("-3", "1"), ("2", "-3")])
-    with pytest.raises(OperationDomainValidationError, match="left half-plane"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         convex_polygon_intersection(polygon, polygon)
+    assert exc_info.value.errors()[0]["type"] == "geometry.convex_polygon.not_convex"
 
 
 def test_native_geometry_api_exposes_intersection() -> None:
@@ -180,5 +181,6 @@ def test_empty_planar_hull_retains_canonical_carrier() -> None:
     # The explicit conversion has a narrower polygon applicability domain.
     from pydantic import ValidationError
 
-    with pytest.raises(ValidationError, match="at least 3"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvexRationalPolygon.from_convex_hull(decoded)
+    assert exc_info.value.errors()[0]["type"] == "too_short"

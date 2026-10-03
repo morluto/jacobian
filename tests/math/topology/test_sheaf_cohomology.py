@@ -369,8 +369,12 @@ class TestAdversarial:
             ),
             natural=True,
         )
-        with pytest.raises(OperationDomainValidationError, match="cover-map composite"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             cohomology_map(claimed)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.cellular_sheaf.authored_sheaf_derived_map_mismatch"
+        )
 
     def test_stalk_rank_above_the_envelope_is_a_resource_rejection(self) -> None:
         from jacobian.catalog.models import OperationResourceAdmissionError

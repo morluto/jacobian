@@ -146,7 +146,7 @@ def test_uncorrectable_result_rejects_identity_witness() -> None:
     request = StabilizerErasureCorrectabilityRequest(
         check_space=value, erased_qubit_ids=("q0",)
     )
-    with pytest.raises(ValueError, match="nontrivial"):
+    with pytest.raises(ValueError) as exc_info:
         StabilizerErasureCorrectabilityResult(
             source=request,
             supported_normalizer_dimension=2,
@@ -157,13 +157,15 @@ def test_uncorrectable_result_rejects_identity_witness() -> None:
                 register=value.qubit_register, x_bits=(0,), z_bits=(0,)
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "stabilizer.erasure_witness"
 
 
 def test_nonisotropic_check_space_is_rejected() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     x = PhaseFreeQubitPauli(register=register, x_bits=(1,), z_bits=(0,))
     z = PhaseFreeQubitPauli(register=register, x_bits=(0,), z_bits=(1,))
-    with pytest.raises(ValueError, match="isotropic"):
+    with pytest.raises(ValueError) as exc_info:
         stabilizer_erasure_correctability(
             CheckSpaceValue(register=register, basis=(x, z)), ("q0",)
         )
+    assert exc_info.value.errors()[0]["type"] == "quantum.stabilizer.not_isotropic"

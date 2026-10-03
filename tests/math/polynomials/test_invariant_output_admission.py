@@ -273,7 +273,9 @@ def test_native_source_shape_rejected_before_presolving(mutation: str) -> None:
             )
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="canonical sparse QQ"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_discriminant(source, "x")
-    with pytest.raises(OperationDomainValidationError, match="canonical sparse QQ"):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.invariant_source"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_resultant(source, _polynomial(("x", "y"), {}), "x")
+    assert exc_info.value.errors()[0]["type"] == "polynomial.invariant_source"

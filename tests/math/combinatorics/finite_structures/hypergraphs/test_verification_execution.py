@@ -79,5 +79,9 @@ def test_exact_independence_verification_reports_actual_incomplete_search() -> N
     payload["resource_budget"]["max_solver_calls"] = 1
     payload["solver_calls"] = 0
     claim = HypergraphIndependenceResult.model_validate(payload)
-    with pytest.raises(OperationResourceAdmissionError, match="could not establish"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         operations.verify_independence_number(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.independence_number.verification_incomplete"
+    )

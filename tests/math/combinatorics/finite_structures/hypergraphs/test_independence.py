@@ -110,8 +110,12 @@ def test_rejects_empty_hyperedge_before_solver() -> None:
     request = HypergraphIndependenceRequest.model_validate(
         {"hypergraph": {"vertices": ["v"], "edges": [["empty", []]]}}
     )
-    with pytest.raises(OperationDomainValidationError, match="empty edges"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         independence_number(request.hypergraph, request.resource_budget)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.independence_number.empty_edge"
+    )
 
 
 def test_solver_budget_is_separate_from_the_hypergraph_carrier_limit() -> None:
@@ -129,7 +133,7 @@ def test_solver_budget_is_separate_from_the_hypergraph_carrier_limit() -> None:
     )
 
     assert len(admitted.hypergraph.vertices) == 100
-    with pytest.raises(ValidationError, match="less than or equal to 16"):
+    with pytest.raises(ValidationError) as exc_info:
         HypergraphIndependenceRequest.model_validate(
             {
                 "hypergraph": source,
@@ -138,6 +142,7 @@ def test_solver_budget_is_separate_from_the_hypergraph_carrier_limit() -> None:
                 },
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_lone_surrogate_vertex_label_rejected_before_execution() -> None:

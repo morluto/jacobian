@@ -77,5 +77,6 @@ def test_endpoint_pair_must_fit_the_digit_bound() -> None:
     source = _source(1, [0])
     endpoint = 10**3_600_000
 
-    with pytest.raises(OperationDomainValidationError, match="digit bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_periodic_interval_count(source, -endpoint, endpoint)
+    assert exc_info.value.errors()[0]["type"] == "number_theory.periodic.result_bound"

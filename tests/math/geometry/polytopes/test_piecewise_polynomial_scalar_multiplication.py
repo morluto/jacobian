@@ -156,12 +156,16 @@ def test_scalar_multiple_recomputes_and_rejects_forged_compatibility_claim() -> 
         obstruction_difference=None,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="continuity claims"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_scalar_multiply(
             PiecewisePolynomialScalarMultiplicationRequest(
                 function=forged, scalar=CanonicalRational(num=2, den=1)
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.scalar_multiplication_continuity"
+    )
 
 
 def test_scalar_growth_is_rejected_before_coefficient_expansion(
@@ -172,9 +176,13 @@ def test_scalar_growth_is_rejected_before_coefficient_expansion(
     scalar = CanonicalRational(num=99, den=1)
     monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)
 
-    with pytest.raises(OperationResourceAdmissionError, match="scaled coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         piecewise_polynomial_scalar_multiply(
             PiecewisePolynomialScalarMultiplicationRequest(
                 function=function, scalar=scalar
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.scalar_multiplication_growth"
+    )

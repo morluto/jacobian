@@ -154,8 +154,9 @@ def test_line_graph_retains_maximum_input_edge_boundary() -> None:
 def test_line_graph_preserves_its_expansion_admission() -> None:
     edges = [(left, right) for left in range(32) for right in range(32, 64)]
     edges.append((0, 1))
-    with pytest.raises(ValidationError, match="1024 input edges"):
+    with pytest.raises(ValidationError) as exc_info:
         LineGraphRequest(graph=_graph(64, edges))
+    assert exc_info.value.errors()[0]["type"] == "graph.line_graph_edge_bound"
 
 
 def test_reversed_induced_selection_has_canonical_edges() -> None:

@@ -116,11 +116,9 @@ def test_source_family_replay_rejects_forged_card_before_canonicalizing() -> Non
     forged = family.model_copy(
         update={"cards": (family.cards[0], family.cards[0], family.cards[2])}
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="every exact source vertex-deleted card",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_anonymous_multiset(forged)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_source_relation"
 
 
 def test_canonicalization_bound_is_checked_before_source_family_replay() -> None:
@@ -133,7 +131,7 @@ def test_canonicalization_bound_is_checked_before_source_family_replay() -> None
 def test_raw_request_keeps_semantic_admission_in_operation_path() -> None:
     # Nine vertices exceed the factorial work envelope but fit the cheap raw
     # carrier cap; malformed nested data is parsed before operation admission.
-    with pytest.raises(ValidationError, match="cards"):
+    with pytest.raises(ValidationError) as exc_info:
         VertexDeckAnonymousMultisetRequest.model_validate(
             {
                 "family": {
@@ -145,10 +143,11 @@ def test_raw_request_keeps_semantic_admission_in_operation_path() -> None:
                 }
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "tuple_type"
 
 
 def test_raw_request_rejects_order_beyond_carrier_cap_before_nested_parsing() -> None:
-    with pytest.raises(ValidationError, match="11 vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         VertexDeckAnonymousMultisetRequest.model_validate(
             {
                 "family": {
@@ -160,6 +159,7 @@ def test_raw_request_rejects_order_beyond_carrier_cap_before_nested_parsing() ->
                 }
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_source_order"
 
 
 def test_max_admitted_source_order_composes_with_equality() -> None:

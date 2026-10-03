@@ -180,10 +180,11 @@ def test_result_rejects_serialized_relation_index_outside_ground() -> None:
     result = grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 5), "FOUR_TERM")
     payload = result.model_dump(mode="json")
     payload["indices"] = [0, 1, 2, 3, 4, 6]
-    with pytest.raises(ValidationError, match="relation_index_outside_ground"):
+    with pytest.raises(ValidationError) as exc_info:
         GrassmannPlueckerRelation.model_validate_json(
             encode_strict_json(payload), strict=True
         )
+    assert exc_info.value.errors()[0]["type"] == "bracket.relation_index_outside_ground"
 
 
 def test_repeated_bracket_factors_retain_their_exponent() -> None:
@@ -253,7 +254,7 @@ def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
     relation = grassmann_pluecker_relation(
         5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
     )
-    with pytest.raises(OperationDomainValidationError, match="source-bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         bracket_syzygy_residual(
             relation.polynomial,
             (
@@ -264,6 +265,7 @@ def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
                 ),
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "bracket.syzygy_term_shape"
 
 
 def test_syzygy_rejects_a_forged_source_relation() -> None:
@@ -276,11 +278,14 @@ def test_syzygy_rejects_a_forged_source_relation() -> None:
         family=relation.family,
         polynomial=bracket_polynomial_from_terms(5, [(Fraction(1), ((0, 1, 2),))]),
     )
-    with pytest.raises(OperationDomainValidationError, match="source metadata"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         bracket_syzygy_residual(
             relation.polynomial,
             ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), forged),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "bracket.syzygy_source_relation_mismatch"
+    )
 
 
 def test_syzygy_rejects_multiplier_outside_target_ground() -> None:
@@ -351,13 +356,12 @@ def test_syzygy_rejects_513_distinct_output_terms_before_expansion() -> None:
             )
         ),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="too many sparse output terms"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         bracket_syzygy_residual(
             target,
             ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), relation),),
         )
+    assert exc_info.value.errors()[0]["type"] == "bracket.syzygy_output_term_bound"
 
 
 def test_syzygy_accepts_512_terms_after_two_relation_cancellations() -> None:
@@ -429,8 +433,11 @@ def test_syzygy_rejects_unbounded_intermediate_coefficient_digits() -> None:
         )
         for offset in (1, 3, 7, 9)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         bracket_syzygy_residual(relation.polynomial, terms)
+    assert (
+        exc_info.value.errors()[0]["type"] == "bracket.syzygy_coefficient_digit_bound"
+    )
 
 
 def test_syzygy_rejects_assembled_multiplicity_overflow_before_combine() -> None:
@@ -676,7 +683,7 @@ def test_syzygy_rejects_cross_products_before_oversized_fraction() -> None:
     )
     first_denominator = 10**20000 + 1
     second_denominator = 10**20000 + 3
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         bracket_syzygy_residual(
             BracketPolynomial(ground_size=5, terms=()),
             (
@@ -692,6 +699,9 @@ def test_syzygy_rejects_cross_products_before_oversized_fraction() -> None:
                 ),
             ),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "bracket.syzygy_coefficient_digit_bound"
+    )
 
 
 def test_syzygy_constructs_from_cancellation_admission_plan() -> None:
@@ -786,8 +796,11 @@ def test_compressed_large_multiplicity_survives_residual_and_json() -> None:
 def test_oversized_repeated_coefficient_rejects_without_partition_search() -> None:
     """An unrepresentable total is rejected in linear arithmetic, not by partitions."""
     width = (10**MAX_CANONICAL_INTEGER_DIGITS - 1) // 64
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _bounded_component_sum([(Fraction(width), (0, 0))] * 128)
+    assert (
+        exc_info.value.errors()[0]["type"] == "bracket.syzygy_coefficient_digit_bound"
+    )
 
 
 def test_coprime_denominator_product_rejects_before_lcm_construction() -> None:
@@ -796,8 +809,11 @@ def test_coprime_denominator_product_rejects_before_lcm_construction() -> None:
     digits = MAX_CANONICAL_INTEGER_DIGITS
     base = 10 ** (digits - 1)
     components = [(Fraction(1, base + index), (1, digits)) for index in range(32)]
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _bounded_component_sum(components)
+    assert (
+        exc_info.value.errors()[0]["type"] == "bracket.syzygy_coefficient_digit_bound"
+    )
 
 
 def test_syzygy_admits_near_bound_denominator_products() -> None:

@@ -85,8 +85,12 @@ def test_surrogate_label_is_rejected_before_result_serialization() -> None:
         grading=(CanonicalRational.from_fraction(Fraction(1)),),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="labels"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         factorization_count(semigroup, (1,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.factorization_count_labels"
+    )
 
 
 def test_overlong_label_is_rejected_before_surrogate_scan() -> None:
@@ -103,8 +107,12 @@ def test_overlong_label_is_rejected_before_surrogate_scan() -> None:
         configuration=forged_configuration, grading=semigroup.grading
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="labels"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         factorization_count(forged, (1,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.factorization_count_labels"
+    )
 
 
 def test_one_row_duplicate_columns_and_zero_target() -> None:
@@ -160,7 +168,7 @@ def test_zero_generator_is_rejected_by_positive_semigroup_carrier() -> None:
         generator_labels=("zero", "unit"),
         entries=((0, 1), (0, 0)),
     )
-    with pytest.raises(ValidationError, match="strictly positive grading"):
+    with pytest.raises(ValidationError) as exc_info:
         PositiveAffineSemigroup(
             configuration=configuration,
             grading=(
@@ -168,6 +176,7 @@ def test_zero_generator_is_rejected_by_positive_semigroup_carrier() -> None:
                 CanonicalRational.from_fraction(Fraction(1)),
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.grading_not_positive"
 
 
 def test_state_preflight_runs_before_univariate_array_allocation(
@@ -184,8 +193,12 @@ def test_state_preflight_runs_before_univariate_array_allocation(
     )
     semigroup = _semigroup(((1,), (2,)), (Fraction(1),))
 
-    with pytest.raises(OperationResourceAdmissionError, match="requires 21 states"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         factorization_count(semigroup, (20,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.factorization_count_states"
+    )
 
 
 def test_count_digit_preflight_runs_before_univariate_array_allocation(
@@ -202,8 +215,12 @@ def test_count_digit_preflight_runs_before_univariate_array_allocation(
     )
     semigroup = _semigroup(((1,), (1,)), (Fraction(1),))
 
-    with pytest.raises(OperationResourceAdmissionError, match="result envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         factorization_count(semigroup, (4,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.factorization_count_digits"
+    )
 
 
 def test_general_count_preflight_runs_before_coefficient_search(
@@ -223,8 +240,9 @@ def test_general_count_preflight_runs_before_coefficient_search(
     )
     semigroup = _semigroup(((1, 0), (0, 1)), (Fraction(1), Fraction(1)))
 
-    with pytest.raises(OperationResourceAdmissionError, match="state envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         factorization_count(semigroup, (1, 1))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.fiber_work"
 
 
 def test_forged_typed_source_is_shaped_before_revalidation_copy(
@@ -248,15 +266,20 @@ def test_forged_typed_source_is_shaped_before_revalidation_copy(
         lambda *_args: pytest.fail("forged axes reached model revalidation"),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="axes exceed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         factorization_count(forged, (1,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.factorization_count_shape"
+    )
 
 
 def test_incomplete_forged_semigroup_has_domain_error() -> None:
     forged = PositiveAffineSemigroup.model_construct()
 
-    with pytest.raises(OperationDomainValidationError, match="missing required"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         factorization_count(forged, (1,))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.semigroup"
 
 
 def test_public_request_and_catalog_example_round_trip() -> None:

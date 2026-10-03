@@ -38,9 +38,13 @@ def test_kernel_value_rejects_missing_or_extra_residues():
     character = DirichletCharacter(group=group, coordinates=(2,))
     kernel = dirichlet_character_kernel(character)
 
-    with pytest.raises(ValidationError, match="kernel index"):
+    with pytest.raises(ValidationError) as exc_info:
         DirichletCharacterKernel(
             character=character,
             residues=kernel.residues[:-1],
             index=kernel.index,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.kernel_index_mismatch"
+    )

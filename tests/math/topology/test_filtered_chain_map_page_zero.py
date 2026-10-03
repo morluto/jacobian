@@ -84,10 +84,14 @@ def test_page_zero_map_rejects_a_non_filtration_preserving_map() -> None:
         source_filtration=_filtration((1, 0)),
         target_filtration=_filtration((0, 1)),
     )
-    with pytest.raises(ValueError, match="filtration preservation"):
+    with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_page_zero(
             request.chain_map, request.source_filtration, request.target_filtration
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "filtered_chain_map.not_filtration_preserving"
+    )
 
 
 def test_page_zero_map_commutes_with_the_graded_boundary() -> None:
@@ -178,12 +182,11 @@ def test_page_zero_map_translates_a_finite_field_rational_entry() -> None:
         source_filtration=filtration,
         target_filtration=filtration,
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical coefficient grammar"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         filtered_chain_map_page_zero(
             request.chain_map, request.source_filtration, request.target_filtration
         )
+    assert exc_info.value.errors()[0]["type"] == "filtered_chain_map.entry_invalid"
 
 
 def _non_exhaustive_request() -> FilteredChainMapRequest:

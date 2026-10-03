@@ -80,16 +80,18 @@ def test_forged_pair_families_are_rejected_before_pair_partition_work():
         "jointly_enabled_pairs": [[0, 1]] * MAX_MARKING_CONFLICT_PROFILE_PAIRS,
         "conflicting_pairs": [[0, 1]],
     }
-    with pytest.raises(ValidationError, match="cardinality exceeds enabled pairs"):
+    with pytest.raises(ValidationError) as exc_info:
         MarkingConflictProfileResult.model_validate(oversized)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.conflict_profile"
 
     field_oversized = {
         **oversized,
         "jointly_enabled_pairs": [[0, 1]] * (MAX_MARKING_CONFLICT_PROFILE_PAIRS + 1),
         "conflicting_pairs": [],
     }
-    with pytest.raises(ValidationError, match="at most"):
+    with pytest.raises(ValidationError) as exc_info:
         MarkingConflictProfileResult.model_validate(field_oversized)
+    assert exc_info.value.errors()[0]["type"] == "too_long"
 
 
 def test_profile_result_size_is_admitted_before_pair_materialization():
@@ -100,5 +102,8 @@ def test_profile_result_size_is_admitted_before_pair_materialization():
         pre=((0,),),
         post=((0,),),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="serialized result"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         marking_conflict_profile(net, Marking(tokens=(0,)))
+    assert (
+        exc_info.value.errors()[0]["type"] == "petri_net.conflict_profile_output_bound"
+    )

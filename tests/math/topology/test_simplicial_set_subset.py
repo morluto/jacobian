@@ -71,10 +71,15 @@ def test_boundary_of_the_one_simplex_retains_both_vertices_and_degeneracies() ->
 
 def test_missing_face_or_degeneracy_rejects_the_proposed_family() -> None:
     ambient = _delta_one_prefix()
-    with pytest.raises(OperationDomainValidationError, match="missing face d_0"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         simplicial_subset(ambient, ((), (1,), ()))
-    with pytest.raises(OperationDomainValidationError, match="missing degeneracy s_0"):
+    assert exc_info.value.errors()[0]["type"] == "simplicial_set.subset.not_face_closed"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         simplicial_subset(ambient, ((0,), (), ()))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simplicial_set.subset.not_degeneracy_closed"
+    )
 
 
 def test_serialized_subobject_inclusion_composes_as_a_simplicial_map() -> None:

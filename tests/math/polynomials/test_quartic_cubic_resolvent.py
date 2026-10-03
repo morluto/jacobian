@@ -124,8 +124,9 @@ def test_roots_one_through_four_give_pair_product_resolvent() -> None:
 
 def test_request_requires_degree_four() -> None:
     cubic = monic_polynomial_from_coefficients(tuple(map(_q, (1, 0, 0, 1))))
-    with pytest.raises(ValidationError, match="degree-four"):
+    with pytest.raises(ValidationError) as exc_info:
         QuarticCubicResolventRequest(polynomial=cubic)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.quartic_resolvent.degree"
 
 
 def test_result_retains_revalidated_canonical_source() -> None:
@@ -150,8 +151,12 @@ def test_result_rejects_resolvent_not_derived_from_source() -> None:
     forged["resolvent"] = _monic(tuple(map(Fraction, (1, 0, 0, 1)))).model_dump(
         mode="python"
     )
-    with pytest.raises(ValidationError, match="derived from the retained quartic"):
+    with pytest.raises(ValidationError) as exc_info:
         QuarticCubicResolventResult.model_validate(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.quartic_resolvent.coefficient_relation"
+    )
 
 
 def test_resolvent_roots_are_the_three_pair_product_sums() -> None:

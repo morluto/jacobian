@@ -344,9 +344,7 @@ def test_sparse_rank_accepts_the_structurally_bounded_source() -> None:
 
 
 def test_sparse_rank_result_rejects_rank_above_a_source_axis() -> None:
-    with pytest.raises(
-        ValidationError, match="cannot exceed either source matrix axis"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         MatrixRankResult(
             matrix=SparseRationalMatrix(
                 row_count=1,
@@ -356,3 +354,4 @@ def test_sparse_rank_result_rejects_rank_above_a_source_axis() -> None:
             rank=2,
             pivot_columns=(0, 1),
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"

@@ -123,7 +123,7 @@ def test_qf_lia_rejects_array_and_nonconstant_uf(assertion: str) -> None:
 
 
 def test_unsat_core_reuses_sort_and_operator_admission() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_smt_unsat_core(
             SmtUnsatCoreRequest(
                 logic=SmtLogic.QF_LIA,
@@ -136,3 +136,4 @@ def test_unsat_core_reuses_sort_and_operator_admission() -> None:
                 ),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "logic.unsat_core_contract"

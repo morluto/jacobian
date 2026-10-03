@@ -127,11 +127,15 @@ def test_metric_determinant_guard_is_substituted_and_singular_pullback_rejected(
         guard.terms[-1].coefficient.num == 1 and guard.terms[-1].exponents == (1, 0)
         for guard in result.pullback_locus_guard
     )
-    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         pullback_metric(
             metric((1, 0, 0, 0), ("u", "v")),
             map_value((x, y), ("x", "y"), ("u", "v")),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.rational_metric.pullback.singular_metric"
+    )
 
 
 def test_substituted_metric_denominator_zero_is_typed_domain_error() -> None:
@@ -163,8 +167,12 @@ def test_noncanonical_authored_map_is_rejected_after_raw_admission() -> None:
     component = authored.components[0]
     forged_component = component.model_copy(update={"denominator": component.numerator})
     forged_map = authored.model_copy(update={"components": (forged_component,)})
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         pullback_metric(metric((1,), ("u",)), forged_map)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.rational_metric.pullback.noncanonical_source"
+    )
 
 
 def test_nonmonomial_rational_map_uses_canonical_worker_path() -> None:
@@ -178,8 +186,12 @@ def test_nonmonomial_rational_map_uses_canonical_worker_path() -> None:
         update={"numerator": numerator, "denominator": denominator}
     )
     value = authored.model_copy(update={"components": (forged,)})
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         pullback_metric(metric((1,), ("u",)), value)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.rational_metric.pullback.noncanonical_source"
+    )
     result = pullback_metric(metric((1,), ("u",)), authored)
     assert (
         simplify(

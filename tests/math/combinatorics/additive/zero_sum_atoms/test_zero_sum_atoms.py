@@ -184,7 +184,7 @@ def test_source_reduces_rows_and_rejects_duplicates_after_reduction() -> None:
     )
     assert source.elements == ((0,), (2,))
 
-    with pytest.raises(ValidationError, match="distinct and sorted"):
+    with pytest.raises(ValidationError) as exc_info:
         ZeroSumAtomSource.model_validate_json(
             encode_strict_json(
                 {
@@ -193,6 +193,10 @@ def test_source_reduces_rows_and_rejects_duplicates_after_reduction() -> None:
                 }
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "additive_combinatorics.zero_sum_atom_source_canonical"
+    )
 
 
 @pytest.mark.parametrize(

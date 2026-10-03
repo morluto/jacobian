@@ -187,8 +187,9 @@ def test_decimal_digit_bound_counts_power_of_ten_exactly() -> None:
 def test_denominator_degree_controls_the_recurrence_work_envelope() -> None:
     denominator = (ONE, *((MINUS_ONE,) * 32))
 
-    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _expand(denominator, 8_000)
+    assert exc_info.value.errors()[0]["type"] == "combinatorics.work_bound"
 
 
 def test_large_constant_prefix_is_admitted_by_recurrence_work() -> None:

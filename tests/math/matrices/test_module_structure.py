@@ -205,8 +205,9 @@ def test_centralizer_general_maximum_height_is_admitted_before_flint() -> None:
         )
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="exact RREF work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         centralizer_basis(matrix)
+    assert exc_info.value.errors()[0]["type"] == "matrix.centralizer.work"
 
 
 def _multiply(

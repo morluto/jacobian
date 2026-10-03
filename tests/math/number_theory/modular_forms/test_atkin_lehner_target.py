@@ -96,19 +96,26 @@ def test_catalog_declares_full_fricke_target_operation() -> None:
 def test_target_carrier_rejects_different_weight() -> None:
     source = ModularFormSpace(level=5, weight=4, kind="M")
     target = ModularFormSpace(level=5, weight=6, kind="M")
-    with pytest.raises(ValueError, match="preserves subgroup, level, weight"):
+    with pytest.raises(ValueError) as exc_info:
         ModularFormAtkinLehnerTarget(
             source_space=source,
             target_space=target,
             divisor=5,
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_forms.atkin_lehner_target_parent"
+    )
 
 
 def test_target_carrier_rejects_partial_divisor() -> None:
     source = ModularFormSpace(level=5, weight=4, kind="M")
-    with pytest.raises(ValueError, match="full Fricke divisor"):
+    with pytest.raises(ValueError) as exc_info:
         ModularFormAtkinLehnerTarget(
             source_space=source,
             target_space=source,
             divisor=1,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_forms.atkin_lehner_target_divisor"
+    )

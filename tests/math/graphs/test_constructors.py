@@ -224,8 +224,12 @@ class TestTriangleProfile:
             ),
         )
 
-        with pytest.raises(OperationDomainValidationError, match="label-character"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_triangle_profile(graph)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.triangle_profile.retained_labels_exceed_bound"
+        )
 
     def test_request_construction_defers_result_admission(self) -> None:
         """Request parsing does not enumerate K_100's triangle rows."""
@@ -397,10 +401,18 @@ class TestSerializedClaimVerifiers:
         )
 
     def test_dimension_bounds_are_domain_errors(self) -> None:
-        with pytest.raises(OperationDomainValidationError, match="dimension"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             construct_hypercube_graph(9)
-        with pytest.raises(OperationDomainValidationError, match="dimension"):
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.constructors.hypercube.dimension_bound"
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             construct_keller_graph(5)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.constructors.keller.dimension_bound"
+        )
 
 
 def _to_word(n: int, d: int) -> tuple[int, ...]:

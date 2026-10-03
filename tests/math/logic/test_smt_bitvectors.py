@@ -99,35 +99,40 @@ def test_shifts_and_bitwise_logic() -> None:
 
 
 def test_integer_sorted_terms_are_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _solve("(declare-const x Int)\n(assert (> x 0))")
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 def test_uninterpreted_functions_are_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _solve(
             "(declare-fun f ((_ BitVec 8)) (_ BitVec 8))\n"
             "(declare-const x (_ BitVec 8))\n"
             "(assert (= (f x) #x00))"
         )
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 def test_conversions_are_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _solve("(declare-const x (_ BitVec 8))\n(assert (= (bv2int x) 0))")
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 def test_float_sorted_terms_are_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _solve("(declare-const f (_ FloatingPoint 8 24))\n(assert (fp.isNegative f))")
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 def test_quantifiers_are_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _solve(
             "(declare-const x (_ BitVec 8))\n"
             "(assert (forall ((y (_ BitVec 8))) (= x y)))"
         )
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 def test_oversized_width_is_a_resource_boundary() -> None:
@@ -138,7 +143,7 @@ def test_oversized_width_is_a_resource_boundary() -> None:
 
 def test_other_fragments_still_reject_bitvectors() -> None:
     for logic in (SmtLogic.QF_LIA, SmtLogic.QF_LRA, SmtLogic.QF_UF):
-        with pytest.raises(OperationDomainValidationError, match="declared"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             solve_smt(
                 SmtSolveRequest(
                     logic=logic,
@@ -149,8 +154,10 @@ def test_other_fragments_still_reject_bitvectors() -> None:
                     ),
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 def test_bitvector_logic_rejects_integer_terms() -> None:
-    with pytest.raises(OperationDomainValidationError, match="declared"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _solve("(declare-const x Int)\n(assert (= x 0))")
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"

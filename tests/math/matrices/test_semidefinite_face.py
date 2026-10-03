@@ -166,8 +166,9 @@ def test_serialized_reduced_system_supports_another_supplied_step() -> None:
 def test_false_exposing_relations_are_rejected(
     matrix: list[list[int]], rhs: int, y: int
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match=r"expos|positive|nonzero"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reduce_exposed_face(_system((_matrix(matrix),), (rhs,)), (_q(y),))
+    assert exc_info.value.errors()[0]["type"] == "matrix.invalid_exposing_relation"
 
 
 def test_multipliers_may_have_negative_entries_when_the_relation_is_valid() -> None:
@@ -252,8 +253,9 @@ def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:
         reduce_exposed_face(
             RationalSemidefiniteSystem(order=0, matrices=(), rhs=()), ()
         )
-    with pytest.raises(OperationDomainValidationError, match="index"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reduce_exposed_face(_system((_matrix([[1]]),), (0,)), ())
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 def test_raw_request_preflight_rejects_over_budget_cells() -> None:

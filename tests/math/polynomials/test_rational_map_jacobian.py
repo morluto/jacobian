@@ -143,8 +143,12 @@ def test_aggregate_output_allocation_rejects_whole_map() -> None:
         target_coordinates=tuple(f"u{i}" for i in range(600)),
         components=(component,) * 600,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="65,536"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         jacobian_matrix(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function_map.jacobian.allocation"
+    )
 
 
 def test_authored_noncanonical_component_and_malformed_axes() -> None:
@@ -154,8 +158,9 @@ def test_authored_noncanonical_component_and_malformed_axes() -> None:
     source = RationalFunctionMap(
         source_variables=("x",), target_coordinates=("u",), components=(invalid,)
     )
-    with pytest.raises(OperationDomainValidationError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         jacobian_matrix(source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.not_coprime"
     with pytest.raises(ValidationError, match="ordered source axis"):
         RationalFunctionMap(
             source_variables=("y",), target_coordinates=("u",), components=(invalid,)

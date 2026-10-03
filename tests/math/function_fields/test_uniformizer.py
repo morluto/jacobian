@@ -99,5 +99,6 @@ def test_infinite_uniformizer_has_degree_difference_one() -> None:
 
 
 def test_reducible_polynomial_is_not_a_place() -> None:
-    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         function_field_place_uniformizer(_place((1, 0, 1)))
+    assert exc_info.value.errors()[0]["type"] == "function_field.place_not_prime"

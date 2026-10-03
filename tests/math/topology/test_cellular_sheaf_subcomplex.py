@@ -103,8 +103,12 @@ def test_restriction_composes_through_nested_subcomplexes() -> None:
 def test_nonincluded_face_is_rejected() -> None:
     sheaf = _triangle_sheaf()
     outside = canonical_complex(("a", "z"), (("a", "z"),))
-    with pytest.raises(OperationDomainValidationError, match="belong"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_to_subcomplex(sheaf, outside)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.subcomplex.not_included"
+    )
 
 
 def test_authored_subcomplex_face_closure_is_admitted() -> None:
@@ -123,8 +127,12 @@ def test_authored_subcomplex_face_closure_is_admitted() -> None:
             "closure_size": 6,
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_to_subcomplex(sheaf, incomplete)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.subcomplex.complex_not_canonical"
+    )
 
 
 def test_subcomplex_rebuilds_forged_derived_restrictions() -> None:
@@ -136,8 +144,12 @@ def test_subcomplex_rebuilds_forged_derived_restrictions() -> None:
         for item in sheaf.derived_restrictions
     )
     forged = sheaf.model_copy(update={"derived_restrictions": derived})
-    with pytest.raises(OperationDomainValidationError, match="cover-map composite"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_to_subcomplex(forged, sheaf.complex)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.authored_sheaf_derived_map_mismatch"
+    )
 
 
 def test_subcomplex_rejects_stalks_outside_the_rank_envelope() -> None:
@@ -152,8 +164,12 @@ def test_subcomplex_rejects_stalks_outside_the_rank_envelope() -> None:
         diamonds=0,
         comparable_pairs=0,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="stalk"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         restrict_to_subcomplex(oversized, complex_)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.admission.stalk_rank"
+    )
 
 
 def test_catalog_publishes_subcomplex_restriction() -> None:

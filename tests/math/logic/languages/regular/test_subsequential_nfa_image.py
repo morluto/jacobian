@@ -188,8 +188,12 @@ def test_nfa_image_requires_exact_alphabet_context() -> None:
     source, alphabet = finite_nfa()
     transducer = sample_transducer(alphabet)
     wrong_parent = source.model_copy(update={"alphabet_id": "other"})
-    with pytest.raises(ValidationError, match="nfa_image_alphabet_identity_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsequentialNFAImageRequest(nfa=wrong_parent, transducer=transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.nfa_image_alphabet_identity_mismatch"
+    )
 
 
 def test_nfa_image_rejects_oversized_product_before_expansion(
@@ -226,8 +230,12 @@ def test_nfa_image_rejects_oversized_product_before_expansion(
     monkeypatch.setattr(
         operations, "_build_nfa_subsequential_image", expansion_must_not_start
     )
-    with pytest.raises(OperationResourceAdmissionError, match="product or output-NFA"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         nfa_subsequential_image(source, transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.nfa_image_resource_bound"
+    )
 
 
 def test_nfa_image_admits_accepting_lookup_before_product_expansion(
@@ -269,5 +277,9 @@ def test_nfa_image_admits_accepting_lookup_before_product_expansion(
     monkeypatch.setattr(
         operations, "_build_nfa_subsequential_image", expansion_must_not_start
     )
-    with pytest.raises(OperationResourceAdmissionError, match="product or output-NFA"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         nfa_subsequential_image(source, transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.nfa_image_resource_bound"
+    )

@@ -256,8 +256,12 @@ def test_numeral_count_refuses_dense_families() -> None:
 
 def test_huge_cutoff_saturates_numeral_admission_before_power_growth() -> None:
     digit_set = KempnerDigitSet(base=4, allowed_digits=(1, 2))
-    with pytest.raises(OperationResourceAdmissionError, match="numeral family"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         require_series_admission(digit_set, 10**100)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.kempner_series.numeral_count"
+    )
 
 
 def test_boundary_numeral_count_is_admitted() -> None:

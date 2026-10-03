@@ -139,10 +139,11 @@ def test_filtered_homology_rejects_rational_domain_until_growth_is_bounded() -> 
     request["complex"]["coefficient_ring"] = CoefficientRing.RATIONAL
     request["complex"]["prime"] = None
     rational_request = FilteredChainComplexRequest.model_validate(request)
-    with pytest.raises(ValueError, match=r"bounded GF\(p\)"):
+    with pytest.raises(ValueError) as exc_info:
         filtered_homology_filtration(
             rational_request.complex, rational_request.filtration
         )
+    assert exc_info.value.errors()[0]["type"] == "filtered_homology.field_required"
 
 
 def test_filtered_homology_keeps_the_retained_output_cell_cap() -> None:
@@ -166,5 +167,6 @@ def test_filtered_homology_keeps_the_retained_output_cell_cap() -> None:
         FiltrationLevel(subspaces=(spanning_subspace,) * 59) for _ in range(8)
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="496488 cells"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         filtered_homology_filtration(complex_value, filtration)
+    assert exc_info.value.errors()[0]["type"] == "filtered_homology.result_cells_bound"

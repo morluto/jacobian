@@ -81,8 +81,12 @@ def test_field_coordinate_equality_compares_canonical_same_parent_values() -> No
         basis_id=extended.basis_id,
         coordinates=None,
     )
-    with pytest.raises(OperationDomainValidationError, match="basis and shape"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_field_coordinates_q_expansion(malformed, 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.field_coordinates_basis_parent"
+    )
 
     expansion = modular_form_field_coordinates_q_expansion(extended, 3)
 
@@ -114,10 +118,11 @@ def test_field_coordinate_equality_admits_sturm_precision_at_level_five() -> Non
 
 
 def test_scalar_extension_rejects_unadmitted_field() -> None:
-    with pytest.raises(OperationDomainValidationError, match=r"exactly Q\(zeta_6\)"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_extend_field(
             _rational_form(), RationalCyclotomicField(order=5)
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_form.field_coordinates_field"
 
 
 def test_field_coordinate_operations_are_published_and_examples_execute() -> None:

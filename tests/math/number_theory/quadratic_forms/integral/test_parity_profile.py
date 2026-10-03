@@ -148,11 +148,15 @@ def test_profile_json_round_trip_and_derived_flag_validation() -> None:
     actual = evaluate_modular_form(round_tripped.polynomial, vector).residue
     assert actual == 1
     assert actual == _evaluate_directly(form, (1, 1)) % 2
-    with pytest.raises(ValidationError, match="must agree with the diagonal"):
+    with pytest.raises(ValidationError) as exc_info:
         ParityProfile(
             polynomial=profile.polynomial,
             all_basis_norms_even=False,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.parity_profile.basis_norms"
+    )
 
 
 def test_full_source_support_boundary_has_admitted_complete_profile() -> None:

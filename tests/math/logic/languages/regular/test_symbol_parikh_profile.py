@@ -302,11 +302,12 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         accepting_states=(0, 1, 2),
     )
 
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="symbol-Parikh DP or output exceeds",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         symbol_parikh_profile(dfa, 76)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.symbol_parikh.profile_bound"
+    )
 
 
 def _source_sensitive_dfa(
@@ -404,11 +405,12 @@ def test_transition_index_charge_rejects_before_indexing(
         raise AssertionError("transition index built before admission")
 
     monkeypatch.setattr(profile_module, "_build_transition_index", fail)
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="symbol-Parikh DP or output exceeds",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         profile_module.symbol_parikh_profile(dfa, length)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.symbol_parikh.profile_bound"
+    )
 
 
 def test_empty_alphabet_has_only_the_empty_word() -> None:
@@ -435,11 +437,12 @@ def test_dense_profile_cell_construction_is_included_in_the_work_bound() -> None
         initial_state=0,
         accepting_states=(0,),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="symbol-Parikh DP or output exceeds",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         symbol_parikh_profile(dfa, 9)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.symbol_parikh.profile_bound"
+    )
 
 
 def _transient_prefix_noncommuting_dfa(
@@ -1104,11 +1107,12 @@ def test_wide_profile_ordering_work_is_charged_before_materialization() -> None:
         initial_state=0,
         accepting_states=(0,),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="symbol-Parikh DP or output exceeds",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         symbol_parikh_profile(dfa, 4)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.symbol_parikh.profile_bound"
+    )
 
 
 def test_profile_work_bound_charges_ordering() -> None:

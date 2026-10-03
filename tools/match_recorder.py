@@ -81,18 +81,29 @@ class _RecordingRaises:
                     # (parametrized cases, loops). Keep every observed code so
                     # the rewriter can refuse an ambiguous single-code assert.
                     observed = previous.get("codes")
-                    codes: set[str] = (
+                    codes: set[str | None] = (
                         set(observed) if isinstance(observed, list) else set()
                     )
-                    if isinstance(previous.get("code"), str):
-                        codes.add(previous["code"])
-                    if isinstance(record.get("code"), str):
-                        codes.add(record["code"])
+                    codes.add(_as_code(previous.get("code")))
+                    codes.add(_as_code(record.get("code")))
                     merged = dict(previous)
-                    merged["codes"] = sorted(codes)
-                    merged["code"] = None if len(codes) != 1 else next(iter(codes))
+                    merged["codes"] = sorted(
+                        codes, key=lambda item: (item is not None, item or "")
+                    )
+                    merged["code"] = next(iter(codes)) if len(codes) == 1 else None
                     RECORD[self._key] = merged
         return self._ctx.__exit__(exc_type, exc, tb)
+
+
+def _as_code(value: object) -> str | None:
+    """Normalise a recorded code; ``None`` marks a code-less execution.
+
+    A site that raises a code-less error in one parametrization and a coded
+    error in another cannot be pinned to a single assert, so the code-less
+    execution has to survive the merge as an explicit ``None``.
+    """
+
+    return value if isinstance(value, str) and value else None
 
 
 def _site_key() -> str | None:

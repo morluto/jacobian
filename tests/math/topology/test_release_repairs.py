@@ -125,7 +125,7 @@ def test_homology_manifold_rejects_impure_empty_links_and_composite_fields() -> 
         )
     )
     assert impure.homology_manifold is False
-    with pytest.raises(OperationDomainValidationError, match="prime field"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         homology_manifold(
             HomologyManifoldRequest(
                 complex=SimplicialComplexRequest.model_validate(
@@ -134,6 +134,10 @@ def test_homology_manifold_rejects_impure_empty_links_and_composite_fields() -> 
                 prime=4,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.homology_manifold.prime_not_prime"
+    )
 
 
 def test_boundary_includes_lower_dimensional_maximal_cells() -> None:
@@ -154,12 +158,15 @@ def test_boundary_includes_lower_dimensional_maximal_cells() -> None:
 def test_relative_homology_rejects_composite_modulus_before_rank() -> None:
     square = CubicalCell(intervals=((0, 1), (0, 1)))
     edge = CubicalCell(intervals=((0, 0), (0, 1)))
-    with pytest.raises(OperationDomainValidationError, match="prime field"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         relative_homology(
             RelativeCubicalHomologyRequest(
                 cells=(square,), subcomplex_cells=(edge,), prime=4
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "cubical_complex.relative_prime_not_prime"
+    )
 
 
 def test_triangulation_retains_source_axis_through_serialization() -> None:
@@ -175,8 +182,12 @@ def test_triangulation_retains_source_axis_through_serialization() -> None:
 
 def test_triangulation_rejects_factorial_output_before_materialization() -> None:
     cube = CubicalCell(intervals=tuple((0, 1) for _ in range(10)))
-    with pytest.raises(OperationResourceAdmissionError, match="dimension"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         triangulate(CubicalTriangulationRequest(cells=(cube,)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.triangulation_dimension_budget"
+    )
 
 
 def _rank_one_interval_sheaf() -> FiniteCellularSheaf:
@@ -235,15 +246,23 @@ def test_sheaf_morphism_requires_a_proved_prime_field() -> None:
         cover_restrictions=restrictions,
     )
     components = tuple((face, ((1,),)) for face in sheaf.canonical_face_order)
-    with pytest.raises(OperationDomainValidationError, match="prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         morphism(sheaf, sheaf, components)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.prime_not_admitted"
+    )
     # Neither a serialized carrier nor a native bypass carries trusted field
     # provenance: both consumer boundaries must establish the same fact.
     restored = type(sheaf).model_validate_json(sheaf.model_dump_json())
     forged = type(sheaf).model_construct(**sheaf.model_dump())
     for authored in (restored, forged):
-        with pytest.raises(OperationDomainValidationError, match="prime"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             morphism(authored, authored, components)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.cellular_sheaf.prime_not_admitted"
+        )
 
 
 def test_sheaf_morphism_uses_modular_arithmetic_and_tuple_axes() -> None:
@@ -332,10 +351,12 @@ def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
 def test_sheaf_morphism_rejects_incomplete_forged_diagram() -> None:
     sheaf = _rank_one_interval_sheaf()
     components = (("a", ((_q(1),),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
-    with pytest.raises(
-        OperationDomainValidationError, match="does not define a cellular sheaf"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         morphism(sheaf, sheaf, components)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.authored_sheaf_not_functorial"
+    )
 
 
 def test_sheaf_morphism_translates_malformed_scalar_to_owner_error() -> None:
@@ -362,20 +383,32 @@ def test_sheaf_morphism_translates_malformed_scalar_to_owner_error() -> None:
         ),
     )
     components = (("a", (("bad",),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
-    with pytest.raises(OperationDomainValidationError, match="exact scalars"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         morphism(sheaf, sheaf, components)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.sections.morphism.scalar_invalid"
+    )
     malformed: Any = (("a", ((None,),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
-    with pytest.raises(OperationDomainValidationError, match="exact scalars"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         morphism(sheaf, sheaf, malformed)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.sections.morphism.scalar_invalid"
+    )
 
 
 def test_relative_homology_admits_group_and_matrix_bounds_before_dense_work() -> None:
     cube = CubicalCell(intervals=((0, 1),) * 10)
     vertex = CubicalCell(intervals=((0, 0),) * 10)
-    with pytest.raises(OperationResourceAdmissionError, match="chain group"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         relative_homology(
             RelativeCubicalHomologyRequest(cells=(cube,), subcomplex_cells=(vertex,))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.relative_chain_group_budget"
+    )
 
 
 def test_filtered_chain_map_retains_canonical_value_and_checks_its_relation() -> None:
@@ -481,7 +514,7 @@ def test_filtered_chain_map_rejects_non_nested_filtration() -> None:
             )
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match="not contained"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         filtered_map(
             FilteredChainMapRequest(
                 chain_map=ChainMapValue(
@@ -493,6 +526,7 @@ def test_filtered_chain_map_rejects_non_nested_filtration() -> None:
                 target_filtration=malformed,
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "filtered_chain_complex.not_nested"
 
 
 def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
@@ -509,9 +543,7 @@ def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
         FiltrationLevel(subspaces=(zero, zero)),
         FiltrationLevel(subspaces=(zero, zero)),
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="top filtration level must span"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         filtered_map(
             FilteredChainMapRequest(
                 chain_map=ChainMapValue(
@@ -523,13 +555,16 @@ def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
                 target_filtration=filtration,
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "filtered_chain_complex.not_exhaustive"
 
 
 def test_standard_simplex_rejects_derived_carrier_overflow_before_tables() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="32 simplices"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         standard_simplex(4, 2)
-    with pytest.raises(OperationResourceAdmissionError, match="32 simplices"):
+    assert exc_info.value.errors()[0]["type"] == "simplicial_set.degree_size_budget"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         standard_simplex(3, 3)
+    assert exc_info.value.errors()[0]["type"] == "simplicial_set.degree_size_budget"
 
 
 def test_presentation_release_is_only_a_direct_relator_witness() -> None:

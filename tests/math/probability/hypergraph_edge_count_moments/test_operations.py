@@ -122,8 +122,11 @@ def test_pair_work_is_refused_before_overlap_expansion() -> None:
         )
         for mask in masks
     )
-    with pytest.raises(OperationResourceAdmissionError, match="overlap work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         run(vertices, edges, Fraction(1, 2))
+    assert (
+        exc_info.value.errors()[0]["type"] == "hypergraph_edge_count_moments.pair_work"
+    )
 
 
 def test_schema_documents_the_closed_probability_interval() -> None:
@@ -137,10 +140,14 @@ def test_rational_height_and_shared_deadline_are_admitted_before_execution() -> 
     vertices = tuple(f"v{i}" for i in range(256))
     edges = (("e", vertices),)
     huge = CanonicalRational(num=1, den=10**200)
-    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_hypergraph_edge_count_moments(
             FiniteHypergraph(vertices=vertices, edges=edges), huge
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph_edge_count_moments.rational_height"
+    )
     with request_execution(time.monotonic()):
         bind_request_deadline(time.monotonic() - 1)
         with pytest.raises(TimeoutError):

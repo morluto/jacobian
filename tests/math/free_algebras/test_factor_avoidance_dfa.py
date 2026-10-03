@@ -113,8 +113,12 @@ def test_factor_family_rejects_dfa_larger_than_shared_carrier() -> None:
     assert accepted.state_count == 64
 
     request = _request(["x"], [["x"] * 64])
-    with pytest.raises(OperationResourceAdmissionError, match="64-state"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         factor_avoidance_dfa(request.alphabet, request.forbidden_factors)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.factor_avoidance_state_bound"
+    )
 
 
 def test_prefix_state_preflight_accounts_for_shared_pattern_prefixes() -> None:

@@ -73,12 +73,21 @@ def test_divisibility_declarations_keep_their_owner_local_contracts(
 
 
 def test_divisibility_contracts_retain_their_typed_admission_errors() -> None:
-    with pytest.raises(OperationDomainValidationError, match="divisor"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         divides(0, 1)
-    with pytest.raises(OperationDomainValidationError, match="nonzero"):
+    assert exc_info.value.errors()[0]["type"] == "number_theory.divisor_must_be_nonzero"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         prime_valuation(0, 2)
-    with pytest.raises(OperationDomainValidationError, match="prime"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.valuation_requires_nonzero_value"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         prime_valuation(1, 4)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.valuation_requires_a_prime_absolute_base_2"
+    )
 
 
 def test_gcd_result_composes_with_arithmetic_integer_consumers() -> None:

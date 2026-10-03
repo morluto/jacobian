@@ -208,13 +208,18 @@ def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> No
             {"coefficient": {"num": 1, "den": 1}, "exponents": [0]},
         ]
     }
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficients"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_recurrence_to_egf_equation(
             {"variable": "n", "terms": [{"exponent": 0, "coefficient": rational}]}
         )
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.recurrence_egf_request"
 
-    with pytest.raises(OperationResourceAdmissionError, match="above the order bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_recurrence_to_egf_equation(_recurrence((0, [(17, 1)])))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.recurrence_egf_differential_order"
+    )
 
 
 def test_egf_denominator_admission_is_local_to_each_output_shift() -> None:

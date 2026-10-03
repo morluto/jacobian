@@ -46,5 +46,9 @@ def test_composition_admits_small_reachable_diagonal(size: int) -> None:
 
 
 def test_composition_refuses_genuinely_large_reachable_product() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="reachable"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_compose(ComposeRequest(first=_cycle(8), second=_cycle(9)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_state_transducer.composition_state_bound_exceeded"
+    )

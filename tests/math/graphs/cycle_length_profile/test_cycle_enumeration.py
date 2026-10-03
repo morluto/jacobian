@@ -142,8 +142,9 @@ def test_complete_family_output_bound_is_admitted_before_search() -> None:
             for right in vertices[index + 1 :]
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="result envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_fixed_length_cycles(graph, 3)
+    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.output_bound"
 
 
 def test_sparse_ring_long_cycle_is_admitted_by_topology_bounds() -> None:
@@ -182,13 +183,15 @@ def test_direct_native_noncanonical_labels_use_typed_domain_errors() -> None:
 
 
 def test_direct_native_invalid_inputs_use_typed_domain_errors() -> None:
-    with pytest.raises(OperationDomainValidationError, match="canonical simple"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_fixed_length_cycles(object(), 3)  # type: ignore[arg-type]
-    with pytest.raises(OperationDomainValidationError, match="integer"):
+    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.graph_type"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_fixed_length_cycles(
             SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=()),
             True,
         )
+    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.length"
 
 
 def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -> None:
@@ -210,10 +213,14 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
 
     payload = result.model_dump(mode="json")
     payload["edge_incidence"][0]["cycle_indices"] = []
-    with pytest.raises(ValueError, match="edge incidence"):
+    with pytest.raises(ValueError) as exc_info:
         FixedLengthCycleEnumerationResult.model_validate(
             json.loads(json.dumps(payload))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cycle_enumeration.edge_incidence_mismatch"
+    )
 
     oversized = result.model_dump(mode="json")
     oversized["vertex_incidence"][0]["cycle_indices"] = list(range(20_001))
@@ -238,10 +245,11 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         }
         for edge in square.edges
     ]
-    with pytest.raises(ValueError, match="close through declared graph edges"):
+    with pytest.raises(ValueError) as exc_info:
         FixedLengthCycleEnumerationResult.model_validate(
             json.loads(json.dumps(forged_cycle))
         )
+    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.cycle_edges_invalid"
 
 
 def test_chordless_family_rejects_cycles_that_retain_a_chord() -> None:
@@ -249,8 +257,12 @@ def test_chordless_family_rejects_cycles_that_retain_a_chord() -> None:
     simple = enumerate_fixed_length_cycles(graph, 4)
     payload = simple.model_dump(mode="json")
     payload["family_kind"] = "CHORDLESS"
-    with pytest.raises(ValueError, match="nonconsecutive"):
+    with pytest.raises(ValueError) as exc_info:
         FixedLengthCycleEnumerationResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cycle_enumeration.chordless_cycle_has_a_chord"
+    )
 
 
 def _ring_edges(vertices: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
@@ -376,8 +388,9 @@ def test_bridged_complete_bipartite_chordless_four_cycles_sum_block_bounds() -> 
 def test_oversized_forged_graph_rejects_before_label_validation() -> None:
     vertices = tuple(f"v{index}" for index in range(257))
     graph = SimpleUndirectedGraph.model_construct(vertices=vertices, edges=())
-    with pytest.raises(OperationDomainValidationError, match="at most 256"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_fixed_length_cycles(graph, 3)
+    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.vertex_bound"
 
 
 def test_empty_clique_family_honors_cancellation_during_assembly(
@@ -546,8 +559,9 @@ def test_exact_chordless_four_cycle_block_charges_traversal_work() -> None:
         if part_of[first] != part_of[second]
     )
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_chordless_fixed_length_cycles(graph, 4)
+    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.work_bound"
 
 
 def test_dominant_multipartite_part_makes_long_cycles_empty() -> None:
@@ -748,8 +762,12 @@ def test_oversized_label_rejects_before_full_string_scans(
     monkeypatch.setattr(unicodedata, "is_normalized", spy)
     oversized = "x" * (100_000_000 // 2 + 1)
     forged = SimpleUndirectedGraph.model_construct(vertices=(oversized,), edges=())
-    with pytest.raises(OperationResourceAdmissionError, match="retained"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_fixed_length_cycles(forged, 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cycle_enumeration.retained_labels_exceed_bound"
+    )
     assert all(length <= 100_000_000 // 2 for length in scanned)
 
 

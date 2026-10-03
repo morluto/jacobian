@@ -53,11 +53,12 @@ def test_character_family_roundtrips_with_one_shared_group_parent():
 def test_character_family_rejects_duplicate_coordinate_rows():
     group = character_group(5)
 
-    with pytest.raises(ValidationError, match="lexicographic order"):
+    with pytest.raises(ValidationError) as exc_info:
         DirichletCharacterFamily(
             group=group,
             coordinates=((0,), (1,), (1,), (3,)),
         )
+    assert exc_info.value.errors()[0]["type"] == "dirichlet_character.family_order"
 
 
 def test_character_family_accepts_the_maximum_modulus_with_bounded_output():

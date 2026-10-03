@@ -113,22 +113,31 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_native_vector_operations_reject_malformed_fields_at_admission() -> None:
-    with pytest.raises(OperationDomainValidationError, match="at least one component"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         divergence(())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_vector_calc.empty_vector_field"
+    )
 
     x = _polynomial(("x", "y", "z"), {(1, 0, 0): 1})
-    with pytest.raises(
-        OperationDomainValidationError, match="one component per variable"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         divergence((x, x))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.component_count"
+    )
 
     planar = _polynomial(("x", "y"), {(1, 0): 1})
-    with pytest.raises(OperationDomainValidationError, match="exactly three variables"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         curl((planar, planar))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.curl_dimensions"
+    )
 
     y = _polynomial(("y", "x", "z"), {(0, 1, 0): 1})
-    with pytest.raises(OperationDomainValidationError, match="one ordered ring"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         divergence((x, y, x))
+    assert exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.ordered_ring"
 
 
 def test_gradient_admits_sparse_inactive_axes_beyond_dense_proxy() -> None:
@@ -286,10 +295,18 @@ def test_scalar_derivative_exact_output_term_boundary() -> None:
         )
         == 260
     )
-    with pytest.raises(OperationDomainValidationError, match="result-term budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         laplacian(source)
-    with pytest.raises(OperationDomainValidationError, match="result-term budget"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_vector_calc.derivative_term_budget"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         directional_derivative(source, direction)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_vector_calc.derivative_term_budget"
+    )
 
 
 @pytest.mark.parametrize("weight", [Fraction(), Fraction(-2, 3)])

@@ -382,8 +382,9 @@ def test_min_cost_flow_derived_scale_admission_fails_closed() -> None:
     )
     graph = CostedFlowGraph(vertex_count=64, edges=edges)
     request = MinCostFlowRequest(graph=graph, demands=tuple([0] * 64))
-    with pytest.raises(OperationResourceAdmissionError, match="derived-scale"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_min_cost_flow(request)
+    assert exc_info.value.errors()[0]["type"] == "graph.flow.derived_scale_bound"
 
 
 @pytest.mark.parametrize("compute", [compute_max_flow, compute_min_cut])
@@ -429,8 +430,9 @@ def test_exact_flow_and_cut_height_is_admitted_before_backend(
         if compute is compute_max_flow
         else MinCutRequest(graph=graph, source=0, sink=3)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="derived-height"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute(request)
+    assert exc_info.value.errors()[0]["type"] == "graph.flow.derived_height_bound"
 
 
 def test_exact_flow_height_admission_retains_small_rational_boundary() -> None:

@@ -158,10 +158,11 @@ def test_zeta_admission_bounds_coefficient_growth_before_backend() -> None:
     assert len(boundary.determinant_polynomial.polynomial.terms) == 51
 
     dense_large = (tuple((1_000_000,) * 50),) * 50
-    with pytest.raises(OperationDomainValidationError, match="coefficient digit bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_artin_mazur_zeta(
             ArtinMazurZetaRequest(shift=AdjacencyShift(matrix=dense_large))
         )
+    assert exc_info.value.errors()[0]["type"] == "symbolic_dynamics.zeta_not_admitted"
 
 
 def test_public_surface_excludes_adjacency_carrier_invariants() -> None:
@@ -215,8 +216,12 @@ def test_golden_mean_finite_type_presentation_is_exact() -> None:
     payload["presentation"]["adjacency_matrix"] = ((1, 0), (1, 1))
     forged = FiniteTypeShiftResult.model_validate(payload)
     assert not verify_block_presentation(forged.presentation)
-    with pytest.raises(OperationDomainValidationError, match="complete count"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         adjacency_shift_from_presentation(forged.presentation)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.presentation_adjacency_invalid"
+    )
 
     round_tripped = BlockPresentation.model_validate_json(
         result.presentation.model_dump_json()
@@ -342,7 +347,7 @@ def test_block_presentation_verifier_authenticates_source_occurring_axis() -> No
 def test_block_presentation_verifier_rejects_unencoded_rules_and_duplicate_alphabet() -> (
     None
 ):
-    with pytest.raises(ValidationError, match="encode every forbidden block"):
+    with pytest.raises(ValidationError) as exc_info:
         BlockPresentation(
             alphabet=("0", "1"),
             memory=1,
@@ -352,6 +357,10 @@ def test_block_presentation_verifier_rejects_unencoded_rules_and_duplicate_alpha
             adjacency_matrix=((0,),),
             two_sided=True,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.presentation_memory_below_forbidden_rule"
+    )
     forged = BlockPresentation.model_construct(
         alphabet=("0", "0"),
         memory=0,
@@ -519,10 +528,12 @@ def test_oversized_enumerations_fail_before_computation() -> None:
     alphabet = tuple(chr(ord("a") + index) for index in range(16))
     shift = ForbiddenBlockShift(alphabet=alphabet, forbidden_blocks=())
     language_request = BlockLanguageRequest(shift=shift, block_length=5)
-    with pytest.raises(
-        OperationDomainValidationError, match="requested block enumeration"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_block_language(language_request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.block_enumeration_not_admitted"
+    )
     with pytest.raises(
         OperationDomainValidationError, match="requested block enumeration"
     ):
@@ -558,10 +569,18 @@ def test_oversized_enumerations_fail_before_computation() -> None:
         forbidden_blocks=(("a",) * 20,),
     )
     support_request = BlockLanguageRequest(shift=oversized_support, block_length=1)
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_block_language(support_request)
-    with pytest.raises(ValueError, match="work bound"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.shift_support_not_admitted"
+    )
+    with pytest.raises(ValueError) as exc_info:
         block_language(oversized_support, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.shift_support_not_admitted"
+    )
 
 
 def test_higher_block_presentation_uses_allowed_overlap_edges() -> None:
@@ -591,10 +610,12 @@ def test_higher_block_requires_enough_memory_for_exact_sft_presentation() -> Non
         alphabet=("0", "1"), forbidden_blocks=(("1", "0", "1", "0"),)
     )
     request = HigherBlockRequest(shift=shift, block_length=2)
-    with pytest.raises(
-        OperationDomainValidationError, match="below the presentation memory"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_higher_block(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.higher_block_below_memory"
+    )
 
 
 def test_periodic_profile_handles_square_mobius_factor() -> None:
@@ -628,13 +649,21 @@ def test_periodic_profile_rejects_matrix_work_before_powering() -> None:
     size = 50
     shift = AdjacencyShift(matrix=tuple((0,) * size for _ in range(size)))
 
-    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         periodic_point_profile(shift, 81)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.periodic_profile_work_bound"
+    )
 
 
 def test_periodic_profile_rejects_projected_output_digits() -> None:
-    with pytest.raises(OperationDomainValidationError, match="output digit bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         periodic_point_profile(AdjacencyShift(matrix=((1_000_000,),)), 100)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.periodic_profile_output_bound"
+    )
 
 
 def test_value_models_reject_ambiguous_and_invalid_carriers() -> None:
@@ -805,8 +834,12 @@ def test_presentation_verification_resource_limit_is_not_a_false_relation(
         ForbiddenBlockShift(alphabet=("a", "b"), forbidden_blocks=())
     )
     monkeypatch.setattr(_bounds, "MAX_PRESENTATION_VERIFICATION_WORK", 1)
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_block_presentation(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.presentation_verification_not_admitted"
+    )
 
 
 def _trace_powers(matrix: tuple[tuple[int, ...], ...], count: int) -> tuple[int, ...]:

@@ -107,8 +107,9 @@ def test_singular_inverse_rejected_by_the_exact_kernel() -> None:
     request = NonsingularIntegerMatrixRequest.model_validate(
         {"matrix": {"entries": [[1, 2], [2, 4]]}}
     )
-    with pytest.raises(ValueError, match="singular"):
+    with pytest.raises(ValueError) as exc_info:
         compute_inverse(request)
+    assert exc_info.value.errors()[0]["type"] == "matrix.singular_matrix"
 
 
 def test_results_retain_their_source_system() -> None:

@@ -222,11 +222,19 @@ def test_profile_admission_charges_structure_not_serialized_label_repetition() -
 
 
 def test_incidence_rejects_labels_above_intrinsic_byte_bound() -> None:
-    with pytest.raises(ValueError, match="1024 UTF-8 bytes"):
+    with pytest.raises(ValueError) as exc_info:
         _family((("x" * 1_025,),), "b", points=("x" * 1_025,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "incidence_structure.label_exceeds_byte_bound"
+    )
 
-    with pytest.raises(ValueError, match="1024 UTF-8 bytes"):
+    with pytest.raises(ValueError) as exc_info:
         _family(((),), "b" * 1_025, points=("p",))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "incidence_structure.label_exceeds_byte_bound"
+    )
 
 
 def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> None:

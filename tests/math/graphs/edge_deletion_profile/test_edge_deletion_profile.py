@@ -241,8 +241,11 @@ def test_rejects_many_component_filters_before_row_enumeration() -> None:
         edges=tuple((f"v{2 * i}", f"v{2 * i + 1}") for i in range(128)),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_edge_deletion_profile(graph, 2)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.edge_deletion.work_exceeds_bound"
+    )
 
 
 def test_large_subset_family_is_rejected_before_expansion() -> None:
@@ -250,8 +253,11 @@ def test_large_subset_family_is_rejected_before_expansion() -> None:
     edges = [(vertices[2 * index], vertices[2 * index + 1]) for index in range(40)]
     graph = _graph(vertices, edges)
 
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_edge_deletion_profile(graph, 20)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.edge_deletion.work_exceeds_bound"
+    )
 
 
 def test_near_complete_large_graph_uses_exact_missing_edge_support() -> None:
@@ -295,8 +301,12 @@ def test_native_result_accepts_retained_labels_at_character_bound() -> None:
 def test_native_result_rejects_labels_above_retained_character_bound() -> None:
     graph = _graph(["x" * (MAX_RETAINED_LABEL_CHARACTERS + 1)], [])
 
-    with pytest.raises(OperationDomainValidationError, match="retained-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_edge_deletion_profile(graph, 0)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.edge_deletion.retained_labels_exceed_bound"
+    )
 
 
 def test_result_preserves_source() -> None:

@@ -168,8 +168,12 @@ def test_multiplicity_limit_is_separate_from_source_degree(
 
     monkeypatch.setattr(_sympy, "polynomial_square_free_decomposition", record_backend)
     for source in (_polynomial({(65,): 1}), _polynomial({(1, 65): 1}, ("y", "x"))):
-        with pytest.raises(OperationResourceAdmissionError, match="multiplicity"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             polynomial_square_free_decomposition(source)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial.square_free_multiplicity_budget"
+        )
     assert not calls  # Reject the unrepresentable multiplicity before the kernel.
 
 
@@ -214,11 +218,16 @@ def test_verifier_preserves_multiplicity_resource_refusal() -> None:
     payload = result.model_dump()
     payload["polynomial"] = _polynomial({(65,): 1}).model_dump()
     claim = PolynomialSquareFreeDecompositionResult.model_validate(payload, strict=True)
-    with pytest.raises(OperationResourceAdmissionError, match="multiplicity"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_polynomial_square_free_decomposition(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.square_free_multiplicity_budget"
+    )
 
 
 @pytest.mark.parametrize("source", (None, 1, {}, "x^65+1"))
 def test_native_source_type_refusal_is_typed(source: Any) -> None:
-    with pytest.raises(OperationDomainValidationError, match="RationalPolynomial"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_square_free_decomposition(source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.square_free_source"

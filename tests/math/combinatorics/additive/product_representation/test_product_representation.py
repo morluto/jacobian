@@ -84,8 +84,12 @@ def test_cartesian_work_is_rejected_before_enumeration() -> None:
     left = _set(range(317))
     right = _set(range(316))
 
-    with pytest.raises(OperationDomainValidationError, match="pair work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_product_representation_profile(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "additive.product_representation_pair_work_exceeded"
+    )
 
 
 def test_worst_case_digit_work_is_rejected_before_product_construction() -> None:
@@ -93,8 +97,12 @@ def test_worst_case_digit_work_is_rejected_before_product_construction() -> None
     left = _set(prefix + index for index in range(150))
     right = _set(prefix + index for index in range(3))
 
-    with pytest.raises(OperationDomainValidationError, match="digit work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_product_representation_profile(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "additive.product_representation_digit_work_exceeded"
+    )
 
 
 def test_large_operands_are_rejected_before_integer_parsing() -> None:

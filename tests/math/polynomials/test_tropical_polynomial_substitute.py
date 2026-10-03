@@ -265,7 +265,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
         update={"variables": ("x", "x")}
     )
     zero = _polynomial(("t",), ())
-    with pytest.raises(Exception, match=r"tropical\.polynomial_axis"):
+    with pytest.raises(Exception) as exc_info:
         compute_polynomial_substitute(
             PolynomialSubstituteRequest(
                 polynomial=source,
@@ -273,6 +273,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
                 images=(zero, zero),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "tropical.polynomial_axis"
 
 
 def test_scalar_dual_rejects_unknown_forged_kind() -> None:

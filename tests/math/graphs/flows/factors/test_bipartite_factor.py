@@ -183,23 +183,28 @@ def test_small_cases_agree_with_exhaustive_edge_subsets() -> None:
 
 
 def test_crossing_partition_is_validated_by_typed_request() -> None:
-    with pytest.raises(ValidationError, match="cross"):
+    with pytest.raises(ValidationError) as exc_info:
         BipartiteFactorRequest(
             graph=IndexedSimpleUndirectedGraph(vertex_count=4, edges=((0, 1), (2, 3))),
             left=(0, 1),
             right=(2, 3),
             required_degrees=(0, 0, 0, 0),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.bipartite_factor_edges_must_cross_partition"
+    )
 
 
 def test_requirement_axes_are_source_bound() -> None:
-    with pytest.raises(ValidationError, match="at least 2"):
+    with pytest.raises(ValidationError) as exc_info:
         BipartiteFactorRequest(
             graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=()),
             left=(0,),
             right=(1,),
             required_degrees=(0,),
         )
+    assert exc_info.value.errors()[0]["type"] == "too_short"
 
 
 def test_result_rejects_cross_outcome_witnesses() -> None:
@@ -211,8 +216,12 @@ def test_result_rejects_cross_outcome_witnesses() -> None:
         requirements={"left": [0, 0, 0], "right": [0, 0, 0]},
     )
     payload.pop("required_degrees", None)
-    with pytest.raises(ValidationError, match="distinct"):
+    with pytest.raises(ValidationError) as exc_info:
         BipartiteFactorResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.bipartite_factor_selected_edges_must_be_distinct"
+    )
 
 
 def test_public_example_and_serialization_round_trip() -> None:
@@ -233,8 +242,12 @@ def test_public_example_and_serialization_round_trip() -> None:
 
 
 def test_admission_rejects_oversized_degree_before_flow() -> None:
-    with pytest.raises(ValidationError, match=r"0\.\.1000000000"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(((0, 1),), 1, 1, (1_000_000_001, 0))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.bipartite_factor_degree_must_be_in_0_max"
+    )
 
 
 @pytest.mark.parametrize(
@@ -313,17 +326,23 @@ def test_partition_permutation_requires_an_explicit_axis_change() -> None:
     graph = IndexedSimpleUndirectedGraph(
         vertex_count=4, edges=((0, 2), (0, 3), (1, 2), (1, 3))
     )
-    with pytest.raises(ValidationError, match="complete ordered axis"):
+    with pytest.raises(ValidationError) as exc_info:
         BipartiteFactorRequest(
             graph=graph, left=(1, 0), right=(2, 3), required_degrees=(2, 0, 1, 1)
         )
-    with pytest.raises(OperationDomainValidationError, match="left must be"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.bipartite_factor_left_axis_must_be_0_len"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         bipartite_degree_constrained_factor(graph, (1, 0), (2, 3), (2, 0, 1, 1))
+    assert exc_info.value.errors()[0]["type"] == "graph.bipartite_factor.partition_axis"
 
 
 def test_serialized_factor_claim_rejects_misaligned_requirement_axes() -> None:
     result = compute_bipartite_factor(_k33((1, 1, 1, 1, 1, 1)))
     payload = result.model_dump(mode="json")
     payload["requirements"]["left"] = [1, 1]
-    with pytest.raises(ValidationError, match="requirement axes"):
+    with pytest.raises(ValidationError) as exc_info:
         BipartiteFactorResult.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "graph.bipartite_factor_result_axes"

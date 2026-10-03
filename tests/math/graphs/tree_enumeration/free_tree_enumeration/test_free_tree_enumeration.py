@@ -91,5 +91,9 @@ def test_request_rejects_first_undeliverable_order() -> None:
     with pytest.raises(ValidationError):
         FreeTreeEnumerationRequest(order=MAX_ORDER + 1)
 
-    with pytest.raises(OperationDomainValidationError, match="orders from 0 through"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_free_trees(MAX_ORDER + 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.free_tree_enumeration_order_out_of_range"
+    )

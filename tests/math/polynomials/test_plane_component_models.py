@@ -162,12 +162,15 @@ def test_empty_and_whole_plane_have_unambiguous_zero_polynomial_tables() -> None
 
 def test_sign_rows_must_cover_the_complete_polynomial_axis() -> None:
     circle = _polynomial(((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))))
-    with pytest.raises(ValidationError, match="one sign per polynomial"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneSemialgebraicSet(
             axis=("x", "y"),
             polynomials=(circle,),
             sign_conditions=(PlaneSignCondition(signs=()),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "plane_semialgebraic.sign_condition_axis"
+    )
 
 
 def test_plane_point_reuses_algebraic_coordinates_and_binds_box_to_one_axis() -> None:
@@ -178,7 +181,7 @@ def test_plane_point_reuses_algebraic_coordinates_and_binds_box_to_one_axis() ->
     assert point.isolating_box.intervals[0].lower == _q(2)
     assert point.isolating_box.intervals[1].lower == _q(-3)
 
-    with pytest.raises(ValidationError, match="complete ordered plane axis"):
+    with pytest.raises(ValidationError) as exc_info:
         IsolatedRealPlanePoint(
             axis=("x", "y"),
             coordinates=point.coordinates,
@@ -186,6 +189,7 @@ def test_plane_point_reuses_algebraic_coordinates_and_binds_box_to_one_axis() ->
                 update={"variables": ("y", "x")}
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.point_box_axis"
 
 
 def test_plane_point_rejects_coordinates_beyond_the_result_carrier_bound() -> None:
@@ -195,12 +199,13 @@ def test_plane_point_rejects_coordinates_beyond_the_result_carrier_bound() -> No
         real_root_index=0,
     )
 
-    with pytest.raises(ValidationError, match="degree-sixteen"):
+    with pytest.raises(ValidationError) as exc_info:
         IsolatedRealPlanePoint(
             axis=("x", "y"),
             coordinates=(over_degree, point.coordinates[1]),
             isolating_box=point.isolating_box,
         )
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.point_bound"
 
 
 def test_plane_point_schema_advertises_the_degree_sixteen_coordinate_carrier() -> None:
@@ -421,8 +426,9 @@ def test_request_raw_preflight_rejects_deep_malformed_scalar_without_recursing()
         "num"
     ] = nested
 
-    with pytest.raises(ValidationError, match="exact integers"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate(raw)
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.rational_shape"
 
 
 @pytest.mark.parametrize(
@@ -481,5 +487,6 @@ def test_request_raw_preflight_rejects_unknown_deep_fields_before_normalization(
         nested = {"nested": nested}
     raw["unknown"] = nested
 
-    with pytest.raises(ValidationError, match="unknown fields"):
+    with pytest.raises(ValidationError) as exc_info:
         PlaneComponentProfileRequest.model_validate(raw)
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.request_shape"

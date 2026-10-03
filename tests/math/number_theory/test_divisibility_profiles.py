@@ -56,12 +56,14 @@ def test_product_divisibility_basic() -> None:
 
 
 def test_profile_requests_reject_nonpositive_elements() -> None:
-    with pytest.raises(OperationDomainValidationError, match="must be positive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_gcd_quotient_profile(GcdQuotientProfileRequest(elements=(0,)))
-    with pytest.raises(OperationDomainValidationError, match="must be positive"):
+    assert exc_info.value.errors()[0]["type"] == "number_theory.non_positive_family"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_product_divisibility_profile(
             ProductDivisibilityProfileRequest(elements=(-2,))
         )
+    assert exc_info.value.errors()[0]["type"] == "number_theory.non_positive_family"
 
 
 def test_profile_declarations_publish_positive_integer_domain() -> None:

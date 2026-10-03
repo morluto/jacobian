@@ -85,8 +85,12 @@ def test_character_serialization_and_tampering_are_checked() -> None:
 
     forged_value = result.model_dump(mode="json")
     forged_value["values"][0]["coefficients"][0]["num"] = "9"
-    with pytest.raises(ValidationError, match="fixed-point counts"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCharacter.model_validate_json(json.dumps(forged_value))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.permutation.fixed_point_values"
+    )
 
     forged_partition = result.model_dump(mode="json")
     forged_partition["partition"]["classes"] = [
@@ -115,11 +119,19 @@ def test_character_serialization_and_tampering_are_checked() -> None:
 
     oversized_partition = result.model_dump(mode="json")
     oversized_partition["partition"]["classes"] = [[]] * 65
-    with pytest.raises(ValidationError, match="class-count bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCharacter.model_validate_json(json.dumps(oversized_partition))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.permutation.partition_class_bound"
+    )
 
-    with pytest.raises(ValidationError, match="fixed-point counts"):
+    with pytest.raises(ValidationError) as exc_info:
         result.model_copy(update={"values": tuple(reversed(result.values))})
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.permutation.fixed_point_values"
+    )
 
 
 def test_typed_constructed_action_and_axis_are_readmitted() -> None:
@@ -128,8 +140,9 @@ def test_typed_constructed_action_and_axis_are_readmitted() -> None:
     forged_axis = result.axis.model_copy(update={"group_order": 999})
     forged_payload = result.model_dump(mode="python")
     forged_payload["axis"] = forged_axis
-    with pytest.raises(ValidationError, match=r"group_order|axis must match"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCharacter.model_validate(forged_payload)
+    assert exc_info.value.errors()[0]["type"] == "groups.characters.group_order"
 
     oversized_action = FinitePermutationAction.model_construct(
         domain=tuple(f"p{i}" for i in range(51)),
@@ -157,8 +170,12 @@ def test_action_group_order_is_rejected_before_class_enumeration(
         "jacobian.math.groups.characters.permutation.operations._classes_from_elements",
         classes_must_not_be_computed,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="order at most 64"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         permutation_character(action)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.permutation.group_order_bound"
+    )
 
 
 def test_order_sixty_four_dihedral_action_fits_the_complete_boundary() -> None:

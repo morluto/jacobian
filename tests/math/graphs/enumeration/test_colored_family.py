@@ -136,15 +136,17 @@ def test_excessive_coloring_family_is_rejected() -> None:
         vertex_bound=7,
         cost_bound=21,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="search units"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _native(request)
+    assert exc_info.value.errors()[0]["type"] == "graph.colored_enumeration_work"
 
 
 def test_native_invalid_bounds_fail_before_enumeration() -> None:
     import pytest
     from pydantic import ValidationError
 
-    with pytest.raises(ValidationError, match="less than or equal to 7"):
+    with pytest.raises(ValidationError) as exc_info:
         connected_colored_graphs(("red",), (), vertex_bound=8, cost_bound=1)
+    assert exc_info.value.errors()[0]["type"] == "less_than_equal"
     with pytest.raises(ValidationError, match="distinct and increasing"):
         connected_colored_graphs(("red", "red"), (), vertex_bound=2, cost_bound=1)

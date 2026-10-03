@@ -189,10 +189,9 @@ def test_crossing_free_unlink_and_complete_state_shape() -> None:
         ).choices
         == ()
     )
-    with pytest.raises(
-        ValidationError, match="cover the complete source crossing axis"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         LinkDiagramSmoothingState(diagram=_curl(), choices=())
+    assert exc_info.value.errors()[0]["type"] == "link_diagram.smoothing_state_axis"
 
 
 def test_state_circles_result_round_trip_and_catalog_publication() -> None:

@@ -72,12 +72,14 @@ def test_prefix_deserialization_enforces_interval_and_value_count() -> None:
     )
     payload = result.model_dump()
     payload["recurrence_indices"] = [99]
-    with pytest.raises(ValueError, match="consecutive from start_index"):
+    with pytest.raises(ValueError) as exc_info:
         type(result).model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.recurrence_indices"
     payload = result.model_dump()
     payload["values"]["values"] = [0, 1]
-    with pytest.raises(ValueError, match="prefix values must cover"):
+    with pytest.raises(ValueError) as exc_info:
         type(result).model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.prefix_value_count"
 
 
 def test_rationally_scaled_fibonacci_has_linear_height_bound() -> None:
@@ -122,10 +124,13 @@ def test_prefix_deserialization_rejects_nonrecurrence_operator() -> None:
         "recurrence_indices": [0],
         "values": {"values": []},
     }
-    with pytest.raises(ValueError, match="positive-order polynomial recurrence"):
+    with pytest.raises(ValueError) as exc_info:
         from jacobian.math.ore_algebras._models import PolynomialRecurrencePrefix
 
         PolynomialRecurrencePrefix.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "ore_algebra.polynomial_recurrence_shape"
+    )
 
 
 def test_alternating_recurrence_preserves_rational_values() -> None:
@@ -147,15 +152,16 @@ def test_alternating_recurrence_preserves_rational_values() -> None:
 
 def test_singular_leading_coefficient_rejected_for_whole_finite_interval() -> None:
     # (n - 1) S + 1 is solvable at n=0 but singular at the second requested index.
-    with pytest.raises(
-        OperationDomainValidationError, match="leading recurrence coefficient vanishes"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_recurrence_generate_prefix(
             _op([(0, [(1, 0)]), (1, [(1, 1), (-1, 0)])]),
             0,
             FiniteRationalSequence.model_validate({"values": [1]}),
             3,
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "ore_algebra.singular_leading_coefficient"
+    )
 
 
 def test_catalog_example_executes_as_finite_recurrence_value() -> None:

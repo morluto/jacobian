@@ -162,8 +162,11 @@ class TestLieAlgebraValidation:
             dimension=1,
             structure_constants=(((0,),),),
         )
-        with pytest.raises(OperationDomainValidationError, match="prime"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             chevalley_eilenberg_complex(algebra)
+        assert (
+            exc_info.value.errors()[0]["type"] == "lie_algebra_homology.prime_not_prime"
+        )
 
     def test_alternation_violation_rejected(self) -> None:
         constants = (
@@ -171,8 +174,9 @@ class TestLieAlgebraValidation:
             ((4, 0), (0, 1)),
         )  # [e_1, e_1] = e_0 != 0
         algebra = LieAlgebra(prime=5, dimension=2, structure_constants=constants)
-        with pytest.raises(OperationDomainValidationError, match="alternating"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             chevalley_eilenberg_complex(algebra)
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra_homology.alternating"
 
     def test_antisymmetry_violation_rejected(self) -> None:
         constants = (
@@ -180,8 +184,11 @@ class TestLieAlgebraValidation:
             ((1, 0), (0, 0)),
         )  # c[0][1] = (1,0) is not -c[1][0] mod 5
         algebra = LieAlgebra(prime=5, dimension=2, structure_constants=constants)
-        with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             chevalley_eilenberg_complex(algebra)
+        assert (
+            exc_info.value.errors()[0]["type"] == "lie_algebra_homology.antisymmetric"
+        )
 
     def test_jacobi_violation_rejected(self) -> None:
         # [e0, e1] = e0 and [e1, e2] = e1 violate the Jacobi identity:
@@ -192,8 +199,9 @@ class TestLieAlgebraValidation:
             ((0, 0, 0), (0, 4, 0), (0, 0, 0)),
         )
         algebra = LieAlgebra(prime=5, dimension=3, structure_constants=constants)
-        with pytest.raises(OperationDomainValidationError, match="Jacobi"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             chevalley_eilenberg_complex(algebra)
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra_homology.jacobi"
 
     def test_noncanonical_diagonal_residue_rejected(self) -> None:
         # 2 mod 2 is zero, so every Lie identity holds vacuously; the entry

@@ -361,8 +361,12 @@ def test_result_preflights_oversized_forged_derived_rationals() -> None:
 def test_result_retains_graph_axis_shape_without_replaying_certificate() -> None:
     payload = deepcopy(_accepted_edge_result().model_dump(mode="json"))
     payload["coloring"] = [0]
-    with pytest.raises(ValidationError, match="one color per graph vertex"):
+    with pytest.raises(ValidationError) as exc_info:
         ChromaticNumberCertificateCheckResult.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.coloring_must_assign_one_color_per_graph_vertex"
+    )
 
     payload = deepcopy(_accepted_edge_result().model_dump(mode="json"))
     payload["graph"] = {
@@ -371,8 +375,12 @@ def test_result_retains_graph_axis_shape_without_replaying_certificate() -> None
     }
     payload["coloring"] = [0] * 20
     payload["weights"] = [{"num": "1", "den": "1"}] * 20
-    with pytest.raises(ValidationError, match="supports at most"):
+    with pytest.raises(ValidationError) as exc_info:
         ChromaticNumberCertificateCheckResult.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_number_certificate_checking_supports_at_most"
+    )
 
 
 def test_vertex_and_subset_enumeration_boundaries() -> None:

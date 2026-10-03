@@ -73,20 +73,27 @@ def test_topology_axioms_are_admitted_by_operations() -> None:
         open_sets=((), (0,), (1,), (0, 1, 2)),
     )
     assert verify_topology(union_invalid) is False
-    with pytest.raises(OperationDomainValidationError, match="unions"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_specialization_preorder(
             SpecializationPreorderRequest(topology=union_invalid)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.not_closed_under_unions"
+    )
 
     intersection_invalid = FiniteTopology(
         point_count=3,
         open_sets=((), (0, 1), (1, 2), (0, 1, 2)),
     )
     assert verify_topology(intersection_invalid) is False
-    with pytest.raises(OperationDomainValidationError, match="intersections"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_specialization_preorder(
             SpecializationPreorderRequest(topology=intersection_invalid)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.not_closed_under_intersections"
+    )
     with pytest.raises(ValidationError) as exc_info:
         FiniteTopology(point_count=2, open_sets=((), (1, 0)))
     assert (
@@ -228,8 +235,11 @@ def test_beat_points_use_strict_t0_order_and_return_witnesses() -> None:
 
 def test_non_t0_beat_point_request_fails_closed() -> None:
     assert is_t0(_indiscrete(2)) is False
-    with pytest.raises(OperationDomainValidationError, match="T0"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_beat_points(BeatPointsRequest(topology=_indiscrete(2)))
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.beat_points_require_t0"
+    )
 
 
 def _all_topologies(size: int) -> tuple[FiniteTopology, ...]:

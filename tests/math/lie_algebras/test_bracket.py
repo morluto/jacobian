@@ -244,22 +244,24 @@ class TestBracketAdmission:
 
     def test_over_bound_element_coefficient_is_rejected_before_expansion(self) -> None:
         over_bound = 10**MAX_ELEMENT_COEFFICIENT_DIGITS
-        with pytest.raises(OperationDomainValidationError, match="64-digit bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_bracket(
                 AXB,
                 _element(AXB_BASIS, (over_bound, 0)),
                 _element(AXB_BASIS, (0, 1)),
             )
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.admission"
 
     def test_over_bound_structure_coefficient_is_rejected_before_jacobi(self) -> None:
         over_bound = 10**MAX_ELEMENT_COEFFICIENT_DIGITS
         algebra = _algebra(AXB_BASIS, ((0, 1, 1, over_bound),))
-        with pytest.raises(OperationDomainValidationError, match="64-digit bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_bracket(
                 algebra,
                 _element(AXB_BASIS, (1, 0)),
                 _element(AXB_BASIS, (0, 1)),
             )
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.admission"
 
     def test_over_bound_dimension_is_rejected_before_jacobi(self) -> None:
         basis = tuple(f"e{index}" for index in range(MAX_LIE_DIMENSION + 1))
@@ -273,8 +275,9 @@ class TestBracketAdmission:
             coordinates=(zero,) * len(basis),
         )
 
-        with pytest.raises(OperationResourceAdmissionError, match="dimension"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             lie_bracket(algebra, element, element)
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.dimension_bound"
 
     def test_over_bound_structure_table_is_rejected_before_jacobi(self) -> None:
         constant = StructureConstant.model_construct(
@@ -289,8 +292,11 @@ class TestBracketAdmission:
         )
         element = _element(("x", "y"), (1, 0))
 
-        with pytest.raises(OperationResourceAdmissionError, match="structure-constant"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             lie_bracket(algebra, element, element)
+        assert (
+            exc_info.value.errors()[0]["type"] == "lie_algebra.structure_constant_bound"
+        )
 
     def test_complete_ledger_keeps_every_nonzero_basis_pair(self) -> None:
         basis = tuple(f"e{index}" for index in range(7))

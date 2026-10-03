@@ -70,8 +70,9 @@ def test_noncoprime_framed_hecke_rejects_before_pari(
         pytest.fail("a noncoprime Hecke index must fail before PARI materialization")
 
     monkeypatch.setattr(basis, "_materialize_pari_basis", cannot_materialize)
-    with pytest.raises(OperationDomainValidationError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         basis.modular_form_hecke_matrix_in_frame(frame, 5)
+    assert exc_info.value.errors()[0]["type"] == "modular_form.hecke_matrix_not_coprime"
 
 
 def test_zero_dimensional_pari_basis_does_not_launch_backend(

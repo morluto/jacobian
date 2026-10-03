@@ -350,16 +350,17 @@ def test_frame_admission_validates_the_request_before_pari_materialization(
         labels=("g0", "g1", "g2"),
         entries=((_rat(0), _rat(0), _rat(0)),) * 3,
     )
-    with pytest.raises(OperationDomainValidationError, match="invertible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         basis.modular_form_coordinates_from_frame(
             ModularFormFramedCoordinates(
                 frame=singular,
                 coordinates=(_rat(1), _rat(0), _rat(0)),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_form.frame_singular"
     assert calls == []
 
-    with pytest.raises(OperationDomainValidationError, match="frame matrix"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         basis.modular_form_basis_frame(
             ModularFormBasisFrameRequest(
                 space=space,
@@ -369,6 +370,7 @@ def test_frame_admission_validates_the_request_before_pari_materialization(
                 entries=((_rat(1), _rat(0)), (_rat(0), _rat(1))),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_form.frame_shape"
     assert calls == []
 
     frame = basis.modular_form_basis_frame(

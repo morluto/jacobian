@@ -309,8 +309,9 @@ def test_deserialized_exact_result_rejects_zero_primary_multiplicity() -> None:
     payload = genuine.model_dump()
     assert payload["item_multiplicities"] is not None
     payload["item_multiplicities"][0]["multiplicity"] = 0
-    with pytest.raises(ValueError, match="primary item"):
+    with pytest.raises(ValueError) as exc_info:
         MinimumGeneralizedExactCoverResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "combinatorics.exact_cover_bound"
 
 
 def test_two_primary_min_degree_branching_is_admitted() -> None:
@@ -382,8 +383,11 @@ def test_exponential_near_universal_search_is_refused() -> None:
         secondary_items=("s",),
         rows=rows,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         minimum_generalized_exact_cover(instance)
+    assert (
+        exc_info.value.errors()[0]["type"] == "combinatorics.minimum_exact_cover_work"
+    )
 
 
 def test_unit_forcing_honors_an_expired_deadline() -> None:
@@ -525,8 +529,11 @@ def test_mandatory_secondary_with_covering_row_keeps_the_full_ceiling() -> None:
         secondary_items=("s",),
         rows=tuple(sorted(rows, key=lambda row: row.row_id)),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         minimum_generalized_exact_cover(instance)
+    assert (
+        exc_info.value.errors()[0]["type"] == "combinatorics.minimum_exact_cover_work"
+    )
 
 
 # ---------------------------------------------------------------------------

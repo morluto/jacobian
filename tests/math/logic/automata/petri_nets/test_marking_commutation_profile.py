@@ -118,12 +118,14 @@ def test_request_and_native_api_reject_invalid_transition_pairs() -> None:
         pre=(),
         post=(),
     )
-    with pytest.raises(ValidationError, match="distinct transitions"):
+    with pytest.raises(ValidationError) as exc_info:
         MarkingCommutationProfileRequest(
             net=net, marking=Marking(tokens=()), transitions=(0, 0)
         )
-    with pytest.raises(OperationDomainValidationError, match="distinct transitions"):
+    assert exc_info.value.errors()[0]["type"] == "petri_net.commutation_transition_pair"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         marking_commutation_profile(net, Marking(tokens=()), (1, 1))
+    assert exc_info.value.errors()[0]["type"] == "petri_net.commutation_transition_pair"
 
 
 def test_result_rejects_authored_flags_that_disagree_with_replays() -> None:
@@ -136,8 +138,9 @@ def test_result_rejects_authored_flags_that_disagree_with_replays() -> None:
     result = marking_commutation_profile(net, Marking(tokens=()), (0, 1))
     forged = result.model_dump(mode="json")
     forged["same_target"] = False
-    with pytest.raises(ValidationError, match="flags must agree"):
+    with pytest.raises(ValidationError) as exc_info:
         MarkingCommutationProfileResult.model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.commutation_profile_claim"
 
 
 def test_catalog_publishes_the_sequential_profile_separately_from_conflicts() -> None:
@@ -185,7 +188,9 @@ def test_output_is_admitted_before_two_replays_are_built() -> None:
         post=((0, 0),),
     )
     marking = Marking(tokens=(0,), net=net)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="serialized output bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         marking_commutation_profile(net, marking, (0, 1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "petri_net.commutation_profile_output_bound"
+    )

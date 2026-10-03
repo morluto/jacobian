@@ -204,7 +204,7 @@ class TestFaces:
         assert len(result.face_walks) == 4
 
     def test_native_kernel_validates_cross_field_inputs(self) -> None:
-        with pytest.raises(ValueError, match="vertex_count"):
+        with pytest.raises(ValueError) as exc_info:
             FiniteCombinatorialMap(
                 vertex_count=3,
                 darts=((0, 1, 1), (1, 0, 0)),
@@ -213,6 +213,9 @@ class TestFaces:
                     (1,),
                 ),
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "combinatorial_map.rotation_row_count"
+        )
 
     def test_face_result_rejects_malformed_retained_map(self) -> None:
         result = compute_faces(FacesRequest(map=_four_cycle()))

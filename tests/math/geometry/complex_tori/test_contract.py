@@ -92,21 +92,26 @@ def test_complex_torus_axis_must_have_even_rank() -> None:
 def test_complex_torus_axis_iterables_are_bounded_before_materialization() -> None:
     structure = _elliptic_torus().complex_structure
 
-    with pytest.raises(ValidationError, match="at most 128 axes"):
+    with pytest.raises(ValidationError) as exc_info:
         LatticeComplexStructure.model_validate(
             {
                 "coordinate_axis": repeat("e1"),
                 "complex_structure": structure,
             },
         )
+    assert exc_info.value.errors()[0]["type"] == "complex_torus.budget_exceeded"
 
-    with pytest.raises(ValidationError, match="NFC Unicode"):
+    with pytest.raises(ValidationError) as exc_info:
         LatticeComplexStructure.model_validate(
             {
                 "coordinate_axis": deque(("e\u0301", "x")),
                 "complex_structure": structure,
             },
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "complex_torus.noncanonical_coordinate_label"
+    )
 
 
 def test_neron_severi_schema_preserves_the_canonical_rational_domain_default() -> None:

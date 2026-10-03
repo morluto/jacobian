@@ -146,17 +146,19 @@ def test_empty_extension_field_matrices_retain_parent(rows: int, columns: int) -
 
 
 def test_empty_quadratic_matrix_requires_field_context() -> None:
-    with pytest.raises(ValidationError, match="explicit radicand"):
+    with pytest.raises(ValidationError) as exc_info:
         RealQuadraticMatrix(entries=())
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 def test_raw_matrix_admission_checks_explicit_empty_axes() -> None:
     from jacobian.math.matrices._operation_models import RationalMatrixRequest
 
-    with pytest.raises(ValidationError, match="dimensions are limited"):
+    with pytest.raises(ValidationError) as exc_info:
         RationalMatrixRequest.model_validate(
             {"matrix": {"row_count": 0, "column_count": 4096, "entries": []}}
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_empty_rank_wire_retains_large_axes() -> None:

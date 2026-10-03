@@ -89,8 +89,9 @@ def test_unsorted_input_is_canonical() -> None:
 
 def test_native_path_rejects_nonpositive_source_values() -> None:
     source = FiniteIntegerSet(elements=(-1, 1))
-    with pytest.raises(OperationDomainValidationError, match="positive integers"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         divisibility_poset(source)
+    assert exc_info.value.errors()[0]["type"] == "divisibility_poset.values_domain"
 
 
 def test_duplicate_rejected() -> None:
@@ -106,8 +107,9 @@ def test_operation_element_limit_is_not_request_structure() -> None:
         {"values": {"elements": elements}}
     )
 
-    with pytest.raises(OperationDomainValidationError, match="between 0 and"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_divisibility_poset(request)
+    assert exc_info.value.errors()[0]["type"] == "divisibility_poset.values_size"
 
 
 def test_exactly_max_elements() -> None:

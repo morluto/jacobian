@@ -82,8 +82,11 @@ def test_rejects_non_normalized_row() -> None:
         domain_sizes=(2,),
         table=(_q(1, 2), _q(1, 3)),
     )
-    with pytest.raises(OperationDomainValidationError, match="sum exactly"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_bayes_net(1, (), (2,), (bad,))
+    assert (
+        exc_info.value.errors()[0]["type"] == "graphical_model.cpt_row_not_normalized"
+    )
 
 
 def test_rejects_parent_mismatch_and_cycle() -> None:
@@ -94,10 +97,12 @@ def test_rejects_parent_mismatch_and_cycle() -> None:
         domain_sizes=(2, 2),
         table=(_q(1, 2), _q(1, 2)),
     )
-    with pytest.raises(OperationDomainValidationError, match="parent"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_bayes_net(2, ((0, 1),), (2, 2), (root, wrong))
-    with pytest.raises(OperationDomainValidationError, match="acyclic"):
+    assert exc_info.value.errors()[0]["type"] == "graphical_model.network_binding"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_bayes_net(2, ((0, 1), (1, 0)), (2, 2), _chain_tables())
+    assert exc_info.value.errors()[0]["type"] == "graphical_model.network_cycle"
 
 
 def test_construct_tool_native_request() -> None:

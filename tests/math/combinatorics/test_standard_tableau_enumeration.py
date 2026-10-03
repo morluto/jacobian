@@ -63,8 +63,6 @@ def test_known_shape_two_one_and_empty_shape() -> None:
 
 
 def test_complete_family_is_admitted_before_construction() -> None:
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="complete standard-tableau family exceeds the admitted count",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_standard_young_tableaux(IntegerPartition(parts=(5, 5, 5)))
+    assert exc_info.value.errors()[0]["type"] == "standard_tableaux.count_bound"

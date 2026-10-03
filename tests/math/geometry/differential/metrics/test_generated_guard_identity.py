@@ -47,8 +47,12 @@ def test_generated_determinant_matches_inherited_source_guard(
         components=(rational_function_from_sympy(1, axis),),
     )
     if offset == 2:
-        with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             covariant_derivative(metric, source)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "differential_geometry.covariant_derivative.locus"
+        )
         return
     result = covariant_derivative(metric, source)
     assert all(not component.numerator.terms for component in result.components)

@@ -95,8 +95,9 @@ def test_product_rejects_mismatched_source_axes() -> None:
     payload["right"] = RationalMatrix(entries=(), column_count=1).model_dump(
         mode="json"
     )
-    with pytest.raises(ValidationError, match="inner axes"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 @pytest.mark.parametrize(

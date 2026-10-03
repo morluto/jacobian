@@ -183,8 +183,12 @@ def test_inverse_trace_deserialization_rejects_missing_event() -> None:
     )
     payload = result.model_dump(mode="python")
     payload["reverse_insertion_events"] = payload["reverse_insertion_events"][:-1]
-    with pytest.raises(ValidationError, match="rsk_reverse_trace_positions"):
+    with pytest.raises(ValidationError) as exc_info:
         RSKWordInverseTraceResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_reverse_trace_positions"
+    )
 
 
 def test_inverse_trace_deserialization_rejects_impossible_corner() -> None:
@@ -193,8 +197,12 @@ def test_inverse_trace_deserialization_rejects_impossible_corner() -> None:
     )
     payload = result.model_dump(mode="python")
     payload["reverse_insertion_events"][0]["removed_column"] = 499
-    with pytest.raises(ValidationError, match="rsk_reverse_trace_cell"):
+    with pytest.raises(ValidationError) as exc_info:
         RSKWordInverseTraceResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_reverse_trace_cell"
+    )
 
 
 def test_inverse_trace_deserialization_rejects_unbound_emitted_rank() -> None:
@@ -204,5 +212,9 @@ def test_inverse_trace_deserialization_rejects_unbound_emitted_rank() -> None:
     payload = result.model_dump(mode="python")
     payload["reverse_insertion_events"][0]["removed_entry"] = 50
     payload["reverse_insertion_events"][0]["output_entry"] = 50
-    with pytest.raises(ValidationError, match="rsk_reverse_trace_ranks"):
+    with pytest.raises(ValidationError) as exc_info:
         RSKWordInverseTraceResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_reverse_trace_ranks"
+    )

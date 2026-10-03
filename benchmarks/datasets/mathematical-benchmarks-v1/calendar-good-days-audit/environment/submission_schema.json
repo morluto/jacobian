@@ -6,20 +6,71 @@
       "additionalProperties": false,
       "properties": {
         "count": {
+          "maximum": 92,
           "minimum": 0,
           "type": "integer"
         },
         "good_dates": {
           "items": {
             "additionalProperties": false,
+            "oneOf": [
+              {
+                "properties": {
+                  "concatenated": {
+                    "maximum": 331,
+                    "minimum": 31
+                  },
+                  "day": {
+                    "maximum": 31
+                  },
+                  "month": {
+                    "const": 3
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "concatenated": {
+                    "maximum": 430,
+                    "minimum": 41
+                  },
+                  "day": {
+                    "maximum": 30
+                  },
+                  "month": {
+                    "const": 4
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "concatenated": {
+                    "maximum": 531,
+                    "minimum": 51
+                  },
+                  "day": {
+                    "maximum": 31
+                  },
+                  "month": {
+                    "const": 5
+                  }
+                }
+              }
+            ],
             "properties": {
               "concatenated": {
                 "type": "integer"
               },
               "day": {
+                "minimum": 1,
                 "type": "integer"
               },
               "month": {
+                "enum": [
+                  3,
+                  4,
+                  5
+                ],
                 "type": "integer"
               }
             },
@@ -30,6 +81,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 92,
           "type": "array"
         }
       },

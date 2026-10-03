@@ -11,14 +11,19 @@
             "minItems": 2,
             "prefixItems": [
               {
+                "maximum": 15,
+                "minimum": 1,
                 "type": "integer"
               },
               {
+                "maximum": 15,
+                "minimum": 1,
                 "type": "integer"
               }
             ],
             "type": "array"
           },
+          "maxItems": 7,
           "type": "array"
         }
       },

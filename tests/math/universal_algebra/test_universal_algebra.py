@@ -337,6 +337,7 @@ class TestMagmaImplicationCountermodel:
                     target=MagmaEquation(left=term, right=term),
                 )
             )
+        # Term-evaluation work is charged before assignment expansion.
         assert (
             exc_info.value.errors()[0]["type"]
             == "universal_algebra.countermodel_work_bound"
@@ -494,6 +495,7 @@ class TestMagmaImplicationCountermodel:
         payload["target"]["algebra"] = empty
         with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(payload)
+        # Retained algebra must be a single-binary-operation magma.
         assert (
             exc_info.value.errors()[0]["type"]
             == "universal_algebra.countermodel_magma_signature"
@@ -853,8 +855,9 @@ class TestQuotient:
             algebra=constant_ternary_algebra(rejected_size),
             partition=tuple((index,) for index in range(rejected_size)),
         )
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_quotient(request)
+        # Quotient construction work budget.
         assert (
             exc_info.value.errors()[0]["type"]
             == "universal_algebra.quotient_work_bound"
@@ -944,14 +947,18 @@ class TestValidation:
         wrong_request = EvaluateRequest(
             algebra=_boolean_algebra(), term=wrong_arity, assignment=(0,)
         )
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_evaluate(wrong_request)
         assert exc_info.value.errors()[0]["type"] == "universal_algebra.term_signature"
         short_request = EvaluateRequest(
             algebra=_boolean_algebra(), term=_and_term(), assignment=(0,)
         )
-        with pytest.raises(ValueError, match="assignment"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_evaluate(short_request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.assignment_variable_axis"
+        )
 
     @pytest.mark.parametrize("partition", [((0,),), ((), (0, 1)), ((0, 1), (1,))])
     def test_partition_must_be_nonempty_disjoint_exact_cover(
@@ -973,8 +980,9 @@ class TestValidation:
             right=term,
             variable_count=7,
         )
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_equation_profile(request)
+        # Assignment work is charged after term-evaluation nodes.
         assert (
             exc_info.value.errors()[0]["type"]
             == "universal_algebra.equation_evaluation_work_bound"
@@ -1027,8 +1035,12 @@ def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> 
     algebra = _boolean_algebra()
     term = _variable_term(2)
     assert evaluate_term(algebra, term, {2: 1, 1: 0, 0: 0}) == 1
-    with pytest.raises(OperationDomainValidationError, match="variable axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_term(algebra, term, {2: 1, 3: 0, 4: 0})
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "universal_algebra.assignment_variable_axis"
+    )
 
 
 def test_native_implication_check_uses_mathematical_arguments() -> None:

@@ -1,10 +1,76 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result. The order must be one of the public input search_orders (1 or 2). For order n, table must have exactly n rows and n columns, and each table entry and each refuting_assignment coordinate x and y must be an integer from 0 through n-1. minimality_checked_orders must list exactly the public search_orders smaller than n, in their published order: [] for order 1 and [1] for order 2. These structural requirements do not establish the premise, target refutation, or minimality; the verifier checks those mathematical claims.",
     "schema_definitions": {},
     "schema_version": "1",
     "submission_path": "/app/submission.json",
     "submission_result": {
         "additionalProperties": false,
+        "oneOf": [
+            {
+                "properties": {
+                    "minimality_checked_orders": {
+                        "const": []
+                    },
+                    "order": {
+                        "const": 1
+                    },
+                    "refuting_assignment": {
+                        "properties": {
+                            "x": {
+                                "maximum": 0
+                            },
+                            "y": {
+                                "maximum": 0
+                            }
+                        }
+                    },
+                    "table": {
+                        "items": {
+                            "items": {
+                                "maximum": 0
+                            },
+                            "maxItems": 1,
+                            "minItems": 1
+                        },
+                        "maxItems": 1,
+                        "minItems": 1
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "minimality_checked_orders": {
+                        "const": [
+                            1
+                        ]
+                    },
+                    "order": {
+                        "const": 2
+                    },
+                    "refuting_assignment": {
+                        "properties": {
+                            "x": {
+                                "maximum": 1
+                            },
+                            "y": {
+                                "maximum": 1
+                            }
+                        }
+                    },
+                    "table": {
+                        "items": {
+                            "items": {
+                                "maximum": 1
+                            },
+                            "maxItems": 2,
+                            "minItems": 2
+                        },
+                        "maxItems": 2,
+                        "minItems": 2
+                    }
+                }
+            }
+        ],
         "properties": {
             "minimality_checked_orders": {
                 "items": {

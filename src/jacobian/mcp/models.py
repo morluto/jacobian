@@ -123,6 +123,13 @@ class OperationInvalidRequestData(StrictModel):
         min_length=1,
         max_length=64,
     )
+    omitted_error_count: Annotated[StrictInt, Field(ge=0)] | None = Field(
+        default=None,
+        description=(
+            "Number of available validation records omitted from errors. Zero means "
+            "no records were omitted; null or absent means completeness is unknown."
+        ),
+    )
     hint: str = (
         "Inspect the operation with math.find and correct the fields at the reported "
         "locations before retrying."
@@ -138,6 +145,13 @@ class OperationResourceAdmissionData(StrictModel):
     errors: tuple[OperationValidationIssue, ...] = Field(
         min_length=1,
         max_length=64,
+    )
+    omitted_error_count: Annotated[StrictInt, Field(ge=0)] | None = Field(
+        default=None,
+        description=(
+            "Number of available validation records omitted from errors. Zero means "
+            "no records were omitted; null or absent means completeness is unknown."
+        ),
     )
     hint: str = (
         "Reduce the mathematical workload, use an applicable exact operation or "

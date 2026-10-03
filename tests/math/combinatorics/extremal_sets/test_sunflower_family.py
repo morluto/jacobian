@@ -312,8 +312,12 @@ def test_large_core_allocation_is_checked_before_each_qualifying_row(
     )
     core = tuple(range(100_000))
     members = tuple((*core, 100_000 + index) for index in range(6))
-    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(_family(members, ground=100_006), 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.sunflower.result_allocation_bound"
+    )
     # The bound is consulted per qualifying row, so refusal precedes the last row.
     assert row_counts
     assert row_counts[-1] < 20

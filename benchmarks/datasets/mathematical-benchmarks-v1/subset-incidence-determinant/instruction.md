@@ -19,7 +19,7 @@ recomputes the parity formula.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+Choose an integer `sample_n` from 1 through 8. For that choice, `mask_order` contains every nonempty subset mask exactly once: it has `2^sample_n - 1` entries, each an integer from 1 through `2^sample_n - 1`. `diagonal_weights` has the same length, with each weight equal to -1 or 1. Any inclusion-linear mask order is permitted. The verifier checks the factorization, weights, parity trace, and general formulas mathematically. The trace contains exactly `trace_max_n` entries (8 in the public input), one for each n from 1 through `trace_max_n`, in any order.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

@@ -296,9 +296,48 @@ def product_residual_backend(
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
+def power_backend(
+    coefficients: tuple[Fraction, ...], exponent: int
+) -> tuple[list[Fraction], int]:
+    """Execute the admitted binary loop with exact FLINT polynomial products."""
+    try:
+        order = len(coefficients)
+        if exponent == 0:
+            request_checkpoint("during zero-exponent series construction")
+            return [Fraction(1), *([Fraction()] * (order - 1))], 0
+        from flint import fmpq_poly
+
+        base = _poly_from_series(_series_from_fractions(coefficients, order), order)
+        result = fmpq_poly([1])
+        count = 0
+        remaining = exponent
+        while remaining:
+            if remaining & 1:
+                request_checkpoint("before exact FLINT series power product")
+                result = (result * base).truncate(order)
+                count += 1
+            remaining >>= 1
+            if remaining:
+                request_checkpoint("before exact FLINT series power square")
+                base = (base * base).truncate(order)
+                count += 1
+        return _poly_coefficients(result, order), count
+    except (
+        OperationBackendError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
+        raise
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 __all__ = [
     "divide_backend",
     "inverse_backend",
+    "power_backend",
     "product_residual_backend",
     "reversion_backend",
 ]

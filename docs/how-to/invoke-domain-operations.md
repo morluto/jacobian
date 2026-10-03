@@ -73,10 +73,19 @@ host's request deadline must also cover the selected value.
 Graph optimization may return valid bounds or an incumbent from an incomplete
 search before the parent deadline. A worker failure or parent deadline expiry
 is an execution error, even when trivial bounds could be constructed afterward.
-A malformed payload or unknown operation ID is a
-tool error, not a mathematical result. A client timeout aborts transport and is
-also not a conclusion. Preserve the selected operation, exact payload or digest,
+A malformed `math.run` payload or unknown execution ID produces a tool error
+with MCP `isError: true`, not a mathematical result. A client timeout aborts transport
+and is also not a conclusion. Preserve the selected operation, exact payload or digest,
 and the concrete change in budget, backend, or representation before retrying.
+
+For an unknown ID, `math.find` inspection instead returns `kind: "error"` and
+`error.code: "UNKNOWN_OPERATION"` with MCP `isError: false`. Check the response's
+`kind` even when the MCP envelope reports success. `math.run` renders the same
+diagnostic as JSON in its tool-error text; both tools report
+`stage: "operation_resolution"` with the same message and recovery hint. Search
+again with `query`, inspect an installed operation's exact ID, then run it with
+the inspected payload. A successful `kind: "matches"` response with no matches is
+not an error and establishes no mathematical conclusion.
 
 ## Use the same contract from the CLI
 

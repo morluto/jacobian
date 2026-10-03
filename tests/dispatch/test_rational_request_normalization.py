@@ -82,10 +82,16 @@ def test_every_rational_argument_normalizes_at_dispatch(
             return False
 
         assert replace_first_ratio(tampered)
-        with pytest.raises(ValidationError, match="rational must be reduced"):
+        with pytest.raises(ValidationError) as exc_info:
             declaration.result_type.model_validate_json(
                 json.dumps(tampered), strict=True
             )
+        # The tampered ratio can sit behind container codecs, so the
+        # rational rejection is one of the reported errors, not always the first.
+        assert any(
+            error["type"] == "canonical_rational.noncanonical_representation"
+            for error in exc_info.value.errors()
+        )
     assert payload == unchanged
 
 
@@ -280,8 +286,9 @@ def test_request_preflight_and_dense_shapes_are_not_repaired() -> None:
 
 def test_downstream_dense_work_admission_is_not_widened() -> None:
     payload = {"matrix": {"entries": [[ratio("2", "4")] * 65]}}
-    with pytest.raises(OperationDomainValidationError, match="64"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation("matrix.rank.compute", payload, Catalog.open())
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_real_product_output_feeds_requests_without_translation() -> None:

@@ -128,7 +128,13 @@ def _composition_height_vector(
         *([None] * (order - 1)),
     )
     result: list[CoefficientHeight] = [None] * order
-    for outer_degree in range(order):
+    # The kernel stops at the highest nonzero outer coefficient. Powers
+    # beyond it are not executed and cannot belong to the growth envelope.
+    highest_outer = max(
+        (degree for degree, height in enumerate(outer) if height is not None),
+        default=-1,
+    )
+    for outer_degree in range(highest_outer + 1):
         coefficient = outer[outer_degree]
         if coefficient is not None:
             for degree, power in enumerate(powers):
@@ -137,7 +143,7 @@ def _composition_height_vector(
                         result[degree], coefficient.product(power)
                     )
             _require_height_vector(tuple(result), operation)
-        if outer_degree + 1 < order:
+        if outer_degree < highest_outer:
             powers = _convolve_height_vectors(powers, inner, order, operation)
     return tuple(result)
 
@@ -714,13 +720,18 @@ def admit_native_scalar_multiply(
 
 
 def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
-    _require_native_input_series(series)
+    from ._power_bounds import MAX_POWER_ORDER, power_envelope
+    from ._unit_bounds import require_series
+
+    require_series(series, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="power")
+    _require_native_input_series(series, maximum_order=MAX_POWER_ORDER)
     _require_native_scalar(exponent, "exponent")
     if not 0 <= exponent <= MAX_POWER_EXPONENT:
         raise _validation_error(
             "power_exponent", f"exponent must be between 0 and {MAX_POWER_EXPONENT}"
         )
     if exponent == 0:
+        power_envelope(series, exponent, 0, 0).checked()
         return
     denominator, coefficients = _cleared_series(series, "power")
     # Write f=A/D. The l1 norm is submultiplicative, even under
@@ -736,6 +747,7 @@ def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
         ),
         "power",
     )
+    power_envelope(series, exponent, norm_bits, denominator_bits).checked()
 
 
 def admit_native_inverse(series: TruncatedSeries) -> None:
@@ -800,6 +812,10 @@ def admit_native_divide(
 
 
 def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
+    from ._unit_bounds import require_series
+
+    require_series(outer, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
+    require_series(inner, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
     _require_native_pair(outer, inner)
     if inner.coefficients[0].as_fraction() != 0:
         raise _validation_error(
@@ -859,7 +875,15 @@ def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None
     )
 
 
-def admit_native_reversion(series: TruncatedSeries) -> None:
+def _admit_reversion_envelope(
+    series: TruncatedSeries,
+) -> tuple[tuple[CoefficientHeight, ...], int] | None:
+    """Admit a source and retain necessary Lagrange bounds for claim replay."""
+    from ._unit_bounds import require_series
+
+    require_series(
+        series, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="reversion"
+    )
     linear_source = _has_degree_at_most(series, 1)
     _require_native_input_series(
         series,
@@ -881,7 +905,7 @@ def admit_native_reversion(series: TruncatedSeries) -> None:
             "reversion requires nonzero linear coefficient",
         )
     if linear_source:
-        return
+        return None
     result_vector, common_denominator, common_numerator = (
         _reversion_lagrange_height_vector(series)
     )
@@ -909,6 +933,11 @@ def admit_native_reversion(series: TruncatedSeries) -> None:
             "reversion_backend_work",
             "reversion backend arithmetic exceeds the bounded work limit",
         )
+    return result_vector, common_denominator
+
+
+def admit_native_reversion(series: TruncatedSeries) -> None:
+    _admit_reversion_envelope(series)
 
 
 def admit_native_integral(series: TruncatedSeries, output_order: int) -> None:
@@ -1069,6 +1098,12 @@ class SeriesScalarMultiplyResult(StrictModel):
 
 
 class SeriesPowerRequest(StrictModel):
+    """Compute a nonnegative integer power through order 2048 when bounds fit.
+
+    Source components retain 256 digits and results 4096 digits. Full binary
+    products, limb-weighted work and retained coefficients are admitted first.
+    """
+
     series: TruncatedSeries
     exponent: StrictInt = Field(ge=0)
 

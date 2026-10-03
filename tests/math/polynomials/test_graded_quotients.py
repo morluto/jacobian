@@ -309,8 +309,12 @@ def test_hilbert_series_result_binds_ambient_denominator_to_source_ring() -> Non
     forged = result.model_dump()
     forged["ambient_denominator_exponent"] = 99
 
-    with pytest.raises(ValidationError, match="source-ring dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graded_ideal.ambient_denominator_exponent"
+    )
 
 
 @pytest.mark.parametrize(
@@ -453,12 +457,14 @@ def test_hilbert_polynomial_binds_source_ring_and_m_axis() -> None:
     )
     payload = result.model_dump()
     payload["initial_ideal"] = other.initial_ideal.model_dump()
-    with pytest.raises(ValidationError, match="source ring"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.source_ring"
     forged = result.model_dump()
     forged["polynomial"]["variables"] = ["t"]
-    with pytest.raises(ValidationError, match="m axis"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialResult.model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.polynomial_axis"
 
 
 def test_hilbert_polynomial_request_omits_series_prefix() -> None:
@@ -468,6 +474,7 @@ def test_hilbert_polynomial_request_omits_series_prefix() -> None:
         HilbertPolynomialRequest.model_validate(
             {"ideal": _ideal((2, 0)).model_dump(), "prefix_degree": 17}
         )
+    # Series prefixes are not part of the polynomial request.
     assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
     HilbertSeriesRequest.model_validate(
         {"ideal": _ideal((2, 0)).model_dump(), "prefix_degree": 16}
@@ -500,8 +507,9 @@ def test_hilbert_series_rejects_noncanonical_denominator_shape() -> None:
     payload["series"]["denominator"]["terms"] = [
         {"coefficient": {"num": 1, "den": 1}, "exponents": [degree]}
     ]
-    with pytest.raises(ValidationError, match="denominator"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_denominator_shape"
 
 
 def test_explicit_unit_generator_short_circuits_before_homogeneity() -> None:
@@ -633,8 +641,9 @@ def test_hilbert_projection_results_bind_the_source_ring(
     other = initial_monomial_ideal(_ideal((2, 0, 0)))
     payload = result.model_dump()
     payload["initial_ideal"] = other.initial_ideal.model_dump()
-    with pytest.raises(ValidationError, match="source ring"):
+    with pytest.raises(ValidationError) as exc_info:
         result_type.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.source_ring"
 
 
 @pytest.mark.parametrize(
@@ -704,8 +713,9 @@ def test_initial_ideal_result_rejects_multiterm_generators() -> None:
         {"coefficient": {"num": 1, "den": 1}, "exponents": [1, 0]},
         {"coefficient": {"num": 1, "den": 1}, "exponents": [0, 1]},
     ]
-    with pytest.raises(ValidationError, match="unit monomials"):
+    with pytest.raises(ValidationError) as exc_info:
         InitialMonomialIdealResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.unit_monomial_generators"
 
 
 def test_hilbert_results_bound_dimension_by_the_ambient_ring() -> None:
@@ -718,13 +728,17 @@ def test_hilbert_results_bound_dimension_by_the_ambient_ring() -> None:
         {"coefficient": {"num": 3, "den": 1}, "exponents": [1]},
         {"coefficient": {"num": -1, "den": 1}, "exponents": [0]},
     ]
-    with pytest.raises(ValidationError, match="source-ring dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_dimension_bound"
     polynomial = hilbert_polynomial(_ideal((2, 0)))
     poly_payload = polynomial.model_dump()
     poly_payload["dimension"] = 3
-    with pytest.raises(ValidationError, match="source-ring dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertPolynomialResult.model_validate(poly_payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graded_ideal.polynomial_dimension_bound"
+    )
 
 
 def test_catalog_examples_state_homogeneity_and_monomial_shape() -> None:
@@ -747,10 +761,9 @@ def test_standard_monomial_result_rejects_divisible_exponents() -> None:
     payload = standard_monomials(_ideal((2, 0)), 2).model_dump()
     payload["monomials"] = [(2, 0)]
     payload["count"] = 1
-    with pytest.raises(
-        ValidationError, match="divisible by an initial-ideal generator"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         StandardMonomialsResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.divisible_monomial"
 
 
 def test_hilbert_series_admits_after_source_leadings_reduce() -> None:
@@ -1061,8 +1074,9 @@ def test_series_rejects_common_t_minus_one_factor() -> None:
             {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
         ]
     }
-    with pytest.raises(ValidationError, match=r"t-1"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate_json(json.dumps(base))
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_reduced_numerator"
 
 
 def test_series_prefix_must_match_the_h_numerator() -> None:
@@ -1070,8 +1084,9 @@ def test_series_prefix_must_match_the_h_numerator() -> None:
     series = hilbert_series(_ideal((2, 0)), prefix_degree=3)
     payload = series.model_dump()
     payload["prefix"] = [value + 1 for value in payload["prefix"]]
-    with pytest.raises(ValidationError, match="prefix"):
+    with pytest.raises(ValidationError) as exc_info:
         HilbertSeriesResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graded_ideal.series_prefix"
 
 
 def test_series_rejects_fractional_h_numerator() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from benchmarks.tooling.heldout_observations import normalize_treatment_comparison_job
 from benchmarks.tooling.observation_comparison import compare_evidence, render_markdown
@@ -17,9 +18,7 @@ def test_paired_report_keeps_public_claim_boundary() -> None:
     assert report["status"] == "VALID"
     assert report["causal_claim_authorized"] is False
     assert report["metrics"]["correctness"]["paired_delta"] == 0.5
-    assert (
-        report["metrics"]["correctness"]["interpretation"] == "descriptive-small-sample"
-    )
+    assert report["metrics"]["correctness"]["interpretation"] == "descriptive-only"
     assert "does not itself authorize a causal" in render_markdown(report)
 
 
@@ -100,14 +99,14 @@ def test_comparison_rejects_same_condition_inputs() -> None:
 
 
 def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> None:
-    control = {
+    control: dict[str, Any] = {
         "artifacts": ["/logs/agent/trajectory.json"],
         "environment": {
             "extra_docker_compose": ["benchmarks/config/agent-eval-proxy.compose.yaml"]
         },
         "agents": [{"name": "codex"}],
     }
-    treatment = {
+    treatment: dict[str, Any] = {
         "artifacts": [
             "/logs/agent/trajectory.json",
             {"source": "/logs/jacobian/mcp.log", "service": "jacobian"},
@@ -150,7 +149,7 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
     ) != normalize_treatment_comparison_job(treatment)
     treatment["agents"][0].pop("skills")
 
-    heldout_treatment = {
+    heldout_treatment: dict[str, Any] = {
         "artifacts": ["/logs/agent/trajectory.json"],
         "environment": {
             "extra_docker_compose": [

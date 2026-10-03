@@ -256,10 +256,14 @@ def test_sample_count_uses_the_exact_integer_wire_contract() -> None:
     assert request.sample_count == 4
 
     for sample_count in ("0", "-1"):
-        with pytest.raises(ValueError, match="must be positive"):
+        with pytest.raises(ValidationError) as caught:
             BerryEsseenRequest.model_validate_json(
                 json.dumps({"distribution": distribution, "sample_count": sample_count})
             )
+        assert (
+            caught.value.errors()[0]["type"]
+            == "probability.berry_esseen.sample_count_positive"
+        )
 
 
 def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
@@ -427,8 +431,9 @@ def test_result_deserialization_rejects_a_noncanonical_mass() -> None:
         "den": 1,
     }
 
-    with pytest.raises(ValueError, match="nonnegative"):
+    with pytest.raises(ValidationError) as caught:
         BerryEsseenResult.model_validate(payload)
+    assert caught.value.errors()[0]["type"] == "probability.distribution.mass_negative"
 
 
 def test_result_requires_consecutive_dyadic_grid_endpoints() -> None:
@@ -438,8 +443,12 @@ def test_result_requires_consecutive_dyadic_grid_endpoints() -> None:
     payload["bound_lower"] = {"num": 0, "den": 1}
     payload["bound_upper"] = {"num": 1, "den": 1}
 
-    with pytest.raises(ValueError, match="consecutive"):
+    with pytest.raises(ValidationError) as caught:
         BerryEsseenResult.model_validate(payload)
+    assert (
+        caught.value.errors()[0]["type"]
+        == "probability.berry_esseen.bound_endpoints_consecutive"
+    )
 
 
 def test_result_requires_dyadic_singleton_or_consecutive_grid() -> None:

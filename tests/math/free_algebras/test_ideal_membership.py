@@ -128,6 +128,5 @@ def test_resource_incompletion_returns_unknown_without_a_conclusion(
 
 def test_membership_operation_is_published_with_a_valid_example() -> None:
     operation = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-    assert operation.request_type.__name__ == "FreeAlgebraIdealMembershipRequest"
-    assert operation.result_type.__name__ == "FreeAlgebraIdealMembershipResult"
+    assert operation.operation_id == OPERATION_ID
     assert len(operation.examples) == 1

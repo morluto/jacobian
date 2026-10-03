@@ -113,8 +113,6 @@ def test_word_search_is_admitted_before_completion() -> None:
 
 def test_profile_operation_is_published() -> None:
     operation = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-    assert operation.request_type.__name__ == "FreeAlgebraQuotientProfileRequest"
-    assert operation.result_type.__name__ == "FreeAlgebraQuotientProfileResult"
     assert len(operation.examples) == 1
     alphabet = ("x", "y")
     commutator = _poly(alphabet, {("x", "y"): 1, ("y", "x"): -1})

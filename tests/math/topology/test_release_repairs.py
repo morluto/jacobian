@@ -184,6 +184,7 @@ def test_triangulation_rejects_factorial_output_before_materialization() -> None
     cube = CubicalCell(intervals=tuple((0, 1) for _ in range(10)))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         triangulate(CubicalTriangulationRequest(cells=(cube,)))
+    # Factorial output is rejected before materialization.
     assert (
         exc_info.value.errors()[0]["type"]
         == "cubical_complex.triangulation_dimension_budget"

@@ -1,7 +1,6 @@
 """Quotient identities checked by independent sparse coefficient arithmetic."""
 
 from fractions import Fraction
-from random import Random
 from time import monotonic
 
 import pytest
@@ -144,15 +143,34 @@ def test_constants_and_empty_axes(axis: tuple[str, ...], constant: int) -> None:
     assert all(not c.numerator.terms for c in result.partial_derivatives)
 
 
-def test_seeded_small_rational_corpus_by_exact_quotient_identity() -> None:
+# Constructed rather than sampled. A uniform draw of (a, b, c, d) over [-3, 3]
+# reaches the axis-dropping and zero-denominator-constant shapes only by luck,
+# and each case costs two worker spawns, so the 20-sample loop spent about 9.7s
+# of the ordinary lane mostly waiting. These tuples name the structure each one
+# exercises: a generic case, each numerator term dropped in turn, a vanishing
+# denominator constant, a sign flip, and a symmetric case.
+_COEFFICIENTS = (
+    (2, 1, 3, 1),  # generic non-degenerate
+    (0, 1, 3, 1),  # numerator drops its quadratic term
+    (2, 0, 3, 1),  # numerator drops its linear term
+    (2, 1, 0, 1),  # numerator passes through the origin
+    (2, 1, 3, 0),  # denominator constant term vanishes
+    (-2, -1, -3, -1),  # uniform sign flip
+    (3, 3, 3, 3),  # symmetric coefficients
+    (3, -3, 3, -3),  # alternating extremes at the sampling boundary
+)
+
+
+@pytest.mark.parametrize("coefficients", _COEFFICIENTS)
+def test_constructed_rational_corpus_by_exact_quotient_identity(
+    coefficients: tuple[int, int, int, int],
+) -> None:
     x, y = symbols("x y")
-    rng = Random(2878)
-    for _ in range(20):
-        a, b, c, d = [rng.randrange(-3, 4) for _ in range(4)]
-        source = rational_function_from_sympy(
-            (a * x * x + b * y + c) / (x + y + d), ("x", "y")
-        )
-        _identity(source)
+    a, b, c, d = coefficients
+    source = rational_function_from_sympy(
+        (a * x * x + b * y + c) / (x + y + d), ("x", "y")
+    )
+    _identity(source)
 
 
 def test_cancellation_and_axis_permutation() -> None:

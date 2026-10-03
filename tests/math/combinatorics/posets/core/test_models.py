@@ -168,6 +168,7 @@ def test_consumers_reject_forged_noncanonical_carrier_order() -> None:
     assert verify_finite_poset(forged) is False
     with pytest.raises(OperationDomainValidationError) as exc_info:
         lower_closure(LowerClosureRequest.model_construct(poset=forged, subset=("b",)))
+    # Canonical carrier order must be sorted.
     assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
@@ -548,6 +549,7 @@ def test_consumers_reject_equality_forging_extremal_label_subclasses() -> None:
     assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
     with pytest.raises(OperationDomainValidationError) as exc_info:
         maximal_chains(forged)
+    # Noncanonical order/Hasse claims are rejected before enumeration.
     assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.source_claims"
 
 
@@ -566,6 +568,7 @@ def test_consumers_reject_finite_poset_subclasses_as_domain_errors() -> None:
     assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
     with pytest.raises(OperationDomainValidationError) as exc_info:
         maximal_chains(forged)
+    # Subclassed posets are not the canonical typed value.
     assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.request_type"
 
 

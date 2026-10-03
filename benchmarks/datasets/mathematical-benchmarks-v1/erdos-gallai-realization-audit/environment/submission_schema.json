@@ -4,6 +4,10 @@
       "additionalProperties": false,
       "properties": {
         "case_id": {
+          "enum": [
+            "constructive",
+            "obstruction"
+          ],
           "type": "string"
         },
         "edges": {
@@ -72,6 +76,38 @@
       "additionalProperties": false,
       "properties": {
         "cases": {
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "case_id": {
+                    "const": "constructive"
+                  }
+                },
+                "required": [
+                  "case_id"
+                ],
+                "type": "object"
+              },
+              "maxContains": 1,
+              "minContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "case_id": {
+                    "const": "obstruction"
+                  }
+                },
+                "required": [
+                  "case_id"
+                ],
+                "type": "object"
+              },
+              "maxContains": 1,
+              "minContains": 1
+            }
+          ],
           "items": {
             "$ref": "#/$defs/case"
           },

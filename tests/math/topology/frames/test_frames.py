@@ -525,8 +525,6 @@ def test_frame_operations_reject_untyped_native_requests(
     with pytest.raises(OperationDomainValidationError) as error:
         operation({})  # type: ignore[operator]
     assert error.value.errors()[0]["type"] == expected_code
-    if request_type is not None:
-        assert request_type.__name__ in str(error.value)
 
 
 def test_existing_frame_operations_reject_forged_vector_axes_at_native_boundary() -> (

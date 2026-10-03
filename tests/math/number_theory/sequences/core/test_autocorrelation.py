@@ -270,12 +270,20 @@ def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:
     result = sequence_order_shape(rational_sequence((1, 1, 3)))
     forged = result.model_dump()
     forged["log_concavity_rows"][0]["holds"] = True
-    with pytest.raises(ValueError, match="first log-concavity"):
+    with pytest.raises(ValidationError) as caught:
         SequenceOrderShapeResult.model_validate(forged)
+    assert (
+        caught.value.errors()[0]["type"]
+        == "sequences.order_shape.first_log_concavity_violation"
+    )
     forged_null = result.model_dump()
     forged_null["first_log_concavity_violation"] = None
-    with pytest.raises(ValueError, match="first log-concavity"):
+    with pytest.raises(ValidationError) as caught:
         SequenceOrderShapeResult.model_validate(forged_null)
+    assert (
+        caught.value.errors()[0]["type"]
+        == "sequences.order_shape.first_log_concavity_violation"
+    )
 
 
 def test_order_shape_rejects_contradictory_boolean_witnesses() -> None:
@@ -283,13 +291,21 @@ def test_order_shape_rejects_contradictory_boolean_witnesses() -> None:
     forged = result.model_dump()
     forged["is_nonnegative"] = True
     forged["first_negative_index"] = 0
-    with pytest.raises(ValueError, match="nonnegativity"):
+    with pytest.raises(ValidationError) as caught:
         SequenceOrderShapeResult.model_validate(forged)
+    assert (
+        caught.value.errors()[0]["type"]
+        == "sequences.order_shape.nonnegative_agreement"
+    )
     signed = sequence_order_shape(rational_sequence((-1, 0, -2)))
     forged_zero = signed.model_dump()
     forged_zero["has_internal_zero"] = False
-    with pytest.raises(ValueError, match="internal-zero"):
+    with pytest.raises(ValidationError) as caught:
         SequenceOrderShapeResult.model_validate(forged_zero)
+    assert (
+        caught.value.errors()[0]["type"]
+        == "sequences.order_shape.internal_zero_agreement"
+    )
 
 
 def test_order_shape_serialization_schema_omits_integer_wire_alternative() -> None:

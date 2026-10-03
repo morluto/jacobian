@@ -266,14 +266,12 @@ def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
 
 def test_mahler_measure_rejects_empty_native_coefficients() -> None:
     forged = IntegerPolynomial.model_construct(coefficients=())
-    with pytest.raises(
-        OperationDomainValidationError, match="at least one coefficient"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mahler_measure(forged)
-    with pytest.raises(
-        OperationDomainValidationError, match="at least one coefficient"
-    ):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_shape"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reciprocal_profile(forged)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_shape"
 
 
 def test_native_profiles_reject_forged_carriers_beyond_integer_envelope() -> None:
@@ -298,6 +296,7 @@ def test_reciprocal_profile_charges_endpoint_fields_in_output_admission() -> Non
     polynomial = IntegerPolynomial.model_construct(coefficients=(wide,) * 121)
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(polynomial)
+    # Serialized endpoint fields are charged against the exact output bound.
     assert (
         exc_info.value.errors()[0]["type"]
         == "polynomial.reciprocal_profile_result_digits"
@@ -306,8 +305,10 @@ def test_reciprocal_profile_charges_endpoint_fields_in_output_admission() -> Non
 
 def test_mahler_measure_rejects_leading_zero_native_coefficients() -> None:
     forged = IntegerPolynomial.model_construct(coefficients=(0, 1))
-    with pytest.raises(OperationDomainValidationError, match="leading zeros"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mahler_measure(forged)
+    # Leading zeros violate the canonical polynomial shape.
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_shape"
 
 
 def test_reciprocal_profile_preflights_duplicated_coefficient_output(
@@ -319,6 +320,7 @@ def test_reciprocal_profile_preflights_duplicated_coefficient_output(
     )
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
+    # Duplicated coefficient output is preflighted against the output bound.
     assert (
         exc_info.value.errors()[0]["type"]
         == "polynomial.reciprocal_profile_result_digits"
@@ -334,6 +336,7 @@ def test_reciprocal_profile_charges_serialized_endpoint_fields(
     )
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
+    # Serialized endpoint fields are charged against the exact output bound.
     assert (
         exc_info.value.errors()[0]["type"]
         == "polynomial.reciprocal_profile_result_digits"

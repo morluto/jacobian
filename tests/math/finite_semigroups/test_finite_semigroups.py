@@ -24,8 +24,6 @@ from jacobian.math.finite_semigroups._models import (
     PowerProfileResult,
     PrincipalIdealsRequest,
     PrincipalIdealsResult,
-    RegularElementsRequest,
-    RegularElementsResult,
 )
 from jacobian.math.finite_semigroups.operations import (
     element_power,
@@ -64,12 +62,6 @@ def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdeals
 
 def compute_green_relations(request: GreenRelationsRequest) -> GreenRelationsResult:
     return green_relations(request.semigroup)
-
-
-def compute_regular_elements(
-    request: RegularElementsRequest,
-) -> RegularElementsResult:
-    return regular_elements(request.semigroup)
 
 
 def compute_nilpotent_elements(

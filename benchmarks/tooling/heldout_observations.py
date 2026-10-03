@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -204,6 +205,45 @@ def _mark_invoked_if_operation_used(
     return True
 
 
+def _family_binding(
+    manifest: dict[str, Any],
+    manifest_digest: str,
+    plan: dict[str, Any],
+    ledger: dict[str, Any],
+    trials: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Project declared families only from the exact frozen manifest and stage."""
+    if any(item.get("manifest_digest") != manifest_digest for item in (plan, ledger)):
+        return None, ["held-out family manifest differs from the frozen plan or ledger"]
+    stage = manifest["experiment"]["stages"].get(plan.get("stage"))
+    if stage is None:
+        return None, ["held-out family binding requires a declared stage"]
+    expected = Counter(
+        (task, repetition)
+        for task in stage["task_ids"]
+        for repetition in range(stage["repetitions"])
+    )
+    observed = Counter((trial["task"], trial["repetition"]) for trial in trials)
+    if observed != expected:
+        return None, [
+            "held-out family binding requires exact stage task/repetition coverage"
+        ]
+    tasks = {task["id"]: task for task in manifest["tasks"]}
+    if any(trial["task_digest"] != tasks[trial["task"]]["digest"] for trial in trials):
+        return None, ["held-out family trial digest differs from the frozen manifest"]
+    return {
+        "manifest_digest": manifest_digest,
+        "tasks": [
+            {
+                "task": task,
+                "digest": tasks[task]["digest"],
+                "family": tasks[task]["family"],
+            }
+            for task in sorted(stage["task_ids"])
+        ],
+    }, []
+
+
 def collect_heldout_evidence(
     *,
     run_plan_path: Path,
@@ -290,8 +330,13 @@ def collect_heldout_evidence(
         None,
         len(selected),
     )
+    family_binding, family_failures = _family_binding(
+        manifest, _sha256(manifest_path), plan, ledger, trials
+    )
+    failures.extend(family_failures)
     evidence = {
-        "schema_version": "4",
+        "schema_version": "5",
+        "task_family_binding": family_binding,
         "evidence_class": "held-out-comparative-evaluation",
         "causal_claim_authorized": False,
         "status": "VALID" if not failures else "INCOMPLETE",

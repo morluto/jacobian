@@ -247,8 +247,10 @@ def test_diagonal_exposure_has_coordinate_kernel_and_independent_denominators() 
 
 
 def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:
-    with pytest.raises(ValidationError, match="symmetric"):
+    # Constraint matrices must be symmetric.
+    with pytest.raises(ValidationError) as exc_info:
         _system((_matrix([[0, 1], [0, 0]]),), (0,))
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_symmetry"
     with pytest.raises(OperationDomainValidationError):
         reduce_exposed_face(
             RationalSemidefiniteSystem(order=0, matrices=(), rhs=()), ()
@@ -259,7 +261,8 @@ def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:
 
 
 def test_raw_request_preflight_rejects_over_budget_cells() -> None:
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -270,11 +273,13 @@ def test_raw_request_preflight_rejects_over_budget_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 128,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_raw_request_preflight_rejects_oversized_scalar_lists() -> None:
     zero = {"num": "0", "den": "1"}
-    with pytest.raises(ValidationError, match=f"{_MAX_EQUALITIES}-item"):
+    # Equality-count envelope sized by the owning constant.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -285,6 +290,7 @@ def test_raw_request_preflight_rejects_oversized_scalar_lists() -> None:
                 "multipliers": [zero],
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_equality_envelope"
 
 
 def test_raw_request_preflight_scans_mapping_wrapped_system() -> None:
@@ -300,8 +306,10 @@ def test_raw_request_preflight_scans_mapping_wrapped_system() -> None:
             "multipliers": [{"num": "1", "den": "1"}] * 128,
         }
     )
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
     request = SemidefiniteFaceReductionRequest.model_validate(
         UserDict(
             {
@@ -326,7 +334,8 @@ def test_raw_request_preflight_scans_mapping_wrapped_system() -> None:
 
 def test_raw_request_preflight_counts_actual_nested_cells() -> None:
     row = [{"num": "0", "den": "1"}] * 128
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -337,6 +346,7 @@ def test_raw_request_preflight_counts_actual_nested_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 9,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_python_mode_generators_reduce_the_issue_fixture_face() -> None:
@@ -374,7 +384,8 @@ def test_python_mode_generators_reduce_the_issue_fixture_face() -> None:
 
 def test_raw_request_preflight_rejects_over_budget_generated_cells() -> None:
     row = [{"num": "0", "den": "1"}] * 128
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -385,10 +396,12 @@ def test_raw_request_preflight_rejects_over_budget_generated_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 9,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_raw_request_preflight_bounds_range_sequences() -> None:
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -399,7 +412,9 @@ def test_raw_request_preflight_bounds_range_sequences() -> None:
                 "multipliers": [{"num": "1", "den": "1"}],
             }
         )
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -410,11 +425,13 @@ def test_raw_request_preflight_bounds_range_sequences() -> None:
                 "multipliers": [{"num": "1", "den": "1"}],
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
     huge = {"num": "1" + "0" * 40_000, "den": "1"}
-    with pytest.raises(ValidationError, match="aggregate digit envelope"):
+    # Aggregate digit envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -427,7 +444,9 @@ def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
                 "multipliers": [{"num": "1", "den": "1"}],
             }
         )
-    with pytest.raises(ValidationError, match="aggregate digit envelope"):
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_digit_envelope"
+    # Aggregate digit envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -440,6 +459,7 @@ def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
                 "multipliers": (huge for _ in range(8192)),
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_digit_envelope"
 
 
 def test_raw_request_preflight_counts_generated_row_cells() -> None:
@@ -448,7 +468,8 @@ def test_raw_request_preflight_counts_generated_row_cells() -> None:
     def generated_row() -> object:
         return (zero for _ in range(8192))
 
-    with pytest.raises(ValidationError, match="dense cell envelope"):
+    # Dense cell envelope.
+    with pytest.raises(ValidationError) as exc_info:
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
@@ -462,6 +483,7 @@ def test_raw_request_preflight_counts_generated_row_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 16,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "semidefinite.face_cell_envelope"
 
 
 def test_inactive_constraint_denominators_are_charged_during_compression() -> None:
@@ -470,8 +492,9 @@ def test_inactive_constraint_denominators_are_charged_during_compression() -> No
         (_matrix([[1, 1], [1, 1]]), _matrix([[huge, 0], [0, 0]])),
         (0, 0),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reduce_exposed_face(system, (_q(1), _q(0)))
+    assert exc_info.value.errors()[0]["type"] == "matrix.face_reduction_budget"
 
 
 def test_inactive_rhs_heights_count_toward_output() -> None:
@@ -484,8 +507,9 @@ def test_inactive_rhs_heights_count_toward_output() -> None:
     system = RationalSemidefiniteSystem(
         order=2, matrices=matrices, rhs=tuple(_q(value) for value in rhs)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output digit"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reduce_exposed_face(system, (_q(1), *(_q(0) for _ in range(200))))
+    assert exc_info.value.errors()[0]["type"] == "matrix.face_reduction_budget"
 
 
 def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
@@ -497,7 +521,9 @@ def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
         ]
     )
     system = _system((_matrix([[0, 1], [1, 0]]), dense), (0, 0))
-    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reduce_exposed_face(system, (_q(1), _q(1)))
-    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+    assert exc_info.value.errors()[0]["type"] == "matrix.face_reduction_budget"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reduce_exposed_face(system, (_q(1), _q(0)))
+    assert exc_info.value.errors()[0]["type"] == "matrix.face_reduction_budget"

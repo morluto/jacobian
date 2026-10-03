@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).parents[2]
 
 
@@ -136,3 +138,30 @@ def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:
     assert harbor.count('exec 9>"$(HARBOR_ORACLE_LOCK)"; flock 9;') == 2
     assert "HARBOR_ORACLE_DOCKER_BUILD_MODE ?= auto" in harbor
     assert "export DOCKER_BUILDKIT=0 COMPOSE_BAKE=false" in harbor
+
+
+def test_oracle_guard_is_cancellable_without_weakening_required_validation() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+    )
+    oracle = workflow["jobs"]["oracle"]
+    assert set(oracle["needs"]) == {"plan", "static", "contracts"}
+    # Inspect the actual declarative guard, not a local scheduler simulation.
+    terms = {
+        term.strip()
+        for term in oracle["if"]
+        .strip()
+        .removeprefix("${{")
+        .removesuffix("}}")
+        .split("&&")
+    }
+    assert terms == {
+        "!cancelled()",
+        "needs.plan.result == 'success'",
+        "needs.static.result == 'success'",
+        "needs.contracts.result == 'success'",
+        "needs.plan.outputs.run-benchmark-oracle == 'true'",
+    }
+    validation = workflow["jobs"]["validation"]
+    assert validation["if"].strip() == "${{ always() }}"
+    assert "oracle" in validation["needs"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
@@ -32,6 +33,8 @@ def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -
         {"card_order": 1, "cards": [{"vertices": ["x"], "edges": []}]},
         catalog,
     )
-    validated = tool.result_type.model_validate(result.output)
+    validated = tool.result_type.model_validate_json(
+        encode_strict_json(result.output), strict=True
+    )
     assert validated.card_order == 1
     assert validated.classes[0].multiplicity == 1

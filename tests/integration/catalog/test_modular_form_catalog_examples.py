@@ -199,7 +199,12 @@ def test_u_prime_matches_independent_q_prefix_action_and_target_coordinates(
     applied = invoke_operation(
         tool.operation_id, request.model_dump(mode="json"), Catalog.open()
     )
-    assert tool.result_type.model_validate(applied.output).space == space
+    assert (
+        tool.result_type.model_validate_json(
+            encode_strict_json(applied.output), strict=True
+        ).space
+        == space
+    )
 
 
 def test_transport_catalog_operation_round_trips_target_coordinates() -> None:

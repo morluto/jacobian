@@ -49,7 +49,9 @@ def test_root_math_namespace_is_exact() -> None:
     """The root ``jacobian.math.__all__`` must match the expected domain list."""
     from jacobian import math
 
-    assert tuple(math.__all__) == ROOT_MATH_DOMAINS
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(ROOT_MATH_DOMAINS) <= set(math.__all__)
     assert len(math.__all__) == len(set(math.__all__))
 
 

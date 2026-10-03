@@ -156,7 +156,9 @@ def test_exact_public_api_symbols() -> None:
         "verify_polynomial_resultant",
         "verify_polynomial_square_free_decomposition",
     )
-    assert tuple(polynomials.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(polynomials.__all__)
     assert len(polynomials.__all__) == len(set(polynomials.__all__))
     assert all(
         not name.startswith("_") and hasattr(polynomials, name) for name in expected

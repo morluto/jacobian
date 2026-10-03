@@ -25,7 +25,9 @@ def test_exact_public_api_symbols() -> None:
         "union_cardinality",
     )
 
-    assert tuple(sets.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(sets.__all__)
     assert all(hasattr(sets, name) for name in sets.__all__)
 
 

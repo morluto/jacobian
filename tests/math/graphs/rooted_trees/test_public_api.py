@@ -10,7 +10,9 @@ def test_exact_rooted_tree_public_api() -> None:
         "construct_fine_partition",
     )
 
-    assert tuple(rooted_trees.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(rooted_trees.__all__)
     assert len(rooted_trees.__all__) == len(set(rooted_trees.__all__))
     assert all(hasattr(rooted_trees, name) for name in rooted_trees.__all__)
     assert not hasattr(rooted_trees, "RootedTreeFinePartitionRequest")

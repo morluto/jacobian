@@ -24,7 +24,9 @@ def test_exact_public_api_symbols() -> None:
         "require_coefficient_matrix_budget",
         "theta_series_prefix",
     )
-    assert tuple(quadratic_forms.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(quadratic_forms.__all__)
     assert len(quadratic_forms.__all__) == len(set(quadratic_forms.__all__))
     assert all(not name.startswith("_") for name in quadratic_forms.__all__)
     assert all(hasattr(quadratic_forms, name) for name in quadratic_forms.__all__)

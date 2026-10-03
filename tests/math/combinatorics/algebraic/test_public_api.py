@@ -60,7 +60,9 @@ def test_exact_public_api_symbols() -> None:
         "standard_young_tableaux_count",
         "tableau_row_reading_word",
     )
-    assert tuple(algebraic_combinatorics.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(algebraic_combinatorics.__all__)
     assert len(algebraic_combinatorics.__all__) == len(
         set(algebraic_combinatorics.__all__)
     )

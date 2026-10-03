@@ -104,17 +104,17 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
             found.append((node.name, node.lineno, "function", node))
         elif isinstance(node, ast.Assign):
             for target in node.targets:
-                if (
-                    isinstance(target, ast.Name)
-                    and target.id not in _PYTEST_MODULE_NAMES
-                ):
-                    found.append((target.id, node.lineno, "variable", node))
-        elif (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id not in _PYTEST_MODULE_NAMES
-        ):
-            found.append((node.target.id, node.lineno, "variable", node))
+                found.extend(
+                    (name, node.lineno, "variable", node)
+                    for name in _assignment_names(target)
+                    if name not in _PYTEST_MODULE_NAMES
+                )
+        elif isinstance(node, ast.AnnAssign):
+            found.extend(
+                (name, node.lineno, "variable", node)
+                for name in _assignment_names(node.target)
+                if name not in _PYTEST_MODULE_NAMES
+            )
     return found
 
 
@@ -139,6 +139,18 @@ def _definition_only_references(tree: ast.Module) -> set[str]:
     )
     _scan(tree, frozenset(), module_names, referenced, fixtures)
     return referenced
+
+
+def _assignment_names(target: ast.expr) -> frozenset[str]:
+    """Names bound by a simple or destructuring assignment target."""
+
+    if isinstance(target, ast.Name):
+        return frozenset({target.id})
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return frozenset().union(*(_assignment_names(item) for item in target.elts))
+    if isinstance(target, ast.Starred):
+        return _assignment_names(target.value)
+    return frozenset()
 
 
 def _pytest_string_references(tree: ast.Module) -> set[str]:
@@ -300,7 +312,7 @@ def _scan(
             continue
         if isinstance(child, _COMPREHENSIONS):
             # Comprehensions open their own scope from Python 3 onward.
-            inner = bound | _comprehension_targets(child)
+            inner = bound
             for generator in child.generators:
                 _scan(
                     generator.iter,
@@ -310,6 +322,7 @@ def _scan(
                     fixtures,
                     class_outer_bound,
                 )
+                inner = inner | _comprehension_target_names(generator.target)
                 _scan(
                     generator.ifs,
                     inner,
@@ -438,7 +451,7 @@ def _scope_bindings(node: ast.AST) -> frozenset[str]:
     """Names a function, class, or lambda binds directly, nested scopes aside."""
 
     names: set[str] = set()
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
         arguments = node.args
         for group in (arguments.posonlyargs, arguments.args, arguments.kwonlyargs):
             names.update(argument.arg for argument in group)
@@ -475,12 +488,11 @@ def _scope_bindings(node: ast.AST) -> frozenset[str]:
     return frozenset(names - declared_global)
 
 
-def _comprehension_targets(node: ast.AST) -> frozenset[str]:
+def _comprehension_target_names(target: ast.AST) -> frozenset[str]:
     return frozenset(
-        target.id
-        for generator in node.generators  # type: ignore[attr-defined]
-        for target in ast.walk(generator.target)
-        if isinstance(target, ast.Name)
+        child.id
+        for child in ast.walk(target)
+        if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store)
     )
 
 

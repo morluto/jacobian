@@ -157,6 +157,37 @@ def test_local_assignment_inside_statement_does_not_rescue_global_helper(
     assert "helper" in _reported(tmp_path, "test_local_shadow.py", body)
 
 
+def test_comprehension_iterator_loads_before_target_binding(tmp_path: Path) -> None:
+    body = """\
+    helper = [1]
+
+    def test_comprehension() -> None:
+        assert [helper for helper in helper] == [1]
+    """
+    assert _reported(tmp_path, "test_comprehension.py", body) == set()
+
+
+def test_lambda_parameter_shadows_module_helper(tmp_path: Path) -> None:
+    body = """\
+    helper = 1
+    callback = lambda helper: helper
+
+    def test_callback() -> None:
+        assert callback(2) == 2
+    """
+    assert "helper" in _reported(tmp_path, "test_lambda.py", body)
+
+
+def test_destructuring_assignments_are_checked_individually(tmp_path: Path) -> None:
+    body = """\
+    helper, used = (1, 2)
+
+    def test_used() -> None:
+        assert used == 2
+    """
+    assert _reported(tmp_path, "test_destructure.py", body) == {"helper"}
+
+
 def test_directly_parametrized_argument_does_not_rescue_fixture(
     tmp_path: Path,
 ) -> None:

@@ -16,6 +16,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     OperationResourceExhaustedError,
+    TimeoutOwner,
     current_request_execution,
     lease_operation_phases,
     report_request_progress,
@@ -90,9 +91,11 @@ def _chromatic_bipartition_timeout(
     request: ChromaticBipartitionRequest,
     *,
     operation_wall_owns_deadline: bool,
+    timeout_owner: TimeoutOwner,
 ) -> None:
     raise OperationExecutionTimeoutError(
         message,
+        timeout_owner=timeout_owner,
         configured_seconds=(
             request.resource_budget.wall_seconds
             if operation_wall_owns_deadline
@@ -104,6 +107,26 @@ def _chromatic_bipartition_timeout(
             else None
         ),
     )
+
+
+def _chromatic_bipartition_checkpoint(stage: str, timeout_owner: TimeoutOwner) -> None:
+    try:
+        request_checkpoint(stage)
+    except OperationExecutionTimeoutError as exc:
+        exc.timeout_owner = timeout_owner
+        raise
+
+
+def _apply_chromatic_timeout_context(
+    exc: OperationExecutionTimeoutError,
+    *,
+    timeout_owner: TimeoutOwner,
+    operation_wall_owns_deadline: bool,
+) -> None:
+    exc.timeout_owner = timeout_owner
+    if not operation_wall_owns_deadline:
+        exc.configured_seconds = None
+        exc.adjustable_field_path = None
 
 
 def find_chromatic_bipartition(
@@ -122,6 +145,12 @@ def find_chromatic_bipartition(
     )
     stdout_limit = _chromatic_bipartition_worker_stdout_limit(request)
     enclosing_deadline = execution.deadline
+    enclosing_timeout_owner = (
+        execution.timeout_owner
+        if execution.outer_deadline is not None
+        and enclosing_deadline == execution.outer_deadline
+        else TimeoutOwner.OPERATION_WALL
+    )
     requested_deadline = execution.started_at + request.resource_budget.wall_seconds
     source_wall_precedes_enclosing = (
         enclosing_deadline is None or requested_deadline < enclosing_deadline
@@ -133,9 +162,15 @@ def find_chromatic_bipartition(
             validation_work=len(request.graph.vertices) + len(request.graph.edges),
         )
     except OperationExecutionTimeoutError as exc:
-        if not source_wall_precedes_enclosing:
-            exc.configured_seconds = None
-            exc.adjustable_field_path = None
+        _apply_chromatic_timeout_context(
+            exc,
+            timeout_owner=(
+                TimeoutOwner.OPERATION_WALL
+                if source_wall_precedes_enclosing
+                else enclosing_timeout_owner
+            ),
+            operation_wall_owns_deadline=source_wall_precedes_enclosing,
+        )
         raise
     deadline = lease.operation_deadline
     # The parent retains the original request start and enclosing bounds.
@@ -143,6 +178,11 @@ def find_chromatic_bipartition(
     # that the source wall controls this request. Enclosing bounds win ties.
     operation_wall_owns_deadline = (
         source_wall_precedes_enclosing and deadline == requested_deadline
+    )
+    timeout_owner = (
+        TimeoutOwner.OPERATION_WALL
+        if operation_wall_owns_deadline
+        else enclosing_timeout_owner
     )
     try:
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
@@ -152,6 +192,7 @@ def find_chromatic_bipartition(
                     "chromatic bipartition deadline expired before the worker started",
                     request,
                     operation_wall_owns_deadline=operation_wall_owns_deadline,
+                    timeout_owner=timeout_owner,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_BIPARTITION_WORKER)],
@@ -174,6 +215,8 @@ def find_chromatic_bipartition(
                 ),
                 cwd=directory,
             )
+    except OperationExecutionTimeoutError:
+        raise
     except OSError as exc:
         raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     if completed.cancelled:
@@ -183,8 +226,11 @@ def find_chromatic_bipartition(
             "chromatic bipartition deadline expired during the worker",
             request,
             operation_wall_owns_deadline=operation_wall_owns_deadline,
+            timeout_owner=timeout_owner,
         )
-    request_checkpoint("after chromatic bipartition worker")
+    _chromatic_bipartition_checkpoint(
+        "after chromatic bipartition worker", timeout_owner
+    )
     if completed.stdout_exceeded or completed.stderr_exceeded:
         raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
     if completed.returncode != 0:
@@ -194,6 +240,7 @@ def find_chromatic_bipartition(
             "chromatic bipartition deadline expired after the worker returned",
             request,
             operation_wall_owns_deadline=operation_wall_owns_deadline,
+            timeout_owner=timeout_owner,
         )
     try:
         result = decode_checked_worker_output(
@@ -202,15 +249,19 @@ def find_chromatic_bipartition(
             checkpoint=lambda: require_execution_deadline(deadline),
         )
     except OperationExecutionTimeoutError as exc:
-        if not operation_wall_owns_deadline:
-            exc.configured_seconds = None
-            exc.adjustable_field_path = None
+        _apply_chromatic_timeout_context(
+            exc,
+            timeout_owner=timeout_owner,
+            operation_wall_owns_deadline=operation_wall_owns_deadline,
+        )
         raise
     except (TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     if result.graph != request.graph or result.s != request.s or result.t != request.t:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    request_checkpoint("after chromatic bipartition response validation")
+    _chromatic_bipartition_checkpoint(
+        "after chromatic bipartition response validation", timeout_owner
+    )
     report_request_progress(
         result.checked_partitions,
         total=total_partitions,

@@ -329,7 +329,7 @@ class TestMagmaImplicationCountermodel:
 
     def test_term_nodes_are_charged_before_assignment_expansion(self) -> None:
         term = _large_dense_axis_term()
-        with pytest.raises(OperationDomainValidationError, match="term-evaluation"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_implication_countermodel_check(
                 ImplicationCountermodelCheckRequest(
                     algebra=_cyclic_addition_algebra(4),
@@ -337,6 +337,11 @@ class TestMagmaImplicationCountermodel:
                     target=MagmaEquation(left=term, right=term),
                 )
             )
+        # Term-evaluation work is charged before assignment expansion.
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_work_bound"
+        )
 
     def test_sparse_variable_axis_is_preserved(self) -> None:
         term = _variable_term(7)
@@ -372,14 +377,17 @@ class TestMagmaImplicationCountermodel:
     def test_native_implication_check_rejects_malformed_arguments_typed(self) -> None:
         magma = _cyclic_addition_algebra(2)
         equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
-        with pytest.raises(OperationDomainValidationError, match="FiniteAlgebra"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             implication_countermodel_check(cast(FiniteAlgebra, None), (), equation)
-        with pytest.raises(OperationDomainValidationError, match="tuple"):
+        assert exc_info.value.errors()[0]["type"] == "universal_algebra.algebra_type"
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             implication_countermodel_check(
                 magma, cast(tuple[MagmaEquation, ...], [equation]), equation
             )
-        with pytest.raises(OperationDomainValidationError, match="MagmaEquation"):
+        assert exc_info.value.errors()[0]["type"] == "universal_algebra.premises_type"
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             implication_countermodel_check(magma, (), cast(MagmaEquation, None))
+        assert exc_info.value.errors()[0]["type"] == "universal_algebra.target_type"
 
     def test_result_rejects_terms_outside_retained_signature(self) -> None:
         magma = _cyclic_addition_algebra(2)
@@ -403,8 +411,12 @@ class TestMagmaImplicationCountermodel:
             ],
             "root": 2,
         }
-        with pytest.raises(ValidationError, match="retained magma"):
+        with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_result_term_signature"
+        )
 
     def test_result_rejects_counterassignment_off_declared_axis(self) -> None:
         magma = _cyclic_addition_algebra(2)
@@ -417,8 +429,12 @@ class TestMagmaImplicationCountermodel:
         )
         payload = result.model_dump(mode="json")
         payload["target"]["first_counterassignment"]["assignment"] = [0]
-        with pytest.raises(ValidationError, match="declared variable axis"):
+        with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_result_assignment_axis"
+        )
 
     def test_result_rejects_impossible_profile_counts_without_replay(self) -> None:
         magma = _cyclic_addition_algebra(2)
@@ -432,8 +448,12 @@ class TestMagmaImplicationCountermodel:
         )
         payload = result.model_dump(mode="json")
         payload["target"]["satisfying_count"] = 1
-        with pytest.raises(ValidationError, match="HOLDS must cover"):
+        with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_result_holds_count"
+        )
 
         failing = compute_implication_countermodel_check(
             ImplicationCountermodelCheckRequest(
@@ -444,13 +464,21 @@ class TestMagmaImplicationCountermodel:
         )
         failing_payload = failing.model_dump(mode="json")
         failing_payload["target"]["satisfying_count"] = 4
-        with pytest.raises(ValidationError, match="FAILS must leave"):
+        with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(failing_payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_result_fails_count"
+        )
 
         failing_payload = failing.model_dump(mode="json")
         failing_payload["target"]["first_counterassignment"]["right_value"] = 0
-        with pytest.raises(ValidationError, match="values must differ"):
+        with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(failing_payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_result_equal_values"
+        )
 
     def test_result_rejects_non_magma_retained_algebra(self) -> None:
         magma = _cyclic_addition_algebra(2)
@@ -465,8 +493,13 @@ class TestMagmaImplicationCountermodel:
         empty = {"carrier": ["0", "1"], "operations": [], "tables": []}
         payload["algebra"] = empty
         payload["target"]["algebra"] = empty
-        with pytest.raises(ValidationError, match="exactly one binary operation"):
+        with pytest.raises(ValidationError) as exc_info:
             ImplicationCountermodelCheckResult.model_validate(payload)
+        # Retained algebra must be a single-binary-operation magma.
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.countermodel_magma_signature"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -822,8 +855,13 @@ class TestQuotient:
             algebra=constant_ternary_algebra(rejected_size),
             partition=tuple((index,) for index in range(rejected_size)),
         )
-        with pytest.raises(ValueError, match="work"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_quotient(request)
+        # Quotient construction work budget.
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.quotient_work_bound"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -909,13 +947,18 @@ class TestValidation:
         wrong_request = EvaluateRequest(
             algebra=_boolean_algebra(), term=wrong_arity, assignment=(0,)
         )
-        with pytest.raises(ValueError, match="arity"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_evaluate(wrong_request)
+        assert exc_info.value.errors()[0]["type"] == "universal_algebra.term_signature"
         short_request = EvaluateRequest(
             algebra=_boolean_algebra(), term=_and_term(), assignment=(0,)
         )
-        with pytest.raises(ValueError, match="assignment"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_evaluate(short_request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.assignment_variable_axis"
+        )
 
     @pytest.mark.parametrize("partition", [((0,),), ((), (0, 1)), ((0, 1), (1,))])
     def test_partition_must_be_nonempty_disjoint_exact_cover(
@@ -937,8 +980,13 @@ class TestValidation:
             right=term,
             variable_count=7,
         )
-        with pytest.raises(ValueError, match="assignment work"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_equation_profile(request)
+        # Assignment work is charged after term-evaluation nodes.
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "universal_algebra.equation_evaluation_work_bound"
+        )
 
     def test_carrier_map_rejects_incomplete_or_wrong_signature_input(self) -> None:
         source = _boolean_algebra()
@@ -987,8 +1035,12 @@ def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> 
     algebra = _boolean_algebra()
     term = _variable_term(2)
     assert evaluate_term(algebra, term, {2: 1, 1: 0, 0: 0}) == 1
-    with pytest.raises(OperationDomainValidationError, match="variable axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_term(algebra, term, {2: 1, 3: 0, 4: 0})
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "universal_algebra.assignment_variable_axis"
+    )
 
 
 def test_native_implication_check_uses_mathematical_arguments() -> None:
@@ -1085,8 +1137,9 @@ def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication(
     magma = _cyclic_addition_algebra(2)
     premise = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
     oversized = (premise,) * 16 + (cast(MagmaEquation, None),)
-    with pytest.raises(OperationDomainValidationError, match="sixteen premises"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         implication_countermodel_check(magma, oversized, premise)
+    assert exc_info.value.errors()[0]["type"] == "universal_algebra.premise_count"
 
 
 def test_native_implication_check_preserves_sparse_variable_axis() -> None:

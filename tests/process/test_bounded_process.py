@@ -5,9 +5,11 @@ import json
 import math
 import os
 import shutil
+import signal
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Never
 
@@ -19,6 +21,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.process import (
+    BoundedProcessResult,
     ProcessPlatformTools,
     ProcessResourceLimits,
     bounded_process_cancellation,
@@ -94,8 +97,10 @@ def test_request_envelope_caps_worker_wall_time() -> None:
     assert time.monotonic() - started < 3
 
 
-def test_cancelled_request_envelope_does_not_launch_a_worker(
+@pytest.mark.parametrize("envelope_only", [False, True], ids=["legacy", "envelope"])
+def test_cancelled_request_does_not_launch_a_worker(
     monkeypatch: pytest.MonkeyPatch,
+    envelope_only: bool,
 ) -> None:
     def fail_to_launch(*_args: object, **_kwargs: object) -> Never:
         raise AssertionError("cancelled request must not launch a worker")
@@ -104,7 +109,12 @@ def test_cancelled_request_envelope_does_not_launch_a_worker(
     cancellation_event = threading.Event()
     cancellation_event.set()
 
-    with request_cancellation(cancellation_event):
+    cancellation_scope = (
+        request_execution(time.monotonic(), cancellation_signal=cancellation_event)
+        if envelope_only
+        else request_cancellation(cancellation_event)
+    )
+    with cancellation_scope:
         completed = run_bounded_process(
             [sys.executable, "-c", "raise SystemExit(0)"],
             input_bytes=b"input",
@@ -117,6 +127,129 @@ def test_cancelled_request_envelope_does_not_launch_a_worker(
     assert completed.cancelled
     assert not completed.timed_out
     assert completed.returncode is None
+    assert completed.stdout == completed.stderr == b""
+
+
+@pytest.mark.parametrize(
+    ("explicit", "legacy", "envelope", "cancelled"),
+    [
+        (None, None, None, False),
+        (None, None, False, False),
+        (None, False, True, False),
+        (None, True, False, True),
+        (False, None, True, False),
+        (False, True, True, False),
+        (True, False, False, True),
+    ],
+)
+def test_raw_worker_cancellation_signal_precedence(
+    explicit: bool | None,
+    legacy: bool | None,
+    envelope: bool | None,
+    cancelled: bool,
+) -> None:
+    class FalseyEvent(threading.Event):
+        def __bool__(self) -> bool:
+            return False
+
+    def event(value: bool | None) -> threading.Event | None:
+        if value is None:
+            return None
+        # The signal protocol requires only is_set(), not truthiness.
+        signal = FalseyEvent()
+        if value:
+            signal.set()
+        return signal
+
+    legacy_event = event(legacy)
+    with (
+        request_execution(time.monotonic(), cancellation_signal=event(envelope)),
+        request_cancellation(legacy_event)
+        if legacy_event is not None
+        else contextlib.nullcontext(),
+    ):
+        completed = run_bounded_process(
+            [sys.executable, "-c", "print('completed')"],
+            input_bytes=b"",
+            timeout_seconds=5,
+            environment=dict(os.environ),
+            stdout_limit=4096,
+            stderr_limit=4096,
+            cancellation_event=event(explicit),
+        )
+
+    assert completed.cancelled is cancelled
+    assert not completed.timed_out
+    assert completed.returncode == (None if cancelled else 0)
+    assert completed.stdout == (b"" if cancelled else b"completed\n")
+    assert completed.stderr == b""
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process-tree assertion is POSIX")
+def test_envelope_cancellation_stops_running_worker_and_descendant(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "ready.json"
+    script = (
+        "import json, os, pathlib, signal, sys, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "parent = os.getpid()\n"
+        "child = os.fork()\n"
+        "if child == 0:\n"
+        "    marker = pathlib.Path(sys.argv[1])\n"
+        "    temporary = marker.with_suffix('.tmp')\n"
+        "    temporary.write_text(json.dumps([parent, os.getpid()]))\n"
+        "    temporary.replace(marker)\n"
+        "time.sleep(30)\n"
+    )
+    cancellation = threading.Event()
+
+    def run_worker() -> BoundedProcessResult:
+        with request_execution(time.monotonic(), cancellation_signal=cancellation):
+            return run_bounded_process(
+                [sys.executable, "-c", script, str(marker)],
+                input_bytes=b"",
+                timeout_seconds=20,
+                environment=dict(os.environ),
+                stdout_limit=4096,
+                stderr_limit=4096,
+            )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(run_worker)
+        try:
+            ready_deadline = time.monotonic() + 5
+            while not marker.exists() and time.monotonic() < ready_deadline:
+                time.sleep(0.01)
+            assert marker.exists(), "worker descendant did not become ready"
+            pids = json.loads(marker.read_text())
+            for pid in pids:
+                os.kill(pid, 0)
+
+            cancellation.set()
+            # Both processes sleep for 30 seconds and the supervisor allows 20.
+            # Returning within 5 seconds proves cancellation, not natural exit.
+            completed = pending.result(timeout=5)
+            assert completed.cancelled
+            assert not completed.timed_out
+            assert completed.returncode == -signal.SIGKILL
+
+            reap_deadline = time.monotonic() + 5
+            remaining = set(pids)
+            while remaining and time.monotonic() < reap_deadline:
+                for pid in tuple(remaining):
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        remaining.remove(pid)
+                if remaining:
+                    time.sleep(0.01)
+            assert not remaining, f"cancelled process tree survived: {remaining}"
+        finally:
+            if marker.exists():
+                parent, _child = json.loads(marker.read_text())
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(parent, signal.SIGKILL)
 
 
 @pytest.mark.parametrize("timeout_seconds", [math.inf, math.nan])

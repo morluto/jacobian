@@ -3,6 +3,7 @@
 from collections.abc import Iterable, Mapping, Sequence
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -14,6 +15,17 @@ from jacobian.math.matrices.semidefinite.values import (
 
 _MAX_SOURCE_DIGITS = 8_000_000
 _MAX_EQUALITIES = 8192
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    """Reject an over-budget raw payload with a distinguishable owner code.
+
+    Preflight refusals all surface as pydantic's generic ``value_error``
+    otherwise, so a caller checking ``errors()[0]["type"]`` cannot tell the
+    cell envelope from the digit envelope.
+    """
+
+    return PydanticCustomError(code, message)
 
 
 def _raw_component_digits(component: object) -> int:
@@ -108,8 +120,9 @@ def _scan_and_install_scalars(
     if not isinstance(value, Iterable):
         return digits
     if isinstance(value, (list, tuple)) and len(value) > _MAX_EQUALITIES:
-        raise ValueError(
-            f"source equalities exceed the admitted {_MAX_EQUALITIES}-item envelope"
+        raise _validation_error(
+            "semidefinite.face_equality_envelope",
+            f"source equalities exceed the admitted {_MAX_EQUALITIES}-item envelope",
         )
     collected: list[object] = []
     extra = 0
@@ -120,12 +133,14 @@ def _scan_and_install_scalars(
         if extra > remaining or len(collected) > _MAX_EQUALITIES:
             if isinstance(value, (list, tuple)):
                 if len(collected) > _MAX_EQUALITIES:
-                    raise ValueError(
+                    raise _validation_error(
+                        "semidefinite.face_equality_envelope",
                         "source equalities exceed the admitted "
-                        f"{_MAX_EQUALITIES}-item envelope"
+                        f"{_MAX_EQUALITIES}-item envelope",
                     )
-                raise ValueError(
-                    "source rationals exceed the admitted aggregate digit envelope"
+                raise _validation_error(
+                    "semidefinite.face_digit_envelope",
+                    "source rationals exceed the admitted aggregate digit envelope",
                 )
             break
     if not isinstance(value, (list, tuple)):
@@ -183,8 +198,9 @@ def _preflight_raw_payload(
     order = system.get("order")
     if type(order) is int:
         if order < 0:
-            raise ValueError(
-                "source and reduced matrices exceed the dense cell envelope"
+            raise _validation_error(
+                "semidefinite.face_cell_envelope",
+                "source and reduced matrices exceed the dense cell envelope",
             )
         declared_matrices = (
             installed_matrices
@@ -211,11 +227,13 @@ class SemidefiniteFaceReductionRequest(StrictModel):
         if isinstance(data, Mapping):
             data, cells, declared, digits = _preflight_raw_payload(data)
             if cells > MAX_SEMIDEFINITE_CELLS or declared > MAX_SEMIDEFINITE_CELLS:
-                raise ValueError(
-                    "source and reduced matrices exceed the dense cell envelope"
+                raise _validation_error(
+                    "semidefinite.face_cell_envelope",
+                    "source and reduced matrices exceed the dense cell envelope",
                 )
             if digits > _MAX_SOURCE_DIGITS:
-                raise ValueError(
-                    "source rationals exceed the admitted aggregate digit envelope"
+                raise _validation_error(
+                    "semidefinite.face_digit_envelope",
+                    "source rationals exceed the admitted aggregate digit envelope",
                 )
         return canonicalize_json_containers(data)

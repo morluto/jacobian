@@ -120,6 +120,32 @@ def test_complete_plan_collects_exact_pairs_and_derives_heldout_report(
     assert report["evidence_class"] == "held-out-comparison"
     assert report["pair_count"] == 9
 
+    assert report["task_count"] == 3
+    selected_families = {
+        task["family"]
+        for task in value["tasks"]
+        if task["id"] in value["experiment"]["stages"]["pilot"]["task_ids"]
+    }
+    assert report["family_count"] == len(selected_families)
+    assert control["task_family_binding"]["manifest_digest"] == _digest(manifest_path)
+    assert report["metrics"]["correctness"]["interpretation"] == "descriptive-only"
+
+    # Even schema-valid family relabelling must not drift from the run's bytes.
+    value["tasks"][0]["family"] = "replacement-family"
+    _write(tmp_path, value)
+    changed, changed_failures = collect_heldout_evidence(
+        run_plan_path=plan_path,
+        manifest_path=manifest_path,
+        ledger_path=ledger_path,
+        condition="C1",
+    )
+    assert changed["status"] == "INCOMPLETE"
+    assert changed["task_family_binding"] is None
+    assert (
+        "held-out family manifest differs from the frozen plan or ledger"
+        in changed_failures
+    )
+
 
 def test_heldout_workflow_is_main_only_manifest_driven_and_sanitized() -> None:
     workflow = (ROOT / ".github/workflows/heldout-benchmarks.yml").read_text(

@@ -922,9 +922,10 @@ def run_bounded_process(
     *cwd* is an optional absolute working directory passed to the child; when
     ``None`` the child inherits the engine's cwd.  *platform_tools* carries
     bootstrap-resolved absolute helper paths (prlimit, taskkill); the engine
-    never discovers executables.  *cancellation_event* overrides the context-bound cancellation
-    event for explicit callers; when ``None`` the engine uses the
-    context-bound event set by :func:`bounded_process_cancellation`.
+    never discovers executables.  *cancellation_event* overrides the context-bound
+    cancellation event for explicit callers; when ``None`` the engine uses the
+    context-bound event set by :func:`bounded_process_cancellation`, falling back
+    to the request execution envelope's signal only when neither is supplied.
 
     Commands using ``sys.executable`` receive the loaded package's import root
     when *environment* does not explicitly supply ``PYTHONPATH``.
@@ -938,6 +939,11 @@ def run_bounded_process(
     if cancellation_event is None:
         cancellation_event = current_request_cancellation()
     execution = current_request_execution()
+    cancellation_event = (
+        execution.cancellation_signal
+        if cancellation_event is None and execution is not None
+        else cancellation_event
+    )
 
     # This envelope includes input spooling, process setup, execution, result
     # capture, and reaping.  Keep a finite portion for teardown so a timeout

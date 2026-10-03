@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "Choose an integer `sample_n` from 1 through 8. For that choice, `mask_order` contains every nonempty subset mask exactly once: it has `2^sample_n - 1` entries, each an integer from 1 through `2^sample_n - 1`. `diagonal_weights` has the same length, with each weight equal to -1 or 1. Any inclusion-linear mask order is permitted. The verifier checks the factorization, weights, parity trace, and general formulas mathematically. The trace contains exactly `trace_max_n` entries (8 in the public input), one for each n from 1 through `trace_max_n`, in any order.",
     "schema_definitions": {},
     "schema_version": "1",
     "submission_path": "/app/submission.json",
@@ -67,7 +67,9 @@
                 "uniqueItems": true
             },
             "sample_n": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
             },
             "trace": {
                 "items": {
@@ -95,7 +97,9 @@
                     ],
                     "type": "object"
                 },
-                "type": "array"
+                "type": "array",
+                "minItems": 8,
+                "maxItems": 8
             }
         },
         "required": [
@@ -106,7 +110,169 @@
             "general_even_count",
             "general_determinant"
         ],
-        "type": "object"
+        "type": "object",
+        "oneOf": [
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 1
+                    },
+                    "mask_order": {
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 1,
+                        "maxItems": 1
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 2
+                    },
+                    "mask_order": {
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 3
+                    },
+                    "mask_order": {
+                        "minItems": 7,
+                        "maxItems": 7,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 7
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 7,
+                        "maxItems": 7
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 4
+                    },
+                    "mask_order": {
+                        "minItems": 15,
+                        "maxItems": 15,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 15
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 15,
+                        "maxItems": 15
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 5
+                    },
+                    "mask_order": {
+                        "minItems": 31,
+                        "maxItems": 31,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 31
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 31,
+                        "maxItems": 31
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 6
+                    },
+                    "mask_order": {
+                        "minItems": 63,
+                        "maxItems": 63,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 63
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 63,
+                        "maxItems": 63
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 7
+                    },
+                    "mask_order": {
+                        "minItems": 127,
+                        "maxItems": 127,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 127
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 127,
+                        "maxItems": 127
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "sample_n": {
+                        "const": 8
+                    },
+                    "mask_order": {
+                        "minItems": 255,
+                        "maxItems": 255,
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 255
+                        }
+                    },
+                    "diagonal_weights": {
+                        "minItems": 255,
+                        "maxItems": 255
+                    }
+                }
+            }
+        ]
     },
     "task_id": "jacobian/subset-incidence-determinant"
 }

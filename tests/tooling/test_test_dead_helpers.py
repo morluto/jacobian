@@ -613,6 +613,64 @@ def test_autouse_fixture_is_referenced_implicitly(tmp_path: Path) -> None:
     assert _reported(tmp_path, "test_autouse.py", body) == set()
 
 
+def test_pytest_plugins_is_a_pytest_owned_module_declaration(tmp_path: Path) -> None:
+    body = """\
+    pytest_plugins = ("tests.plugin",)
+    """
+    assert _reported(tmp_path, "test_plugin.py", body) == set()
+
+
+def test_keyword_parametrize_argnames_do_not_request_fixtures(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def item():
+        return 1
+
+    @pytest.mark.parametrize(argnames="item", argvalues=[2])
+    def test_item(item):
+        assert item == 2
+    """
+    assert _reported(tmp_path, "test_keyword_parametrize.py", body) == {"item"}
+
+
+def test_class_parametrize_argnames_do_not_request_method_fixtures(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def item():
+        return 1
+
+    @pytest.mark.parametrize("item", [2])
+    class TestCase:
+        def test_item(self, item):
+            assert item == 2
+    """
+    assert _reported(tmp_path, "test_class_parametrize.py", body) == {"item"}
+
+
+def test_empty_class_loop_preserves_module_helper_fallback(tmp_path: Path) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class TestCase:
+        for _ in ():
+            helper = 2
+        value = helper()
+
+        def test_value(self):
+            assert self.value == 1
+    """
+    assert _reported(tmp_path, "test_class_loop_fallback.py", body) == set()
+
+
 def test_class_body_bindings_apply_in_execution_order(tmp_path: Path) -> None:
     body = """\
     def helper() -> int:

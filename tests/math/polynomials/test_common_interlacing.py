@@ -878,10 +878,12 @@ def test_active_worker_cancellation_is_preserved_as_execution_state() -> None:
         timer.cancel()
         timer.join()
 
-    # The wall-time bound is the evidence, not a stopwatch for its own sake: the
-    # expensive work runs in a killable worker subprocess, so a parent-side
-    # sentinel cannot observe it. Returning the typed admission error this far
-    # below the worker lease is what shows the guard ran before that work.
+    # The wall-time bound is the evidence, not a stopwatch for its own sake. The
+    # cancellation timer fires 0.1s in, so this is not an admission guard
+    # running before any work: it is the in-flight worker observing the signal
+    # and being torn down. Returning the typed cancellation error well inside the
+    # worker's own lease is what shows cancellation reached the running child
+    # promptly rather than being ignored until that child finished on its own.
     assert time.monotonic() - started < 5.0
 
 

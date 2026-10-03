@@ -554,10 +554,15 @@ def test_collision_group_growth_is_bounded_before_materialization() -> None:
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
-    # The wall-time bound is the evidence, not a stopwatch for its own sake: the
-    # expensive work runs in a killable worker subprocess, so a parent-side
-    # sentinel cannot observe it. Returning the typed admission error this far
-    # below the worker lease is what shows the guard ran before that work.
+    # The wall-time bound is the evidence, not a stopwatch for its own sake. The
+    # skipped work is internal to `rational_laurent_multiply`, which calls
+    # `_maximum_coefficient_digits` synchronously in this process, so there is no
+    # parent-side seam to hang a deterministic sentinel on. What the bound
+    # distinguishes is ordering: accumulating the collision group's reduced
+    # denominator across 64 pairwise-coprime 17,000-digit factors takes far
+    # longer than 2s, so returning the typed admission error inside it is what
+    # shows the running-denominator check refused before that accumulation
+    # rather than after it.
     assert time.monotonic() - started < 2.0
 
 

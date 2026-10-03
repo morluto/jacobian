@@ -217,7 +217,7 @@ def test_root_isolation_rejects_expanded_normalization_without_decimal_formattin
     """Clearing valid rational denominators must return the intended bound error."""
 
     base = 10 ** (MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS - 1)
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_root_isolation(
             _wire(
                 UnivariatePolynomialRequest,

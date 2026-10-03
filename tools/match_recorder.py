@@ -88,6 +88,11 @@ def merge_record(
     explicit member meaning "this execution raised no owner code" and must
     survive the merge: dropping it is what let a coded observation hide an
     earlier code-less one.
+
+    Observed ``match`` texts are unioned the same way. A parametrized site
+    asserting two different messages behind one owner code is guarded only by
+    its wording, so retaining the first message would let the rewriter delete
+    the sole distinction between those guards.
     """
 
     if previous is None:
@@ -99,7 +104,29 @@ def merge_record(
     merged = dict(previous)
     merged["codes"] = sorted(codes, key=lambda item: (item is not None, item or ""))
     merged["code"] = next(iter(codes)) if len(codes) == 1 else None
+    matches = _observed_matches(previous, record)
+    if matches:
+        merged["matches"] = matches
+        if previous.get("match") is not None:
+            merged["match"] = previous["match"]
     return merged
+
+
+def _observed_matches(
+    previous: dict[str, object], record: dict[str, object]
+) -> list[str]:
+    """Return every ``match`` text observed for one site, sorted and unique."""
+
+    seen = previous.get("matches")
+    matches: set[str] = (
+        {item for item in seen if isinstance(item, str) and item}
+        if isinstance(seen, list)
+        else set()
+    )
+    for source in (previous.get("match"), record.get("match")):
+        if isinstance(source, str) and source:
+            matches.add(source)
+    return sorted(matches)
 
 
 def _as_code(value: object) -> str | None:

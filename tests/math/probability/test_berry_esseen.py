@@ -204,15 +204,15 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
     )
 
     over_digits = "1" + "0" * 512
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as over_digit_error:
         BerryEsseenRequest.model_validate(
             {
                 "distribution": _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))),
                 "sample_count": int(over_digits),
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "exact_integer.digit_bound"
-    with pytest.raises(ValueError):
+    assert over_digit_error.value.errors()[0]["type"] == "exact_integer.digit_bound"
+    with pytest.raises(ValidationError):
         BerryEsseenRequest.model_validate_json(
             json.dumps(
                 {
@@ -225,7 +225,7 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
                 }
             )
         )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as nonpositive_error:
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(
                 distribution=distribution.distribution,
@@ -233,7 +233,7 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
             )
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        nonpositive_error.value.errors()[0]["type"]
         == "probability.berry_esseen.nonpositive_sample_count"
     )
 

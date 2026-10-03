@@ -88,18 +88,25 @@ def test_transport_cusp_form_into_ambient_space_preserves_the_form() -> None:
 
 def test_transport_rejects_non_nested_parent_requests() -> None:
     form = _coordinates(2, 4, "M", "gamma0-two-weight-2-4-monomials-v1", (0, 1))
-    with pytest.raises(OperationDomainValidationError, match="divide"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_space_inclusion(
             form.space, ModularFormSpace(level=3, weight=4, kind="M")
         )
-    with pytest.raises(OperationDomainValidationError, match="weights must agree"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.inclusion_inclusion_level"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_space_inclusion(
             form.space, ModularFormSpace(level=4, weight=6, kind="M")
         )
-    with pytest.raises(OperationDomainValidationError, match="does not embed"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.inclusion_inclusion_weight"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_space_inclusion(
             form.space, ModularFormSpace(level=4, weight=4, kind="S")
         )
+    assert exc_info.value.errors()[0]["type"] == "modular_form.inclusion_inclusion_kind"
 
 
 def test_transport_rejects_nontrivial_character_target() -> None:
@@ -121,8 +128,11 @@ def test_transport_rejects_nontrivial_character_target() -> None:
     )
     character = DirichletCharacter(group=group, coordinates=(1,))
     target = ModularFormSpace(level=4, weight=4, kind="M", character=character)
-    with pytest.raises(OperationDomainValidationError, match="trivial-character QQ"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_space_inclusion(source.space, target)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.inclusion_inclusion_parent"
+    )
 
 
 def test_transport_rejects_forged_inclusion_and_source_mismatch() -> None:
@@ -133,10 +143,17 @@ def test_transport_rejects_forged_inclusion_and_source_mismatch() -> None:
         source_space=ModularFormSpace(level=2, weight=4, kind="M"),
         target_space=ModularFormSpace(level=3, weight=4, kind="M"),
     )
-    with pytest.raises(OperationDomainValidationError, match="must divide"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_transport(source, forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.transport_inclusion_inclusion_level"
+    )
 
     other_source = ModularFormSpace(level=2, weight=4, kind="M")
     inclusion = modular_form_space_inclusion(other_source, target)
-    with pytest.raises(OperationDomainValidationError, match="must equal"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_transport(source, inclusion)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.transport_source_mismatch"
+    )

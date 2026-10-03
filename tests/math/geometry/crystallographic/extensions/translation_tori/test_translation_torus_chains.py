@@ -314,11 +314,15 @@ def test_torus_directions_must_generate_the_retained_unit_lattice(
             coordinate.update(
                 CanonicalRational.from_fraction(value).model_dump(mode=mode)
             )
-    with pytest.raises(ValidationError, match="translation_torus_directions"):
+    with pytest.raises(ValidationError) as exc_info:
         if wire:
             type(result).model_validate_json(json.dumps(payload))
         else:
             type(result).model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.translation_torus_directions"
+    )
 
 
 @pytest.mark.parametrize("wire", [False, True])

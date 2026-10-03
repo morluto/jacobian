@@ -84,8 +84,9 @@ def test_order_within_one_degree_sixteen_polynomial_uses_root_indices() -> None:
 
 
 def test_negative_leading_polynomials_are_rejected_structurally() -> None:
-    with pytest.raises(ValidationError, match="positive leading"):
+    with pytest.raises(ValidationError) as exc_info:
         _value(("-1", "0", "2"), 0)
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.leading_sign"
 
 
 def test_nonprimitive_real_root_claims_parse_without_gcd_proof(
@@ -103,10 +104,12 @@ def test_nonprimitive_real_root_claims_parse_without_gcd_proof(
 def test_nonprimitive_real_root_claims_are_rejected_by_consumers() -> None:
     candidate = _value(("2", "0", "-4"), 0)
 
-    with pytest.raises(OperationDomainValidationError, match="primitive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         require_primitive_real_algebraic_value(candidate)
-    with pytest.raises(OperationDomainValidationError, match="primitive"):
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.not_primitive"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         isolate_real_algebraic(candidate)
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.not_primitive"
 
 
 def test_nonprimitive_complex_root_claims_parse_without_gcd_proof(
@@ -129,13 +132,15 @@ def test_nonprimitive_complex_root_claims_are_rejected_by_explicit_checker() -> 
         polynomial=(2, 0, -2), root_index=0
     )
 
-    with pytest.raises(OperationDomainValidationError, match="primitive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         complex_algebraic.require_primitive_complex_algebraic_value(candidate)
+    assert exc_info.value.errors()[0]["type"] == "complex_algebraic.not_primitive"
 
 
 def test_value_rejects_a_nonreal_or_missing_root() -> None:
-    with pytest.raises(OperationDomainValidationError, match="existing real root"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         isolate_real_algebraic(_value(("1", "0", "1"), 0))
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.root_index"
     with real_algebraic_validation_error():
         _value(("1", "0", "-2"), 2)
 
@@ -163,11 +168,14 @@ def test_pairwise_comparison_retains_its_degree_eight_work_envelope() -> None:
 
     with pytest.raises(ValueError, match="degree at most 8"):
         compare_real_algebraic(degree_sixteen, _value(("1", "-1"), 0))
-    with pytest.raises(ValidationError, match="degree at most 8"):
+    with pytest.raises(ValidationError) as exc_info:
         AlgebraicCompareRequest(
             left=degree_sixteen,
             right=_value(("1", "-1"), 0),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_isolation.comparison_degree_bound"
+    )
 
 
 def test_comparison_preflights_raw_degree_before_algebraic_recognition() -> None:
@@ -184,8 +192,11 @@ def test_comparison_preflights_raw_degree_before_algebraic_recognition() -> None
     }
     profiler = cProfile.Profile()
 
-    with pytest.raises(ValidationError, match="degree at most 8"):
+    with pytest.raises(ValidationError) as exc_info:
         profiler.runcall(AlgebraicCompareRequest.model_validate, payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_isolation.comparison_degree_bound"
+    )
 
     assert (
         AlgebraicCompareRequest.model_json_schema()["properties"]["left"]["properties"][
@@ -205,8 +216,9 @@ def test_root_isolation_retains_its_degree_eight_work_envelope() -> None:
         {"num": 1 if index in {0, 9} else 0, "den": 1} for index in range(10)
     ]
 
-    with pytest.raises(ValidationError, match="degree at most 8"):
+    with pytest.raises(ValidationError) as exc_info:
         UnivariatePolynomialRequest.model_validate(_isolation_payload(coefficients))
+    assert exc_info.value.errors()[0]["type"] == "root_isolation.source_degree_bound"
 
 
 def _isolation_payload(coefficients: list[dict[str, int]]) -> dict[str, object]:

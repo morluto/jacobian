@@ -224,12 +224,13 @@ def test_overlapping_enclosed_segments_are_rejected() -> None:
         contribution_lower=_rational(1),
         contribution_upper=_rational(1),
     )
-    with pytest.raises(ValidationError, match="nonoverlapping"):
+    with pytest.raises(ValidationError) as exc_info:
         ArclengthEnclosed(
             lower=_rational(2),
             upper=_rational(2),
             segments=(segment, segment),
         )
+    assert exc_info.value.errors()[0]["type"] == "plane_curve.arclength.segment_overlap"
 
 
 def test_projective_left_tangency_off_the_face_is_empty() -> None:
@@ -300,12 +301,13 @@ def test_permuted_enclosed_segments_are_rejected() -> None:
         contribution_lower=_rational(1),
         contribution_upper=_rational(1),
     )
-    with pytest.raises(ValidationError, match="canonical order"):
+    with pytest.raises(ValidationError) as exc_info:
         ArclengthEnclosed(
             lower=_rational(2),
             upper=_rational(2),
             segments=(second, first),
         )
+    assert exc_info.value.errors()[0]["type"] == "plane_curve.arclength.segment_order"
 
 
 def test_degenerate_box_with_irrational_semiaxis_has_exact_zero_length() -> None:

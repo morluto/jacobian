@@ -563,8 +563,9 @@ def test_backend_failure_does_not_retry_or_construct_a_result(
 def test_expression_and_box_must_share_one_complete_named_axis(
     payload: dict[str, Any], message: str
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as exc_info:
         IntervalExpressionBoxEnclosureRequest.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "analysis.invariant"
 
 
 def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> None:
@@ -576,10 +577,11 @@ def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> 
             }
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="anonymous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         expression_enclosure(
             request.expression, request.argument, request.precision_bits
         )
+    assert exc_info.value.errors()[0]["type"] == "analysis.expression.named_variable"
 
 
 def test_box_interval_endpoints_are_ordered_and_bounded() -> None:

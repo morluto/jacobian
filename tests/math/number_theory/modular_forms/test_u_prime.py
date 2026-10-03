@@ -69,8 +69,9 @@ def test_u_prime_rejects_nondivisor_composite_and_character_parent() -> None:
         basis_id=_PARI_BASIS_ID,
         coordinates=(CanonicalRational(num=1, den=1),),
     )
-    with pytest.raises(OperationDomainValidationError, match="when p divides N"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         basis.modular_form_coordinates_u_prime(form, 2)
+    assert exc_info.value.errors()[0]["type"] == "modular_form.u_prime_level"
 
     level_four = ModularFormSpace(level=4, weight=4, kind="M")
     level_four_basis = basis.modular_form_basis_q_expansions(level_four, 2)
@@ -82,8 +83,9 @@ def test_u_prime_rejects_nondivisor_composite_and_character_parent() -> None:
             for i in range(len(level_four_basis.elements))
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match="requires a prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         basis.modular_form_coordinates_u_prime(composite_form, 4)
+    assert exc_info.value.errors()[0]["type"] == "modular_form.u_prime_not_prime"
 
     chi4 = dirichlet_character(character_group(4), (1,))
     character_space = ModularFormSpace(
@@ -94,8 +96,9 @@ def test_u_prime_rejects_nondivisor_composite_and_character_parent() -> None:
         basis_id="gamma0-four-chi4-weight-one-v1",
         coordinates=(CanonicalRational(num=1, den=1),),
     )
-    with pytest.raises(OperationDomainValidationError, match="trivial-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         basis.modular_form_coordinates_u_prime(character_form, 2)
+    assert exc_info.value.errors()[0]["type"] == "modular_form.u_prime_parent"
 
 
 def test_u_prime_zero_dimensional_cusp_edge_is_same_space() -> None:

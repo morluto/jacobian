@@ -315,8 +315,11 @@ def test_power_rejects_work_and_height_envelopes_separately() -> None:
     assert charged_products == MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS - 292
     assert convolution_peak(admitted, 12).maximum_probability.as_fraction() > 0
 
-    with pytest.raises(OperationDomainValidationError, match="product work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         convolution_peak(_three_point_lattice(121), 96)
+    assert (
+        exc_info.value.errors()[0]["type"] == "probability.convolution_power.work_bound"
+    )
 
     assert convolution_peak(_fair_bit(), 1_700).maximum_probability.as_fraction() > 0
     with pytest.raises(OperationDomainValidationError, match="digit result bound"):

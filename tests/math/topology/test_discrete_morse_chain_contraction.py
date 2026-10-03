@@ -59,13 +59,21 @@ def test_interval_returns_exact_inclusion_projection_and_chain_homotopy() -> Non
         {**payload["critical_cells_by_dimension"][0], "cells": (("x",),)},
         *payload["critical_cells_by_dimension"][1:],
     )
-    with pytest.raises(ValidationError, match="critical bases"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.discrete_morse.chain_contraction_critical_binding"
+    )
 
     payload = result.model_dump(mode="python")
     payload["pairs"] = ({**payload["pairs"][0], "face": ("x",)},)
-    with pytest.raises(ValidationError, match="matching pairs"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.discrete_morse.chain_contraction_matching_binding"
+    )
 
 
 def test_empty_matching_is_identity_and_filled_triangle_has_chain_homotopy() -> None:
@@ -138,8 +146,12 @@ def test_cyclic_matching_is_rejected_as_a_domain_error() -> None:
             (("c",), ("a", "c")),
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="closed V-path"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_chain_contraction(circle, cyclic)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.discrete_morse.matching_not_acyclic.cyclic_matching"
+    )
 
 
 def test_tool_catalog_entry_executes_the_same_chain_contraction() -> None:
@@ -174,8 +186,12 @@ def test_tool_request_candidate_bound_runs_before_complex_canonicalization(
         pytest.fail("complex canonicalization ran before candidate admission")
 
     monkeypatch.setattr(tools, "canonicalize", fail_on_canonicalize)
-    with pytest.raises(OperationResourceAdmissionError, match="512-candidate"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         tools._run_compute_chain_contraction(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.discrete_morse.contraction.face_candidates"
+    )
 
 
 def test_direct_model_construct_facet_shape_is_bounded_before_dump() -> None:

@@ -54,8 +54,12 @@ def test_result_preserves_source() -> None:
 
 
 def test_nonpositive_palette_is_rejected_before_division() -> None:
-    with pytest.raises(OperationDomainValidationError, match="positive palette"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         decide_equitable_k_coloring(_graph(["a"], []), 0)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.equitable_coloring_positive_palette"
+    )
 
 
 def test_large_palette_uses_the_direct_singleton_class_construction() -> None:
@@ -216,5 +220,8 @@ def test_one_edge_k1_is_decided_without_recursion() -> None:
 
 def test_search_depth_bound_rejects_before_backtracking() -> None:
     graph = _graph([f"{index:03d}" for index in range(257)], [["000", "001"]])
-    with pytest.raises(OperationDomainValidationError, match="search bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         decide_equitable_k_coloring(graph, 2)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.equitable_coloring_search_exceeded"
+    )

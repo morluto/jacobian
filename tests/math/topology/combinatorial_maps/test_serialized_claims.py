@@ -50,8 +50,11 @@ def test_map_laws_are_consumer_admission(
     payload["rotations"] = [[1], [0]]
     claim = FiniteCombinatorialMap.model_validate(payload)
     decoded = FiniteCombinatorialMap.model_validate_json(claim.model_dump_json())
-    with pytest.raises(OperationDomainValidationError, match="outgoing darts"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         consumer(decoded)
+    assert (
+        exc_info.value.errors()[0]["type"] == "combinatorial_map.foreign_rotation_dart"
+    )
 
 
 def test_map_relation_round_trips_and_forgeries() -> None:

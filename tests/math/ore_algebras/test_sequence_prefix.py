@@ -197,19 +197,21 @@ def test_work_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
         raise AssertionError("coefficient evaluation must follow admission")
 
     monkeypatch.setattr(operations, "_evaluate_rational_polynomial_at", fail)
-    with pytest.raises(OperationResourceAdmissionError, match="evaluation budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         shift_operator_apply_to_sequence_prefix(
             _operator(((0, _rf(((1, 1),))),)),
             0,
             FiniteRationalSequence(values=(1, 2)),
         )
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_prefix_work"
 
 
 def test_start_index_is_explicit_and_bounded() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="integer-index envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         shift_operator_apply_to_sequence_prefix(
             _operator(()), 100_001, FiniteRationalSequence(values=(1,))
         )
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_prefix_index"
 
 
 def test_prefix_edge_admits_last_stored_index() -> None:
@@ -228,9 +230,10 @@ def test_output_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
         raise AssertionError("coefficient evaluation must follow output admission")
 
     monkeypatch.setattr(operations, "_evaluate_rational_polynomial_at", fail)
-    with pytest.raises(OperationResourceAdmissionError, match="weight budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         shift_operator_apply_to_sequence_prefix(
             _operator(((0, _rf(((1, 0),))),)),
             0,
             FiniteRationalSequence(values=(1,)),
         )
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_prefix_output"

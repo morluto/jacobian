@@ -434,8 +434,12 @@ class TestSubsequentialRun:
         )
 
     def test_native_run_rejects_symbol_outside_alphabet(self) -> None:
-        with pytest.raises(ValueError, match="outside"):
+        with pytest.raises(ValueError) as exc_info:
             run_subsequential(_flip(), (2,))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "finite_state_transducer.word_symbol_out_of_range"
+        )
 
 
 class TestComposition:
@@ -672,12 +676,20 @@ class TestNativeTransformations:
         result = compute_trim(request)
         payload = result.model_dump(mode="json")
         payload["new_to_old"] = [1]
-        with pytest.raises(ValidationError, match="outside the source"):
+        with pytest.raises(ValidationError) as exc_info:
             TrimResult.model_validate(payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "finite_state_transducer.trim_new_to_old_out_of_range"
+        )
         payload = result.model_dump(mode="json")
         payload["old_to_new"] = [[0, 1]]
-        with pytest.raises(ValidationError, match="new-state range"):
+        with pytest.raises(ValidationError) as exc_info:
             TrimResult.model_validate(payload)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "finite_state_transducer.trim_new_ids_not_canonical"
+        )
 
     def test_trim_result_rejects_forged_alphabet_parent(self) -> None:
         source = _flip().model_copy(

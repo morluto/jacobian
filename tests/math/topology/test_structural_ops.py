@@ -251,11 +251,12 @@ class TestBarycentricSubdivision:
             )
         )
 
-        with pytest.raises(
-            OperationResourceAdmissionError,
-            match="more than 128 subdivision facets",
-        ):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             compute_barycentric_subdivision(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.require_barycentric_work_bounds_1"
+        )
 
     def test_subdivide_edge(self) -> None:
         result = compute_barycentric_subdivision(
@@ -533,15 +534,14 @@ class TestShellingCheck:
         assert result.is_shelling
 
     def test_invalid_order(self) -> None:
-        with pytest.raises(
-            OperationDomainValidationError, match="permutation of facet indices"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_shelling_check(
                 ShellingCheckRequest(complex=_complex(EDGE), facet_order=(1, 0))
             )
+        assert exc_info.value.errors()[0]["type"] == "topology.shelling_facet_order"
 
     def test_result_retains_shelling_branch_consistency(self) -> None:
-        with pytest.raises(ValidationError, match="cannot carry failure diagnostics"):
+        with pytest.raises(ValidationError) as exc_info:
             ShellingCheckResult(
                 complex=canonical_complex(
                     tuple(EDGE["vertices"]), tuple(tuple(f) for f in EDGE["facets"])
@@ -551,7 +551,11 @@ class TestShellingCheck:
                 failed_at=0,
                 failure_reason="unexpected",
             )
-        with pytest.raises(ValidationError, match="requires a valid position"):
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.require_structural_shelling_1"
+        )
+        with pytest.raises(ValidationError) as exc_info:
             ShellingCheckResult(
                 complex=canonical_complex(
                     tuple(EDGE["vertices"]), tuple(tuple(f) for f in EDGE["facets"])
@@ -559,6 +563,10 @@ class TestShellingCheck:
                 facet_order=(0,),
                 is_shelling=False,
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.require_structural_shelling_2"
+        )
 
 
 class TestElementaryCollapse:

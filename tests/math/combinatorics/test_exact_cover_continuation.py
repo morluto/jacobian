@@ -239,12 +239,13 @@ def test_combine_rejects_partial_child_coverage() -> None:
     ).children
     assert len(children) == 2
     partial = (find_generalized_exact_cover(instance, shard=children[0]),)
-    with pytest.raises(ValueError, match="disjoint"):
+    with pytest.raises(ValueError) as exc_info:
         combine_generalized_exact_cover_shard_results(
             GeneralizedExactCoverShardResultsCombineRequest(
                 instance=instance, parent_shard=root, child_results=partial
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "combinatorics.exact_cover_invariant"
 
 
 def test_shard_semantic_rejections_are_owner_typed() -> None:

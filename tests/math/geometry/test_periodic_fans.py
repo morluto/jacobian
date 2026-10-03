@@ -383,8 +383,12 @@ def test_convex_ccw_pentagon_cycle_passes_the_convexity_test() -> None:
 def test_unimodularity_claim_is_rejected_for_a_polygon_cell() -> None:
     payload = square_polygon_fan().model_dump()
     payload["unimodular_cells"] = (0,)
-    with pytest.raises(ValidationError, match="unimodularity claims"):
+    with pytest.raises(ValidationError) as exc_info:
         PeriodicFanPresentation.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.periodic_fan.unimodular_cell_not_simplex"
+    )
 
 
 def test_period_lattice_rank_deficient_is_rejected() -> None:

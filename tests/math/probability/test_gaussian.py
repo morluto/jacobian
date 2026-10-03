@@ -70,5 +70,9 @@ def test_expansion_bound_is_admitted_at_operation_time() -> None:
     request = CanonicalGaussianPolynomialMomentRequest(polynomial=polynomial, order=6)
 
     assert len(polynomial.terms) ** request.order > MAX_GAUSSIAN_EXPANSION_PATHS
-    with pytest.raises(OperationDomainValidationError, match="path expansion bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _operation().run(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.gaussian.expansion_path_bound"
+    )

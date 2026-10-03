@@ -199,5 +199,8 @@ def test_large_biconnected_block_rejected() -> None:
     graph = _graph(
         vertices, [(vertices[i], vertices[(i + 1) % 21], 1) for i in range(21)]
     )
-    with pytest.raises(OperationDomainValidationError, match="exhaustive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         signed_clique_weight_maximum(graph)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.signed_clique_weight.work_budget"
+    )

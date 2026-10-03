@@ -84,8 +84,11 @@ def test_rejects_illegal_edge_and_incomplete_untruncated_graph() -> None:
     )
     graph = reachability_graph(net, Marking(tokens=(1, 0)), max_states=4)
     incomplete = graph.model_copy(update={"edges": graph.edges[:-1]})
-    with pytest.raises(OperationDomainValidationError, match="every enabled successor"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reachability_terminal_scc_profile(incomplete)
+    assert (
+        exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.incomplete_graph"
+    )
 
     forged = graph.model_copy(
         update={
@@ -94,8 +97,9 @@ def test_rejects_illegal_edge_and_incomplete_untruncated_graph() -> None:
             )
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="exact firing"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reachability_terminal_scc_profile(forged)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.invalid_edge"
 
 
 def test_rejects_empty_source_graph_before_scc_construction() -> None:
@@ -113,8 +117,9 @@ def test_rejects_empty_source_graph_before_scc_construction() -> None:
         edges=(),
         truncated=False,
     )
-    with pytest.raises(OperationDomainValidationError, match="state/edge counts"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reachability_terminal_scc_profile(empty_graph)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.graph_shape"
 
 
 def test_rejects_forged_oversized_matrix_before_model_dump() -> None:
@@ -132,8 +137,9 @@ def test_rejects_forged_oversized_matrix_before_model_dump() -> None:
         edges=(),
         truncated=True,
     )
-    with pytest.raises(OperationDomainValidationError, match="arc matrices"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reachability_terminal_scc_profile(graph)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.net_shape"
 
 
 def test_work_bound_rejects_before_graph_dump(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -166,8 +172,9 @@ def test_work_bound_rejects_before_graph_dump(monkeypatch: pytest.MonkeyPatch) -
         pytest.fail("graph serialization ran before work admission")
 
     monkeypatch.setattr(ReachabilityResult, "model_dump", fail_on_dump)
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reachability_terminal_scc_profile(graph)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.work_bound"
 
 
 def test_ordering_work_is_included_at_the_exact_admission_boundary(
@@ -206,8 +213,9 @@ def test_ordering_work_is_included_at_the_exact_admission_boundary(
     monkeypatch.setattr(
         petri_operations, "MAX_TERMINAL_SCC_PROFILE_WORK", base_work + ordering_work - 1
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reachability_terminal_scc_profile(graph)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.work_bound"
 
 
 def test_charges_each_parent_markings_own_matrix_cells(
@@ -250,8 +258,9 @@ def test_charges_each_parent_markings_own_matrix_cells(
     monkeypatch.setattr(
         petri_operations, "_terminal_scc_graph_output_bound", fail_on_output_bound
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reachability_terminal_scc_profile(graph)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.work_bound"
 
 
 def test_preserves_domain_classification_for_malformed_graphs() -> None:

@@ -46,12 +46,14 @@ def test_scalar_envelope_agrees_for_native_and_json_components(sign: int) -> Non
         == accepted
     )
     native["objective"] = [{"num": sign * boundary, "den": 1}]
-    with pytest.raises(ValidationError, match="digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         StandardFormRationalLinearProgram.model_validate(native)
+    assert exc_info.value.errors()[0]["type"] == "linear_program.raw_input_bound"
     wire = accepted.model_dump(mode="json")
     wire["objective"] = [{"num": str(sign * boundary), "den": "1"}]
-    with pytest.raises(ValidationError, match="digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         StandardFormRationalLinearProgram.model_validate_json(json.dumps(wire))
+    assert exc_info.value.errors()[0]["type"] == "linear_program.raw_input_bound"
 
 
 def _dense_program(n: int, m: int) -> StandardFormRationalLinearProgram:

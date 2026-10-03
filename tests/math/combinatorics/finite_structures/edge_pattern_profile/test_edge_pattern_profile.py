@@ -159,5 +159,6 @@ def test_declaration_accepts_65_character_color_for_small_source() -> None:
 
 def test_native_rejects_unencodable_color() -> None:
     hg = _hg(["a"], [])
-    with pytest.raises(OperationDomainValidationError, match="valid UTF-8"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_edge_pattern_profile(hg, {"a": "\ud800"})
+    assert exc_info.value.errors()[0]["type"] == "edge_pattern.invalid_color_encoding"

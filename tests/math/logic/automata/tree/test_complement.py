@@ -101,8 +101,11 @@ def test_complement_rejects_incomplete_transition_tables() -> None:
         ),
         final_states=(0,),
     )
-    with pytest.raises(OperationDomainValidationError, match="complete deterministic"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         complement_tree_automaton(incomplete)  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"] == "tree_automata.complement_automaton_type"
+    )
 
 
 def test_complement_rejects_nondeterministic_transition_keys() -> None:
@@ -115,8 +118,11 @@ def test_complement_rejects_nondeterministic_transition_keys() -> None:
         ),
         final_states=(0,),
     )
-    with pytest.raises(OperationDomainValidationError, match="complete deterministic"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         complement_tree_automaton(nondeterministic)  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"] == "tree_automata.complement_automaton_type"
+    )
 
 
 def test_complement_admits_transition_product_before_expansion() -> None:
@@ -126,7 +132,11 @@ def test_complement_admits_transition_product_before_expansion() -> None:
         transitions=(),
         final_states=(),
     )
-    with pytest.raises(ValidationError, match="one transition for every symbol"):
+    with pytest.raises(ValidationError) as exc_info:
         CompleteDeterministicBottomUpTreeAutomaton.model_validate(
             high_arity.model_dump(), strict=True
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "tree_automata.transition_table_incomplete"
+    )

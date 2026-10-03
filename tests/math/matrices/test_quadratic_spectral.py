@@ -150,8 +150,11 @@ def test_spectral_admission_rejects_a_composite_radicand() -> None:
         ((_q(radicand=12), _q(radicand=12)), (_q(radicand=12), _q(radicand=12)))
     )
 
-    with pytest.raises(OperationDomainValidationError, match="square-free"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         symmetric_spectrum(matrix)
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.radicand_not_square_free"
+    )
 
 
 @pytest.mark.parametrize(
@@ -186,8 +189,9 @@ def test_empty_quadratic_shapes_are_rejected_after_shape_admission(
 ) -> None:
     with pytest.raises(ValueError, match="quadratic"):
         native(matrix)  # type: ignore[operator]
-    with pytest.raises(OperationDomainValidationError, match="quadratic"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         tool(request_type(matrix=matrix))  # type: ignore[operator]
+    assert exc_info.value.errors()[0]["type"] == "matrix.domain_invalid"
 
 
 def test_symmetric_spectrum_can_return_quartic_values() -> None:
@@ -569,14 +573,12 @@ def test_inertia_rejects_unbounded_denominator_clearing_before_kernel() -> None:
             for row in range(16)
         )
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="intermediate integer growth"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         inertia(source)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="intermediate integer growth"
-    ):
+    assert exc_info.value.errors()[0]["type"] == "matrix.inertia.growth_bound"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_inertia(RealQuadraticInertiaRequest(matrix=source))
+    assert exc_info.value.errors()[0]["type"] == "matrix.inertia.growth_bound"
     # The source is strictly diagonally dominant with positive diagonal, so
     # this is a true authored claim. Verification must preserve non-completion.
     claim = RealQuadraticInertia.model_validate_json(
@@ -590,10 +592,9 @@ def test_inertia_rejects_unbounded_denominator_clearing_before_kernel() -> None:
             }
         )
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="intermediate integer growth"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_inertia(claim)
+    assert exc_info.value.errors()[0]["type"] == "matrix.inertia.growth_bound"
 
 
 def test_inertia_accepts_dense_large_shared_denominators() -> None:

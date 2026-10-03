@@ -128,10 +128,14 @@ def test_piecewise_product_rejects_forged_compatible_claim():
     )
     valid = _function(complex_value, {(0,): 1})
 
-    with pytest.raises(OperationDomainValidationError, match="compatibility claims"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_multiply(
             PiecewisePolynomialMultiplicationRequest(left=forged, right=valid)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.multiplication_continuity"
+    )
 
 
 def test_piecewise_product_preflights_aggregate_convolution_work():
@@ -152,14 +156,16 @@ def test_piecewise_product_preflights_aggregate_convolution_work():
         status="COMPATIBLE",
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="aggregate piecewise"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         piecewise_polynomial_multiply(
             PiecewisePolynomialMultiplicationRequest(left=function, right=function)
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.multiplication_work"
 
 
 def test_native_multiplication_rejects_a_forged_request_with_a_typed_error():
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_multiply(
             PiecewisePolynomialMultiplicationRequest.model_construct()
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.multiplication_type"

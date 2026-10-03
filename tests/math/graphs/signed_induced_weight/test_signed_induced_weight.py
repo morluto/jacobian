@@ -7,7 +7,7 @@ from itertools import combinations
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization._models import (
     RationalWeightedEdge,
@@ -167,11 +167,11 @@ def test_connected_twenty_one_vertex_component_still_rejected() -> None:
         vertices,
         [(left, right, 1) for left, right in combinations(vertices, 2)],
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="support component exceeds",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         signed_induced_weight_extrema(g)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.signed_induced_weight.work_budget"
+    )
 
 
 def test_edgeless_twenty_one_vertex_graph_is_admitted() -> None:
@@ -298,11 +298,9 @@ def test_rejects_unrepresentable_rational_height_before_search() -> None:
         )
     graph = _graph(vertices, edges)
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=(
-            "common denominator.*"
-            rf"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit rational bound"
-        ),
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         signed_induced_weight_extrema(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.signed_induced_weight.rational_height_bound"
+    )

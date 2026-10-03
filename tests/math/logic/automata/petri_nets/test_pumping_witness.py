@@ -86,8 +86,11 @@ def test_pumping_replay_ledger_is_admitted_before_prefixes_exist() -> None:
     source = Marking(tokens=(0,), net=net)
     # Every retained prefix serializes the parent-bound source marking,
     # repeating the whole named net up to the 1024-entry admitted length.
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         check_pumping_witness(net, source, (0,) * 1024)
+    assert (
+        exc_info.value.errors()[0]["type"] == "petri_net.pumping_witness_output_bound"
+    )
     # A small ledger of the same named net stays exact.
     small = check_pumping_witness(net, source, (0,) * 10)
     assert small.status == "FIRES_WITHOUT_GROWTH"

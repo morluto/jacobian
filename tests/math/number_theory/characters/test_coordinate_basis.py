@@ -126,8 +126,12 @@ def test_transport_rejects_a_map_that_does_not_identify_canonical_units() -> Non
         update={"target_generator_images_in_source_coordinates": ((1, 0), (0, 1))}
     )
 
-    with pytest.raises(OperationDomainValidationError, match="same unit"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         change_dirichlet_character_coordinate_basis(request.character, invalid)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.coordinate_basis.isomorphism_image_mismatch"
+    )
 
 
 def test_transport_rejects_a_structurally_shaped_but_false_unit_decomposition() -> None:
@@ -139,18 +143,26 @@ def test_transport_rejects_a_structurally_shaped_but_false_unit_decomposition() 
         update={"target_group": bad_target}
     )
 
-    with pytest.raises(OperationDomainValidationError, match="reconstruct"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         change_dirichlet_character_coordinate_basis(request.character, invalid)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.group.coordinate_mismatch"
+    )
 
 
 def test_isomorphism_input_bounds_generator_image_rank() -> None:
     request = _request()
-    with pytest.raises(ValidationError, match="target-generator image"):
+    with pytest.raises(ValidationError) as exc_info:
         DirichletCharacterCoordinateIsomorphism(
             source_group=request.character.group,
             target_group=request.coordinate_isomorphism.target_group,
             target_generator_images_in_source_coordinates=((0,), (1,)),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.coordinate_basis.image_rank"
+    )
 
 
 def test_trivial_unit_group_transport_preserves_its_degenerate_table() -> None:
@@ -241,8 +253,11 @@ def test_group_admission_rejects_nonunit_order_one_generators() -> None:
         target_generator_images_in_source_coordinates=((0,),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="exact") as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         change_dirichlet_character_coordinate_basis(character, isomorphism)
+    assert (
+        error.value.errors()[0]["type"] == "dirichlet_character.group.generator_order"
+    )
     assert error.value.errors()[0]["type"] == (
         "dirichlet_character.group.generator_order"
     )
@@ -251,16 +266,21 @@ def test_group_admission_rejects_nonunit_order_one_generators() -> None:
 def test_native_transport_rejects_wrong_runtime_argument_types() -> None:
     request = _request()
 
-    with pytest.raises(OperationDomainValidationError, match="coordinate-basis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         change_dirichlet_character_coordinate_basis(
             request.character,
             object(),  # type: ignore[arg-type]
         )
-    with pytest.raises(OperationDomainValidationError, match="Dirichlet character"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.coordinate_basis.isomorphism_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         change_dirichlet_character_coordinate_basis(
             object(),  # type: ignore[arg-type]
             request.coordinate_isomorphism,
         )
+    assert exc_info.value.errors()[0]["type"] == "dirichlet_character.character_type"
 
 
 def test_native_transport_rejects_a_shape_bypassed_isomorphism() -> None:
@@ -269,8 +289,12 @@ def test_native_transport_rejects_a_shape_bypassed_isomorphism() -> None:
         update={"target_generator_images_in_source_coordinates": ()}
     )
 
-    with pytest.raises(OperationDomainValidationError, match="malformed") as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         change_dirichlet_character_coordinate_basis(request.character, invalid)
+    assert (
+        error.value.errors()[0]["type"]
+        == "dirichlet_character.coordinate_basis.isomorphism_invalid"
+    )
     assert error.value.errors()[0]["type"] == (
         "dirichlet_character.coordinate_basis.isomorphism_invalid"
     )

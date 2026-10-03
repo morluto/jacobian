@@ -184,10 +184,14 @@ def test_transport_rejects_order_three_generalized_coordinates() -> None:
         coordinates=(_element(1),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="order-six"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_transport(
             source_form, _inclusion(source_space, source_space)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_basis_unsupported_space"
+    )
 
 
 def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
@@ -381,12 +385,14 @@ def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
         basis_id=_GENERIC_BASIS,
         coordinates=(_element(10**41), _element(0), _element(0)),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="expansion or target solve exceeds"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         modular_character_coordinates_transport(
             oversized, _inclusion(source_39, target_space)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_transport_height_admission"
+    )
 
 
 def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
@@ -410,8 +416,12 @@ def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
             )
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="do not match"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_equal_in_common_space(right, forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_transport_claim_mismatch"
+    )
 
 
 def test_global_equality_requires_the_least_common_source_level() -> None:
@@ -429,8 +439,12 @@ def test_global_equality_requires_the_least_common_source_level() -> None:
         _level_13_form(source_13), _inclusion(source_13, source_13)
     )
 
-    with pytest.raises(OperationDomainValidationError, match="least common multiple"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_equal_in_common_space(first, first)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_equality_target_not_lcm"
+    )
     assert identity.target_form is None
     assert len(identity.target_q_expansion.coefficients) == 3
     assert modular_character_coordinates_equal_in_common_space(identity, identity).equal
@@ -462,10 +476,12 @@ def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
     wrong_character = dirichlet_character(character_group(26), (10,))
     wrong_character_space = _space(26, wrong_character)
     bad_map = _inclusion(source_space, wrong_character_space)
-    with pytest.raises(
-        OperationDomainValidationError, match="not the explicit inflation"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_transport(_level_13_form(source_space), bad_map)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_inflation_mismatch"
+    )
 
     larger_field = RationalCyclotomicField(order=12)
     mismatched_target = ModularFormSpace(
@@ -486,13 +502,13 @@ def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
             source=_FIELD, target=larger_field
         ),
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="explicit character-space inclusion is malformed",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_transport(
             _level_13_form(source_space), bad_field_map
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.character_inclusion_invalid"
+    )
 
 
 def test_transport_request_model_round_trip() -> None:
@@ -620,11 +636,12 @@ def test_transport_height_boundary_is_admitted_before_basis_materialization(
             basis_id=_LEGACY_BASIS,
             coordinates=(_element(coefficient),),
         )
-        with pytest.raises(
-            OperationResourceAdmissionError,
-            match="expansion or target solve exceeds",
-        ):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             modular_character_coordinates_transport(oversized, inclusion)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "modular_form.character_transport_height_admission"
+        )
 
 
 def test_transport_accepts_admitted_height_boundary_through_exact_expansion() -> None:

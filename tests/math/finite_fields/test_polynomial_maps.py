@@ -198,16 +198,28 @@ def test_slice_b_values_reject_wrong_parent_and_incomplete_table() -> None:
         (element(other, (0, 0)), element(other, (1, 0))),
     )
 
-    with pytest.raises(ValueError, match="one exact field presentation"):
+    with pytest.raises(ValueError) as exc_info:
         FinitePolynomialMap(
             domain=polynomial_map.domain,
             codomain=polynomial_map.codomain,
             polynomial=wrong_polynomial,
         )
-    with pytest.raises(ValueError, match="complete domain"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.finite_polynomial_map_one_exact_presentation"
+    )
+    with pytest.raises(ValueError) as exc_info:
         FiniteMapTable(map=polynomial_map, entries=table.entries[:-1])
-    with pytest.raises(ValueError, match="canonical domain order"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.finite_map_table_enumerate_complete_domain"
+    )
+    with pytest.raises(ValueError) as exc_info:
         FiniteMapTable(map=polynomial_map, entries=tuple(reversed(table.entries)))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.finite_map_table_inputs_canonical_domain_order"
+    )
 
 
 def test_fibers_and_collisions_preserve_the_table_defining_invariants() -> None:

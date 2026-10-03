@@ -144,11 +144,9 @@ def test_u_prime_rejects_order_three_character_before_using_order_six_envelope()
     space = _space(4, 26)
     form = _coordinates(space, 0)
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="coefficient envelope is established only for order-six",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_u_prime(form, 2)
+    assert exc_info.value.errors()[0]["type"] == "modular_form.character_u_prime_parent"
 
 
 def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> None:

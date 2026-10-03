@@ -84,10 +84,9 @@ def test_product_preserves_nullary_truth_values_and_empty_carriers() -> None:
 def test_product_rejects_signature_mismatch_and_overlarge_cartesian_table() -> None:
     left = _structure(2, [[0, 1]])
     mismatched = FiniteRelationalStructure(carrier_size=2)
-    with pytest.raises(
-        OperationDomainValidationError, match="identical ranked signatures"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         direct_product_structure(left, mismatched)
+    assert exc_info.value.errors()[0]["type"] == "relational.product.signature_mismatch"
 
     # Both operands fit their own 4,096-row contract and their Cartesian
     # carrier has exactly 64 labels. Their product relation has 4,096^2 rows,
@@ -98,5 +97,6 @@ def test_product_rejects_signature_mismatch_and_overlarge_cartesian_table() -> N
         carrier_size=8, signature=(four_place,), relation_tables=(rows,)
     )
     b = a
-    with pytest.raises(OperationResourceAdmissionError, match="product relation"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         direct_product_structure(a, b)
+    assert exc_info.value.errors()[0]["type"] == "relational.product.table_rows_bound"

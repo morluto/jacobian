@@ -228,16 +228,24 @@ class TestAdmissionBounds:
         big = 10**254 + 1
         points = tuple(_point(str(big + i), str(big + 2 * i)) for i in range(32))
         request = GeneralPositionRequest(points=points)
-        with pytest.raises(OperationDomainValidationError, match="work bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             general_position_search(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.general_position_search_n_points_max"
+        )
 
     def test_general_position_rejects_quartic_point_growth(self) -> None:
         """32 points x 32 digits pass n*digits=1024 but C(32,4)*digits^2 is
         about 36M; the combinatorial count must gate admission instead."""
         points = tuple(_point(str(10**31 + i), str(10**31 + 2 * i)) for i in range(32))
         request = GeneralPositionRequest(points=points)
-        with pytest.raises(OperationDomainValidationError, match="work bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             general_position_search(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.general_position_search_n_points_max"
+        )
 
     def test_general_position_accepts_moderate_configurations(self) -> None:
         """Shapes within the C(n,4)*digits^2 budget still run end to end."""
@@ -419,12 +427,16 @@ class TestSpannedCircleProfile:
             )
             for index in range(3)
         )
-        with pytest.raises(ValidationError, match="planar"):
+        with pytest.raises(ValidationError) as exc_info:
             SpannedCircleProfileResult(
                 configuration=PointConfiguration(points=points),
                 num_points=3,
                 circles=(),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.spanned_circle_requires_planar_points"
+        )
 
     def test_translated_parabola_is_admitted_like_the_origin_frame(self) -> None:
         points = tuple(
@@ -464,7 +476,7 @@ class TestSpannedCircleProfile:
             center=_point("2", "2"),
             radius_squared=CanonicalRational(num=8, den=1),
         )
-        with pytest.raises(ValidationError, match="source triples"):
+        with pytest.raises(ValidationError) as exc_info:
             SpannedCircleProfileResult(
                 configuration=_configuration(*points),
                 num_points=3,
@@ -473,6 +485,7 @@ class TestSpannedCircleProfile:
                     SpannedCircleEntry(circle=second, point_indices=(0, 1, 2)),
                 ),
             )
+        assert exc_info.value.errors()[0]["type"] == "geometry.spanned_circle_row_count"
 
     def test_result_rejects_circles_sharing_a_source_triple(self) -> None:
         points = (
@@ -489,7 +502,7 @@ class TestSpannedCircleProfile:
             center=_point("2", "2"),
             radius_squared=CanonicalRational(num=8, den=1),
         )
-        with pytest.raises(ValidationError, match="at most one spanned circle"):
+        with pytest.raises(ValidationError) as exc_info:
             SpannedCircleProfileResult(
                 configuration=_configuration(*points),
                 num_points=4,
@@ -498,6 +511,10 @@ class TestSpannedCircleProfile:
                     SpannedCircleEntry(circle=second, point_indices=(0, 1, 2)),
                 ),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.spanned_circle_shared_triple"
+        )
 
     def test_result_rejects_nonplanar_source_points(self) -> None:
         zero = CanonicalRational(num=0, den=1)
@@ -509,12 +526,16 @@ class TestSpannedCircleProfile:
                 LabelledRationalPoint(label="c", coordinates=(zero, one, zero)),
             )
         )
-        with pytest.raises(ValidationError, match="planar"):
+        with pytest.raises(ValidationError) as exc_info:
             SpannedCircleProfileResult(
                 configuration=configuration,
                 num_points=3,
                 circles=(),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.spanned_circle_requires_planar_points"
+        )
 
     def test_translated_back_output_counts_numerator_and_denominator(self) -> None:
         origin_num = 10**30_000 + 17
@@ -581,10 +602,14 @@ class TestSpannedCircleProfile:
             RationalPoint2D(x=CanonicalRational(num=6 * 10**32767 + 1, den=1), y=shift),
             RationalPoint2D(x=shift, y=CanonicalRational(num=6 * 10**32767 + 1, den=1)),
         )
-        with pytest.raises(OperationResourceAdmissionError, match="translated-back"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             spanned_circle_profile(
                 SpannedCircleProfileRequest(configuration=_configuration(*points))
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "geometry.spanned_circle_result_digit_bound"
+        )
 
     def test_translated_coordinate_error_uses_request_path(self) -> None:
         points = (

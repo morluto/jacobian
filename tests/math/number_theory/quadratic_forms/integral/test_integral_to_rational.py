@@ -96,8 +96,9 @@ def test_inclusion_result_is_bound_to_source_and_native_input_is_revalidated() -
         diagonal_coefficients=(0,) * 129,
         cross_terms=(),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="128 labels"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         integral_form_to_rational(oversized)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.integral.axis_bound"
 
 
 @pytest.mark.parametrize(

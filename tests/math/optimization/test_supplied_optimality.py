@@ -311,8 +311,12 @@ def test_gap_admission_accounts_for_all_primal_and_dual_products(shared: bool) -
     if shared:
         assert not check_linear_optimality(candidate).is_optimal
     else:
-        with pytest.raises(OperationResourceAdmissionError, match="rational digits"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             check_linear_optimality(candidate)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "optimization.linear.optimality_check_bound"
+        )
 
 
 def test_forged_dual_multiplier_fails_stationarity_from_definition() -> None:

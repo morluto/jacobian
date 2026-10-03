@@ -302,7 +302,8 @@ def test_structure_constants_reject_non_prime_field() -> None:
         field_order=4,
         multiplication=(((0,),),),
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="field_order must be prime"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         center_basis(algebra)
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_dim_algebra.field_order_not_prime"
+    )

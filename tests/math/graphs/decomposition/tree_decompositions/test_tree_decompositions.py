@@ -156,14 +156,20 @@ class TestVertexOccurrences:
                 (oversized_vertices[255], oversized_vertices[256]),
             ),
         )
-        with pytest.raises(ValidationError, match="at most 256 source vertices"):
+        with pytest.raises(ValidationError) as exc_info:
             VertexOccurrencesRequest(decomposition=oversized)
-        with pytest.raises(
-            OperationDomainValidationError, match="at most 256 source vertices"
-        ):
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.tree_decomposition.vertex_occurrences.vertex_bound"
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_vertex_occurrences(
                 VertexOccurrencesRequest.model_construct(decomposition=oversized)
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.tree_decomposition.vertex_occurrences.vertex_bound"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -254,8 +260,12 @@ class TestRestrict:
             decomposition=_path_decomposition(),
             subset=("a", "missing"),
         )
-        with pytest.raises(OperationDomainValidationError, match="declared source"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_restrict(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.subset_must_contain_only_declared_source_vertice"
+        )
 
     def test_prunes_against_the_contracted_tree(self) -> None:
         decomposition = TreeDecomposition(

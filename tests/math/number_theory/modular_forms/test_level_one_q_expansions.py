@@ -137,16 +137,26 @@ def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() ->
 
 def test_requests_above_the_coefficient_digit_bound_name_the_quantity() -> None:
     request = LevelOneNamedQExpansionRequest(form="E6", truncation_order=3000)
-    with pytest.raises(OperationDomainValidationError, match="coefficient-digit bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         level_one_named_q_expansion(request.form, request.truncation_order)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.coefficient_digit_bound_exceeded"
+    )
 
 
 def test_delta_above_the_work_budget_names_the_controlling_quantity() -> None:
     request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=1800)
-    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         level_one_named_q_expansion(request.form, request.truncation_order)
-    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.exact_work_bound_exceeded"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         require_level_one_admission("DELTA", 1800)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.exact_work_bound_exceeded"
+    )
 
 
 def test_delta_backend_does_not_read_or_mutate_global_series_precision() -> None:
@@ -168,10 +178,18 @@ def test_wire_request_rejects_boolean_truncation_orders() -> None:
 
 
 def test_native_admission_rejects_boolean_truncation_orders() -> None:
-    with pytest.raises(OperationDomainValidationError, match="plain integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         require_level_one_admission("DELTA", True)
-    with pytest.raises(OperationDomainValidationError, match="plain integer"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.truncation_order_must_be_integer"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         level_one_named_q_expansion("E4", True)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.truncation_order_must_be_integer"
+    )
 
 
 @pytest.mark.parametrize("form", ["E5", "delta", "e4", "SIGMA", ""])
@@ -182,16 +200,12 @@ def test_native_admission_rejects_unknown_forms_before_any_scan(
         raise AssertionError("an unknown form must never reach a divisor scan")
 
     monkeypatch.setattr(level_one_kernel, "divisor_power_sum", fail)
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="form must be one of 'E4', 'E6', or 'DELTA'",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         level_one_named_q_expansion(cast(NamedLevelOneModularForm, form), 8)
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="form must be one of 'E4', 'E6', or 'DELTA'",
-    ):
+    assert exc_info.value.errors()[0]["type"] == "modular_form.form_out_of_range"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         require_level_one_admission(cast(NamedLevelOneModularForm, form), 8)
+    assert exc_info.value.errors()[0]["type"] == "modular_form.form_out_of_range"
 
 
 @pytest.mark.parametrize("form", ["E4", "E6", "DELTA"])

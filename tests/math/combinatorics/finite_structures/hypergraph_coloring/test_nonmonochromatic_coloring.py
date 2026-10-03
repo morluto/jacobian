@@ -241,8 +241,11 @@ def test_large_carrier_with_cheap_search_is_admitted() -> None:
 def test_palette_must_be_positive_in_request_and_operation() -> None:
     h = _hg(["a"], [])
 
-    with pytest.raises(OperationDomainValidationError, match="palette_size"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         decide_nonmonochromatic_coloring(h, 0)
+    assert (
+        exc_info.value.errors()[0]["type"] == "hypergraph_coloring.palette_out_of_range"
+    )
     with pytest.raises(ValidationError):
         NonmonochromaticColoringRequest(hypergraph=h, palette_size=0)
 

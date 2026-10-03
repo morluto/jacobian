@@ -114,8 +114,9 @@ def test_field_mismatch_and_zero_coefficient_are_rejected() -> None:
             CanonicalRational(num=0, den=1) for _ in range(field.degree)
         ),
     )
-    with pytest.raises(ValidationError, match="zero terms must be omitted"):
+    with pytest.raises(ValidationError) as exc_info:
         CyclotomicPolynomialTerm(coefficient=coefficient, exponents=(0,))
+    assert exc_info.value.errors()[0]["type"] == "polynomial.cyclotomic.zero_term"
     nonzero = RationalCyclotomicElement(
         field=field,
         coefficients_ascending=(
@@ -123,14 +124,15 @@ def test_field_mismatch_and_zero_coefficient_are_rejected() -> None:
             *(CanonicalRational(num=0, den=1) for _ in range(field.degree - 1)),
         ),
     )
-    with pytest.raises(
-        ValidationError, match="every coefficient must use the polynomial field"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         CyclotomicPolynomial(
             field=RationalCyclotomicField(order=1),
             variables=("x",),
             terms=(CyclotomicPolynomialTerm(coefficient=nonzero, exponents=(0,)),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.cyclotomic.coefficient_parent"
+    )
 
 
 def test_public_manifest_declares_composable_typed_coefficient_map() -> None:
@@ -177,8 +179,9 @@ def test_embedding_admits_coordinate_growth_before_expansion() -> None:
         ),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="coordinates"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         embed_rational_polynomial(source, field)
+    assert exc_info.value.errors()[0]["type"] == "coordinate_bound"
 
 
 def test_raw_nested_parent_coordinates_are_admitted_before_model_construction() -> None:
@@ -196,8 +199,11 @@ def test_raw_nested_parent_coordinates_are_admitted_before_model_construction() 
         ]
         * 253,
     }
-    with pytest.raises(ValidationError, match="coefficient coordinates"):
+    with pytest.raises(ValidationError) as exc_info:
         CyclotomicPolynomial.model_validate(raw)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.cyclotomic.coordinate_bound"
+    )
 
 
 def test_request_preflights_raw_coefficient_digits_before_parsing() -> None:
@@ -289,5 +295,6 @@ def test_embedding_rejects_coefficients_that_do_not_fit_exact_scalar_carrier() -
         ),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="height"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         embed_rational_polynomial(source, RationalCyclotomicField(order=5))
+    assert exc_info.value.errors()[0]["type"] == "coefficient_height_bound"

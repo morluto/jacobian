@@ -88,10 +88,9 @@ def test_equal_words_share_canonical_action_and_serialize_composably():
 def test_composition_rejects_different_cartan_parents():
     a2 = weyl_element_from_word(((2, -1), (-1, 2)), (0,))
     b2 = weyl_element_from_word(((2, -2), (-1, 2)), (0,))
-    with pytest.raises(
-        OperationDomainValidationError, match="same ordered Cartan parent"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_compose(a2, b2)
+    assert exc_info.value.errors()[0]["type"] == "root_system.weyl_parent_mismatch"
 
 
 def test_requests_round_trip_element_contracts():

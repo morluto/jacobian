@@ -18,8 +18,9 @@ def test_mixed_arithmetic_cannot_drop_its_growth_bound(base: str) -> None:
             f"(assert (= {expression} 1))(check-sat)"
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match=r"growth|work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         solve_smt(request)
+    assert exc_info.value.errors()[0]["type"] == "logic.smtlib_source"
 
 
 @pytest.mark.parametrize(

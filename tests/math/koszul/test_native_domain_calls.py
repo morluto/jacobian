@@ -105,8 +105,9 @@ def test_native_axis_subclass_cannot_supply_callbacks() -> None:
     forged = koszul.BasedFiniteModule.model_construct(
         algebra=algebra, basis=("m",), action=PoisonTuple(())
     )
-    with pytest.raises(OperationDomainValidationError, match="exact tuples"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         koszul.module_koszul_map(algebra, forged, forged, (), ((q(1),),))
+    assert exc_info.value.errors()[0]["type"] == "koszul.module.native_shape"
 
 
 def test_native_snapshot_shares_request_deadline() -> None:

@@ -108,5 +108,6 @@ def test_order_preflight_happens_before_signed_root_expansion(
 
 def test_order_rejects_invalid_word_index() -> None:
     matrix = CartanMatrix.model_validate(((2, -1), (-1, 2)))
-    with pytest.raises(OperationDomainValidationError, match="word"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_order(matrix, (2,))
+    assert exc_info.value.errors()[0]["type"] == "root_system.invalid_weyl_word"

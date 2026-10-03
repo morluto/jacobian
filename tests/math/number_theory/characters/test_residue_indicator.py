@@ -66,8 +66,12 @@ def test_character_coefficients_reconstruct_unit_indicator_exactly():
 
 
 def test_nonunit_target_is_rejected():
-    with pytest.raises(OperationDomainValidationError, match="unit residues"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dirichlet_character_residue_indicator_expansion(character_group(8), 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.residue_indicator.requires_unit"
+    )
 
 
 def test_work_is_admitted_before_dual_coordinates_are_built(monkeypatch):
@@ -78,8 +82,12 @@ def test_work_is_admitted_before_dual_coordinates_are_built(monkeypatch):
         raise AssertionError("dual coordinates must follow admission")
 
     monkeypatch.setattr(operations, "product", unexpected_product)
-    with pytest.raises(OperationResourceAdmissionError, match="work envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         dirichlet_character_residue_indicator_expansion(group, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.residue_indicator.work_bound"
+    )
 
 
 def test_public_tool_example_computes_mod3_indicator():

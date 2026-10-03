@@ -201,12 +201,14 @@ def test_weight_digit_and_ground_bound_edges() -> None:
     wider_split_carrier = MatroidWeightFunction(
         ground_axis=one_loop.ground_axis, values=(10**12,)
     )
-    with pytest.raises(OperationDomainValidationError, match="decimal digits"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         maximum_weight_independent_set_result(one_loop, wider_split_carrier)
-    with pytest.raises(ValidationError, match="decimal digits"):
+    assert exc_info.value.errors()[0]["type"] == "matroid.weights.digits"
+    with pytest.raises(ValidationError) as exc_info:
         MatroidWeightFunction(
             ground_axis=one_loop.ground_axis, values=(10 ** (MAX_SPLIT_WEIGHT_DIGITS),)
         )
+    assert exc_info.value.errors()[0]["type"] == "matroid.weights.digits"
 
     max_ground = _matroid(2, ((0,) * 256,))
     result = maximum_weight_independent_set_result(

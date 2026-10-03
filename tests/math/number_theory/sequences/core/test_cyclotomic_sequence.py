@@ -38,12 +38,13 @@ def test_cyclotomic_sequence_preserves_parent_origin_and_empty_values() -> None:
 def test_cyclotomic_sequence_rejects_coefficients_from_another_parent() -> None:
     field = RationalCyclotomicField(order=3)
     other_field = RationalCyclotomicField(order=4)
-    with pytest.raises(ValidationError, match="cyclotomic_parent_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCyclotomicSequence(
             index_origin=0,
             field=field,
             values=(_element(other_field, 1, 0),),
         )
+    assert exc_info.value.errors()[0]["type"] == "sequences.cyclotomic_parent_mismatch"
 
 
 def test_cyclotomic_sequence_requires_strict_integer_origin() -> None:

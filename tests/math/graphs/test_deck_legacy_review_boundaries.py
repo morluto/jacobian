@@ -120,8 +120,9 @@ def test_unknown_payload_does_not_trigger_recursive_materialization() -> None:
 
     payload = _star_profile().model_dump()
     payload["unknown"] = Untraversable()
-    with pytest.raises(ValueError, match="Extra inputs"):
+    with pytest.raises(ValueError) as exc_info:
         models.VertexDeckIsomorphismProfile.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
 
 
 @pytest.mark.parametrize("request_payload", [False, True])
@@ -144,8 +145,9 @@ def test_missing_source_axis_is_rejected_before_copying(
         if request_payload
         else models.VertexDeckIsomorphismProfile
     )
-    with pytest.raises(ValueError, match="source vertex axis"):
+    with pytest.raises(ValueError) as exc_info:
         owner.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.vertex_iso_profile_family"
 
 
 def test_mixed_native_source_carrier_remains_accepted() -> None:
@@ -211,13 +213,14 @@ def test_decoded_star_deck_feeds_all_count_consumers() -> None:
 def test_native_family_relation_is_still_checked() -> None:
     original = _star_profile()
     forged = original.family.model_copy(update={"edge_appearances": (99, 99, 99)})
-    with pytest.raises(ValueError, match="family_edge_receipt"):
+    with pytest.raises(ValueError) as exc_info:
         models.VertexDeckIsomorphismProfile(
             family=forged,
             classes=original.classes,
             class_indices=original.class_indices,
             vertex_maps=original.vertex_maps,
         )
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.family_edge_receipt"
 
 
 @pytest.mark.parametrize("request_payload", [False, True])

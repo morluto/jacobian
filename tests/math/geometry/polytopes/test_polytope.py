@@ -647,13 +647,14 @@ class TestRejection:
     def test_empty_system_is_classified_before_its_recession_cone(self) -> None:
         """An infeasible strip is empty, not a nonempty unbounded polyhedron."""
 
-        with pytest.raises(ValueError, match="empty polytope"):
+        with pytest.raises(ValueError) as exc_info:
             _volume_via_halfspaces(
                 (
                     _h((1, 1), (0, 1), offset=(0, 1)),
                     _h((-1, 1), (0, 1), offset=(-1, 1)),
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "polytope.h_representation"
 
     def test_unbounded_halfspace_representation(self) -> None:
         """An unbounded H-representation (no upper bounds) is rejected."""
@@ -1735,7 +1736,7 @@ class TestCanonicalVPolytopeComposition:
             )
 
     def test_canonical_value_remains_mutually_exclusive_with_halfspaces(self) -> None:
-        with pytest.raises(ValueError, match="exactly one of"):
+        with pytest.raises(ValueError) as exc_info:
             PolytopeVolumeRequest(
                 vertices=_support_square_result().polytope,
                 halfspaces=(
@@ -1745,6 +1746,7 @@ class TestCanonicalVPolytopeComposition:
                     ),
                 ),
             )
+        assert exc_info.value.errors()[0]["type"] == "polytope.halfspaces"
 
     def test_schema_publishes_canonical_v_polytope_acceptance(self) -> None:
         schema = PolytopeVolumeRequest.model_json_schema()

@@ -255,8 +255,9 @@ def test_duplicate_frames_do_not_claim_full_vertex_coverage() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         su2_gauge_transform(field, frames)
-    with pytest.raises(ValueError, match="transform_vertices"):
+    with pytest.raises(ValueError) as exc_info:
         SU2GaugeTransformRequest(field=field, vertex_values=frames)
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.su2.transform_vertices"
 
 
 def test_path_work_charges_inverse_product_before_resetting_growth() -> None:

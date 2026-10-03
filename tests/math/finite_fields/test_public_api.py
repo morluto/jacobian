@@ -604,10 +604,15 @@ def test_slice_a_rejects_wrong_presentation_and_axis() -> None:
         directions.points[0].coordinates,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="presentation"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_scalars(subspace, wrong_parent_direction)
-    with pytest.raises(OperationDomainValidationError, match="axis"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.direction_presentation_mismatch"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_scalars(subspace, wrong_axis_direction)
+    assert exc_info.value.errors()[0]["type"] == "finite_field.direction_axis_mismatch"
 
 
 def test_direction_rank_ledger_rejects_mismatched_line_before_iteration() -> None:

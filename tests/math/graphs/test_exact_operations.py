@@ -98,8 +98,12 @@ def test_flow_contract_rejects_out_of_range_terminals() -> None:
             }
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="source must be in"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_max_flow(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.source_must_be_in_0_graph_vertex_count_1"
+    )
 
 
 def test_spectral_contract_rejects_non_simple_graphs() -> None:

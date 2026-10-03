@@ -157,8 +157,15 @@ def test_result_structure_rejects_malformed_assignment_payload() -> None:
     )
     payload = enumerate_csp_solutions(instance).model_dump()
     payload["assignments"] = [[1], [0]]
-    with pytest.raises(ValueError, match="lexicographically ordered"):
+    with pytest.raises(ValueError) as exc_info:
         CspSolutions.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "relational.homomorphism.solutions.order"
+    )
     payload["assignments"] = [[2], [3]]
-    with pytest.raises(ValueError, match="template-valued"):
+    with pytest.raises(ValueError) as exc_info:
         CspSolutions.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "relational.homomorphism.solutions.assignment_shape"
+    )

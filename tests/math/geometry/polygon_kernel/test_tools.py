@@ -364,14 +364,20 @@ def test_rejects_immediately_above_structural_boundaries() -> None:
 
 def test_rejects_derived_work_before_pairwise_expansion() -> None:
     request = _request(_parabola_polygon(10**30))
-    with pytest.raises(OperationDomainValidationError, match="feasibility work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_visibility_kernel(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "geometry.visibility_kernel_not_admitted"
+    )
 
 
 def test_large_derived_coefficients_are_rejected_by_work_before_expansion() -> None:
     request = _request(_parabola_polygon(10**45))
-    with pytest.raises(OperationDomainValidationError, match="feasibility work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_visibility_kernel(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "geometry.visibility_kernel_not_admitted"
+    )
 
 
 @pytest.mark.parametrize(
@@ -401,5 +407,8 @@ def test_feasibility_admission_flips_at_the_derived_work_boundary() -> None:
     accepted = _request(_parabola_polygon(10**28))
     assert len(accepted.polygon.points) == MAX_KERNEL_SOURCE_VERTICES
 
-    with pytest.raises(OperationDomainValidationError, match="feasibility work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_visibility_kernel(_request(_parabola_polygon(10**29)))
+    assert (
+        exc_info.value.errors()[0]["type"] == "geometry.visibility_kernel_not_admitted"
+    )

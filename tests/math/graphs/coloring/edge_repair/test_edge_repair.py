@@ -116,26 +116,38 @@ def test_result_rejects_nonminimal_or_unbound_witnesses() -> None:
     result = compute_precoloring_edge_repair(_k4(3))
     payload = json.loads(result.model_dump_json())
     payload["repaired_edge_count"] = 2
-    with pytest.raises(ValidationError, match="match"):
+    with pytest.raises(ValidationError) as exc_info:
         PrecoloringEdgeRepairResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.precoloring_repair_count_must_match_indices"
+    )
 
 
 def test_duplicate_fixed_vertices_fail_closed() -> None:
-    with pytest.raises(ValidationError, match="one color per vertex"):
+    with pytest.raises(ValidationError) as exc_info:
         PrecoloringEdgeRepairRequest(
             graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=()),
             colors=2,
             fixed_colors=((0, 0), (0, 1)),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.precoloring_fixed_colors_must_assign_one_color_per_vertex"
+    )
 
 
 def test_unsorted_fixed_vertices_fail_closed() -> None:
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    with pytest.raises(ValidationError) as exc_info:
         PrecoloringEdgeRepairRequest(
             graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=()),
             colors=2,
             fixed_colors=((1, 0), (0, 1)),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.precoloring_fixed_colors_must_be_strictly_increasing"
+    )
 
 
 def _result_with_fixed_colors(

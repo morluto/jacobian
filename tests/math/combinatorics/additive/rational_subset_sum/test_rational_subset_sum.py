@@ -109,8 +109,12 @@ def test_uncancellable_rational_growth_is_rejected_before_enumeration() -> None:
         _cr(1, 10**20000 + 3),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="rational"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_rational_subset_sum_profile(values)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_subset_sum.rational_growth_bound"
+    )
 
 
 def test_serialized_forged_profile_is_rejected_by_verifier() -> None:

@@ -84,10 +84,9 @@ def test_zero_dimensional_form_has_one_term_for_every_modulus() -> None:
 
 
 def test_rejects_residue_space_above_bound_before_enumeration() -> None:
-    with pytest.raises(
-        OperationResourceAdmissionError, match="complete residue domain"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         finite_quadratic_gauss_sum(_form(("x", "y", "z", "w"), (1, 1, 1, 1)), 64)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.gauss_sum.state_bound"
 
 
 def test_rejects_dense_support_before_enumeration() -> None:
@@ -107,8 +106,9 @@ def test_rejects_dense_support_before_enumeration() -> None:
             for right in range(left + 1, 20)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         finite_quadratic_gauss_sum(form, 2)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.gauss_sum.work_bound"
 
 
 def test_rejects_oversized_support_before_enumeration() -> None:
@@ -128,8 +128,11 @@ def test_rejects_oversized_support_before_enumeration() -> None:
             for right in range(left + 1, 100)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="support"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         finite_quadratic_gauss_sum(form, 1)
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.gauss_sum.support_bound"
+    )
 
 
 def test_rejects_retained_source_above_output_digit_envelope() -> None:
@@ -152,8 +155,9 @@ def test_rejects_retained_source_above_output_digit_envelope() -> None:
             for right in range(left + 1, 64)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output digit envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         finite_quadratic_gauss_sum(form, 1)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.gauss_sum.output_bound"
 
 
 def test_small_support_with_tall_coefficients_remains_admitted() -> None:
@@ -181,5 +185,6 @@ def test_rejects_rational_coefficients() -> None:
         axis=("x",),
         diagonal_coefficients=(CanonicalRational(num=1, den=2),),
     )
-    with pytest.raises(ValueError, match="integral coefficients"):
+    with pytest.raises(ValueError) as exc_info:
         finite_quadratic_gauss_sum(form, 3)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.integral_required"

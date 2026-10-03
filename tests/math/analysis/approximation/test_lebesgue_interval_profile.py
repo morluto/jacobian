@@ -189,5 +189,8 @@ def test_unrepresentable_interior_degree_rejects_before_basis_expansion(
         pytest.fail("basis expansion preceded complete source admission")
 
     monkeypatch.setattr(operations, "_poly_multiply", unexpected_expansion)
-    with pytest.raises(OperationResourceAdmissionError, match="degree"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         lebesgue_interval_profile(source(tuple(range(32)), 0, 31))
+    assert (
+        exc_info.value.errors()[0]["type"] == "approximation.lebesgue.algebraic_degree"
+    )

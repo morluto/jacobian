@@ -32,8 +32,9 @@ def test_grammar_symbol_axes_are_unique(axis: str) -> None:
         "start_symbol": "S",
     }
     payload[axis] = ("S", "S") if axis == "nonterminals" else ("a", "a")
-    with pytest.raises(ValidationError, match="unique"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCFGO.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "context_free.duplicate_symbols"
 
 
 @pytest.mark.parametrize(

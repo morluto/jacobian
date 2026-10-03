@@ -76,5 +76,6 @@ def test_graph_invariant_and_core_keep_source() -> None:
     assert verify_graph_invariant(
         GraphCoreResult.model_validate_json(valid.model_dump_json())
     )
-    with pytest.raises(ValidationError, match="source graph"):
+    with pytest.raises(ValidationError) as exc_info:
         GraphCoreResult(graph=graph, k=0, vertices=("outside",))
+    assert exc_info.value.errors()[0]["type"] == "graph.k_core_source_vertices"

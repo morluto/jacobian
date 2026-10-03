@@ -164,8 +164,9 @@ def test_large_repeated_singular_blocks() -> None:
 
 
 def test_polynomial_symmetry_rejection() -> None:
-    with pytest.raises(OperationDomainValidationError, match="symmetric"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_inertia_cells(_source(sp.Matrix([[T, 1], [0, T]])), _interval())
+    assert exc_info.value.errors()[0]["type"] == "matrix.inertia_cells.symmetry"
 
 
 def test_connected_algebraic_degree_rejection() -> None:
@@ -252,11 +253,13 @@ def test_singleton_specialization_of_high_degree_nondiagonal_matrix() -> None:
 def test_copied_inconsistent_inertia_carriers_are_rejected() -> None:
     source = _source(sp.Matrix([[1]]))
     forged_matrix = source.model_copy(update={"row_count": 0})
-    with pytest.raises(OperationDomainValidationError, match="structural"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_inertia_cells(forged_matrix, _interval(0, 1))
+    assert exc_info.value.errors()[0]["type"] == "matrix.inertia_cells_domain"
     reversed_interval = ClosedRationalInterval.model_construct(
         lower=CanonicalRational(num=1, den=1),
         upper=CanonicalRational(num=0, den=1),
     )
-    with pytest.raises(OperationDomainValidationError, match="structural"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_inertia_cells(source, reversed_interval)
+    assert exc_info.value.errors()[0]["type"] == "matrix.inertia_cells_domain"

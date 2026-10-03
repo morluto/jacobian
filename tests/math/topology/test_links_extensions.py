@@ -48,11 +48,15 @@ def _two_braid(*exponents: Literal[-1, 1]) -> BraidWord:
 
 class TestBraidWords:
     def test_generator_axis_is_part_of_the_parent(self) -> None:
-        with pytest.raises(ValidationError, match="generator index"):
+        with pytest.raises(ValidationError) as exc_info:
             BraidWord(
                 strand_count=2,
                 letters=(BraidLetter(generator=2, exponent=1),),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "link_diagram.braid_generator_out_of_range"
+        )
 
     def test_permutation_retains_closure_cycles_and_writhe(self) -> None:
         result = braid_permutation(_two_braid(1, 1, 1))
@@ -70,8 +74,11 @@ class TestBraidWords:
         product = braid_multiply(word, inverse)
         assert product.strand_count == 2
         assert len(product.letters) == 6
-        with pytest.raises(OperationDomainValidationError, match="strand count"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             braid_multiply(word, BraidWord(strand_count=3))
+        assert (
+            exc_info.value.errors()[0]["type"] == "link_diagram.braid_parent_mismatch"
+        )
 
     def test_braid_group_laws_match_independent_permutation_composition(self) -> None:
         left = BraidWord(
@@ -131,8 +138,9 @@ class TestBraidWords:
     def test_forged_braid_is_readmitted_before_execution(self) -> None:
         forged = BraidWord.model_construct(strand_count=0, letters=())
 
-        with pytest.raises(OperationDomainValidationError, match="braid-word contract"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             braid_permutation(forged)
+        assert exc_info.value.errors()[0]["type"] == "link_diagram.braid_word_shape"
 
 
 class TestGoeritzData:
@@ -272,10 +280,9 @@ class TestGoeritzData:
         with pytest.raises(ValidationError) as error:
             LinkBlackboardGraph.model_validate_json(forged.model_dump_json())
         assert error.value.errors()[0]["type"] == "link_diagram.blackboard_region_faces"
-        with pytest.raises(
-            OperationDomainValidationError, match="bounded checkerboard graph contract"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             link_goeritz_data(forged)
+        assert exc_info.value.errors()[0]["type"] == "link_diagram.goeritz_graph_shape"
 
     def test_mirror_negates_matrix_and_preserves_absolute_determinant(self) -> None:
         right = link_goeritz_data(
@@ -307,12 +314,17 @@ class TestGoeritzData:
         assert result.absolute_determinant == link_determinant(diagram).determinant == 5
 
     def test_goeritz_slice_rejects_crossing_free_and_over_bound_diagrams(self) -> None:
-        with pytest.raises(OperationDomainValidationError, match="nonempty"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             link_blackboard_graph(OrientedLinkDiagram(free_loops=1))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "link_diagram.blackboard_graph_crossing_projection"
+        )
 
         over_bound = braid_closure(_two_braid(*(1,) * 33)).diagram
-        with pytest.raises(OperationResourceAdmissionError, match="32 crossings"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             link_goeritz_data(link_blackboard_graph(over_bound))
+        assert exc_info.value.errors()[0]["type"] == "link_diagram.goeritz_matrix_bound"
 
 
 class TestSeifertCircles:
@@ -338,8 +350,11 @@ class TestSeifertCircles:
         assert result.genus == 0
 
     def test_knot_first_contract_rejects_multiple_components(self) -> None:
-        with pytest.raises(OperationDomainValidationError, match="one component"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             link_seifert_circles(OrientedLinkDiagram(free_loops=2))
+        assert (
+            exc_info.value.errors()[0]["type"] == "link_diagram.seifert_requires_knot"
+        )
 
 
 class TestAlexanderPolynomial:
@@ -406,14 +421,21 @@ class TestAlexanderPolynomial:
     def test_one_variable_contract_rejects_links(self) -> None:
         hopf = braid_closure(_two_braid(1, 1)).diagram
 
-        with pytest.raises(OperationDomainValidationError, match="one component"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             link_alexander_polynomial(hopf)
+        assert (
+            exc_info.value.errors()[0]["type"] == "link_diagram.alexander_requires_knot"
+        )
 
     def test_determinant_expansion_has_an_explicit_crossing_bound(self) -> None:
         diagram = braid_closure(_two_braid(*(1,) * 9)).diagram
 
-        with pytest.raises(OperationResourceAdmissionError, match="eight crossings"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             link_alexander_polynomial(diagram)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "link_diagram.alexander_crossing_bound"
+        )
 
 
 class TestWirtingerPresentation:
@@ -454,7 +476,8 @@ class TestWirtingerPresentation:
             crossings=(), arcs=(), free_loops=-1
         )
 
-        with pytest.raises(
-            OperationDomainValidationError, match="oriented-link contract"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             wirtinger_presentation(forged)
+        assert (
+            exc_info.value.errors()[0]["type"] == "link_diagram.wirtinger_diagram_shape"
+        )

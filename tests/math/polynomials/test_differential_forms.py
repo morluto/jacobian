@@ -345,13 +345,14 @@ def test_wedge_is_associative_and_serializable() -> None:
 
 
 def test_form_rejects_unsorted_or_mismatched_components() -> None:
-    with pytest.raises(ValidationError, match="component_order"):
+    with pytest.raises(ValidationError) as exc_info:
         _form(
             1,
             ((1,), _poly((1, (0, 0)))),
             ((0,), _poly((1, (0, 0)))),
         )
-    with pytest.raises(OperationDomainValidationError, match="identical"):
+    assert exc_info.value.errors()[0]["type"] == "differential_form.component_order"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         wedge(
             _form(0, ((), _poly((1, (0, 0))))),
             PolynomialDifferentialForm(
@@ -360,19 +361,22 @@ def test_form_rejects_unsorted_or_mismatched_components() -> None:
                 components=(),
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "differential_form.variable_axis"
 
 
 def test_duplicate_differential_indices_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="component_indices"):
+    with pytest.raises(ValidationError) as exc_info:
         _form(2, ((0, 0), _poly((1, (0, 0)))))
+    assert exc_info.value.errors()[0]["type"] == "differential_form.component_indices"
 
 
 @pytest.mark.parametrize("indices", ((1, 0), (-1,)))
 def test_exported_component_rejects_noncanonical_indices(
     indices: tuple[int, ...],
 ) -> None:
-    with pytest.raises(ValidationError, match="component_indices"):
+    with pytest.raises(ValidationError) as exc_info:
         FormComponent(indices=indices, coefficient=_poly((1, (0, 0))))
+    assert exc_info.value.errors()[0]["type"] == "differential_form.component_indices"
 
 
 def test_overflowing_zero_form_degree_is_typed_admission() -> None:
@@ -405,8 +409,9 @@ def test_serialized_differential_indices_have_a_schema_bound() -> None:
             }
         ],
     }
-    with pytest.raises(ValidationError, match="at most 8 items"):
+    with pytest.raises(ValidationError) as exc_info:
         PolynomialDifferentialForm.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "too_long"
 
 
 def test_wedge_groups_coefficient_growth_by_output_monomial() -> None:

@@ -828,19 +828,31 @@ class TestNativeSurface:
         )
 
         zero = _polynomial((), VARS)
-        with pytest.raises(OperationDomainValidationError, match="nonzero"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             weight_profile(zero, (1, 1))
-        with pytest.raises(OperationDomainValidationError, match="nonzero"):
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial_support_geometry.zero_weight_profile"
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             initial_form(zero, (1, 1))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial_support_geometry.zero_weight_profile"
+        )
         nonzero = _polynomial(_XY_TERMS, VARS)
-        with pytest.raises(
-            OperationDomainValidationError, match="weight vector length"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             weight_profile(nonzero, (1,))
-        with pytest.raises(
-            OperationDomainValidationError, match="weight vector length"
-        ):
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial_support_geometry.weight_dimension_mismatch"
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             initial_form(nonzero, (1,))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polynomial_support_geometry.weight_dimension_mismatch"
+        )
 
     def test_native_weighted_admission_rejects_before_source_rebuild(
         self, monkeypatch: pytest.MonkeyPatch

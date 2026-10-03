@@ -105,14 +105,16 @@ def test_native_rejects_noncanonical_values(values: tuple[object, ...]) -> None:
 
 def test_native_rejects_oversized_value_before_parsing() -> None:
     """The representation bound rejects huge strings during preflight."""
-    with pytest.raises(ValueError, match="digit bound"):
+    with pytest.raises(ValueError) as exc_info:
         divisibility_edge_profile(FiniteIntegerSet(elements=(int("1" * (256 + 1)),)))
+    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.value_digits"
 
 
 def test_native_rejects_values_beyond_worker_factorization_envelope() -> None:
     """Derived quotients, rather than source widths, use the worker bound."""
-    with pytest.raises(ValueError, match="quotient"):
+    with pytest.raises(ValueError) as exc_info:
         divisibility_edge_profile(FiniteIntegerSet(elements=(1, 10**20)))
+    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.quotient_digits"
 
 
 def test_native_allows_wide_sources_with_small_quotient() -> None:
@@ -125,8 +127,9 @@ def test_native_allows_wide_sources_with_small_quotient() -> None:
 
 def test_native_rejects_oversized_integer_before_formatting() -> None:
     """Huge integers are bounded by the digit limit before worker admission."""
-    with pytest.raises(ValueError, match="digit bound"):
+    with pytest.raises(ValueError) as exc_info:
         divisibility_edge_profile(FiniteIntegerSet(elements=(int("1" * (256 + 1)),)))
+    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.value_digits"
 
 
 def test_resource_admission_belongs_to_operation_execution() -> None:
@@ -134,8 +137,9 @@ def test_resource_admission_belongs_to_operation_execution() -> None:
     request = DivisibilityEdgeProfileRequest(
         values=FiniteIntegerSet(elements=tuple(range(1, 501)))
     )
-    with pytest.raises(OperationDomainValidationError, match="factorization"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_divisibility_edge_profile(request)
+    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.factorization_work"
 
 
 @pytest.mark.parametrize(

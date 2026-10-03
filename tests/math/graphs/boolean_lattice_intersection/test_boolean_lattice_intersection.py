@@ -93,10 +93,15 @@ def test_n8_is_the_carrier_boundary() -> None:
 
 
 def test_native_rejects_negative_ground_set_size() -> None:
-    with pytest.raises(OperationDomainValidationError, match="between 0"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_boolean_lattice_intersection_graph(-1, 0, "INTERSECTION_EQ")
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "boolean_lattice.ground_set_size_too_large"
+    )
 
 
 def test_native_rejects_invalid_relation_before_enumeration() -> None:
-    with pytest.raises(OperationDomainValidationError, match="relation"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_boolean_lattice_intersection_graph(8, 0, "INVALID")  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "boolean_lattice.invalid_relation"

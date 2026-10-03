@@ -123,8 +123,12 @@ class TestHankel:
         )
 
         require_hankel_matrix_admission(prefix_at_bound, order, shifted=False)
-        with pytest.raises(ValueError, match=rf"conservative {bound}-digit bound"):
+        with pytest.raises(ValueError) as exc_info:
             compute_hankel_matrix(HankelRequest(prefix=prefix_over_bound, order=order))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "moment_functional.hankel.determinant_height"
+        )
 
 
 class TestShiftedHankel:

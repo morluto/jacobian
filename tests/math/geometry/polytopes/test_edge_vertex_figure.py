@@ -402,8 +402,12 @@ class TestBoundary:
             polytope_operations, "_computed_facets_from_vertices", reject
         )
 
-        with pytest.raises(OperationResourceAdmissionError, match=message):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             polytope_edge_profile(_square())
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "polytope.edge_profile.enumeration_over_envelope"
+        )
 
     def test_dimension_zero_source_cannot_form(self) -> None:
         # A dimension-zero source (one vertex) violates the canonical

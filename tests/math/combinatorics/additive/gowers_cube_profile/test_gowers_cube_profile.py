@@ -60,13 +60,15 @@ def test_result_preserves_source() -> None:
 
 
 def test_noncanonical_subset_representative_is_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="canonical residues"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_gowers_cube_profile(5, (5,), 1)
+    assert exc_info.value.errors()[0]["type"] == "gowers_cube.canonical_subset"
 
 
 def test_coupled_cube_work_is_rejected_before_enumeration() -> None:
-    with pytest.raises(OperationDomainValidationError, match="vertex-check bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_gowers_cube_profile(3, (0, 1, 2), 12)
+    assert exc_info.value.errors()[0]["type"] == "gowers_cube.work_exceeded"
 
 
 @pytest.mark.parametrize(

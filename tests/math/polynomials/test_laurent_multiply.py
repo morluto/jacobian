@@ -62,8 +62,9 @@ def test_axis_mismatch_rejects_before_convolution() -> None:
     left = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 0),))
     right = RationalLaurentPolynomial(variables=("y",), terms=(term(1, 0),))
 
-    with pytest.raises(OperationDomainValidationError, match="ordered variable axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.axis_mismatch"
 
 
 def test_coefficient_growth_is_rejected_before_convolution() -> None:
@@ -565,8 +566,14 @@ def test_collision_group_growth_is_bounded_before_materialization(
     monkeypatch.setattr(
         laurent_module, "_laurent_encoded_digits", count_encoded_digit_checks
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="coefficient"
+    ) as exc_info:
         rational_laurent_multiply(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.laurent.coefficient_growth"
+    )
     assert encoded_digit_checks == 64
 
 
@@ -651,8 +658,9 @@ def test_aggregate_output_digit_envelope_is_enforced() -> None:
             _rational_term(10**6999 + index, 1, index) for index in range(39, -1, -1)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
 
 
 def test_monomial_scale_counts_the_full_output_aggregate() -> None:
@@ -664,8 +672,9 @@ def test_monomial_scale_counts_the_full_output_aggregate() -> None:
     )
     left = RationalLaurentPolynomial(variables=("x",), terms=(factor,))
     right = RationalLaurentPolynomial(variables=("x",), terms=others)
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
 
 
 def test_rational_aggregate_counts_both_coefficient_components() -> None:
@@ -683,8 +692,9 @@ def test_rational_aggregate_counts_both_coefficient_components() -> None:
         variables=("x",),
         terms=tuple(term(index + 100, index) for index in range(39, -1, -1)),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
 
 
 def test_aggregate_cap_is_enforced_while_collecting() -> None:
@@ -703,8 +713,9 @@ def test_aggregate_cap_is_enforced_while_collecting() -> None:
             _rational_term(1, 1, exponent) for exponent in range(-30721, -32769, -1)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
 
 
 def test_aggregate_envelope_counts_canonical_json_overhead(
@@ -729,5 +740,6 @@ def test_aggregate_envelope_counts_canonical_json_overhead(
         variables=("x",),
         terms=(_rational_term(1, 1, 0),),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"

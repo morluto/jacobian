@@ -133,10 +133,13 @@ def test_false_complete_graph_cannot_authorize_full_reachable_extrema() -> None:
         ReachabilityRequest(net=net, initial_marking=Marking(tokens=(0,)), max_states=2)
     )
     forged = graph.model_copy(update={"edges": ()})
-    with pytest.raises(OperationDomainValidationError, match="every enabled successor"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_reachability_token_profile(
             ReachabilityTokenProfileRequest(source_graph=forged)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.incomplete_graph"
+    )
 
 
 def test_tied_extrema_use_lowest_source_state_index_not_bfs_history() -> None:
@@ -215,8 +218,9 @@ def test_oversized_arc_integer_is_rejected_before_output_stringification() -> No
         edges=(),
         truncated=False,
     )
-    with pytest.raises(OperationDomainValidationError, match="bounded nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reachability_token_profile(graph)
+    assert exc_info.value.errors()[0]["type"] == "petri_net.terminal_scc.net_weights"
 
 
 def test_work_bound_charges_axis_label_characters() -> None:
@@ -240,8 +244,12 @@ def test_work_bound_charges_axis_label_characters() -> None:
         edges=(),
         truncated=False,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reachability_token_profile(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "petri_net.reachability_token_profile.work_bound"
+    )
 
 
 @pytest.mark.parametrize(

@@ -186,8 +186,12 @@ def test_decoded_result_rejects_false_in_range_edge_transport() -> None:
             )
         }
     )
-    with pytest.raises(ValidationError, match="edge_transport_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         RestrictRationalOutputResult.model_validate(forged.model_dump())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_transducer.restrict_output.edge_transport_mismatch"
+    )
 
 
 @pytest.mark.parametrize(

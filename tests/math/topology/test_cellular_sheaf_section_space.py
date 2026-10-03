@@ -271,10 +271,12 @@ def test_full_compatibility_matrix_is_admitted_before_dense_construction() -> No
         complex_value, SheafField.RATIONAL, None, stalks, cover_maps
     )
     assert constructed.sheaf is not None
-    with pytest.raises(
-        OperationResourceAdmissionError, match="full compatibility matrix"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         sections(constructed.sheaf)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.sections.compatibility_matrix_bound"
+    )
 
 
 def test_catalog_section_operation_exposes_a_reusable_target_space() -> None:

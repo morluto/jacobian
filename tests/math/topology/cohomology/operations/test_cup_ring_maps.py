@@ -595,8 +595,12 @@ class TestInducedMaps:
         payload = json.loads(self._identity(_CIRCLE).model_dump_json())
         payload["source"]["faces_by_dimension"][0]["faces"][0][0] = "0"
 
-        with pytest.raises(ValidationError, match="declared source vertex"):
+        with pytest.raises(ValidationError) as exc_info:
             SimplicialMap.model_validate_json(json.dumps(payload))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "cohomology_operation.simplicial_map_source_face_labels"
+        )
 
     def test_native_and_catalog_paths_agree(self) -> None:
         tool = _tool("topology.simplicial_map.induced_cohomology.compute")

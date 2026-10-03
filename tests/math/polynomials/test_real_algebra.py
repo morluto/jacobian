@@ -264,8 +264,11 @@ def test_contract_rejects_lower_gt_upper() -> None:
         lower=R(num=10, den=1),
         upper=R(num=0, den=1),
     )
-    with pytest.raises(OperationDomainValidationError, match="lower bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_root_count(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.real_algebra_interval_order"
+    )
 
 
 def test_contract_rejects_duplicate_exponents() -> None:
@@ -287,8 +290,12 @@ def test_contract_rejects_oversized_coefficient_digits() -> None:
         lower=R(num=-10, den=1),
         upper=R(num=10, den=1),
     )
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficient"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_root_count(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.real_algebra_coefficient_bound"
+    )
 
 
 def test_contract_accepts_bounded_primitive_integer_normalization() -> None:
@@ -306,8 +313,11 @@ def test_contract_accepts_bounded_primitive_integer_normalization() -> None:
 def test_sturm_rejects_constant_polynomial() -> None:
     """Review fix: a degree-0 polynomial is rejected before execution."""
     request = SturmChainRequest(polynomial=_poly((5, 1, 0)))
-    with pytest.raises(OperationDomainValidationError, match="non-constant"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_sturm_chain(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.real_algebra_constant_input"
+    )
 
 
 def test_sturm_chain_boundary_sixteen_digit_coefficient() -> None:

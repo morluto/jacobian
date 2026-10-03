@@ -100,8 +100,9 @@ def test_empty_gram_retains_ambient_dimension() -> None:
     assert result.dimension == 7
     assert result.gram.row_count == result.gram.column_count == 0
     assert GramResult.model_validate_json(result.model_dump_json()) == result
-    with pytest.raises(ValueError, match="at least as many"):
+    with pytest.raises(ValueError) as exc_info:
         frame_potential(source)
+    assert exc_info.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
 def test_zero_dimensional_frame_potential() -> None:
@@ -118,8 +119,9 @@ def test_zero_dimensional_vectors_have_zero_gram_but_no_coherence() -> None:
     assert result.gram.entries == ((0, 0), (0, 0))
     assert verify_gram(result)
     assert frame_potential(source).potential == 0
-    with pytest.raises(ValueError, match="nonzero"):
+    with pytest.raises(ValueError) as exc_info:
         coherence(source)
+    assert exc_info.value.errors()[0]["type"] == "frames.zero_vector"
 
 
 def test_empty_zero_dimensional_coherence_has_no_maximizer() -> None:

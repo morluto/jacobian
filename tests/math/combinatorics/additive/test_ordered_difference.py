@@ -73,8 +73,12 @@ class TestOrderedDifferenceProfile:
         dimension = 1_024
         request = _request(*((index,) + (0,) * (dimension - 1) for index in range(33)))
 
-        with pytest.raises(ValueError, match="1,000,000-coordinate work budget"):
+        with pytest.raises(ValueError) as exc_info:
             _run_ordered(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "additive_combinatorics.ordered_difference_work_exceeded"
+        )
 
     def test_no_repeated(self) -> None:
         """A Sidon set has no repeated differences."""

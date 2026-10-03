@@ -218,7 +218,7 @@ def test_disjoint_singleton_supports_certify_empty_optimum_with_two_loops() -> N
         )
     )
     assert composed.total_weight == 0
-    with pytest.raises(OperationDomainValidationError, match="does not certify"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=first,
@@ -229,6 +229,9 @@ def test_disjoint_singleton_supports_certify_empty_optimum_with_two_loops() -> N
                 second_split=_weights(labels, (0, 0)),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "matroid.weighted_intersection.optimality"
+    )
 
 
 def test_owner_manifest_example_runs_through_declared_types() -> None:
@@ -280,10 +283,14 @@ def test_rank_certificate_verifier_returns_false_for_missing_fields() -> None:
 
 def test_nonoptimal_candidate_rejected_by_dual_objective_equality() -> None:
     first, second, weight_function, _, first_terms, second_terms = _rank_one_arguments()
-    with pytest.raises(OperationDomainValidationError, match="dual objective"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weighted_intersection_rank_certificate(
             first, second, weight_function, (1,), first_terms, second_terms
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "matroid.weighted_intersection.rank_dual.optimality"
+    )
 
 
 def test_admission_rejects_many_expensive_ranks_before_kernel(
@@ -306,7 +313,7 @@ def test_admission_rejects_many_expensive_ranks_before_kernel(
         raise AssertionError("rank kernel ran before aggregate admission")
 
     monkeypatch.setattr(intersection, "_weighted_rank", unexpected)
-    with pytest.raises(OperationResourceAdmissionError, match="rank-dual certificate"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         weighted_intersection_rank_certificate(
             source,
             source,
@@ -315,6 +322,10 @@ def test_admission_rejects_many_expensive_ranks_before_kernel(
             family,
             family,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "matroid.weighted_intersection.rank_dual.work_bound"
+    )
 
 
 def test_256_element_request_is_accepted_inside_rank_work_envelope() -> None:

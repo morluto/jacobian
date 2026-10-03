@@ -152,16 +152,25 @@ def test_ore_commutation_relation_composes_with_addition() -> None:
 def test_rational_function_operator_coefficients_are_outside_addition_subring() -> None:
     reciprocal = _rf(((1, 0),), ((1, 1),))
     operator = _op(((0, reciprocal),))
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficients"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         shift_operator_add(operator, _op(()))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.shift_polynomial_coefficients"
+    )
 
-    with pytest.raises(ValueError, match="polynomial coefficients"):
+    with pytest.raises(ValueError) as exc_info:
         ShiftOperatorAddRequest(left=operator, right=_op(()))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.polynomial_operator_coefficients"
+    )
 
 
 def test_nonconstant_scalar_is_not_mistaken_for_a_rational_constant() -> None:
-    with pytest.raises(OperationDomainValidationError, match="rational constant"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         shift_operator_scalar_left_multiply(_rf(((1, 1),)), _op(((0, _rf(((1, 0),))),)))
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_rational_constant"
 
 
 def test_malformed_scalar_is_rejected_under_the_scalar_contract() -> None:
@@ -253,8 +262,11 @@ def test_normalization_lcm_growth_is_rejected_within_fixed_intermediate_cap() ->
         )
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="scale exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         shift_operator_normalize_polynomial_coefficients(source)
+    assert (
+        exc_info.value.errors()[0]["type"] == "ore_algebra.shift_normalize_scale_digits"
+    )
 
 
 def test_addition_digit_admission_rejects_before_rational_sum(monkeypatch) -> None:
@@ -269,5 +281,9 @@ def test_addition_digit_admission_rejects_before_rational_sum(monkeypatch) -> No
         raise AssertionError("rational addition must follow result-height admission")
 
     monkeypatch.setattr(operations, "_poly_add", fail)
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient-digit"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         shift_operator_add(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.shift_addition_coefficient_digits"
+    )

@@ -226,9 +226,7 @@ def test_abutment_preflights_complete_retained_output_cells() -> None:
         for _ in range(8)
     )
 
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="complete abutment result retains up to",
-    ) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         abutment(SpectralAbutmentRequest(complex=complex_value, filtration=filtration))
+    assert error.value.errors()[0]["type"] == "spectral_sequence.abutment_output_bound"
     assert error.value.errors()[0]["type"] == "spectral_sequence.abutment_output_bound"

@@ -457,10 +457,11 @@ def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
 
 
 def test_cyclic_request_requires_an_explicit_modulus() -> None:
-    with pytest.raises(ValidationError, match="modulus"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsetSumResidueProfileRequest.model_validate_json(
             '{"source":{"items":["2","3"]},"include_empty_subset":true}'
         )
+    assert exc_info.value.errors()[0]["type"] == "additive_combinatorics.request_shape"
 
 
 def test_shared_values_reject_ambiguous_index_subsets() -> None:

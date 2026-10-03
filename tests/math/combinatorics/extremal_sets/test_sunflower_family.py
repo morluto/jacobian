@@ -243,8 +243,9 @@ def test_projection_uses_canonical_multi_digit_member_order() -> None:
 def test_output_edge_bound_is_admitted_before_row_construction() -> None:
     """The complete candidate envelope rejects 156 disjoint singleton pairs."""
     source = _family(tuple((index,) for index in range(156)), ground=156)
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(source, 2)
+    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.output_bound"
 
 
 def test_qualifying_plan_stops_once_the_output_bound_is_exceeded(
@@ -392,10 +393,11 @@ def test_result_allocation_is_admitted_before_row_construction(
         1,
     )
     source = _family(((0,), (1,)), ground=2)
-    with pytest.raises(
-        OperationResourceAdmissionError, match=r"allocation units|result bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(source, 2)
+    assert (
+        exc_info.value.errors()[0]["type"] == "set_system.sunflower.source_output_bound"
+    )
 
 
 @pytest.mark.scale
@@ -476,8 +478,9 @@ def test_output_edge_bound_uses_qualifying_rows() -> None:
     """156 disjoint singletons form C(156, 2) empty-core pairs, over MAX_EDGES."""
 
     source = _family(tuple((index,) for index in range(156)), ground=156)
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(source, 2)
+    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.output_bound"
 
 
 @pytest.mark.scale
@@ -533,8 +536,9 @@ def test_reversed_rows_with_renumbered_ids_are_rejected() -> None:
         (row["edge_id"], [str(index) for index in row["source_indices"]])
         for row in reversed_rows
     ]
-    with pytest.raises(ValidationError, match="lexicographic source-index order"):
+    with pytest.raises(ValidationError) as exc_info:
         SunflowerFamilyResult.model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.row_order"
 
 
 def test_independent_pairwise_intersection_oracle() -> None:
@@ -616,18 +620,21 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
     payload = result.model_dump(mode="json")
     payload["sunflowers"] = list(reversed(payload["sunflowers"]))
     payload["hypergraph"]["edges"] = list(reversed(payload["hypergraph"]["edges"]))
-    with pytest.raises(
-        ValidationError, match=r"canonical ordinals|strictly ordered|lexicographic"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         SunflowerFamilyResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.row_identity"
 
 
 def test_core_equality_work_is_included_in_admission() -> None:
     """Pairwise equality against the core is charged, not only intersection size."""
     core = tuple(range(2_499))
     members = tuple((*core, 2_499 + index) for index in range(20))
-    with pytest.raises(OperationResourceAdmissionError, match="intersection work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(_family(members, ground=2_520), 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.sunflower.intersection_work_bound"
+    )
 
 
 def test_cancellation_is_checkpointed_before_member_expansion(

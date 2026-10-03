@@ -107,8 +107,12 @@ def test_complemented_large_period_uses_scalar_count() -> None:
 
 def test_negative_cutoff_is_a_typed_domain_rejection() -> None:
     source = _source([(2, [0])])
-    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_periodic_union_prefix_count(source, -1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.periodic_prefix.negative_cutoff"
+    )
 
 
 def test_scalar_count_keeps_period_lift_plan() -> None:

@@ -48,26 +48,29 @@ def test_construct_nonabelian_s3_and_retain_parent_bound_elements() -> None:
 
 
 def test_table_rejects_non_square_shape_and_wrong_identity() -> None:
-    with pytest.raises(OperationDomainValidationError, match="square"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_finite_group_table(
             FiniteGroupTableRequest(identity=0, multiplication=((0, 1),))
         )
-    with pytest.raises(OperationDomainValidationError, match="two-sided"):
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.invalid_input"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_finite_group_table(
             FiniteGroupTableRequest(identity=1, multiplication=S3)
         )
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.identity_law"
 
 
 def test_table_rejects_nonassociative_loop() -> None:
     nonassociative = [list(row) for row in S3]
     nonassociative[1][2] = 0
-    with pytest.raises(OperationDomainValidationError, match="associative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_finite_group_table(
             FiniteGroupTableRequest(
                 identity=0,
                 multiplication=tuple(tuple(row) for row in nonassociative),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.associativity"
 
 
 def test_element_index_is_checked_against_its_group_parent() -> None:
@@ -76,8 +79,9 @@ def test_element_index_is_checked_against_its_group_parent() -> None:
         multiplication=S3,
         inverse=(0, 1, 2, 3, 5, 4),
     )
-    with pytest.raises(ValidationError, match="belong"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupTableElement(group=group, index=6)
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.element_parent"
 
 
 def test_table_rejects_forged_inverse_map_from_construct_and_json() -> None:
@@ -87,9 +91,10 @@ def test_table_rejects_forged_inverse_map_from_construct_and_json() -> None:
         inverse=(0, 0, 2, 3, 5, 4),
     )
 
-    with pytest.raises(ValidationError, match="two-sided inverse"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupTable.model_validate_json(forged.model_dump_json())
-    with pytest.raises(ValidationError, match="two-sided inverse"):
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.inverse_binding"
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupTable.model_validate(
             {
                 "identity": 0,
@@ -97,7 +102,8 @@ def test_table_rejects_forged_inverse_map_from_construct_and_json() -> None:
                 "inverse": (0, 0, 2, 3, 5, 4),
             }
         )
-    with pytest.raises(ValidationError, match="two-sided inverse"):
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.inverse_binding"
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupTable.model_validate_json(
             json.dumps(
                 {
@@ -107,6 +113,7 @@ def test_table_rejects_forged_inverse_map_from_construct_and_json() -> None:
                 }
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.inverse_binding"
 
 
 def test_construct_readmits_bypass_constructed_request_before_group_laws() -> None:
@@ -118,9 +125,11 @@ def test_construct_readmits_bypass_constructed_request_before_group_laws() -> No
         multiplication=((False,),),
         identity=0,
     )
-    with pytest.raises(OperationDomainValidationError, match="request"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_finite_group_table(forged)
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.invalid_request"
 
     missing = FiniteGroupTableRequest.model_construct(identity=0)
-    with pytest.raises(OperationDomainValidationError, match="request"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_finite_group_table(missing)
+    assert exc_info.value.errors()[0]["type"] == "finite_group.table.invalid_request"

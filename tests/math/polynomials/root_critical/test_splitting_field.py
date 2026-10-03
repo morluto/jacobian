@@ -109,16 +109,24 @@ def test_zero_distance_row_has_zero_field_element() -> None:
 
 def test_unbound_field_is_rejected() -> None:
     field = exact_splitting_field(_poly(-2, 0, 1))
-    with pytest.raises(OperationDomainValidationError, match="bound to the exact"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         splitting_field_distance_profile(_poly(-1, 0, 1), field)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.root_critical.binding_source_mismatch"
+    )
 
 
 def test_forged_defining_polynomial_is_rejected() -> None:
     polynomial = _poly(-2, 0, 1)
     field = exact_splitting_field(polynomial)
     forged = field.model_copy(update={"defining_polynomial": _poly(-1, 0, 1)})
-    with pytest.raises(OperationDomainValidationError, match="computed exact field"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         splitting_field_distance_profile(polynomial, forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.root_critical.binding_field_mismatch"
+    )
 
 
 def test_canonical_rational_round_trip() -> None:
@@ -152,8 +160,12 @@ def test_field_degree_bound_rejected() -> None:
 
 
 def test_native_field_type_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="rational polynomial"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         exact_splitting_field("not a polynomial")  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.root_critical.splitting_field_polynomial_type"
+    )
 
 
 def _sympy_quotient_check(field: ExactSplittingField) -> None:

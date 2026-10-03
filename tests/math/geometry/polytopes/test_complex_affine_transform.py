@@ -115,28 +115,35 @@ def test_unimodular_shear_transports_square_triangulation_and_incidence():
 
 def test_affine_transform_requires_nonsingular_matrix():
     source = polytopal_complex_closure((_poly(((0, 0), (1, 0), (0, 1)), "t"),))
-    with pytest.raises(OperationDomainValidationError, match="invertible matrix"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_affine_transform(
             source, *_bound_map(((1, 2), (2, 4)), (0, 0))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.affine_transform_singular"
+    )
 
 
 def test_affine_transform_revalidates_complex_before_preflight():
-    with pytest.raises(OperationDomainValidationError, match="malformed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_affine_transform(
             PolytopalComplexClosureResult.model_construct(),
             *_bound_map(((1, 0), (0, 1)), (0, 0)),
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.complex_malformed"
 
 
 def test_affine_transform_admits_matrix_height_before_geometry_work():
     source = polytopal_complex_closure((_poly(((0, 0), (1, 0), (0, 1)), "t"),))
-    with pytest.raises(
-        OperationResourceAdmissionError, match="32-digit input envelope"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polytopal_complex_affine_transform(
             source, *_bound_map(((10**32, 0), (0, 1)), (0, 0))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.affine_transform_input_digits_over_envelope"
+    )
 
 
 def test_affine_transform_admits_result_coordinate_growth_before_target_closure():
@@ -144,9 +151,11 @@ def test_affine_transform_admits_result_coordinate_growth_before_target_closure(
     source = polytopal_complex_closure(
         (_poly(((base, 0), (base + 1, 0), (base, 1)), "large"),)
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="transformed coordinate exceeds"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polytopal_complex_affine_transform(
             source, *_bound_map(((base, 0), (0, 1)), (0, 0))
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.affine_transform_result_digits_over_envelope"
+    )

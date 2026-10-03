@@ -66,8 +66,9 @@ def test_zero_dimensional_sphere_and_zero_polynomial() -> None:
 def test_invalid_sphere_weight(weight: int) -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
-    with pytest.raises(OperationDomainValidationError, match="weight must"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         fixed_weight_moment(_polynomial(4), weight)
+    assert exc_info.value.errors()[0]["type"] == "boolean.fixed_weight_domain"
 
 
 def test_character_square_is_one_at_every_weight() -> None:

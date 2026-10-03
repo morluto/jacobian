@@ -210,8 +210,11 @@ def test_joint_table_parsing_does_not_establish_normalization() -> None:
         probabilities=((CanonicalRational(num=1, den=2),),),
     )
     decoded = FiniteJointTable.model_validate_json(table.model_dump_json())
-    with pytest.raises(OperationDomainValidationError, match="sum exactly to 1"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mutual_information(decoded)
+    assert (
+        exc_info.value.errors()[0]["type"] == "probability.joint_table_not_normalized"
+    )
 
 
 def test_likelihood_ratio_is_a_claim_after_serialization() -> None:
@@ -290,8 +293,12 @@ def test_dense_table_over_operation_support_envelope_is_resource_rejected() -> N
         probabilities=tuple(tuple(mass for _ in range(16)) for _ in range(16)),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="positive cells"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         mutual_information(table)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.mutual_information.support_bound"
+    )
 
 
 def test_joint_table_rejects_ambiguous_axes_and_shape() -> None:

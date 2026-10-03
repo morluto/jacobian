@@ -206,7 +206,7 @@ def test_certificate_matches_exhaustive_common_independent_set_oracle() -> None:
 def test_certificate_rejects_inexact_split() -> None:
     labels = ("a", "b")
     matroid = _matroid(((1, 0), (0, 1)), labels)
-    with pytest.raises(OperationDomainValidationError, match="sum coordinatewise"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=matroid,
@@ -217,6 +217,7 @@ def test_certificate_rejects_inexact_split() -> None:
                 second_split=_weight(labels, (0, 1)),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "matroid.weighted_intersection.split"
 
 
 def test_split_witness_supports_bounded_extra_digits_for_cancellation() -> None:
@@ -263,7 +264,7 @@ def test_certificate_rejects_a_feasible_but_nonoptimal_candidate() -> None:
     matroid = _matroid(((1, 0), (0, 1)), labels)
     weights = _weight(labels, (4, 2))
     zero = _weight(labels, (0, 0))
-    with pytest.raises(OperationDomainValidationError, match="does not certify"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=matroid,
@@ -274,6 +275,9 @@ def test_certificate_rejects_a_feasible_but_nonoptimal_candidate() -> None:
                 second_split=zero,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "matroid.weighted_intersection.optimality"
+    )
 
 
 def test_certificate_rejects_candidate_not_independent_in_both_sources() -> None:
@@ -282,7 +286,7 @@ def test_certificate_rejects_candidate_not_independent_in_both_sources() -> None
     free = _matroid(((1, 0), (0, 1)), labels)
     weights = _weight(labels, (2, 1))
     zero = _weight(labels, (0, 0))
-    with pytest.raises(OperationDomainValidationError, match="independent in both"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=parallel,
@@ -293,6 +297,10 @@ def test_certificate_rejects_candidate_not_independent_in_both_sources() -> None
                 second_split=zero,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "matroid.weighted_intersection.feasibility"
+    )
 
 
 def test_explicit_checker_rejects_forged_source_maximum_claims() -> None:
@@ -339,7 +347,7 @@ def test_aggregate_work_rejects_before_any_greedy_rank_expansion(
     monkeypatch.setattr(
         intersection, "_maximum_weight_independent_set_admitted", unexpected
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=matroid,
@@ -350,6 +358,9 @@ def test_aggregate_work_rejects_before_any_greedy_rank_expansion(
                 second_split=zero,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "matroid.weighted_intersection.work_bound"
+    )
 
 
 def test_output_size_rejects_long_repeated_axis_labels_before_rank_expansion(
@@ -368,9 +379,7 @@ def test_output_size_rejects_long_repeated_axis_labels_before_rank_expansion(
     monkeypatch.setattr(
         intersection, "_maximum_weight_independent_set_admitted", unexpected
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="codepoint allocation bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=matroid,
@@ -381,3 +390,6 @@ def test_output_size_rejects_long_repeated_axis_labels_before_rank_expansion(
                 second_split=zero,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "matroid.intersection.ground_axis_bound"
+    )

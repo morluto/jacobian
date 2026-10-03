@@ -113,7 +113,7 @@ def test_table_rejects_values_from_an_unbound_cyclotomic_axis() -> None:
         )
         for _ in table.partition.classes
     )
-    with pytest.raises(ValueError, match="table_cyclotomic_axis"):
+    with pytest.raises(ValueError) as exc_info:
         CharacterTableResult.model_validate(
             {
                 "partition": table.partition,
@@ -126,6 +126,9 @@ def test_table_rejects_values_from_an_unbound_cyclotomic_axis() -> None:
                 "degree_square_sum": 6,
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "groups.characters.table_cyclotomic_axis"
+    )
 
 
 def test_partition_survives_request_json_round_trip() -> None:

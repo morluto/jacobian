@@ -59,5 +59,6 @@ def test_rational_square_keeps_all_areas_after_large_translation() -> None:
 
 def test_truly_oversized_area_remains_refused() -> None:
     wide = Fraction(10**20000)
-    with pytest.raises(OperationResourceAdmissionError, match="area"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _run(((Fraction(0), Fraction(0)), (wide, Fraction(0)), (Fraction(0), wide)))
+    assert exc_info.value.errors()[0]["type"] == "geometry.triangle_area_result_bound"

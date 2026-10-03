@@ -49,8 +49,12 @@ def test_profile_rechecks_caller_supplied_simplicial_identities() -> None:
         checked_identities=source.checked_identities,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="fail a visible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         degeneracy_profile(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simplicial_set.degeneracy_profile_source_invalid"
+    )
 
 
 def test_degree_zero_profile_and_empty_degree_axis() -> None:

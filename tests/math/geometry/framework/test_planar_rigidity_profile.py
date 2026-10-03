@@ -123,8 +123,9 @@ def test_framework_source_excludes_zero_and_one_vertex_configurations(
         for index in range(point_count)
     )
 
-    with pytest.raises(ValidationError, match="at least 2 items"):
+    with pytest.raises(ValidationError) as exc_info:
         PointConfiguration(points=points)
+    assert exc_info.value.errors()[0]["type"] == "too_short"
 
 
 def test_noncollinear_triangle_has_full_infinitesimal_rank() -> None:
@@ -251,10 +252,18 @@ def test_graph_labels_must_equal_configuration_labels_before_execution(
 ) -> None:
     source = configuration((("a", 0, 0), ("b", 1, 0), ("c", 0, 1)))
 
-    with pytest.raises(ValidationError, match="point-label set"):
+    with pytest.raises(ValidationError) as exc_info:
         PlanarRigidityProfileRequest(configuration=source, graph=bad_graph)
-    with pytest.raises(OperationDomainValidationError, match="point-label set"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.graph_vertices_must_match_point_labels"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         planar_rigidity_profile(source, bad_graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.graph_vertices_must_match_point_labels"
+    )
 
 
 def test_configuration_must_be_planar() -> None:
@@ -266,10 +275,18 @@ def test_configuration_must_be_planar() -> None:
     )
     source_graph = graph(("a", "b"), (("a", "b"),))
 
-    with pytest.raises(ValidationError, match="exactly two coordinates"):
+    with pytest.raises(ValidationError) as exc_info:
         PlanarRigidityProfileRequest(configuration=source, graph=source_graph)
-    with pytest.raises(OperationDomainValidationError, match="exactly two coordinates"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.configuration_must_be_planar"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         planar_rigidity_profile(source, source_graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.configuration_must_be_planar"
+    )
 
 
 def test_derived_matrix_composes_unchanged_with_matrix_rank_compute() -> None:
@@ -303,8 +320,12 @@ def test_profile_round_trip_is_structural_and_source_bound() -> None:
     )
     forged = result.model_dump(mode="json")
     forged["edge_axis"] = [["a", "c"], ["a", "b"], ["b", "c"]]
-    with pytest.raises(ValidationError, match="lexicographically sorted"):
+    with pytest.raises(ValidationError) as exc_info:
         PlanarRigidityProfile.model_validate_json(json.dumps(forged))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.edge_axis_must_be_sorted_graph_edges"
+    )
 
 
 def test_serialized_profile_verifier_rejects_forged_matrix_claim() -> None:
@@ -513,10 +534,14 @@ def test_coordinate_work_accepts_and_rejects_the_exact_edge_boundary() -> None:
         MAX_FRAMEWORK_COORDINATE_WORK
     )
 
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         planar_rigidity_profile(source, rejected_graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.coordinate_work_exceeds_bound"
+    )
 
-    with pytest.raises(ValidationError, match="work bound"):
+    with pytest.raises(ValidationError) as exc_info:
         PlanarRigidityProfileRequest.model_validate_json(
             json.dumps(
                 {
@@ -525,6 +550,10 @@ def test_coordinate_work_accepts_and_rejects_the_exact_edge_boundary() -> None:
                 }
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.coordinate_work_exceeds_bound"
+    )
 
 
 def test_edgeless_native_call_still_enforces_source_parse_work() -> None:
@@ -549,5 +578,9 @@ def test_edgeless_native_call_still_enforces_source_parse_work() -> None:
     )
 
     assert source_work > MAX_FRAMEWORK_COORDINATE_WORK
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         planar_rigidity_profile(source, graph(("a", "b"), ()))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.coordinate_work_exceeds_bound"
+    )

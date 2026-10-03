@@ -67,8 +67,12 @@ def test_rejects_uncolored_nonempty_host() -> None:
 
 
 def test_rejects_unencodable_pattern_label() -> None:
-    with pytest.raises(ValidationError, match="Unicode scalar"):
+    with pytest.raises(ValidationError) as exc_info:
         SimpleUndirectedGraph(vertices=("\ud800",), edges=())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.kind_must_be_valid_unicode_scalar_text"
+    )
 
 
 def test_rejects_unbounded_retained_embedding_labels() -> None:
@@ -78,8 +82,12 @@ def test_rejects_unbounded_retained_embedding_labels() -> None:
         graph=SimpleUndirectedGraph(vertices=("y",), edges=())
     )
 
-    with pytest.raises(OperationDomainValidationError, match="label-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_rainbow_embedding_profile(pattern, host)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.rainbow_embedding.retained_labels_exceed_bound"
+    )
 
 
 def test_rejects_unbounded_embedding_family() -> None:

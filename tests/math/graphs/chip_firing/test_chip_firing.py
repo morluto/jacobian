@@ -58,16 +58,17 @@ C3 = _graph(C3_WIRE)
 
 class TestLaplacian:
     def test_result_requires_degree_axis(self) -> None:
-        with pytest.raises(ValidationError, match="vertex axis"):
+        with pytest.raises(ValidationError) as exc_info:
             LaplacianResult(
                 graph=GRAPH,
                 vertices=GRAPH.vertices,
                 laplacian=IntegerMatrix(entries=((0,), (0,))),
                 degrees=(0,),
             )
+        assert exc_info.value.errors()[0]["type"] == "chip_firing.laplacian_shape"
 
     def test_reduced_result_requires_sink_membership(self) -> None:
-        with pytest.raises(ValidationError, match="sink vertex"):
+        with pytest.raises(ValidationError) as exc_info:
             ReducedLaplacianResult(
                 graph=GRAPH,
                 vertices=("a", "b", "c"),
@@ -76,6 +77,7 @@ class TestLaplacian:
                     entries=((0, 0, 0), (0, 0, 0), (0, 0, 0))
                 ),
             )
+        assert exc_info.value.errors()[0]["type"] == "chip_firing.sink_not_in_graph"
 
     def test_path_graph(self) -> None:
         result = laplacian(GRAPH)
@@ -404,10 +406,12 @@ class TestCriticalGroup:
             }
         )
 
-        with pytest.raises(
-            OperationDomainValidationError, match="requires a connected graph"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             critical_group(graph, "a")
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "chip_firing.critical_group_requires_connected_graph"
+        )
 
     def test_critical_group_rejects_the_snf_work_boundary(self) -> None:
         order = 116
@@ -422,8 +426,12 @@ class TestCriticalGroup:
             }
         )
 
-        with pytest.raises(OperationDomainValidationError, match="SNF exceeds"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             critical_group(graph, labels[0])
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "chip_firing.critical_group_work_bound"
+        )
 
 
 class TestAbelJacobi:

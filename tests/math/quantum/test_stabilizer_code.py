@@ -150,5 +150,9 @@ def test_dependent_group_with_inconsistent_character_is_rejected() -> None:
         qubit_register=register,
         generators=(z, z),
     )
-    with pytest.raises(OperationDomainValidationError, match="independent generator"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         stabilizer_code_compute(dependent_group, (1, -1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quantum.stabilizer.code.group_not_independent"
+    )

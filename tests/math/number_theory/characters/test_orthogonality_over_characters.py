@@ -89,11 +89,18 @@ def test_modulus_one_residue_zero_is_the_unique_unit_class() -> None:
 def test_rejects_forged_group_and_integer_outside_the_input_envelope() -> None:
     group = character_group(5)
     forged = group.model_copy(update={"unit_residues": (1, 2, 3)})
-    with pytest.raises(OperationDomainValidationError, match="complete canonical unit"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dirichlet_character_orthogonality_over_characters(forged, 1, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "dirichlet_character.group.unit_residues_mismatch"
+    )
 
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         dirichlet_character_orthogonality_over_characters(group, 10**256, 1)
+    assert (
+        exc_info.value.errors()[0]["type"] == "dirichlet_character.integer_digit_bound"
+    )
 
 
 def test_native_result_is_independent_of_transport_byte_limits() -> None:

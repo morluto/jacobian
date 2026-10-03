@@ -126,8 +126,11 @@ class TestBoundary:
             pre=tuple((0,) for _ in range(17)),
             post=tuple((0,) for _ in range(17)),
         )
-        with pytest.raises(OperationResourceAdmissionError, match="at most"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             petri_invariants(wide)
+        assert (
+            exc_info.value.errors()[0]["type"] == "petri_net.invariants_dimension_bound"
+        )
 
     def test_empty_place_set_gives_unit_t_invariants(self) -> None:
         net = PetriNet(place_count=0, transition_count=2, pre=(), post=())

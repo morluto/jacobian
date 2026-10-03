@@ -88,13 +88,15 @@ def test_native_admission_rejects_nonpositive_modulus() -> None:
     """Native execution rejects modulus zero through the domain channel."""
     import pytest
 
-    with pytest.raises(ValueError, match="modulus must be positive"):
+    with pytest.raises(ValueError) as exc_info:
         compute_cyclic_prefix_sum_residue_profile(_sequence(1), 0)
+    assert exc_info.value.errors()[0]["type"] == "cyclic_prefix_sum.modulus_domain"
 
 
 def test_native_admission_rejects_noncanonical_sequence() -> None:
     """Native execution uses the shared canonical indexed sequence value."""
     import pytest
 
-    with pytest.raises(ValueError, match="indexed integer sequence"):
+    with pytest.raises(ValueError) as exc_info:
         compute_cyclic_prefix_sum_residue_profile((1, 2), 5)  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "cyclic_prefix_sum.sequence_type"

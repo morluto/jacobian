@@ -112,12 +112,11 @@ def test_addition_rejects_different_complex_values_even_when_support_matches():
     left = _function(left_complex, {(0,): 1})
     right = _function(right_complex, {(0,): 1})
 
-    with pytest.raises(
-        OperationDomainValidationError, match="identical canonical complex"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_add(
             PiecewisePolynomialAdditionRequest(left=left, right=right)
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_complex"
 
 
 def test_addition_rejects_a_claimed_piecewise_function_that_is_discontinuous():
@@ -132,10 +131,11 @@ def test_addition_rejects_a_claimed_piecewise_function_that_is_discontinuous():
     discontinuous = piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
     compatible = _function(complex_value, {(0,): 1})
 
-    with pytest.raises(OperationDomainValidationError, match="only compatible C0"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_add(
             PiecewisePolynomialAdditionRequest(left=discontinuous, right=compatible)
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_continuity"
 
 
 def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
@@ -169,12 +169,13 @@ def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
             status="COMPATIBLE",
         )
 
-    with pytest.raises(OperationResourceAdmissionError, match="sum piece may contain"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         piecewise_polynomial_add(
             PiecewisePolynomialAdditionRequest(
                 left=value(left_terms), right=value(right_terms)
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_terms"
 
 
 def test_addition_admits_result_support_after_exact_cancellation():
@@ -234,5 +235,6 @@ def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound(
 
 
 def test_native_addition_rejects_a_forged_request_with_a_typed_error():
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_add(PiecewisePolynomialAdditionRequest.model_construct())
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_type"

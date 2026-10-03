@@ -204,13 +204,17 @@ def test_full_rank_row_swap_canonicalizes_pivot_sets_independently() -> None:
 def test_pivot_columns_follow_source_axis_order() -> None:
     fp = _f2()
     m = _matrix(fp, [[[1], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])
-    with pytest.raises(ValidationError, match="pivot columns must follow"):
+    with pytest.raises(ValidationError) as exc_info:
         type(matrix_rank(m))(
             matrix=m,
             rank=2,
             pivot_rows=("r0", "r1"),
             pivot_columns=("c1", "c0"),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.matrix_rank.pivot_columns_order"
+    )
 
 
 @pytest.mark.parametrize(
@@ -264,8 +268,12 @@ def test_rank_claim_admits_field_even_for_empty_axes(empty: bool) -> None:
     )
     claim = MatrixRankResult(matrix=matrix, rank=0)
     decoded = MatrixRankResult.model_validate_json(claim.model_dump_json())
-    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         verify_matrix_rank(decoded)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.modulus_irreducible_over_prime_field"
+    )
 
 
 def test_rank_invariance_under_row_ops() -> None:

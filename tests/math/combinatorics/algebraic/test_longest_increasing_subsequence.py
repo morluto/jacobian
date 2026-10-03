@@ -88,12 +88,18 @@ def test_tool_is_published_with_strict_convention_and_bound_example() -> None:
 def test_oversized_forged_word_is_rejected_before_dynamic_programming() -> None:
     source = FiniteWord.model_construct(alphabet=("a",), letters=("a",) * 501)
     request = LongestIncreasingSubsequenceRequest.model_construct(word=source)
-    with pytest.raises(OperationResourceAdmissionError, match="word length"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         longest_increasing_subsequence(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "algebraic_combinatorics.lis_word_length"
+    )
 
 
 def test_payload_cardinality_is_admitted_before_dynamic_programming() -> None:
     source = FiniteWord.model_construct(alphabet=("a" * 140_801,), letters=())
     request = LongestIncreasingSubsequenceRequest.model_construct(word=source)
-    with pytest.raises(OperationResourceAdmissionError, match="payload exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         longest_increasing_subsequence(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "algebraic_combinatorics.lis_word_bytes"
+    )

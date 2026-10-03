@@ -246,13 +246,17 @@ class TestSumsetCardinality:
         assert not verify_sumset_cardinality(result)
 
     def test_result_rejects_noncanonical_support_order(self) -> None:
-        with pytest.raises(ValidationError, match="sumset support must be sorted"):
+        with pytest.raises(ValidationError) as exc_info:
             SumsetCardinalityResult(
                 left=FiniteIntegerSet(elements=(0,)),
                 right=FiniteIntegerSet(elements=(0, 1)),
                 cardinality=2,
                 support=FiniteIntegerSet(elements=(1, 0)),
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "additive_combinatorics.require_canonical_support"
+        )
 
 
 class TestDirectSumPredicate:

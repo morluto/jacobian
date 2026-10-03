@@ -221,8 +221,9 @@ def test_native_entry_rejects_malformed_term_without_raw_validation_errors() -> 
 
 def test_zero_term_has_no_generic_shift_quotients() -> None:
     term = ProperHypergeometricTerm(polynomial=polynomial([]))
-    with pytest.raises(OperationDomainValidationError, match="zero term"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         proper_hypergeometric_shift_quotients(term)
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.hypergeometric_zero_term"
 
 
 def test_large_affine_offsets_are_admitted_before_symbolic_expansion():
@@ -234,8 +235,12 @@ def test_large_affine_offsets_are_admitted_before_symbolic_expansion():
             ),
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="128 digits"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         proper_hypergeometric_shift_quotients(term)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.hypergeometric_quotient_coefficient_budget"
+    )
 
 
 def test_factorial_growth_is_rejected_before_expansion() -> None:

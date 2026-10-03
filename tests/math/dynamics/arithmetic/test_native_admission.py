@@ -130,8 +130,12 @@ def test_unadmitted_iterate_claim_is_not_refuted() -> None:
     claim = wire.compute_map_iterate(request)
     authored = claim.model_copy(update={"n": 11})
     restored = type(claim).model_validate_json(authored.model_dump_json())
-    with pytest.raises(OperationResourceAdmissionError, match="degree"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         wire.verify_map_iterate(restored)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "arithmetic_dynamics.iterate_degree_exceeds_bound"
+    )
 
 
 def test_finite_field_coefficients_length_is_admitted_before_conversion() -> None:

@@ -48,8 +48,12 @@ def test_rational_point_construct() -> None:
 def test_rational_point_construct_rejects_all_zero_coordinates() -> None:
     request = RationalPointConstructRequest(coordinates=(_r(0), _r(0)))
 
-    with pytest.raises(OperationDomainValidationError, match="nonzero coordinate"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_projective_point(request.coordinates)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.projective_point_least_nonzero_coordinate"
+    )
 
 
 def test_standard_chart() -> None:
@@ -64,8 +68,9 @@ def test_standard_chart() -> None:
 
 @pytest.mark.parametrize("chart_index", [-1, -2])
 def test_standard_chart_rejects_negative_native_chart_index(chart_index: int) -> None:
-    with pytest.raises(OperationDomainValidationError, match="out of range"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         standard_chart(_point(_r(1), _r(2), _r(3)), chart_index)
+    assert exc_info.value.errors()[0]["type"] == "geometry.chart_index_out_range"
 
 
 def test_chart_transition() -> None:
@@ -90,8 +95,9 @@ def test_chart_transition() -> None:
 def test_chart_transition_rejects_negative_native_chart_indices(
     chart_i: int, chart_j: int
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match="out of range"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         chart_transition(_point(_r(1), _r(2), _r(3)), chart_i, chart_j)
+    assert exc_info.value.errors()[0]["type"] == "geometry.chart_index_out_range"
 
 
 def test_chart_transition_is_invariant_under_homogeneous_rescaling() -> None:

@@ -123,8 +123,12 @@ def test_pattern_must_have_strictly_fewer_vertices_than_source() -> None:
     source = SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
     deck = unlabelled_vertex_deck(vertex_deletion_family(source))
     pattern = SimpleUndirectedGraph(vertices=("x", "y"), edges=(("x", "y"),))
-    with pytest.raises(OperationDomainValidationError, match="strictly smaller"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_subgraph_count(deck, pattern)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.kelly_subgraph_pattern_not_proper"
+    )
 
 
 def test_subgraph_count_rejects_oversized_label_echo_before_expansion() -> None:
@@ -159,5 +163,9 @@ def test_work_admission_precedes_copy_count_expansion(
 
     monkeypatch.setattr(operations, "MAX_KELLY_DECK_TOTAL_WORK", 0)
     monkeypatch.setattr(operations, "_noninduced_copy_count", fail)
-    with pytest.raises(OperationResourceAdmissionError, match="total work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         vertex_deck_subgraph_count(deck, pattern)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.kelly_subgraph_total_work_bound"
+    )

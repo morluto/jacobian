@@ -115,7 +115,7 @@ def test_multiplicity_schema_matches_runtime_bounds_and_anchoring() -> None:
 
 def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
     one_edge = {"vertices": ["v00", "v01", "v02"], "edges": [["v01", "v02"]]}
-    with pytest.raises(ValidationError, match="classes must be unique"):
+    with pytest.raises(ValidationError) as exc_info:
         AnonymousGraphCardMultiset.model_validate(
             {
                 "card_order": 3,
@@ -125,14 +125,16 @@ def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
                 ],
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_card_classes"
 
 
 def test_mixed_card_orders_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="declared card_order"):
+    with pytest.raises(ValidationError) as exc_info:
         AnonymousGraphCardMultisetRequest(
             card_order=2,
             cards=(graph(("a", "b"), ()), graph(("x",), ())),
         )
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_card_order"
 
 
 @pytest.mark.parametrize("card_order", [None, True, "2", -1])
@@ -236,10 +238,11 @@ def test_model_construct_edge_endpoints_are_bounded_before_set_checks(
     request = AnonymousGraphCardMultisetRequest.model_construct(
         card_order=2, cards=(forged_graph,)
     )
-    with pytest.raises(OperationDomainValidationError, match=message):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         anonymous_graph_card_multiset(
             getattr(request, "card_order", None), request.cards
         )
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_card_labels"
 
 
 def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
@@ -263,10 +266,14 @@ def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
         exact_work - 1,
         raising=False,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         anonymous_graph_card_multiset(
             getattr(request, "card_order", None), request.cards
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.anonymous_canonicalization_bound"
+    )
 
 
 def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
@@ -276,10 +283,14 @@ def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
     )
     tied_work = factorial(8) * (8 + 2 * comb(8, 2))
     assert tied_work > 2_000_000
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         anonymous_graph_card_multiset(
             getattr(request, "card_order", None), request.cards
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.anonymous_canonicalization_bound"
+    )
 
     payload = {
         "card_order": 8,

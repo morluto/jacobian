@@ -89,5 +89,9 @@ def test_derived_line_key_growth_is_rejected_before_pair_enumeration() -> None:
             label="c", coordinates=(wide,) + (CanonicalRational(num=0, den=1),) * 19
         ),
     )
-    with pytest.raises(ValueError, match="line keys exceed"):
+    with pytest.raises(ValueError) as exc_info:
         compute_spanned_line_profile(PointConfiguration(points=points))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.spanned_line_profile.result_bound"
+    )

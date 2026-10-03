@@ -141,8 +141,9 @@ def test_candidate_box_is_admitted_before_lattice_point_enumeration(
         "_iter_candidate_coordinates",
         lambda *_args: pytest.fail("candidate points enumerated before admission"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="candidate box"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         holes_through_degree(_PARITY_SEMIGROUP, 2)
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.hole_candidate_bound"
 
 
 def test_catalog_example_and_serialized_profile_round_trip() -> None:
@@ -181,8 +182,12 @@ def test_forged_typed_axes_are_bounded_before_revalidation_copy() -> None:
         grading=_PARITY_SEMIGROUP.grading,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="configuration"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         holes_through_degree(semigroup, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.hole_configuration_shape"
+    )
 
 
 def test_forged_grading_scalars_are_rejected_before_rational_validation() -> None:
@@ -192,5 +197,6 @@ def test_forged_grading_scalars_are_rejected_before_rational_validation() -> Non
         grading=(forged_rational, _PARITY_SEMIGROUP.grading[1]),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="exact integers"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         holes_through_degree(semigroup, 1)
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.grading"

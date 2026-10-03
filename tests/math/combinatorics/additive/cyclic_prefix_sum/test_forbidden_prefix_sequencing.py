@@ -296,7 +296,7 @@ def test_request_reduces_and_validates_canonical_sources() -> None:
     assert request.first_element == (0,)
     assert request.forbidden_values == ((1,), (2,))
 
-    with pytest.raises(ValidationError, match="distinct and sorted"):
+    with pytest.raises(ValidationError) as exc_info:
         ForbiddenPrefixSequencingRequest.model_validate_json(
             encode_strict_json(
                 {
@@ -305,7 +305,11 @@ def test_request_reduces_and_validates_canonical_sources() -> None:
                 }
             )
         )
-    with pytest.raises(ValidationError, match="match the group rank"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "additive_combinatorics.sequencing_source_canonical"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ForbiddenPrefixSequencingRequest.model_validate_json(
             encode_strict_json(
                 {
@@ -314,7 +318,11 @@ def test_request_reduces_and_validates_canonical_sources() -> None:
                 }
             )
         )
-    with pytest.raises(ValidationError, match="reduce to a source element"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "additive_combinatorics.sequencing_source_rank"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ForbiddenPrefixSequencingRequest.model_validate_json(
             encode_strict_json(
                 {
@@ -324,6 +332,10 @@ def test_request_reduces_and_validates_canonical_sources() -> None:
                 }
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "additive_combinatorics.sequencing_first_element_membership"
+    )
 
 
 def test_admission_uses_source_search_work_not_group_order() -> None:
@@ -341,7 +353,7 @@ def test_admission_uses_source_search_work_not_group_order() -> None:
         == "FOUND"
     )
 
-    with pytest.raises(ValidationError, match="at most 8 items"):
+    with pytest.raises(ValidationError) as exc_info:
         _run(
             ForbiddenPrefixSequencingRequest.model_validate_json(
                 encode_strict_json(
@@ -355,8 +367,9 @@ def test_admission_uses_source_search_work_not_group_order() -> None:
                 )
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "too_long"
 
-    with pytest.raises(ValidationError, match="less than or equal to 109601"):
+    with pytest.raises(ValidationError) as exc_info:
         ForbiddenPrefixSequencingRequest.model_validate_json(
             encode_strict_json(
                 {
@@ -365,6 +378,7 @@ def test_admission_uses_source_search_work_not_group_order() -> None:
                 }
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_schema_publishes_exact_search_envelope() -> None:

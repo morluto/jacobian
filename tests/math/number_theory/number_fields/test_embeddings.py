@@ -202,15 +202,21 @@ def test_embedding_identity_is_independent_of_valid_isolation_evidence() -> None
 
 
 def test_nonprimitive_presentations_and_malformed_elements_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="primitive"):
+    with pytest.raises(ValidationError) as exc_info:
         _field("2", "0", "2")
-    with pytest.raises(ValidationError, match="positive leading"):
+    assert exc_info.value.errors()[0]["type"] == "simple_number_field.not_primitive"
+    with pytest.raises(ValidationError) as exc_info:
         _field("-1", "0", "-1")
-    with pytest.raises(ValidationError, match="exactly one coefficient"):
+    assert exc_info.value.errors()[0]["type"] == "simple_number_field.leading_sign"
+    with pytest.raises(ValidationError) as exc_info:
         SimpleNumberFieldElement(
             presentation=_field("1", "0", "1"),
             coefficients_ascending=(_rational(1),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simple_number_field.element_coordinate_count"
+    )
 
 
 def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected() -> (
@@ -238,8 +244,11 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
 
     wrong_sign = negative.model_dump(mode="json")
     wrong_sign["half_plane"] = "POSITIVE_IMAGINARY"
-    with pytest.raises(ValidationError, match="half-plane"):
+    with pytest.raises(ValidationError) as exc_info:
         ComplexNumberFieldEmbeddingRecord.model_validate_json(json.dumps(wrong_sign))
+    assert (
+        exc_info.value.errors()[0]["type"] == "simple_number_field.complex_half_plane"
+    )
 
     boundary_root = RationalComplexIsolatingRectangle(
         real_lower=_rational(0),
@@ -426,8 +435,9 @@ def test_profile_structural_validation_rejects_an_incomplete_result() -> None:
     profile = embeddings(_field("1", "0", "1"))
     incomplete = profile.model_dump(mode="json")
     incomplete["records"].pop()
-    with pytest.raises(ValidationError, match="degree-many"):
+    with pytest.raises(ValidationError) as exc_info:
         NumberFieldEmbeddingProfile.model_validate_json(json.dumps(incomplete))
+    assert exc_info.value.errors()[0]["type"] == "simple_number_field.embedding_count"
 
 
 def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> None:
@@ -444,10 +454,9 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
         embeddings(degree_nine)
     assert caught.value.reason == "degree_bound"
-    with pytest.raises(
-        ValidationError, match="integer exceeds the decimal digit bound"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         _field("1", "0", "1" + "0" * MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS)
+    assert exc_info.value.errors()[0]["type"] == "exact_integer.digit_bound"
     with pytest.raises(ValidationError) as error:
         SimpleNumberFieldElement.model_validate(
             {
@@ -472,7 +481,7 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
 def test_real_embedding_rejects_degree_above_its_runtime_carrier_bound() -> None:
     degree_nine = _field("1", *("0",) * 8, "-2")
 
-    with pytest.raises(ValidationError, match="limited to degree 8"):
+    with pytest.raises(ValidationError) as exc_info:
         RealNumberFieldEmbedding(
             kind="REAL",
             presentation=degree_nine,
@@ -484,6 +493,10 @@ def test_real_embedding_rejects_degree_above_its_runtime_carrier_bound() -> None
                 },
             ),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simple_number_field.embedding_degree_bound"
+    )
 
 
 @pytest.mark.parametrize(

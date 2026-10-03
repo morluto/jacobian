@@ -200,8 +200,11 @@ def test_lower_dimensional_support_is_rejected() -> None:
         "MIN_PLUS",
         (((0, 0), 0), ((1, 0), 1), ((2, 0), 0)),
     )
-    with pytest.raises(OperationDomainValidationError, match="affine dimension two"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         tropical_bivariate_hypersurface(polynomial)
+    assert (
+        exc_info.value.errors()[0]["type"] == "tropical.hypersurface_newton_dimension"
+    )
 
 
 def test_term_count_admission_happens_before_lifted_hull(
@@ -219,8 +222,11 @@ def test_term_count_admission_happens_before_lifted_hull(
         lambda *_args, **_kwargs: pytest.fail("lifted hull entered before admission"),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="at most 10"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         tropical_bivariate_hypersurface(polynomial)
+    assert (
+        exc_info.value.errors()[0]["type"] == "tropical.regular_subdivision_term_bound"
+    )
 
 
 def test_ten_term_boundary_is_accepted() -> None:
@@ -239,7 +245,7 @@ def test_polynomial_value_rejects_duplicate_exponent_support() -> None:
         kind="FINITE",
         value=CanonicalRational.from_integer_ratio(0, 1),
     )
-    with pytest.raises(ValidationError, match="unique exponents"):
+    with pytest.raises(ValidationError) as exc_info:
         TropicalPolynomial(
             semiring=semiring,
             variables=("x", "y"),
@@ -249,3 +255,4 @@ def test_polynomial_value_rejects_duplicate_exponent_support() -> None:
                 TropicalPolynomialTerm(exponents=(1, 1), coefficient=scalar),
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "tropical.polynomial_terms"

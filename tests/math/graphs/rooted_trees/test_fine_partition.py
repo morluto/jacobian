@@ -308,8 +308,12 @@ def test_result_parsing_rejects_constructed_rows_not_bound_to_source() -> None:
         },
     }
 
-    with pytest.raises(ValidationError, match="partition all graph vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.rooted_tree.fine_partition.vertex_partition"
+    )
 
 
 def test_result_parsing_preserves_unproved_non_tree_diagnostic() -> None:
@@ -344,8 +348,12 @@ def test_result_parsing_rejects_non_tree_status_for_a_tree() -> None:
         },
     }
 
-    with pytest.raises(ValidationError, match="disconnected or cyclic"):
+    with pytest.raises(ValidationError) as exc_info:
         RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.rooted_tree.fine_partition.non_tree_status"
+    )
 
 
 def test_result_parsing_rejects_undeclared_upper_seed_without_key_error(
@@ -355,8 +363,12 @@ def test_result_parsing_rejects_undeclared_upper_seed_without_key_error(
     payload["outcome"]["shrubs"][0]["upper_seed"] = "missing"
     payload["outcome"]["shrubs"][0]["boundary_seeds"] = ["c", "missing"]
 
-    with pytest.raises(ValidationError, match="upper_seed must be a retained seed"):
+    with pytest.raises(ValidationError) as exc_info:
         RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.rooted_tree.fine_partition.shrub_upper_seed_membership"
+    )
 
 
 @pytest.mark.parametrize(
@@ -408,11 +420,15 @@ def test_utf8_label_byte_boundary_is_admitted_before_construction() -> None:
 
 def test_unencodable_label_is_rejected_by_the_graph_carrier() -> None:
     surrogate = "\ud800"
-    with pytest.raises(ValidationError, match="valid Unicode scalar values"):
+    with pytest.raises(ValidationError) as exc_info:
         SimpleUndirectedGraph(
             vertices=("root", surrogate),
             edges=(("root", surrogate),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.kind_must_be_valid_unicode_scalar_text"
+    )
 
 
 def test_empty_source_label_is_rejected_before_result_construction() -> None:
@@ -440,8 +456,12 @@ def test_structural_result_parsing_rejects_an_empty_retained_source_label() -> N
         },
     }
 
-    with pytest.raises(ValidationError, match="graph vertex labels must not be empty"):
+    with pytest.raises(ValidationError) as exc_info:
         RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.rooted_tree.fine_partition.empty_label"
+    )
 
 
 def test_shared_maximum_order_path_is_admitted() -> None:

@@ -372,8 +372,11 @@ class TestConstantWeightProfile:
 
     def test_rejects_mixed_weight_source(self) -> None:
         request = ConstantWeightProfileRequest(code=_code((0, 0, 1, 1), (1, 1, 1, 0)))
-        with pytest.raises(ValueError, match="all codewords"):
+        with pytest.raises(ValueError) as exc_info:
             constant_weight_profile(request.code)
+        assert (
+            exc_info.value.errors()[0]["type"] == "nonlinear_code.not_constant_weight"
+        )
 
 
 class TestSetSystemConversion:
@@ -582,16 +585,24 @@ class TestDerivedAdmissionBoundaries:
     ) -> None:
         ConstantWeightRequest.model_validate({"length": 101, "weight": 2})
         request = ConstantWeightRequest.model_validate({"length": 102, "weight": 2})
-        with pytest.raises(ValueError, match="entry bound"):
+        with pytest.raises(ValueError) as exc_info:
             constant_weight_code(request.length, request.weight)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "nonlinear_code.constant_weight_not_admitted"
+        )
         request = ConstantWeightRequest.model_validate(
             {
                 "length": MAX_EXPLICIT_CODE_LENGTH,
                 "weight": MAX_EXPLICIT_CODE_LENGTH // 2,
             }
         )
-        with pytest.raises(ValueError, match="entry bound"):
+        with pytest.raises(ValueError) as exc_info:
             constant_weight_code(request.length, request.weight)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "nonlinear_code.constant_weight_not_admitted"
+        )
 
 
 class TestCanonicalConsumers:
@@ -623,8 +634,12 @@ class TestCanonicalConsumers:
 
     def test_constant_weight_admission_rejects_central_binomial_work(self) -> None:
         request = ConstantWeightRequest.model_validate({"length": 64, "weight": 32})
-        with pytest.raises(ValueError, match="entry bound"):
+        with pytest.raises(ValueError) as exc_info:
             constant_weight_code(request.length, request.weight)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "nonlinear_code.constant_weight_not_admitted"
+        )
         properties = ConstantWeightRequest.model_json_schema()["properties"]
         assert properties["length"]["maximum"] == MAX_EXPLICIT_CODE_LENGTH
 

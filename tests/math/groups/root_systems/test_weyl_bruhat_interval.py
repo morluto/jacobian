@@ -133,8 +133,9 @@ def test_empty_equal_and_nonempty_intervals_round_trip_with_endpoint_binding() -
 def test_parent_mismatch_invalid_weyl_action_and_group_admission_are_rejected() -> None:
     a2_identity = weyl_element_from_word(A2, ())
     b2_identity = weyl_element_from_word(((2, -2), (-1, 2)), ())
-    with pytest.raises(OperationDomainValidationError, match="same ordered Cartan"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_bruhat_interval(a2_identity, b2_identity)
+    assert exc_info.value.errors()[0]["type"] == "root_system.weyl_parent_mismatch"
 
     invalid = WeylElement.model_construct(
         matrix=a2_identity.matrix,
@@ -147,8 +148,11 @@ def test_parent_mismatch_invalid_weyl_action_and_group_admission_are_rejected() 
 
     a4 = ((2, -1, 0, 0), (-1, 2, -1, 0), (0, -1, 2, -1), (0, 0, -1, 2))
     identity = weyl_element_from_word(a4, ())
-    with pytest.raises(OperationResourceAdmissionError, match="order at most 64"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         weyl_bruhat_interval(identity, identity)
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_system.bruhat_interval_group_bound"
+    )
 
 
 def test_bruhat_endpoint_bounds_raw_values_and_reports_endpoint_location() -> None:

@@ -406,8 +406,11 @@ def test_transport_rejects_forged_authored_path_basepoints(path_name: str) -> No
     )
     payload = result.model_dump()
     payload[path_name]["basepoint"] = "b"
-    with pytest.raises(ValidationError, match="basepoint_transport_walk"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupGaugeBasepointTransportResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "lattice_gauge.basepoint_transport_walk"
+    )
 
 
 def test_empty_transport_cannot_change_its_basepoint() -> None:
@@ -416,8 +419,12 @@ def test_empty_transport_cannot_change_its_basepoint() -> None:
     payload = result.model_dump()
     payload["target_basepoint"] = "b"
     payload["transported_loop"]["basepoint"] = "b"
-    with pytest.raises(ValidationError, match="basepoint_transport_connector"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lattice_gauge.basepoint_transport_connector"
+    )
 
 
 def test_curvature_rejects_a_field_on_a_different_lattice() -> None:
@@ -431,8 +438,9 @@ def test_curvature_rejects_a_field_on_a_different_lattice() -> None:
     )
     payload = result.model_dump()
     payload["field"] = other_field.model_dump()
-    with pytest.raises(ValidationError, match="curvature_parent"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.curvature_parent"
 
 
 def test_transport_decode_retains_values_without_replaying_holonomy() -> None:
@@ -503,5 +511,6 @@ def test_native_path_container_hooks_are_not_invoked() -> None:
             raise AssertionError("noncanonical path containers must not be traversed")
 
     path = OrientedGaugePath.model_construct(steps=UnvisitedSteps(), basepoint="a")
-    with pytest.raises(ValidationError, match="path_shape"):
+    with pytest.raises(ValidationError) as exc_info:
         OrientedGaugePath.model_validate(path)
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.path_shape"

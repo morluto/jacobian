@@ -166,8 +166,12 @@ def test_outer_denominator_zero_after_substitution_is_domain_error() -> None:
     inner = _map(("x",), ("y",), (_rf(1, (x,)),))
     outer = _map(("y",), ("z",), (_rf(1 / (y - 1), (y,)),))
 
-    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_maps(outer, inner)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function_map.compose.undefined_outer_denominator"
+    )
 
 
 def test_permuted_scaled_monomial_map_preserves_sparse_structure() -> None:
@@ -358,8 +362,9 @@ def test_axis_mismatch_and_authored_noncanonical_source_are_rejected() -> None:
     )
     bad_inner = _map(("x",), ("y",), (authored,))
     outer = _map(("y",), ("z",), (_rf(y, (y,)),))
-    with pytest.raises(OperationDomainValidationError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_maps(outer, bad_inner)
+    assert exc_info.value.errors()[0]["type"] == "not_coprime"
 
 
 def test_equal_inner_coordinates_make_an_outer_denominator_undefined() -> None:
@@ -371,8 +376,12 @@ def test_equal_inner_coordinates_make_an_outer_denominator_undefined() -> None:
         (_rf((x + 1) ** 64, (x,)), _rf((x + 1) ** 64, (x,))),
     )
     outer = _map(("y1", "y2"), ("z",), (_rf(1 / (y1**2 - y2**2), (y1, y2)),))
-    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_maps(outer, inner)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function_map.compose.undefined_outer_denominator"
+    )
 
 
 def test_identical_inner_denominators_are_one_construction_guard() -> None:
@@ -412,8 +421,12 @@ def test_scalar_scaled_inner_coordinates_vanish_before_exponent_bound() -> None:
         ("z",),
         (_rf(1 / (y1**2 - y2**2), (y1, y2)),),
     )
-    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_maps(outer, inner)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function_map.compose.undefined_outer_denominator"
+    )
 
 
 def test_general_rational_scalar_equivalence_vanishes() -> None:
@@ -429,8 +442,12 @@ def test_general_rational_scalar_equivalence_vanishes() -> None:
         ("z",),
         (_rf(1 / (y1 + y2 / 2), (y1, y2)),),
     )
-    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_maps(outer, inner)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "rational_function_map.compose.undefined_outer_denominator"
+    )
 
 
 def test_catalog_composition_batches_source_recognition_and_normalization(

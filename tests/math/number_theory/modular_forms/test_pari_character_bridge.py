@@ -160,5 +160,9 @@ def test_character_serializer_rejects_field_that_does_not_contain_values() -> No
         update={"coefficient_domain": RationalCyclotomicField(order=3)}
     )
 
-    with pytest.raises(OperationDomainValidationError, match="must contain"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _pari_character_request(space)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.pari_character_field_mismatch"
+    )

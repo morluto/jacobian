@@ -137,8 +137,9 @@ def test_axis_and_support_are_admitted_before_expansion() -> None:
         (1,) * (MAX_QUADRATIC_SCALE_AXIS + 1),
         axis=tuple(f"v{i}" for i in range(MAX_QUADRATIC_SCALE_AXIS + 1)),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="axis"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         scale_rational_quadratic_form(long_axis, _q(1))
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.scale_axis_bound"
 
     # Support counts diagonal plus cross terms, so exceeding it needs many
     # distinct cross terms on an axis that is still inside the axis bound.
@@ -153,24 +154,27 @@ def test_axis_and_support_are_admitted_before_expansion() -> None:
     assert len(wide.diagonal_coefficients) + len(wide.cross_terms) > (
         MAX_QUADRATIC_SCALE_SUPPORT
     )
-    with pytest.raises(OperationResourceAdmissionError, match="support"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         scale_rational_quadratic_form(wide, _q(1))
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.scale_support_bound"
 
 
 def test_an_oversized_factor_is_refused_by_its_own_width_bound() -> None:
     """A factor wider than the coefficient bound is refused as the factor."""
     huge = _q(10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS)
-    with pytest.raises(
-        OperationResourceAdmissionError, match=r"scale factor|coefficient"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         scale_rational_quadratic_form(_form((1,)), huge)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.scale_factor_bound"
 
 
 def test_coefficient_growth_is_refused_before_the_product_is_formed() -> None:
     """A wide source coefficient times a wide legal factor overflows the bound."""
     edge = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
-    with pytest.raises(OperationResourceAdmissionError, match="numerator"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         scale_rational_quadratic_form(_form((edge,)), _q(edge))
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.scale_coefficient_growth"
+    )
 
 
 def test_scaling_by_zero_drops_cancelled_cross_terms() -> None:

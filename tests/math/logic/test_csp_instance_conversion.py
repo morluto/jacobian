@@ -79,18 +79,30 @@ def test_homomorphisms_are_exactly_directly_enumerated_csp_solutions() -> None:
 def test_rejects_duplicate_constraint_ids_unknown_symbols_and_bad_scopes() -> None:
     payload = _instance().model_dump()
     payload["constraints"][1]["constraint_id"] = "c0"
-    with pytest.raises(ValidationError, match="constraint IDs must be unique"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCspInstance.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "relational.homomorphism.constraint_identity"
+    )
 
     payload = _instance().model_dump()
     payload["constraints"][0]["symbol_id"] = "Missing"
-    with pytest.raises(ValidationError, match="must name a template relation"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCspInstance.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "relational.homomorphism.constraint_symbol"
+    )
 
     payload = _instance().model_dump()
     payload["constraints"][0]["scope"] = [0, 3]
-    with pytest.raises(ValidationError, match="declared axis"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteCspInstance.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "relational.homomorphism.constraint_variable"
+    )
 
 
 def test_forged_oversized_instance_is_rejected_before_recursive_copy() -> None:

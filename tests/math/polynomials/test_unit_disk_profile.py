@@ -176,8 +176,12 @@ def test_independent_exact_rectangle_winding_oracle() -> None:
 
 
 def test_domain_and_resource_rejections_are_distinct() -> None:
-    with pytest.raises(OperationDomainValidationError, match="nonzero univariate"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         unit_disk_profile(polynomial([]))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_disk.nonzero_univariate_required"
+    )
     multivariate = RationalPolynomial.model_validate(
         {
             "variables": ["x", "y"],
@@ -186,8 +190,12 @@ def test_domain_and_resource_rejections_are_distinct() -> None:
             },
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="nonzero univariate"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         unit_disk_profile(multivariate)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_disk.nonzero_univariate_required"
+    )
     with pytest.raises(OperationResourceAdmissionError, match="derived"):
         unit_disk_profile(polynomial([1] * 100))
 

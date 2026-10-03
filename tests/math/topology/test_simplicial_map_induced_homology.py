@@ -277,8 +277,12 @@ def test_rejects_noncomposable_homology_maps() -> None:
         maps=tuple(tuple(range(len(level))) for level in source.sets),
     )
 
-    with pytest.raises(ValueError, match="first target homology"):
+    with pytest.raises(ValueError) as exc_info:
         compose_simplicial_homology_maps(
             induced_normalized_homology_map(c2_identity),
             induced_normalized_homology_map(simplex_identity),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simplicial_set.homology_map_composition_mismatch"
+    )

@@ -1073,11 +1073,9 @@ def test_point_height_is_revalidated_after_the_selected_translated_solve() -> No
         (Fraction(1, translation_denominator), Fraction(0)),
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="exact fixed-locus point bound exceeds",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         build_affine_torus_plan(source, deadline=monotonic() + 300)
+    assert exc_info.value.errors()[0]["type"] == "affine_torus.fixed_locus.point_height"
 
 
 def test_admission_uses_the_selected_translated_solve_height() -> None:

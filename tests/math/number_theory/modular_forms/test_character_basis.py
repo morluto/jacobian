@@ -323,10 +323,16 @@ def test_forged_character_coordinates_are_rejected_before_pari(
         raise AssertionError("PARI adapter ran for malformed caller coordinates")
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
-    with pytest.raises(OperationDomainValidationError, match="coordinates"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _pari_character_request(forged_space)
-    with pytest.raises(OperationDomainValidationError, match="coordinates"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.pari_character_coordinates"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_basis_q_expansions(forged_space)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.pari_character_coordinates"
+    )
 
 
 @pytest.mark.parametrize("missing", ["coefficient_domain", "character"])
@@ -357,7 +363,7 @@ def test_character_basis_carrier_rejects_foreign_coefficient_parent() -> None:
             CanonicalRational(num=0, den=1),
         ),
     )
-    with pytest.raises(ValidationError, match="belong to the space coefficient field"):
+    with pytest.raises(ValidationError) as exc_info:
         from jacobian.math.number_theory.modular_forms.character_basis_models import (
             ModularCharacterQExpansion,
         )
@@ -367,6 +373,10 @@ def test_character_basis_carrier_rejects_foreign_coefficient_parent() -> None:
             basis_id="gamma0-13-even-order6-character-sturm-v1",
             coefficients=(foreign, foreign, foreign),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_forms.character_q_coefficient_parent"
+    )
 
 
 @pytest.mark.parametrize(
@@ -525,8 +535,12 @@ def test_character_hecke_t1_is_identity_and_bad_level_index_is_rejected(
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
     assert modular_character_coordinates_hecke(_form(1), 1) == _form(1)
-    with pytest.raises(OperationDomainValidationError, match="gcd"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_hecke(_form(1), 13)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_hecke_coprime_level"
+    )
 
 
 @pytest.mark.parametrize("coordinate", [2, 10])
@@ -605,5 +619,8 @@ def test_character_coordinate_operation_rejects_forged_scalar_before_pari(
         raise AssertionError("PARI ran for malformed character coordinates")
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_q_expansion(forged_form)
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.cyclotomic_coordinate_type"
+    )

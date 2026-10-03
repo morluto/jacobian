@@ -78,5 +78,9 @@ def test_maximal_chain_output_bound_accepts_128_and_rejects_129() -> None:
     assert accepted.subdivision_complex is not None
     assert accepted.subdivision_complex.closure_size <= 2048
 
-    with pytest.raises(OperationResourceAdmissionError, match="more than 128"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_barycentric_subdivision(_four_simplex_with_isolated_points(9))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.require_barycentric_work_bounds_1"
+    )

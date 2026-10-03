@@ -60,13 +60,15 @@ def test_result_preserves_source() -> None:
 
 
 def test_negative_matrix_entry_is_rejected_before_quotients() -> None:
-    with pytest.raises(OperationDomainValidationError, match="nonnegative matrix"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_collatz_wielandt_profile(_rm(((_cr(-1),),)), (_cr(1),))
+    assert exc_info.value.errors()[0]["type"] == "collatz_wielandt.nonnegative_matrix"
 
 
 def test_nonpositive_vector_is_rejected_through_the_domain_boundary() -> None:
-    with pytest.raises(OperationDomainValidationError, match="positive vector"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_collatz_wielandt_profile(_rm(((_cr(1),),)), (_cr(0),))
+    assert exc_info.value.errors()[0]["type"] == "collatz_wielandt.positive_vector"
 
 
 def test_derived_quotient_must_fit_the_rational_carrier() -> None:

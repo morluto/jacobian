@@ -194,7 +194,7 @@ class TestDisjunctiveSumValidation:
             )
 
     def test_cyclic_component_rejected(self) -> None:
-        with pytest.raises(ValueError, match="acyclic"):
+        with pytest.raises(ValueError) as exc_info:
             compute_disjunctive_sum(
                 DisjunctiveSumRequest.model_validate(
                     {
@@ -211,6 +211,7 @@ class TestDisjunctiveSumValidation:
                     }
                 )
             )
+        assert exc_info.value.errors()[0]["type"] == "impartial_game_acyclic"
 
 
 class TestToolRegistration:

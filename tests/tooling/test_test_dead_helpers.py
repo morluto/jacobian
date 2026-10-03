@@ -197,6 +197,43 @@ def test_class_compound_statement_updates_bindings_in_order(tmp_path: Path) -> N
     assert "helper" in _reported(tmp_path, "test_class_compound.py", body)
 
 
+@pytest.mark.parametrize(
+    "suite",
+    [
+        "for _ in (0,):\n    helper = 2\n    value = helper",
+        "with context():\n    helper = 2\n    value = helper",
+        "try:\n    helper = 2\n    value = helper\nexcept Exception:\n    pass",
+        "match 1:\n    case _:\n        helper = 2\n        value = helper",
+    ],
+)
+def test_class_bindings_update_within_each_compound_suite(
+    tmp_path: Path, suite: str
+) -> None:
+    body = "def helper():\n    return 1\n\nclass TestCase:\n" + textwrap.indent(
+        suite, "    "
+    )
+    assert "helper" in _reported(tmp_path, "test_compound_suite.py", body)
+
+
+def test_nested_class_does_not_close_over_outer_class_bindings(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class TestOuter:
+        helper = 2
+
+        class Inner:
+            value = helper()
+
+        def test_inner(self):
+            assert self.Inner.value == 1
+    """
+    assert _reported(tmp_path, "test_nested_class.py", body) == set()
+
+
 def test_lambda_parameter_shadows_module_helper(tmp_path: Path) -> None:
     body = """\
     helper = 1
@@ -353,6 +390,27 @@ def test_earlier_module_binding_used_before_reassignment_is_live(
     path = _write(tmp_path, "test_binding_order.py", body)
     violations = _check_file(tmp_path, path)
     assert [(item.name, item.line) for item in violations] == [("CASES", 9)]
+
+
+def test_eager_module_call_resolves_deferred_load_before_reassignment(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    def use():
+        return helper()
+
+    VALUE = use()
+    helper = None
+
+    def test_value():
+        assert VALUE == 1
+    """
+    path = _write(tmp_path, "test_eager_call.py", body)
+    violations = _check_file(tmp_path, path)
+    assert [(item.name, item.line) for item in violations] == [("helper", 8)]
 
 
 def test_default_pytest_filename_pattern_is_scanned(tmp_path: Path) -> None:

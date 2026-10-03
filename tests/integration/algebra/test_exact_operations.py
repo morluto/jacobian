@@ -217,7 +217,7 @@ def test_root_isolation_rejects_expanded_normalization_without_decimal_formattin
     """Clearing valid rational denominators must return the intended bound error."""
 
     base = 10 ** (MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS - 1)
-    with pytest.raises(ValueError, match="primitive integer source coefficients"):
+    with pytest.raises(ValueError) as exc_info:
         compute_root_isolation(
             _wire(
                 UnivariatePolynomialRequest,
@@ -229,6 +229,9 @@ def test_root_isolation_rejects_expanded_normalization_without_decimal_formattin
                 ),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_isolation.source_coefficient_bound"
+    )
 
 
 def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
@@ -519,8 +522,9 @@ def test_closed_form_contract_requires_every_initial_value() -> None:
         characteristic_coefficients=(_r(1), _r(-1), _r(-1)),
         initial_values=(_r(1),),
     )
-    with pytest.raises(OperationDomainValidationError, match="initial value count"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_closed_form(request)
+    assert exc_info.value.errors()[0]["type"] == "recurrence_solving.invalid_domain"
 
 
 def _isolation_payload(coefficients: list[dict[str, str]]) -> dict[str, object]:

@@ -141,11 +141,14 @@ class TestLinkExtensionTools:
     def test_braid_product_public_bounds_are_exact(self) -> None:
         catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
         multiply = catalog["braid.word.multiply.compute"]
-        with pytest.raises(OperationDomainValidationError, match="same strand count"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             multiply.run(
                 BraidProductRequest(left=_two_braid(1), right=BraidWord(strand_count=3))
             )
-        with pytest.raises(OperationResourceAdmissionError, match="64-letter"):
+        assert (
+            exc_info.value.errors()[0]["type"] == "link_diagram.braid_parent_mismatch"
+        )
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             multiply.run(
                 BraidProductRequest(
                     left=BraidWord(
@@ -162,3 +165,7 @@ class TestLinkExtensionTools:
                     ),
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "link_diagram.braid_product_length_bound"
+        )

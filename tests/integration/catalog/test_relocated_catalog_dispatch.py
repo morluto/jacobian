@@ -730,13 +730,15 @@ def test_catalog_publishes_generic_mixed_pauli_logical_frame() -> None:
     # that GF(2) work. Structural violations are still rejected here.
     bad_register = frame.model_dump(mode="json")
     bad_register["x_logical_basis"][0]["qubit_register"] = {"qubit_ids": ["other"]}
-    with pytest.raises(ValidationError, match="register"):
+    with pytest.raises(ValidationError) as exc_info:
         LogicalPauliFrame.model_validate(bad_register)
+    assert exc_info.value.errors()[0]["type"] == "stabilizer.pauli_register_binding"
 
     bad_dimension = frame.model_dump(mode="json")
     bad_dimension["x_logical_basis"] = []
-    with pytest.raises(ValidationError, match="size k"):
+    with pytest.raises(ValidationError) as exc_info:
         LogicalPauliFrame.model_validate(bad_dimension)
+    assert exc_info.value.errors()[0]["type"] == "stabilizer.logical_frame_dimension"
 
 
 # --- relocated from tests/math/quantum/test_pauli_labels.py

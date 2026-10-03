@@ -34,7 +34,7 @@ def test_sparse_nullspace_roundtrip_and_defining_identity(free_column: int) -> N
 
 
 def test_sparse_nullspace_rejects_excessive_basis_before_expansion() -> None:
-    with pytest.raises(OperationDomainValidationError, match="output-cell"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(
             "matrix.nullspace.compute",
             {
@@ -47,3 +47,4 @@ def test_sparse_nullspace_rejects_excessive_basis_before_expansion() -> None:
             },
             Catalog.open(),
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"

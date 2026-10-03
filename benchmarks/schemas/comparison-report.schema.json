@@ -4,17 +4,350 @@
   "title": "Jacobian paired public workflow comparison",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "evidence_class", "causal_claim_authorized", "status", "dataset", "source_sha", "conditions", "pair_count", "metrics", "validation_failures"],
+  "required": [
+    "schema_version",
+    "evidence_class",
+    "causal_claim_authorized",
+    "status",
+    "dataset",
+    "source_sha",
+    "snapshot_id",
+    "conditions",
+    "pair_count",
+    "task_count",
+    "family_count",
+    "family_count_meaning",
+    "repetitions_per_task",
+    "metrics",
+    "validation_failures"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "VALID"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ],
   "properties": {
-    "schema_version": {"const": "1"},
-    "evidence_class": {"enum": ["public-workflow-comparison", "held-out-comparison"]},
-    "causal_claim_authorized": {"const": false},
-    "status": {"enum": ["VALID", "INVALID"]},
-    "dataset": {"type": ["string", "null"]},
-    "source_sha": {"type": ["string", "null"]},
-    "conditions": {"type": "object"},
-    "pair_count": {"type": "integer", "minimum": 0},
-    "metrics": {"type": "object"},
-    "validation_failures": {"type": "array", "items": {"type": "string"}}
+    "schema_version": {
+      "const": "3"
+    },
+    "evidence_class": {
+      "enum": [
+        "public-workflow-comparison",
+        "held-out-comparison"
+      ]
+    },
+    "causal_claim_authorized": {
+      "const": false
+    },
+    "status": {
+      "enum": [
+        "VALID",
+        "INVALID"
+      ]
+    },
+    "dataset": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "snapshot_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "conditions": {
+      "type": "object"
+    },
+    "pair_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "task_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "family_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "family_count_meaning": {
+      "const": "declared labels, not established independent units"
+    },
+    "repetitions_per_task": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/metric"
+      }
+    },
+    "validation_failures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "task_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task",
+        "pair_count",
+        "missing_pair_count",
+        "control_mean",
+        "treatment_mean",
+        "paired_delta"
+      ],
+      "properties": {
+        "task": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pair_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_pair_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "control_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "treatment_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "paired_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "task_average": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "weighting",
+        "task_count",
+        "observed_task_count",
+        "missing_task_count",
+        "control_mean",
+        "treatment_mean",
+        "paired_delta"
+      ],
+      "properties": {
+        "weighting": {
+          "const": "equal-observed-task-means"
+        },
+        "task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observed_task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "control_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "treatment_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "paired_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "family_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "weighting",
+        "task_count",
+        "observed_task_count",
+        "missing_task_count",
+        "control_mean",
+        "treatment_mean",
+        "paired_delta"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "weighting": {
+          "const": "equal-observed-task-means"
+        },
+        "task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observed_task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "control_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "treatment_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "paired_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pair_count",
+        "missing_pair_count",
+        "weighting",
+        "tasks",
+        "task_average",
+        "families",
+        "control_mean",
+        "treatment_mean",
+        "paired_delta",
+        "bootstrap_95_interval",
+        "mcnemar_exact_p",
+        "interpretation",
+        "inference_unavailable_reason"
+      ],
+      "properties": {
+        "pair_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_pair_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighting": {
+          "const": "equal-observed-pairs"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/task_summary"
+          }
+        },
+        "task_average": {
+          "$ref": "#/$defs/task_average"
+        },
+        "families": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/family_summary"
+              }
+            }
+          ]
+        },
+        "control_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "treatment_mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "paired_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bootstrap_95_interval": {
+          "type": "null"
+        },
+        "mcnemar_exact_p": {
+          "type": "null"
+        },
+        "interpretation": {
+          "const": "descriptive-only"
+        },
+        "inference_unavailable_reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
   }
 }

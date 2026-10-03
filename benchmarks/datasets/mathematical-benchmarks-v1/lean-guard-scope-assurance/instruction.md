@@ -14,7 +14,7 @@ The offline verifier derives every expected finding from the frozen semantic fac
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+The verifier replays the task-specific mathematical predicate from the submitted result. Return exactly five cases in the order given in /app/input.json, preserving each case's id.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

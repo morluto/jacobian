@@ -197,17 +197,24 @@ def test_euclidean_segment_admission_is_typed() -> None:
 def test_diophantine_square_admission_is_typed(
     operation_id: str, payload: dict[str, object]
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match="perfect square"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(operation_id, payload, Catalog.open())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine.discriminant_must_not_be_square"
+    )
 
 
 def test_modular_form_work_admission_is_typed() -> None:
-    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(
             "modular_form.level_one.named_q_expansion.compute",
             {"form": "DELTA", "truncation_order": 999_999},
             Catalog.open(),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "modular_form.exact_work_bound_exceeded"
+    )
 
 
 def test_orthogonal_recurrence_admission_is_typed() -> None:

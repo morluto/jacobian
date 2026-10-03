@@ -36,10 +36,6 @@ A2 = ((2, -1), (-1, 2))
 G2 = ((2, -3), (-1, 2))
 
 
-def _a1(weight: int) -> int:
-    return weight
-
-
 @pytest.mark.parametrize(
     "large",
     [

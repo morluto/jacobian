@@ -237,7 +237,6 @@ def test_inactive_coordinate_of_a_nonmonomial_row_is_canonical_zero() -> None:
 
 def test_quotient_rule_by_independent_exact_coefficient_convolution() -> None:
     from fractions import Fraction
-    from random import Random
 
     from jacobian.math.polynomials.values import SparseRationalPolynomial
 
@@ -261,17 +260,24 @@ def test_quotient_rule_by_independent_exact_coefficient_convolution() -> None:
             if e[axis]
         }
 
-    rng = Random(2879)
+    # Constructed rather than sampled. The aggregate dimension is already owned
+    # by test_many_sparse_rows_and_eight_axis_support (1,024 components) and the
+    # aggregate rejection tests, so this corpus exists only to give the exact
+    # convolution oracle distinct numerator and denominator structure. Twelve
+    # random draws just made that coverage probabilistic, and cost 8.3s of
+    # worker startup. These six guarantee every quadratic coefficient in 1..4
+    # appears and spread the constant terms further apart.
+    corpus = ((1, 0), (2, 1), (3, 2), (4, 3), (1, 6), (4, 11))
     x, y = symbols("x y")
     components = tuple(
         rational_function_from_sympy(
-            (rng.randrange(1, 5) * x * x + y + i) / (x + y + i + 1), ("x", "y")
+            (quadratic * x * x + y + constant) / (x + y + constant + 1), ("x", "y")
         )
-        for i in range(12)
+        for quadratic, constant in corpus
     )
     source = RationalFunctionMap(
         source_variables=("x", "y"),
-        target_coordinates=tuple(f"u{i}" for i in range(12)),
+        target_coordinates=tuple(f"u{i}" for i in range(len(components))),
         components=components,
     )
     result = jacobian_matrix(source)

@@ -172,10 +172,14 @@ def test_uncancelled_scalar_growth_still_refuses_oversized_components(
     factor = 2 if near_boundary else 10
     value = Fraction(1, component) if reciprocal else Fraction(component)
     scalar = Fraction(1, factor) if reciprocal else Fraction(factor)
-    with pytest.raises(OperationResourceAdmissionError, match="scaled coefficient"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         piecewise_polynomial_scalar_multiply(
             PiecewisePolynomialScalarMultiplicationRequest(
                 function=_constant(value),
                 scalar=CanonicalRational.from_fraction(scalar),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.scalar_multiplication_growth"
+    )

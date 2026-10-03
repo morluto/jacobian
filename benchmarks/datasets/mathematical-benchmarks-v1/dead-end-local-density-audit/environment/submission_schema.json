@@ -11,6 +11,12 @@
           ]
         },
         "case_id": {
+          "enum": [
+            "invertible-collisions",
+            "singly-divisible",
+            "square-divisible-vacuous",
+            "square-divisible-obstructed"
+          ],
           "type": "string"
         },
         "density_denominator": {
@@ -51,6 +57,68 @@
       "additionalProperties": false,
       "properties": {
         "cases": {
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "case_id": {
+                    "const": "invertible-collisions"
+                  }
+                },
+                "required": [
+                  "case_id"
+                ],
+                "type": "object"
+              },
+              "maxContains": 1,
+              "minContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "case_id": {
+                    "const": "singly-divisible"
+                  }
+                },
+                "required": [
+                  "case_id"
+                ],
+                "type": "object"
+              },
+              "maxContains": 1,
+              "minContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "case_id": {
+                    "const": "square-divisible-vacuous"
+                  }
+                },
+                "required": [
+                  "case_id"
+                ],
+                "type": "object"
+              },
+              "maxContains": 1,
+              "minContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "case_id": {
+                    "const": "square-divisible-obstructed"
+                  }
+                },
+                "required": [
+                  "case_id"
+                ],
+                "type": "object"
+              },
+              "maxContains": 1,
+              "minContains": 1
+            }
+          ],
           "items": {
             "$ref": "#/$defs/case"
           },

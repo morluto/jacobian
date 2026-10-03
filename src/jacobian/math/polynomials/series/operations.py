@@ -25,6 +25,7 @@ from jacobian.math.polynomials.series._flint import (
 from jacobian.math.polynomials.series._flint import (
     inverse_backend as _inverse_backend,
 )
+from jacobian.math.polynomials.series._flint import power_backend as _power_backend
 from jacobian.math.polynomials.series._flint import (
     product_residual_backend as _product_residual_backend,
 )
@@ -32,6 +33,7 @@ from jacobian.math.polynomials.series._flint import (
     reversion_backend as _reversion_backend,
 )
 from jacobian.math.polynomials.series._models import (
+    MAX_RESULT_RATIONAL_DIGITS,
     MAX_TRUNCATION_ORDER,
     SeriesArithmeticResult,
     SeriesComposeResult,
@@ -48,7 +50,8 @@ from jacobian.math.polynomials.series._models import (
     SeriesToPolynomialResult,
     SeriesTruncateResult,
     TruncatedSeries,
-    _has_degree_at_most,
+    _admit_reversion_envelope,
+    _height,
     admit_native_add_subtract,
     admit_native_compose,
     admit_native_divide,
@@ -210,25 +213,13 @@ def power(series: TruncatedSeries, exponent: int) -> SeriesPowerResult:
     """Compute series^exponent via binary exponentiation modulo x^N."""
     _run_admission(lambda: admit_native_power(series, exponent))
     n = series.truncation_order
-    a = _series_fractions(series)
-
-    result_coeffs = [Fraction(1)] + [Fraction(0)] * (n - 1)
-    base = a[:]
-    multiplications = 0
-    e = exponent
-    while e > 0:
-        if e & 1:
-            result_coeffs = _cauchy_convolve(result_coeffs, base, n)
-            multiplications += 1
-        e >>= 1
-        if e > 0:
-            base = _cauchy_convolve(base, base, n)
-            multiplications += 1
-
-    return SeriesPowerResult(
-        result=_series_result(series.variable, n, result_coeffs),
-        multiplication_count=multiplications,
+    coefficients, count = _power_backend(tuple(_series_fractions(series)), exponent)
+    result = SeriesPowerResult(
+        result=_series_result(series.variable, n, coefficients),
+        multiplication_count=count,
     )
+    request_checkpoint("after exact series power construction")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -440,30 +431,58 @@ def reversion(series: TruncatedSeries) -> SeriesReversionResult:
 
 def verify_reversion(claim: SeriesReversionResult) -> bool:
     """Verify both composition identities and their serialized ledgers."""
+    from ._unit_bounds import require_series
+
     try:
-        admit_native_reversion(claim.source)
+        envelope = _admit_reversion_envelope(claim.source)
+        order = claim.source.truncation_order
+        if (
+            getattr(claim, "left_identity", None) != "F_OF_G_IS_X_MOD_X_TO_N"
+            or getattr(claim, "right_identity", None) != "G_OF_F_IS_X_MOD_X_TO_N"
+            or not _zero_ledger(getattr(claim, "left_residual", ()), order)
+            or not _zero_ledger(getattr(claim, "right_residual", ()), order)
+        ):
+            return False
+        require_series(
+            claim.result,
+            maximum_digits=MAX_RESULT_RATIONAL_DIGITS,
+            resource_family="reversion",
+        )
     except OperationResourceAdmissionError:
         raise
     except (AttributeError, OperationDomainValidationError, TypeError, ValueError):
         return False
     if (
         claim.source.variable != claim.result.variable
-        or claim.source.truncation_order != claim.result.truncation_order
+        or order != claim.result.truncation_order
     ):
         return False
-    order = claim.source.truncation_order
-    if _has_degree_at_most(claim.source, 1):
+    if envelope is None:
         return (
             claim.result.coefficients[0].num == 0
             and all(value.num == 0 for value in claim.result.coefficients[2:])
             and claim.source.coefficients[1].as_fraction()
             * claim.result.coefficients[1].as_fraction()
             == 1
-            and all(
-                value.num == 0
-                for value in (*claim.left_residual, *claim.right_residual)
-            )
         )
+    # Lagrange inversion supplies necessary component bounds and an exact
+    # common denominator multiple for every valid inverse. Rejecting a
+    # violation is a mathematical negative, not a failed resource estimate.
+    # Candidates satisfying these bounds fit the already admitted source
+    # envelope for both compositions; the exact identities still decide truth.
+    heights, common_denominator = envelope
+    for value, bound in zip(claim.result.coefficients, heights, strict=True):
+        if bound is None:
+            if value.num:
+                return False
+            continue
+        actual = _height(value)
+        if (
+            actual.numerator_digits > bound.numerator_digits
+            or actual.denominator_digits > bound.denominator_digits
+            or common_denominator % value.den
+        ):
+            return False
     left = _compose_coefficients(claim.source, claim.result)
     right = _compose_coefficients(claim.result, claim.source)
     target = [Fraction(1) if index == 1 else Fraction(0) for index in range(order)]

@@ -40,10 +40,12 @@ def _assert_golden_root(value: MahlerAlgebraicValue, index: int) -> None:
 
 def test_mahler_coefficient_digit_bound_is_an_admission_error() -> None:
     oversized = 10**MAX_MAHLER_COEFFICIENT_DIGITS
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         mahler_measure(IntegerPolynomial(coefficients=(oversized, -1, -1)))
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_coefficient_bound"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, oversized)))
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_coefficient_bound"
 
 
 def test_mahler_result_does_not_replay_coefficient_digit_admission() -> None:
@@ -254,52 +256,59 @@ def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
     reciprocal = reciprocal_profile(polynomial)
     assert reciprocal.degree == MAX_MAHLER_DEGREE + 1
     assert reciprocal.state == "RECIPROCAL"
-    with pytest.raises(ValidationError, match="degree at most"):
+    with pytest.raises(ValidationError) as exc_info:
         MahlerMeasureRequest(polynomial=polynomial)
-    with pytest.raises(OperationDomainValidationError, match="degree at most"):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_degree_bound"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mahler_measure(polynomial)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_degree_bound"
 
 
 def test_mahler_measure_rejects_empty_native_coefficients() -> None:
     forged = IntegerPolynomial.model_construct(coefficients=())
-    with pytest.raises(
-        OperationDomainValidationError, match="at least one coefficient"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mahler_measure(forged)
-    with pytest.raises(
-        OperationDomainValidationError, match="at least one coefficient"
-    ):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_shape"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reciprocal_profile(forged)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_shape"
 
 
 def test_native_profiles_reject_forged_carriers_beyond_integer_envelope() -> None:
     oversized = IntegerPolynomial.model_construct(
         coefficients=(1,) * (MAX_POLYNOMIAL_TERMS + 1)
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="coefficient-carrier envelope"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(oversized)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_carrier_term_bound"
     too_wide = IntegerPolynomial.model_construct(
         coefficients=(10**MAX_CANONICAL_INTEGER_DIGITS,)
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="canonical integer representation"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(too_wide)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.mahler_carrier_integer_digits"
+    )
 
 
 def test_reciprocal_profile_charges_endpoint_fields_in_output_admission() -> None:
     wide = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1)
     polynomial = IntegerPolynomial.model_construct(coefficients=(wide,) * 121)
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(polynomial)
+    # Serialized endpoint fields are charged against the exact output bound.
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.reciprocal_profile_result_digits"
+    )
 
 
 def test_mahler_measure_rejects_leading_zero_native_coefficients() -> None:
     forged = IntegerPolynomial.model_construct(coefficients=(0, 1))
-    with pytest.raises(OperationDomainValidationError, match="leading zeros"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mahler_measure(forged)
+    # Leading zeros violate the canonical polynomial shape.
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_shape"
 
 
 def test_reciprocal_profile_preflights_duplicated_coefficient_output(
@@ -309,8 +318,13 @@ def test_reciprocal_profile_preflights_duplicated_coefficient_output(
         "jacobian.math.polynomials._mahler_kernel.MAX_PROFILE_RESULT_DIGITS",
         20,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
+    # Duplicated coefficient output is preflighted against the output bound.
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.reciprocal_profile_result_digits"
+    )
 
 
 def test_reciprocal_profile_charges_serialized_endpoint_fields(
@@ -320,8 +334,13 @@ def test_reciprocal_profile_charges_serialized_endpoint_fields(
         "jacobian.math.polynomials._mahler_kernel.MAX_PROFILE_RESULT_DIGITS",
         70,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
+    # Serialized endpoint fields are charged against the exact output bound.
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.reciprocal_profile_result_digits"
+    )
 
 
 def test_reciprocal_profile_is_not_a_public_catalog_operation() -> None:
@@ -432,9 +451,12 @@ def test_large_perfect_square_discriminant_avoids_surd_admission() -> None:
 
 
 def test_native_mahler_family_rejects_non_polynomial_arguments() -> None:
-    with pytest.raises(OperationDomainValidationError, match="canonical integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         mahler_measure((1, -1, -1))  # type: ignore[arg-type]
-    with pytest.raises(OperationDomainValidationError, match="canonical integer"):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_type"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         quadratic_root_profile((1, -1, -1))  # type: ignore[arg-type]
-    with pytest.raises(OperationDomainValidationError, match="canonical integer"):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_type"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reciprocal_profile((1, 0, 1))  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_polynomial_type"

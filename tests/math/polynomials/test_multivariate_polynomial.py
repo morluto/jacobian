@@ -230,10 +230,10 @@ class TestMultivariateGcd:
 
         left = _poly(("x",), (("1/1", (1,)),))
         right = _poly(("x",), (("1/1", (0,)),))
-        with pytest.raises(
-            OperationDomainValidationError, match="at least two variables"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _compute_gcd(MultivariateGcdRequest(left=left, right=right))
+        # Contract: multivariate operations require at least two variables.
+        assert exc_info.value.errors()[0]["type"] == "polynomial.multivariate_contract"
 
     def test_gcd_rejects_mismatched_variables(self) -> None:
         """Polynomials must share the same ordered variable list."""

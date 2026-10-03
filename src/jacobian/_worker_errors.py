@@ -18,10 +18,55 @@ from jacobian._execution import (
     OperationResourceExhaustedError,
 )
 
+_TIMEOUT_CONTEXT_FIELDS = {"configured_seconds", "adjustable_field_path"}
+_MAX_TIMEOUT_PATH_COMPONENTS = 32
+_MAX_TIMEOUT_PATH_COMPONENT_LENGTH = 128
+
+
+def _decode_timeout_context(
+    response: dict[str, object],
+) -> tuple[float | None, tuple[str | int, ...] | None]:
+    configured: float | None = None
+    if "configured_seconds" in response:
+        value = response["configured_seconds"]
+        if not (type(value) is int or type(value) is float) or value < 0:
+            raise ValueError("invalid configured timeout")
+        try:
+            finite = math.isfinite(value)
+        except OverflowError as exc:
+            raise ValueError("invalid configured timeout") from exc
+        if not finite:
+            raise ValueError("invalid configured timeout")
+        configured = value
+    path: tuple[str | int, ...] | None = None
+    if "adjustable_field_path" in response:
+        components = response["adjustable_field_path"]
+        if (
+            type(components) is not list
+            or not components
+            or len(components) > _MAX_TIMEOUT_PATH_COMPONENTS
+        ):
+            raise ValueError("invalid timeout field path")
+        for component in components:
+            if type(component) is str:
+                if not 1 <= len(component) <= _MAX_TIMEOUT_PATH_COMPONENT_LENGTH:
+                    raise ValueError("invalid timeout field path")
+            elif type(component) is not int or not 0 <= component < 2**53:
+                raise ValueError("invalid timeout field path")
+        path = tuple(components)
+    return configured, path
+
 
 @contextmanager
-def worker_execution_errors() -> Iterator[None]:
-    """Encode classified failures; retain bounded backend causes privately."""
+def worker_execution_errors(
+    *, preserve_timeout_context: bool = False
+) -> Iterator[None]:
+    """Encode classified failures; retain bounded backend causes privately.
+
+    An owner may preserve source-authored timeout context after proving its
+    complete error frame fits its existing stdout allowance. Other workers
+    retain their compact error branch and unchanged channel requirements.
+    """
     try:
         try:
             yield
@@ -35,7 +80,7 @@ def worker_execution_errors() -> Iterator[None]:
         OperationExecutionTimeoutError,
         OperationExecutionCancelledError,
     ) as exc:
-        error = {"kind": "execution_error", "stage": exc.stage.value}
+        error: dict[str, object] = {"kind": "execution_error", "stage": exc.stage.value}
         if isinstance(exc, OperationBackendError):
             error["reason"] = exc.reason.value
             error["diagnostic"] = "".join(traceback.format_exception(exc))[-1024:]
@@ -47,6 +92,22 @@ def worker_execution_errors() -> Iterator[None]:
                 if isinstance(exc, OperationExecutionTimeoutError)
                 else "cancelled"
             )
+            if (
+                isinstance(exc, OperationExecutionTimeoutError)
+                and preserve_timeout_context
+            ):
+                if exc.configured_seconds is not None:
+                    error["configured_seconds"] = exc.configured_seconds
+                if exc.adjustable_field_path is not None:
+                    path = exc.adjustable_field_path
+                    if (
+                        type(path) is not tuple
+                        or not path
+                        or len(path) > _MAX_TIMEOUT_PATH_COMPONENTS
+                    ):
+                        raise ValueError("invalid timeout field path") from None
+                    error["adjustable_field_path"] = list(path)
+                _decode_timeout_context(error)
         print(json.dumps(error, separators=(",", ":")))
 
 
@@ -60,15 +121,23 @@ def decode_worker_execution_error(response: object) -> None:
             raise OperationResourceExhaustedError(
                 ExecutionResource(response["resource"]), stage=stage
             )
-        if set(response) == {"kind", "stage", "reason"}:
-            if response["reason"] == "timeout":
-                raise OperationExecutionTimeoutError(
-                    "operation worker deadline expired", stage=stage
-                )
-            if response["reason"] == "cancelled":
-                raise OperationExecutionCancelledError(
-                    "operation worker cancelled", stage=stage
-                )
+        if response.get("reason") == "timeout" and set(response) <= (
+            {"kind", "stage", "reason"} | _TIMEOUT_CONTEXT_FIELDS
+        ):
+            configured, path = _decode_timeout_context(response)
+            raise OperationExecutionTimeoutError(
+                "operation worker deadline expired",
+                stage=stage,
+                configured_seconds=configured,
+                adjustable_field_path=path,
+            )
+        if (
+            set(response) == {"kind", "stage", "reason"}
+            and response["reason"] == "cancelled"
+        ):
+            raise OperationExecutionCancelledError(
+                "operation worker cancelled", stage=stage
+            )
         if set(response) == {"kind", "stage", "reason", "diagnostic"}:
             reason = BackendFailureReason(response["reason"])
             diagnostic = response["diagnostic"]

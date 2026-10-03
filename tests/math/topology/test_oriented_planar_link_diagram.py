@@ -121,11 +121,6 @@ def test_torus_rotation_system_is_rejected_even_when_pairings_are_complete() -> 
         )
 
 
-def _legacy_projection(value: OrientedLinkDiagram) -> OrientedLinkDiagram:
-    """Explicit one-way projection after V2 orientation has been validated."""
-    return value
-
-
 def test_mirror_reverses_checked_crossing_signs_and_preserves_sphere_embedding() -> (
     None
 ):

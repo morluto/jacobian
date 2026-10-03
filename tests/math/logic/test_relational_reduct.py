@@ -16,8 +16,6 @@ from jacobian.math.logic.relational_structures._admission import (
 )
 from jacobian.math.logic.relational_structures._models import RelationalReductRequest
 
-OPERATION_ID = "relational_structure.reduct.compute"
-
 
 def _structure(
     signature: tuple[tuple[str, int], ...],

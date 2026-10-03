@@ -18,8 +18,6 @@ from jacobian.math.function_fields._models import (
     FiniteFunctionField,
 )
 
-OPERATION_ID = "function_field.element.add.compute"
-
 
 def _polynomial(prime: int, coefficients: tuple[int, ...]) -> PrimeFieldPolynomial:
     return PrimeFieldPolynomial(characteristic=prime, coefficients=coefficients)

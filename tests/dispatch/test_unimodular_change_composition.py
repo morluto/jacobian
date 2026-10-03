@@ -7,49 +7,6 @@ import json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
-from jacobian.math.matrices.values import IntegerMatrix
-from jacobian.math.number_theory.quadratic_forms.integral._models import (
-    IntegralQuadraticForm,
-)
-
-
-def _polynomial_value(form: IntegralQuadraticForm, coordinates: tuple[int, ...]) -> int:
-    result = sum(
-        coefficient * coordinate**2
-        for coefficient, coordinate in zip(
-            form.diagonal_coefficients, coordinates, strict=True
-        )
-    )
-    return result + sum(
-        term.coefficient * coordinates[term.left] * coordinates[term.right]
-        for term in form.cross_terms
-    )
-
-
-def _matrix_vector(matrix: IntegerMatrix, vector: tuple[int, ...]) -> tuple[int, ...]:
-    return tuple(
-        sum(
-            int(entry) * coordinate
-            for entry, coordinate in zip(row, vector, strict=True)
-        )
-        for row in matrix.entries
-    )
-
-
-def _request(
-    form: IntegralQuadraticForm,
-    matrix: tuple[tuple[int, ...], ...],
-    target_axis: tuple[str, ...],
-) -> tuple[IntegralQuadraticForm, IntegerMatrix, tuple[str, ...]]:
-    return (
-        form,
-        IntegerMatrix(
-            row_count=len(matrix),
-            column_count=len(matrix),
-            entries=matrix,
-        ),
-        target_axis,
-    )
 
 
 def test_advertised_tool_composes_after_dispatch_roundtrip() -> None:

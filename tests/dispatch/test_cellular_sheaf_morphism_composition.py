@@ -74,30 +74,6 @@ def _triangle_sheaf(
     return result.sheaf
 
 
-def _independent_square_oracle(source, target, components) -> bool:
-    """Check each incidence square with a separate Fraction implementation."""
-    phi = {
-        tuple(key): Fraction(matrix[0][0].num, matrix[0][0].den)
-        for key, matrix in components
-    }
-    rho_f = {
-        (item.source, item.target): Fraction(
-            item.entries[0][0].num, item.entries[0][0].den
-        )
-        for item in source.cover_restrictions
-    }
-    rho_g = {
-        (item.source, item.target): Fraction(
-            item.entries[0][0].num, item.entries[0][0].den
-        )
-        for item in target.cover_restrictions
-    }
-    return all(
-        rho_g[(face, coface)] * phi[face] == phi[coface] * rho_f[(face, coface)]
-        for face, coface in rho_f
-    )
-
-
 def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> None:
     f, g, h = _triangle_sheaf(), _triangle_sheaf(), _triangle_sheaf()
     axis = f.canonical_face_order

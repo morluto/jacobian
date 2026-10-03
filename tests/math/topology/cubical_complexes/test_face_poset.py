@@ -13,8 +13,6 @@ from jacobian.math.topology.cubical_complexes._models import (
 )
 from jacobian.math.topology.cubical_complexes.operations import face_poset
 
-_OPERATION_ID = "topology.cubical_complex.face_poset.compute"
-
 
 def _oracle_face_closure(cells: tuple[CubicalCell, ...]) -> tuple[CubicalCell, ...]:
     faces: set[tuple[tuple[int, int], ...]] = set()

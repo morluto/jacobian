@@ -1,39 +1,5 @@
 """Catalog schema check for the restored residue-image bounds."""
 
-from jacobian.math.number_theory._modular_models import (
-    ModularPolynomialResidueImageRequest,
-    ModularPolynomialVariable,
-)
-from jacobian.math.number_theory.modular_polynomials import (
-    ModularPolynomialTerm,
-)
-
-
-def _request(*, exponent: int = 1) -> ModularPolynomialResidueImageRequest:
-    return ModularPolynomialResidueImageRequest(
-        modulus=5,
-        variables=(ModularPolynomialVariable(name="x", residues=(0, 1)),),
-        terms=(ModularPolynomialTerm(coefficient=3, exponents=(exponent,)),),
-    )
-
-
-def _request_with_coefficient(
-    coefficient: int,
-) -> ModularPolynomialResidueImageRequest:
-    return ModularPolynomialResidueImageRequest(
-        modulus=5,
-        variables=(ModularPolynomialVariable(name="x", residues=(0, 1)),),
-        terms=(ModularPolynomialTerm(coefficient=coefficient, exponents=(1,)),),
-    )
-
-
-def _request_payload(coefficient: str) -> dict[str, object]:
-    return {
-        "modulus": 5,
-        "variables": [{"name": "x", "residues": [0, 1]}],
-        "terms": [{"coefficient": coefficient, "exponents": [1]}],
-    }
-
 
 def test_both_residue_image_operations_advertise_the_restored_bounds() -> None:
     from jacobian.catalog.builtins import BUILTIN_TOOLS

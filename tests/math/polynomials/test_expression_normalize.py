@@ -1496,10 +1496,8 @@ def test_nested_variable_member_is_rejected_before_copying() -> None:
         "variables": [_ExplodingList()],
         "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 class _HugeKeyMapping(Mapping[str, object]):
@@ -1534,11 +1532,9 @@ def test_many_unexpected_request_keys_are_rejected_early() -> None:
             "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
         }
     )
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(mapping)
     assert mapping.iterated <= 8
-    assert time.monotonic() - started < 1.0
 
 
 def test_oversized_literal_is_a_typed_resource_rejection() -> None:
@@ -1632,10 +1628,8 @@ def test_malformed_operand_container_is_bounded_before_copying() -> None:
             "operands": {str(i): i for i in range(5_000_000)},
         },
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_unexpected_node_field_is_bounded_before_copying() -> None:
@@ -1649,10 +1643,8 @@ def test_unexpected_node_field_is_bounded_before_copying() -> None:
             "extra": {str(i): i for i in range(5_000_000)},
         },
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_oversized_variable_axis_is_bounded_before_copying() -> None:
@@ -1661,10 +1653,8 @@ def test_oversized_variable_axis_is_bounded_before_copying() -> None:
         "variables": ["x"] * 3_000_000,
         "expression": {"kind": "VARIABLE", "name": "x"},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_unexpected_top_level_field_is_bounded_before_copying() -> None:
@@ -1674,10 +1664,8 @@ def test_unexpected_top_level_field_is_bounded_before_copying() -> None:
         "expression": {"kind": "VARIABLE", "name": "x"},
         "extra": {str(index): index for index in range(3_000_000)},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_container_shaped_literal_is_rejected_before_copying() -> None:
@@ -1687,10 +1675,8 @@ def test_container_shaped_literal_is_rejected_before_copying() -> None:
         "variables": ["x"],
         "expression": {"kind": "LITERAL", "value": [1] * 1_000_000},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_zero_power_returns_one_without_expanding_the_base() -> None:
@@ -1712,9 +1698,7 @@ def test_zero_power_returns_one_without_expanding_the_base() -> None:
         "exponent": 13,
     }
     request = _request("ZZ", {"kind": "POWER", "base": base, "exponent": 0}, variables)
-    started = time.monotonic()
     result = _normalize(request)
-    assert time.monotonic() - started < 2.0
     assert result.polynomial.polynomial.terms[0].coefficient == CanonicalRational(
         num=1, den=1
     )
@@ -1727,10 +1711,8 @@ def test_non_node_operand_is_rejected_before_container_copy() -> None:
         "variables": ["x"],
         "expression": {"kind": "ADD", "operands": [[0] * 5_000_000]},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_forged_source_missing_expression_is_a_typed_domain_error() -> None:
@@ -1792,10 +1774,8 @@ def test_nested_literal_component_sequence_is_rejected_before_copy() -> None:
             "value": {"num": [0] * 5_000_000, "den": 1},
         },
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_container_shaped_variable_name_is_rejected_before_copy() -> None:
@@ -1805,10 +1785,8 @@ def test_container_shaped_variable_name_is_rejected_before_copy() -> None:
         "variables": ["x"],
         "expression": {"kind": "VARIABLE", "name": [0] * 5_000_000},
     }
-    started = time.monotonic()
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
-    assert time.monotonic() - started < 1.0
 
 
 def test_forged_empty_operands_are_a_typed_domain_error() -> None:

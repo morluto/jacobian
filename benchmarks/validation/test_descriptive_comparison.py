@@ -240,3 +240,59 @@ def test_duplicate_frozen_task_rows_cannot_be_overwritten(digest: str) -> None:
     for arm in (control, treatment):
         arm["fixed_invariants"]["tasks"].insert(0, {"task": "a", "digest": digest})
     assert compare_evidence(control, treatment)["status"] == "INVALID"
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement"),
+    [
+        (("tasks",), "invalid"),
+        (("tasks", 0, "pair_count"), -1),
+        (("tasks", 0, "control_mean"), "invalid"),
+        (("task_average",), "invalid"),
+        (("task_average", "observed_task_count"), 1.5),
+        (("task_average", "weighting"), "equal-families"),
+        (("families",), {}),
+        (("families", 0, "family"), 5),
+        (("families", 0, "treatment_mean"), []),
+        (("weighting",), "arbitrary"),
+        (("control_mean",), "invalid"),
+        (("treatment_mean",), True),
+        (("paired_delta",), {}),
+    ],
+)
+def test_report_schema_rejects_malformed_descriptive_fields(
+    path: tuple[str | int, ...], replacement: Any
+) -> None:
+    import json
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator
+
+    schema = json.loads(
+        (
+            Path(__file__).parents[1] / "schemas/comparison-report.schema.json"
+        ).read_text()
+    )
+    report = compare_evidence(*_arms([("a", "one", [1.0])]))
+    target = report["metrics"]["correctness"]
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = replacement
+    assert not Draft202012Validator(schema).is_valid(report)
+
+
+@pytest.mark.parametrize("field", ["control_mean", "treatment_mean", "paired_delta"])
+def test_report_schema_requires_all_descriptive_means(field: str) -> None:
+    import json
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator
+
+    schema = json.loads(
+        (
+            Path(__file__).parents[1] / "schemas/comparison-report.schema.json"
+        ).read_text()
+    )
+    report = compare_evidence(*_arms([("a", "one", [1.0])]))
+    del report["metrics"]["correctness"][field]
+    assert not Draft202012Validator(schema).is_valid(report)

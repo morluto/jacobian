@@ -56,13 +56,15 @@ def lease_operation_phases(
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()
     operation_deadline = started + wall_seconds
-    if execution is not None and execution.outer_deadline is not None:
-        operation_deadline = min(operation_deadline, execution.outer_deadline)
+    if execution is not None and execution.deadline is not None:
+        operation_deadline = min(operation_deadline, execution.deadline)
     delivery_reserve = 0.02 + admitted_response_bytes / 20_000_000
     teardown_reserve = 0.02 + validation_work / 10_000_000
     backend_deadline = operation_deadline - delivery_reserve - teardown_reserve
     bind_request_deadline(operation_deadline)
     if backend_deadline <= time.monotonic():
+        if request_cancelled():
+            request_checkpoint("before backend phase lease")
         raise OperationExecutionTimeoutError(
             "operation has no remaining admitted backend lease",
             timeout_owner=TimeoutOwner.OPERATION_WALL,

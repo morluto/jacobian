@@ -233,13 +233,15 @@ def request_checkpoint(
         now = time.monotonic()
         if now < deadline:
             return
+        # A late checkpoint can observe both deadlines expired. The earliest
+        # bound still owns the timeout; the outer bound wins ties.
         raise OperationExecutionTimeoutError(
             f"request deadline expired {stage}",
             stage=resolved_stage,
             timeout_owner=(
                 execution.timeout_owner
                 if execution.outer_deadline is not None
-                and now >= execution.outer_deadline
+                and execution.outer_deadline == deadline
                 else TimeoutOwner.OPERATION_WALL
             ),
             elapsed_seconds=max(0.0, now - execution.started_at),

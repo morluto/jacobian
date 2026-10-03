@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 import pytest
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.links import (
     BraidLetter,
     BraidWord,
@@ -40,7 +43,8 @@ class TestAlexanderPolynomial:
             if tool.operation_id == "link_diagram.determinant.compute"
         )
         diagram = braid_closure(_two_braid(1, 1, 1)).diagram
-        result = tool.run(LinkDeterminantRequest(diagram=diagram))
+        request = LinkDeterminantRequest(diagram=diagram)
+        result = tool.run(request)
 
         assert isinstance(result, LinkDeterminantResult)
         assert result.alexander.diagram == diagram
@@ -49,30 +53,49 @@ class TestAlexanderPolynomial:
             LinkDeterminantResult.model_validate_json(result.model_dump_json())
             == result
         )
+        # Dispatch owns the public boundary: operation-ID lookup, strict wire
+        # parsing, and the serialized output envelope must all accept it.
+        dispatched = invoke_operation(
+            tool.operation_id, request.model_dump(mode="json"), Catalog.open()
+        )
+        assert (
+            LinkDeterminantResult.model_validate_json(json.dumps(dispatched.output))
+            == result
+        )
 
 
 class TestLinkExtensionTools:
     def test_braid_product_public_bounds_are_exact(self) -> None:
-        catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
-        multiply = catalog["braid.word.multiply.compute"]
-        with pytest.raises(OperationDomainValidationError, match="same strand count"):
-            multiply.run(
-                BraidProductRequest(left=_two_braid(1), right=BraidWord(strand_count=3))
+        mismatched = BraidProductRequest(
+            left=_two_braid(1), right=BraidWord(strand_count=3)
+        )
+        with pytest.raises(OperationDomainValidationError) as mismatch:
+            invoke_operation(
+                "braid.word.multiply.compute",
+                mismatched.model_dump(mode="json"),
+                Catalog.open(),
             )
-        with pytest.raises(OperationResourceAdmissionError, match="64-letter"):
-            multiply.run(
-                BraidProductRequest(
-                    left=BraidWord(
-                        strand_count=2,
-                        letters=tuple(
-                            BraidLetter(generator=1, exponent=1) for _ in range(32)
-                        ),
-                    ),
-                    right=BraidWord(
-                        strand_count=2,
-                        letters=tuple(
-                            BraidLetter(generator=1, exponent=1) for _ in range(33)
-                        ),
-                    ),
-                )
+        assert (
+            mismatch.value.errors()[0]["type"] == "link_diagram.braid_parent_mismatch"
+        )
+
+        overbound = BraidProductRequest(
+            left=BraidWord(
+                strand_count=2,
+                letters=tuple(BraidLetter(generator=1, exponent=1) for _ in range(32)),
+            ),
+            right=BraidWord(
+                strand_count=2,
+                letters=tuple(BraidLetter(generator=1, exponent=1) for _ in range(33)),
+            ),
+        )
+        with pytest.raises(OperationResourceAdmissionError) as growth:
+            invoke_operation(
+                "braid.word.multiply.compute",
+                overbound.model_dump(mode="json"),
+                Catalog.open(),
             )
+        assert (
+            growth.value.errors()[0]["type"]
+            == "link_diagram.braid_product_length_bound"
+        )

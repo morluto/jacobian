@@ -9,7 +9,9 @@ from typing import get_type_hints
 import pytest
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.differential import operations as differential
 from jacobian.math.geometry.exact import operations as exact_geometry
 from jacobian.math.matrices.quadratic_spectral import operations as quadratic_spectral
@@ -51,9 +53,11 @@ def test_verifiers_propagate_operational_failures(
         )
     else:
         tool = next(tool for tool in BUILTIN_TOOLS if tool.result_type is result_type)
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    claim = tool.result_type.model_validate_json(result.model_dump_json())
+    example_input = tool.examples[0].input
+    # The claim under test must come back through the public boundary, so the
+    # verifier is exercised on a dispatched, strictly parsed, wire-encoded value.
+    dispatched = invoke_operation(tool.operation_id, example_input, Catalog.open())
+    claim = tool.result_type.model_validate_json(json.dumps(dispatched.output))
     assert verifier(claim)
 
     failure = (

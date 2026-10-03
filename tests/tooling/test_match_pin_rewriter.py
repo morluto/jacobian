@@ -15,9 +15,10 @@ would drop those siblings and change what the test exercises.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
-from tools.match_recorder import merge_record
+from tools.match_records import merge_record
 from tools.rewrite_match_pins import convertible_sites, load, rewrite
 
 SITE = "tests/example/test_module.py:42:8"
@@ -122,6 +123,63 @@ def test_merge_record_preserves_codeless_member() -> None:
     merged = merge_record({"code": None, "codes": [None]}, {"code": "ops.limit"})
     assert merged["codes"] == [None, "ops.limit"]
     assert merged["code"] is None
+
+
+def test_recorder_refuses_multiple_validation_errors() -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    class MultipleErrorsError(ValueError):
+        def errors(self) -> list[dict[str, str]]:
+            return [
+                {"type": "generic.first", "loc": "first"},
+                {"type": "specific.later", "loc": "later"},
+            ]
+
+    original_raises = pytest.raises
+    recorder.pytest_configure(None)
+    try:
+        expected_line = sys._getframe().f_lineno + 1
+        with pytest.raises(MultipleErrorsError, match="later field"):
+            raise MultipleErrorsError("later field failed")
+        key = f"tests/tooling/test_match_pin_rewriter.py:{expected_line}"
+        assert recorder.RECORD[key]["code"] is None
+    finally:
+        recorder.pytest_unconfigure(None)
+    assert pytest.raises is original_raises
+
+
+def test_recorder_import_and_supported_raises_forms() -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    original_raises = pytest.raises
+    assert pytest.raises is original_raises
+    recorder.pytest_configure(None)
+    try:
+        info = pytest.raises(ValueError, int, "not an integer")  # noqa: RUF061
+        assert isinstance(info.value, ValueError)
+        with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
+            int("still not an integer")
+    finally:
+        recorder.pytest_unconfigure(None)
+    assert pytest.raises is original_raises
+
+
+def test_bare_pydantic_codes_are_not_convertible(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        _line(
+            {
+                "code": "missing",
+                "codes": ["missing"],
+                "match": "required field is missing",
+            }
+        ),
+    )
+    usable, rejected = convertible_sites(load(path))
+    assert not usable
+    assert rejected["non_owner_code"] == 1
 
 
 def test_distinct_matches_across_executions_are_rejected(tmp_path: Path) -> None:

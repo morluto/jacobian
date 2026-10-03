@@ -23,12 +23,13 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import TypeGuard
 
 try:  # pragma: no cover - import style depends on how the tool is invoked
-    from tools.match_recorder import merge_record
+    from tools.match_records import merge_record
 except ImportError:  # invoked as a script: python tools/rewrite_match_pins.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from tools.match_recorder import merge_record
+    from tools.match_records import merge_record
 
 GENERIC_CODES = frozenset(
     {
@@ -69,7 +70,7 @@ def convertible_sites(
         path, _, _ = key.rpartition(":")
         code = info.get("code")
         for match in _observed_matches(info):
-            if isinstance(code, str) and code not in GENERIC_CODES:
+            if _is_owner_code(code) and code not in GENERIC_CODES:
                 by_code[(path, code)].add(match)
 
     usable: dict[tuple[str, int], str] = {}
@@ -92,6 +93,9 @@ def convertible_sites(
         if not isinstance(code, str) or not code:
             rejected["no_code"] += 1
             continue
+        if not _is_owner_code(code):
+            rejected["non_owner_code"] += 1
+            continue
         if code in GENERIC_CODES:
             rejected["generic_code"] += 1
             continue
@@ -100,6 +104,12 @@ def convertible_sites(
             continue
         usable[(path, int(lineno))] = code
     return usable, rejected
+
+
+def _is_owner_code(code: object) -> TypeGuard[str]:
+    """Owner errors use namespaced codes; bare names are generic validators."""
+
+    return isinstance(code, str) and "." in code
 
 
 def _observed_matches(info: dict[str, object]) -> list[str]:

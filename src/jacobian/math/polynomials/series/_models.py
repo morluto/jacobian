@@ -128,7 +128,13 @@ def _composition_height_vector(
         *([None] * (order - 1)),
     )
     result: list[CoefficientHeight] = [None] * order
-    for outer_degree in range(order):
+    # The kernel stops at the highest nonzero outer coefficient. Powers
+    # beyond it are not executed and cannot belong to the growth envelope.
+    highest_outer = max(
+        (degree for degree, height in enumerate(outer) if height is not None),
+        default=-1,
+    )
+    for outer_degree in range(highest_outer + 1):
         coefficient = outer[outer_degree]
         if coefficient is not None:
             for degree, power in enumerate(powers):
@@ -137,7 +143,7 @@ def _composition_height_vector(
                         result[degree], coefficient.product(power)
                     )
             _require_height_vector(tuple(result), operation)
-        if outer_degree + 1 < order:
+        if outer_degree < highest_outer:
             powers = _convolve_height_vectors(powers, inner, order, operation)
     return tuple(result)
 
@@ -806,6 +812,10 @@ def admit_native_divide(
 
 
 def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
+    from ._unit_bounds import require_series
+
+    require_series(outer, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
+    require_series(inner, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
     _require_native_pair(outer, inner)
     if inner.coefficients[0].as_fraction() != 0:
         raise _validation_error(

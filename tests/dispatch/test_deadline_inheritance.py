@@ -24,11 +24,13 @@ from jacobian._execution import (
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import execute_operation, invoke_operation
+from jacobian.math.graphs.optimization import _chromatic_bipartition_process
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
     CHROMATIC_BIPARTITION_OPERATION,
     ChromaticBipartitionRequest,
     find_chromatic_bipartition,
 )
+from jacobian.process import BoundedProcessResult
 
 _OPERATION_ID = CHROMATIC_BIPARTITION_OPERATION.operation_id
 _PAYLOAD: dict[str, Any] = {
@@ -232,6 +234,73 @@ def test_child_local_deadline_keeps_its_winning_owner(
         assert error.value.elapsed_seconds == observed_at - 100.0
         assert current_request_execution() is parent
         assert parent.deadline == 105.0
+    assert current_request_execution() is None
+
+
+@pytest.mark.parametrize("native", [False, True], ids=["dispatch", "native"])
+@pytest.mark.parametrize(
+    ("outer_offset", "bound_offset", "outer_owner", "expected_owner", "source_owns"),
+    [
+        (60, None, TimeoutOwner.CALLER_DEADLINE, TimeoutOwner.CALLER_DEADLINE, False),
+        (60, None, TimeoutOwner.BACKEND_TIMEOUT, TimeoutOwner.BACKEND_TIMEOUT, False),
+        (None, 60, TimeoutOwner.CALLER_DEADLINE, TimeoutOwner.OPERATION_WALL, False),
+        (120, None, TimeoutOwner.CALLER_DEADLINE, TimeoutOwner.CALLER_DEADLINE, False),
+        (180, None, TimeoutOwner.CALLER_DEADLINE, TimeoutOwner.OPERATION_WALL, True),
+    ],
+    ids=["caller", "backend", "bound", "source-tie", "source-earlier"],
+)
+def test_worker_timeout_preserves_inherited_owner_and_source_context(
+    monkeypatch: pytest.MonkeyPatch,
+    native: bool,
+    outer_offset: int | None,
+    bound_offset: int | None,
+    outer_owner: TimeoutOwner,
+    expected_owner: TimeoutOwner,
+    source_owns: bool,
+) -> None:
+    request = ChromaticBipartitionRequest.model_validate(_PAYLOAD)
+    now = time.monotonic()
+    worker_calls: list[bool] = []
+
+    def timed_out_worker(*args: Any, **kwargs: Any) -> BoundedProcessResult:
+        child = current_request_execution()
+        assert child is not None
+        assert child.deadline == now + min(outer_offset or bound_offset or 120, 120)
+        worker_calls.append(True)
+        return BoundedProcessResult(
+            returncode=None,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=True,
+        )
+
+    monkeypatch.setattr(
+        _chromatic_bipartition_process, "run_bounded_process", timed_out_worker
+    )
+    with request_execution(
+        now,
+        outer_deadline=None if outer_offset is None else now + outer_offset,
+        timeout_owner=outer_owner,
+    ) as parent:
+        if bound_offset is not None:
+            bind_request_deadline(now + bound_offset)
+        inherited_deadline = parent.deadline
+        with pytest.raises(OperationExecutionTimeoutError) as error:
+            if native:
+                find_chromatic_bipartition(request)
+            else:
+                invoke_operation(_OPERATION_ID, _PAYLOAD, _CATALOG)
+        assert worker_calls == [True]
+        assert error.value.timeout_owner is expected_owner
+        assert error.value.configured_seconds == (120 if source_owns else None)
+        assert error.value.adjustable_field_path == (
+            ("resource_budget", "wall_seconds") if source_owns else None
+        )
+        assert current_request_execution() is parent
+        if not native:
+            assert parent.deadline == inherited_deadline
     assert current_request_execution() is None
 
 

@@ -16,6 +16,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.catalog.catalog import Catalog
+from jacobian.math.graphs.optimization import _chromatic_bipartition_process
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
     CHROMATIC_BIPARTITION_OPERATION,
 )
@@ -23,6 +24,7 @@ from jacobian.mcp import direct_tools, tools
 from jacobian.mcp.direct_tools import direct_operation_tools
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server
+from jacobian.process import BoundedProcessResult
 from mcp import Client
 
 
@@ -35,6 +37,7 @@ from mcp import Client
         "past-origin",
         "live-outer",
         "live-bound",
+        "worker-timeout",
         "none",
     ],
 )
@@ -53,7 +56,11 @@ def test_mcp_inherits_adapter_timing(
         deadline = now - 1 if timing.startswith("expired") else now + 60
         with request_execution(
             now - (130 if timing == "past-origin" else 10),
-            outer_deadline=deadline if timing.endswith("outer") else None,
+            outer_deadline=(
+                deadline
+                if timing.endswith("outer") or timing == "worker-timeout"
+                else None
+            ),
         ) as parent:
             if timing.endswith("bound"):
                 bind_request_deadline(deadline)
@@ -68,6 +75,19 @@ def test_mcp_inherits_adapter_timing(
     # The wire has no deadline field. Model the enclosing serving context at
     # the synchronous adapter seam actually used by each SDK entry point.
     monkeypatch.setattr(adapter, "execute_operation", enclosing_execution)
+    if timing == "worker-timeout":
+        monkeypatch.setattr(
+            _chromatic_bipartition_process,
+            "run_bounded_process",
+            lambda *args, **kwargs: BoundedProcessResult(
+                returncode=None,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=True,
+            ),
+        )
     server = _build_server(
         state=AppState(operation_catalog=catalog),
         evaluation_tools=direct_operation_tools(catalog) if direct else (),
@@ -88,7 +108,7 @@ def test_mcp_inherits_adapter_timing(
                 if direct
                 else {"operation_id": operation_id, "payload": payload},
             )
-        if timing.startswith("expired") or timing == "past-origin":
+        if timing.startswith("expired") or timing in {"past-origin", "worker-timeout"}:
             assert response.is_error
             content = response.content[0]
             assert isinstance(content, TextContent)
@@ -96,11 +116,18 @@ def test_mcp_inherits_adapter_timing(
             assert diagnostic["code"] == "OPERATION_TIMEOUT"
             assert diagnostic["operation_id"] == operation_id
             assert diagnostic["timeout_owner"] == (
-                "caller_deadline" if timing == "expired-outer" else "operation_wall"
+                "caller_deadline"
+                if timing in {"expired-outer", "worker-timeout"}
+                else "operation_wall"
             )
             assert diagnostic["stage"] == (
-                "operation_execution" if timing == "past-origin" else "request_parsing"
+                "operation_execution"
+                if timing in {"past-origin", "worker-timeout"}
+                else "request_parsing"
             )
+            if timing == "worker-timeout":
+                assert "configured_seconds" not in diagnostic
+                assert "adjustable_field_path" not in diagnostic
         else:
             assert not response.is_error
             assert response.structured_content is not None

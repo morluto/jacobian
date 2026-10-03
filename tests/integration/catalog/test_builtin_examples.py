@@ -132,10 +132,9 @@ def test_fixed_point_prefix_dispatch_preserves_tuple_decoding_and_preflights_sou
         },
         "prefix_length": 1,
     }
-    with pytest.raises(
-        OperationRequestValidationError, match="payload failed validation"
-    ) as error:
+    with pytest.raises(OperationRequestValidationError) as error:
         invoke_operation(operation.operation_id, oversized_mortal_source, _CATALOG)
+    assert error.value.errors()[0]["type"] == "word.fixed_point_source_occurrence_bound"
     assert (
         "source exceeds the aggregate occurrence bound"
         in error.value.errors()[0]["msg"]

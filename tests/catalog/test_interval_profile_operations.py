@@ -114,9 +114,10 @@ def test_interval_profile_schemas_publish_coupled_admission_limits() -> None:
 
 
 def test_work_rejection_is_domain_validation_at_execution() -> None:
-    with pytest.raises(OperationDomainValidationError, match="work budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(
             "number_theory.integer_interval.divisor_count_profile.compute",
             {"lower_bound": 1, "upper_bound": MAX_INTERVAL_WIDTH},
             Catalog.open(),
         )
+    assert exc_info.value.errors()[0]["type"] == "number_theory.interval.work_bound"

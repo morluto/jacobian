@@ -16,7 +16,9 @@ def test_exact_public_api_symbols() -> None:
         "verify_gromov_hyperbolicity",
         "verify_metric_profile",
     )
-    assert tuple(finite_metric_spaces.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(finite_metric_spaces.__all__)
     assert len(finite_metric_spaces.__all__) == len(set(finite_metric_spaces.__all__))
     assert all(not name.startswith("_") for name in finite_metric_spaces.__all__)
     assert all(

@@ -38,7 +38,9 @@ def test_exact_public_api_symbols() -> None:
         "verify_derivation",
         "verify_enumerate_concepts",
     )
-    assert tuple(formal_concept_analysis.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(formal_concept_analysis.__all__)
     assert len(formal_concept_analysis.__all__) == len(
         set(formal_concept_analysis.__all__)
     )

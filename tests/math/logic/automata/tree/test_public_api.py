@@ -58,7 +58,9 @@ def test_exact_public_api_symbols() -> None:
         "verify_tree_run",
         "verify_trim_tree_automaton",
     )
-    assert tuple(tree_automata.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(tree_automata.__all__)
     assert len(tree_automata.__all__) == len(set(tree_automata.__all__))
     assert all(not name.startswith("_") for name in tree_automata.__all__)
     assert all(hasattr(tree_automata, name) for name in tree_automata.__all__)

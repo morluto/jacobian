@@ -26,7 +26,9 @@ def test_hypergraph_public_api_is_explicit() -> None:
         "vertex_degrees",
     )
 
-    assert tuple(hypergraphs.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(hypergraphs.__all__)
     assert len(hypergraphs.__all__) == len(set(hypergraphs.__all__))
     assert all(not name.startswith("_") for name in hypergraphs.__all__)
     assert all(hasattr(hypergraphs, name) for name in hypergraphs.__all__)

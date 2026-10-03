@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import gcd
 from re import fullmatch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -24,9 +24,11 @@ MAX_UNIT_SCRATCH_BITS = 1 << 18
 MAX_UNIT_STORAGE_BITS = 1 << 32
 
 
-def _reject(reason: str, message: str) -> None:
+def _reject(
+    reason: str, message: str, *, family: Literal["unit", "power"] = "unit"
+) -> None:
     raise OperationResourceAdmissionError(
-        location=(), code=f"formal_power_series.unit_{reason}", message=message
+        location=(), code=f"formal_power_series.{family}_{reason}", message=message
     )
 
 
@@ -38,7 +40,12 @@ def _invalid() -> None:
     )
 
 
-def require_series(series: TruncatedSeries, *, maximum_digits: int) -> None:
+def require_series(
+    series: TruncatedSeries,
+    *,
+    maximum_digits: int,
+    resource_family: Literal["unit", "power"] = "unit",
+) -> None:
     """Bound native copies before shape shortcuts, LCMs, and backend conversion."""
     from ._models import MAX_TRUNCATE_SOURCE_ORDER, TruncatedSeries
 
@@ -54,7 +61,11 @@ def require_series(series: TruncatedSeries, *, maximum_digits: int) -> None:
     ):
         _invalid()
     if series.truncation_order > MAX_TRUNCATE_SOURCE_ORDER:
-        _reject("order", "source exceeds the bounded series carrier admission")
+        _reject(
+            "order",
+            "source exceeds the bounded series carrier admission",
+            family=resource_family,
+        )
     ceiling = 10**maximum_digits
     for value in series.coefficients:
         request_checkpoint("during exact unit-series scalar admission")
@@ -71,7 +82,11 @@ def require_series(series: TruncatedSeries, *, maximum_digits: int) -> None:
             or abs(value.num) >= ceiling
             or value.den >= ceiling
         ):
-            _reject("coefficient", f"coefficient exceeds {maximum_digits} digits")
+            _reject(
+                "coefficient",
+                f"coefficient exceeds {maximum_digits} digits",
+                family=resource_family,
+            )
         if gcd(value.num, value.den) != 1:
             _invalid()
 

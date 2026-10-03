@@ -78,10 +78,11 @@ def test_family_rejects_same_shape_pauli_from_another_ordered_register() -> None
             PauliFamilyEntry(pauli_id="b", pauli=_value(other, (1, 0), (0, 0))),
         )
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="identical ordered register"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         pauli_family_commutation_matrix(request.family)
+    assert (
+        exc_info.value.errors()[0]["type"] == "quantum.pauli.family.register_mismatch"
+    )
 
 
 def test_family_size_is_bounded_at_the_domain_value() -> None:
@@ -108,8 +109,12 @@ def test_aggregate_output_is_admitted_before_pairing(
         raise AssertionError("pairing ran before aggregate result admission")
 
     monkeypatch.setattr(operations, "_symplectic_pairing", unexpected_pairing)
-    with pytest.raises(OperationResourceAdmissionError, match="result size"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         pauli_family_commutation_matrix(family)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quantum.pauli.family.commutation_matrix.over_envelope"
+    )
 
 
 def test_maximum_admitted_family_and_register_complete() -> None:

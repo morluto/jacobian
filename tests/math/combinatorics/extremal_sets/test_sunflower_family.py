@@ -264,15 +264,17 @@ def test_qualifying_plan_stops_once_the_output_bound_is_exceeded(
 
     monkeypatch.setattr(sunflower_module, "_candidate_common_core", fail_core_scan)
     source = _family(tuple((index,) for index in range(20)), ground=20)
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(source, 9)
+    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.output_bound"
 
 
 def test_qualifying_plan_stops_once_the_output_cannot_fit() -> None:
     """182 disjoint singletons form C(182, 3) empty-core triples, over MAX_EDGES."""
     source = _family(tuple((index,) for index in range(182)), ground=182)
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(source, 3)
+    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.output_bound"
 
 
 @pytest.mark.scale
@@ -309,8 +311,12 @@ def test_large_core_allocation_is_checked_before_each_qualifying_row(
     )
     core = tuple(range(100_000))
     members = tuple((*core, 100_000 + index) for index in range(6))
-    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct_sunflower_family(_family(members, ground=100_006), 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.sunflower.result_allocation_bound"
+    )
     # The bound is consulted per qualifying row, so refusal precedes the last row.
     assert row_counts
     assert row_counts[-1] < 20

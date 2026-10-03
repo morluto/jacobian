@@ -155,7 +155,7 @@ def _is_overload_declaration(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bo
 
 def _definition_only_references(
     tree: ast.Module,
-) -> tuple[set[str], set[tuple[str, int, bool]]]:
+) -> tuple[set[str], set[tuple[str, int, bool, int | None]]]:
     """Module-level names that a *lexically resolved* load actually reaches.
 
     A flat name set is not enough. A local parameter, assignment, or attribute
@@ -176,7 +176,7 @@ def _definition_only_references(
     )
     referenced.update(_autouse_fixture_definitions(tree))
     aliases = _pytest_import_aliases(tree)
-    reference_sites: set[tuple[str, int, bool]] = set()
+    reference_sites: set[tuple[str, int, bool, int | None]] = set()
     _scan(
         tree, frozenset(), module_names, referenced, fixtures, aliases, reference_sites
     )
@@ -191,10 +191,10 @@ def _definition_only_references(
         + 1
     )
     for definition in _autouse_fixture_definitions(tree):
-        reference_sites.add((definition, synthetic_line, True))
+        reference_sites.add((definition, synthetic_line, True, None))
     for fixture_name in _pytest_string_references(tree):
         if fixture_name in fixtures:
-            reference_sites.add((fixtures[fixture_name], synthetic_line, True))
+            reference_sites.add((fixtures[fixture_name], synthetic_line, True, None))
     return referenced, reference_sites
 
 
@@ -363,9 +363,10 @@ def _scan(  # noqa: C901
     referenced: set[str],
     fixtures: dict[str, str],
     pytest_aliases: dict[str, str],
-    reference_sites: set[tuple[str, int, bool]],
+    reference_sites: set[tuple[str, int, bool, int | None]],
     class_outer_bound: frozenset[str] | None = None,
     deferred: bool = False,
+    scope_line: int | None = None,
 ) -> None:
     """Record module-level loads and the binding each load can reach."""
 
@@ -379,6 +380,7 @@ def _scan(  # noqa: C901
             referenced,
             reference_sites,
             deferred,
+            scope_line,
         )
         return
     if isinstance(node, ast.Constant):
@@ -401,6 +403,7 @@ def _scan(  # noqa: C901
                     reference_sites,
                     class_outer_bound,
                     deferred,
+                    scope_line,
                 )
             for default in _header_expressions(child):
                 _scan(
@@ -413,6 +416,7 @@ def _scan(  # noqa: C901
                     reference_sites,
                     class_outer_bound,
                     deferred,
+                    scope_line,
                 )
             if _is_pytest_injected(child, fixtures):
                 requested = _argument_names(child) - _direct_parametrize_names(
@@ -421,17 +425,18 @@ def _scan(  # noqa: C901
                 for name in requested:
                     if name in fixtures:
                         referenced.add(fixtures[name])
-                        reference_sites.add((fixtures[name], child.lineno, True))
+                        reference_sites.add((fixtures[name], child.lineno, True, None))
             if isinstance(child, ast.ClassDef):
                 _scan_class_body(
                     child.body,
-                    bound,
+                    class_outer_bound if class_outer_bound is not None else bound,
                     module_names,
                     referenced,
                     fixtures,
                     pytest_aliases,
                     reference_sites,
                     deferred,
+                    class_outer_bound if class_outer_bound is not None else bound,
                 )
                 continue
             body_bound = bound | _scope_bindings(child)
@@ -457,6 +462,9 @@ def _scan(  # noqa: C901
                 reference_sites,
                 body_class_outer_bound,
                 True,
+                child.lineno
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                else scope_line,
             )
             continue
         if isinstance(child, ast.Name):
@@ -469,6 +477,7 @@ def _scan(  # noqa: C901
                 referenced,
                 reference_sites,
                 deferred,
+                scope_line,
             )
             continue
         if isinstance(child, _COMPREHENSIONS):
@@ -486,6 +495,7 @@ def _scan(  # noqa: C901
                     reference_sites,
                     class_outer_bound if index == 0 else None,
                     deferred if index == 0 else lazy,
+                    scope_line,
                 )
                 inner = inner | _comprehension_target_names(generator.target)
                 _scan(
@@ -498,6 +508,7 @@ def _scan(  # noqa: C901
                     reference_sites,
                     None,
                     lazy,
+                    scope_line,
                 )
             for expression in (
                 (child.key, child.value)
@@ -514,6 +525,7 @@ def _scan(  # noqa: C901
                     reference_sites,
                     None,
                     lazy,
+                    scope_line,
                 )
             continue
         if isinstance(child, ast.Attribute):
@@ -527,6 +539,7 @@ def _scan(  # noqa: C901
                 reference_sites,
                 class_outer_bound,
                 deferred,
+                scope_line,
             )
             continue
         _scan(
@@ -539,6 +552,7 @@ def _scan(  # noqa: C901
             reference_sites,
             class_outer_bound,
             deferred,
+            scope_line,
         )
 
 
@@ -549,12 +563,14 @@ def _scan_class_body(
     referenced: set[str],
     fixtures: dict[str, str],
     pytest_aliases: dict[str, str],
-    reference_sites: set[tuple[str, int, bool]],
+    reference_sites: set[tuple[str, int, bool, int | None]],
     deferred: bool,
+    class_outer_bound: frozenset[str] | None = None,
 ) -> None:
     """Scan class statements in order because class locals bind when assigned."""
 
     bound = outer_bound
+    lexical_outer = class_outer_bound if class_outer_bound is not None else outer_bound
     for statement in statements:
         _scan_class_statement(
             statement,
@@ -564,7 +580,7 @@ def _scan_class_body(
             fixtures,
             pytest_aliases,
             reference_sites,
-            outer_bound,
+            lexical_outer,
             deferred,
         )
         bound = bound | _class_statement_bindings(statement)
@@ -577,7 +593,7 @@ def _scan_class_statement(
     referenced: set[str],
     fixtures: dict[str, str],
     pytest_aliases: dict[str, str],
-    reference_sites: set[tuple[str, int, bool]],
+    reference_sites: set[tuple[str, int, bool, int | None]],
     outer_bound: frozenset[str],
     deferred: bool,
 ) -> None:
@@ -602,6 +618,7 @@ def _scan_class_statement(
             pytest_aliases,
             reference_sites,
             deferred,
+            outer_bound,
         )
         _scan_class_body(
             statement.orelse,
@@ -612,7 +629,218 @@ def _scan_class_statement(
             pytest_aliases,
             reference_sites,
             deferred,
+            outer_bound,
         )
+        return
+    if isinstance(statement, (ast.For, ast.AsyncFor)):
+        _scan(
+            statement.iter,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            outer_bound,
+            deferred,
+        )
+        loop_bound = bound | _comprehension_target_names(statement.target)
+        _scan_class_body(
+            statement.body,
+            loop_bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        _scan_class_body(
+            statement.orelse,
+            loop_bound | _class_suite_bindings(statement.body),
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        return
+    if isinstance(statement, ast.While):
+        _scan(
+            statement.test,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            outer_bound,
+            deferred,
+        )
+        _scan_class_body(
+            statement.body,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        _scan_class_body(
+            statement.orelse,
+            bound | _class_suite_bindings(statement.body),
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        return
+    if isinstance(statement, (ast.With, ast.AsyncWith)):
+        with_bound = bound
+        for item in statement.items:
+            _scan(
+                item.context_expr,
+                with_bound,
+                module_names,
+                referenced,
+                fixtures,
+                pytest_aliases,
+                reference_sites,
+                outer_bound,
+                deferred,
+            )
+            if item.optional_vars is not None:
+                with_bound |= _comprehension_target_names(item.optional_vars)
+        _scan_class_body(
+            statement.body,
+            with_bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        return
+    if isinstance(statement, (ast.Try, ast.TryStar)):
+        _scan_class_body(
+            statement.body,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        for handler in statement.handlers:
+            if handler.type is not None:
+                _scan(
+                    handler.type,
+                    bound,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    pytest_aliases,
+                    reference_sites,
+                    outer_bound,
+                    deferred,
+                )
+            handler_bound = bound | ({handler.name} if handler.name else set())
+            _scan_class_body(
+                handler.body,
+                frozenset(handler_bound),
+                module_names,
+                referenced,
+                fixtures,
+                pytest_aliases,
+                reference_sites,
+                deferred,
+                outer_bound,
+            )
+        body_bound = bound | _class_suite_bindings(statement.body)
+        _scan_class_body(
+            statement.orelse,
+            body_bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        final_bound = body_bound | _class_suite_bindings(statement.orelse)
+        _scan_class_body(
+            statement.finalbody,
+            final_bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            deferred,
+            outer_bound,
+        )
+        return
+    if isinstance(statement, ast.Match):
+        _scan(
+            statement.subject,
+            bound,
+            module_names,
+            referenced,
+            fixtures,
+            pytest_aliases,
+            reference_sites,
+            outer_bound,
+            deferred,
+        )
+        for case in statement.cases:
+            _scan(
+                case.pattern,
+                bound,
+                module_names,
+                referenced,
+                fixtures,
+                pytest_aliases,
+                reference_sites,
+                outer_bound,
+                deferred,
+            )
+            case_bound = bound | _pattern_binding_names(case.pattern)
+            if case.guard is not None:
+                _scan(
+                    case.guard,
+                    case_bound,
+                    module_names,
+                    referenced,
+                    fixtures,
+                    pytest_aliases,
+                    reference_sites,
+                    outer_bound,
+                    deferred,
+                )
+            _scan_class_body(
+                case.body,
+                case_bound,
+                module_names,
+                referenced,
+                fixtures,
+                pytest_aliases,
+                reference_sites,
+                deferred,
+                outer_bound,
+            )
         return
     _scan(
         [statement],
@@ -624,6 +852,20 @@ def _scan_class_statement(
         reference_sites,
         outer_bound,
         deferred,
+    )
+
+
+def _class_suite_bindings(statements: Sequence[ast.stmt]) -> frozenset[str]:
+    return frozenset().union(
+        *(_class_statement_bindings(statement) for statement in statements)
+    )
+
+
+def _pattern_binding_names(pattern: ast.pattern) -> frozenset[str]:
+    return frozenset(
+        name
+        for node in ast.walk(pattern)
+        if (name := _pattern_binding_name(node)) is not None
     )
 
 
@@ -663,12 +905,13 @@ def _record(
     bound: frozenset[str],
     module_names: set[str],
     referenced: set[str],
-    reference_sites: set[tuple[str, int, bool]],
+    reference_sites: set[tuple[str, int, bool, int | None]],
     deferred: bool,
+    scope_line: int | None,
 ) -> None:
     if isinstance(context, ast.Load) and name in module_names and name not in bound:
         referenced.add(name)
-        reference_sites.add((name, line, deferred))
+        reference_sites.add((name, line, deferred, scope_line))
 
 
 def _is_pytest_injected(node: ast.AST, fixtures: dict[str, str]) -> bool:
@@ -836,6 +1079,52 @@ def _waived(lines: list[str], line: int) -> bool:
     return _WAIVER in lines[line - 1]
 
 
+def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[int, ...]:
+    """Module-time direct calls to the function owning a deferred name load."""
+
+    if function_line is None:
+        return ()
+    function = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.lineno == function_line
+        ),
+        None,
+    )
+    if function is None:
+        return ()
+    eager_calls: list[int] = []
+    stack: list[ast.AST] = list(tree.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            stack.extend(node.decorator_list)
+            stack.extend(_header_expressions(node))
+            continue
+        if isinstance(node, ast.Lambda):
+            stack.extend(_header_expressions(node))
+            continue
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == function.name
+            and node.lineno > function_line
+        ):
+            prior_definitions = [
+                candidate.lineno
+                for candidate in tree.body
+                if isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and candidate.name == function.name
+                and candidate.lineno < node.lineno
+            ]
+            if prior_definitions and max(prior_definitions) == function_line:
+                eager_calls.append(node.lineno)
+        stack.extend(ast.iter_child_nodes(node))
+    return tuple(eager_calls)
+
+
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     relative = path.relative_to(root).as_posix()
     try:
@@ -851,12 +1140,23 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     for index, (name, line, _kind, _node) in enumerate(definitions):
         bindings.setdefault(name, []).append((index, line))
     referenced_bindings: set[int] = set()
-    for name, line, deferred in reference_sites:
+    for name, line, deferred, scope_line in reference_sites:
         choices = bindings.get(name, [])
         if not choices:
             continue
         if deferred:
-            referenced_bindings.add(choices[-1][0])
+            eager_calls = _module_eager_calls(tree, scope_line)
+            if eager_calls:
+                for call_line in eager_calls:
+                    eligible = [
+                        index
+                        for index, binding_line in choices
+                        if binding_line < call_line
+                    ]
+                    if eligible:
+                        referenced_bindings.add(eligible[-1])
+            else:
+                referenced_bindings.add(choices[-1][0])
         else:
             eligible = [index for index, binding_line in choices if binding_line < line]
             if eligible:

@@ -60,8 +60,9 @@ def test_enumeration_bound() -> None:
     elements = tuple(f"s{i}" for i in range(13))
     table = tuple(tuple("s0" for _ in elements) for _ in elements)
     semigroup = FiniteSemigroup(elements=elements, multiplication=table)
-    with pytest.raises(OperationResourceAdmissionError, match="at most 12"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ideal_enumeration(semigroup)
+    assert exc_info.value.errors()[0]["type"] == "finite_semigroup.enumeration_bound"
 
 
 def test_group_green_relations_are_universal() -> None:

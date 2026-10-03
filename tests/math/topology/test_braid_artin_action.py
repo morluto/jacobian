@@ -65,8 +65,12 @@ def test_artin_action_obeys_braid_relation_and_trefoil_closure_permutation() -> 
 def test_action_admits_cancellation_and_bounds_reduced_expansion() -> None:
     cancelled = braid_artin_action(_word(2, *((1, 1),) * 6))
     assert tuple(len(image.letters) for image in cancelled.generator_images) == (13, 11)
-    with pytest.raises(OperationResourceAdmissionError, match="128-letter"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         braid_artin_action(_word(2, *((1, 1),) * 64))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "link_diagram.artin_action_expansion_bound"
+    )
 
 
 def test_action_reduces_inverse_braid_prefixes_before_bounded_expansion() -> None:

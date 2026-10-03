@@ -282,8 +282,12 @@ class TestBoundary:
             ),
             final_outputs=(SubseqFinalOutput(state=0, output=()),),
         )
-        with pytest.raises(OperationResourceAdmissionError, match="sample"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             minimize_subsequential(wide, 12)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "finite_state_transducer.minimize_sample_bound_exceeded"
+        )
 
     def test_state_count_over_cap_is_rejected(self) -> None:
         with pytest.raises(ValidationError):

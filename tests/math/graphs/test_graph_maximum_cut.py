@@ -126,8 +126,12 @@ def test_empty_graph_retains_its_source_and_exact_zero_cut() -> None:
 def test_rejects_excessive_retained_label_allocation() -> None:
     label = "x" * (MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS // 2 + 1)
 
-    with pytest.raises(OperationDomainValidationError, match="retained label"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_maximum_cut(GraphMaximumCutRequest(graph=_graph((label,), ())))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.maximum_cut.retained_labels_exceed_bound"
+    )
 
 
 def test_bipartite_graph_cuts_every_edge_and_preserves_source_axes() -> None:

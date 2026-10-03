@@ -548,24 +548,27 @@ def test_wheel_consumers_reject_a_structurally_valid_forged_wheel() -> None:
     forged = wheel.model_dump(mode="json")
     forged["modulus"] = "0"
 
-    with pytest.raises(OperationDomainValidationError, match="wheel modulus"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_residue_wheel_enumeration(
             PrimeTupleResidueWheelEnumerationRequest.model_validate_json(
                 __import__("json").dumps({"wheel": forged})
             )
         )
-    with pytest.raises(OperationDomainValidationError, match="wheel modulus"):
+    assert exc_info.value.errors()[0]["type"] == "prime_affine_form.wheel_invariant"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_wheel_membership(
             PrimeTupleWheelMembershipRequest.model_validate_json(
                 __import__("json").dumps({"wheel": forged, "value": "5"})
             )
         )
-    with pytest.raises(OperationDomainValidationError, match="wheel modulus"):
+    assert exc_info.value.errors()[0]["type"] == "prime_affine_form.wheel_invariant"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_interval_residue_profile(
             PrimeTupleIntervalResidueProfileRequest.model_validate_json(
                 __import__("json").dumps({"wheel": forged, "lower": "0", "upper": "12"})
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "prime_affine_form.wheel_invariant"
 
 
 def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
@@ -594,10 +597,11 @@ def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
     missing_endpoints = count.model_dump(mode="json")
     missing_endpoints["first_match"] = None
     missing_endpoints["last_match"] = None
-    with pytest.raises(ValidationError, match="if and only if match_count is positive"):
+    with pytest.raises(ValidationError) as exc_info:
         PrimePatternIntervalCountResult.model_validate_json(
             json.dumps(missing_endpoints)
         )
+    assert exc_info.value.errors()[0]["type"] == "prime_affine_form.interval_invariant"
 
     impossible_count = count.model_dump(mode="json")
     impossible_count["lower"] = "3"

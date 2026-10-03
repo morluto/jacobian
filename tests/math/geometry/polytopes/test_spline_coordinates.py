@@ -240,10 +240,11 @@ def test_piece_count_is_rejected_before_assignment_canonicalization(
         )
 
     monkeypatch.setattr(PieceAssignment, "model_validate", should_not_canonicalize)
-    with pytest.raises(OperationResourceAdmissionError, match="too many pieces"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         spline_coordinates(
             SplineCoordinatesRequest(function=forged, degree=1, smoothness=0)
         )
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.piece_count"
 
 
 def test_coordinates_reject_exact_smoothness_and_degree_failures() -> None:
@@ -254,10 +255,14 @@ def test_coordinates_reject_exact_smoothness_and_degree_failures() -> None:
         )
 
     too_high_degree = _two_interval_function(((2, 1),), ((2, 1),))
-    with pytest.raises(OperationDomainValidationError, match="piece degree"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         spline_coordinates(
             SplineCoordinatesRequest(function=too_high_degree, degree=1, smoothness=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.spline_coordinates_degree"
+    )
 
 
 def test_discontinuous_piecewise_value_uses_the_unconstrained_spline_slice() -> None:
@@ -299,7 +304,11 @@ def test_coordinate_output_is_admitted_before_nullspace_materialization(
         raise AssertionError("basis must not be materialized after output rejection")
 
     monkeypatch.setattr(spline_kernel, "_spline_space_from_data", unexpected_basis)
-    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         spline_kernel.spline_coordinates(
             SplineCoordinatesRequest(function=function, degree=1, smoothness=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.spline_coordinates_output"
+    )

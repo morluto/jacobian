@@ -36,5 +36,9 @@ def test_authored_preorder_checked_on_consumption() -> None:
         points=("a", "b", "c"), preorder=((0,), (0, 1), (1, 2))
     )
     decoded = FiniteTopologicalSpace.model_validate_json(claim.model_dump_json())
-    with pytest.raises(OperationDomainValidationError, match="transitive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         kolmogorov_quotient(decoded)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology_space.preorder_not_transitive"
+    )

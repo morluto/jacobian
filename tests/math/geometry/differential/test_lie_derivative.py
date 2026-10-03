@@ -218,11 +218,12 @@ def test_content_aware_height_admission_rejects_real_output_growth() -> None:
         (_function(variables, (large_coefficient, (1,))),),
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="coefficient bound",
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         build_lie_derivative_plan(vector, scalar)
+    assert (
+        error.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.result_height"
+    )
 
     assert error.value.errors()[0]["type"].endswith("result_height")
 
@@ -500,19 +501,21 @@ def test_rejects_axis_mismatch_and_nonvector_signature_at_domain_admission() -> 
     scalar_y = _tensor(y_axis, (), (_function(y_axis, (1, (1,))),))
     scalar_x = _tensor(x_axis, (), (_function(x_axis, (1, (1,))),))
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="same ordered coordinate axis",
-    ) as mismatch:
+    with pytest.raises(OperationDomainValidationError) as mismatch:
         lie_derivative(contravariant_x, scalar_y)
+    assert (
+        mismatch.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.coordinate_axis_mismatch"
+    )
     assert type(mismatch.value) is OperationDomainValidationError
     assert mismatch.value.errors()[0]["type"].endswith("coordinate_axis_mismatch")
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="rank one and CONTRAVARIANT",
-    ) as signature:
+    with pytest.raises(OperationDomainValidationError) as signature:
         lie_derivative(covariant_x, scalar_x)
+    assert (
+        signature.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.vector_signature"
+    )
     assert type(signature.value) is OperationDomainValidationError
     assert signature.value.errors()[0]["type"].endswith("vector_signature")
 
@@ -541,11 +544,12 @@ def test_nonvector_signature_precedes_nested_coprimality_recognition() -> None:
         }
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="rank one and CONTRAVARIANT",
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         lie_derivative(request.vector_field, request.tensor)
+    assert (
+        error.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.vector_signature"
+    )
 
     assert error.value.errors()[0]["type"].endswith("vector_signature")
 
@@ -566,11 +570,12 @@ def test_admitted_signature_rejects_a_nonreduced_component_as_noncanonical() -> 
     )
     scalar = _tensor(("x",), (), (_function(("x",), (1, (1,))),))
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="coprime",
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         lie_derivative(vector, scalar)
+    assert (
+        error.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.component_not_canonical"
+    )
 
     assert error.value.errors()[0]["type"].endswith("component_not_canonical")
 
@@ -1031,8 +1036,12 @@ def test_work_budget_rejection_precedes_coprimality_recognition(
     )
     monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", 1)
 
-    with pytest.raises(OperationResourceAdmissionError, match="work budget") as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         lie_derivative(vector, tensor)
+    assert (
+        error.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.work_budget"
+    )
 
     assert error.value.errors()[0]["type"].endswith("work_budget")
 
@@ -1073,8 +1082,12 @@ def test_locus_guard_rejection_precedes_coprimality_recognition(
         forbidden_recognition,
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="guard representation"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         lie_derivative(vector, scalar)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.result_locus_guards"
+    )
 
 
 def test_dispatch_start_owns_one_deadline_through_result_construction(
@@ -1210,11 +1223,12 @@ def test_result_exponent_admission_has_an_accepted_and_rejected_edge() -> None:
         (rational_power(64),),
         guards=(power_guard(64),),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="exponent bound 64",
-    ) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         lie_derivative(rejected_vector, rejected_scalar)
+    assert (
+        error.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.result_exponent"
+    )
     assert error.value.errors()[0]["type"].endswith("result_exponent")
 
 
@@ -1236,12 +1250,16 @@ def test_profile_rejects_a_forged_result_that_drops_an_inherited_guard() -> None
     scalar = _tensor(variables, (), (_function(variables, (1, (1,))),))
     forged_result = _tensor(variables, (), (_function(variables, (1, (0,))),))
 
-    with pytest.raises(ValidationError, match="retain exactly"):
+    with pytest.raises(ValidationError) as exc_info:
         RationalLieDerivativeProfile(
             vector_field=rational_vector,
             source=scalar,
             lie_derivative=forged_result,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.result_locus"
+    )
 
 
 def test_polynomial_cancellation_support_growth_is_rejected_before_conversion() -> None:
@@ -1345,8 +1363,12 @@ def test_verifier_at_exact_work_boundary(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", plan.work_units - 1
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_lie_derivative(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.lie_derivative.work_budget"
+    )
 
 
 def test_verifier_rejects_noncanonical_source() -> None:

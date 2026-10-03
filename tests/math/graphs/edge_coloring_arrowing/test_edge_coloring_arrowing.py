@@ -117,9 +117,11 @@ def test_result_preserves_inputs() -> None:
 def test_rejects_empty_target_and_unbounded_search() -> None:
     host = _k6()
     empty = _graph([], [])
-    with pytest.raises(OperationDomainValidationError, match="target 0"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         decide_edge_coloring_arrowing(host, (empty,))
-    with pytest.raises(OperationDomainValidationError, match="embedding checks"):
+    assert exc_info.value.errors()[0]["type"] == "graph.arrowing.target_empty"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         decide_edge_coloring_arrowing(
             _graph([str(i) for i in range(10)], _k6().edges), (_k3(),) * 6
         )
+    assert exc_info.value.errors()[0]["type"] == "graph.arrowing.work_too_large"

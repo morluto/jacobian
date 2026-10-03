@@ -243,8 +243,9 @@ def test_full_alphabet_long_monomial_admitted_and_malformed_labels_rejected() ->
     malformed = FreeAlgebraPolynomial.model_construct(
         alphabet=("x",), terms=(malformed_term,)
     )
-    with pytest.raises(OperationDomainValidationError, match="not canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reverse_polynomial_antiautomorphism(malformed)
+    assert exc_info.value.errors()[0]["type"] == "free_algebra.polynomial_shape"
 
     oversized = FreeAlgebraPolynomial.model_construct(
         alphabet=("x" * 100_000,), terms=()

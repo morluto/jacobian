@@ -82,13 +82,14 @@ def test_r2_compatibility() -> None:
 
 def test_result_requires_one_for_positive_cutoff() -> None:
     """A complete positive-cutoff family must contain the universal member 1."""
-    with pytest.raises(ValueError, match="must begin with 1"):
+    with pytest.raises(ValueError) as exc_info:
         RFullEnumerateResult(
             minimum_exponent=2,
             cutoff=10,
             count=0,
             family=(),
         )
+    assert exc_info.value.errors()[0]["type"] == "r_full_enumerate.missing_one"
 
 
 def test_native_api_uses_integer_arguments() -> None:
@@ -158,7 +159,7 @@ def test_high_exponent_family_uses_mathematical_family_bound() -> None:
 
 def test_result_rejects_oversized_family_member_before_parsing() -> None:
     """Result validation bounds member representations before bigint parsing."""
-    with pytest.raises(ValueError, match="at most 32769 characters"):
+    with pytest.raises(ValueError) as exc_info:
         RFullEnumerateResult.model_validate_json(
             json.dumps(
                 {
@@ -169,11 +170,12 @@ def test_result_rejects_oversized_family_member_before_parsing() -> None:
                 }
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "string_too_long"
 
 
 def test_result_rejects_oversized_cutoff_before_parsing() -> None:
     """Result validation bounds cutoff representations before bigint parsing."""
-    with pytest.raises(ValueError, match="at most 32769 characters"):
+    with pytest.raises(ValueError) as exc_info:
         RFullEnumerateResult.model_validate_json(
             json.dumps(
                 {
@@ -184,3 +186,4 @@ def test_result_rejects_oversized_cutoff_before_parsing() -> None:
                 }
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "string_too_long"

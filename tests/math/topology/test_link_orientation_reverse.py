@@ -92,10 +92,12 @@ def test_reversal_noop_and_free_loop_representative_rejection() -> None:
         crossings=_hopf().crossings, arcs=_hopf().arcs, free_loops=1
     )
     assert link_orientation_reverse(source).diagram == source
-    with pytest.raises(
-        OperationDomainValidationError, match="free loops are untracked"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         link_orientation_reverse(source, ("free_loop_000:dart",))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "link_diagram.orientation_reverse.untracked_component"
+    )
 
 
 def test_orientation_reversal_catalog_example_executes() -> None:

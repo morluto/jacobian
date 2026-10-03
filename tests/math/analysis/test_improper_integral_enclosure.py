@@ -182,10 +182,7 @@ def test_divergent_smooth_factor_is_outside_the_proved_class() -> None:
 
 
 def test_smooth_factor_intermediate_overflow_is_typed_admission() -> None:
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="smooth factor exceeds the admitted exact preflight bound",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enclose_endpoint_log_improper_integral(
             _request(
                 smooth_expression={
@@ -198,6 +195,10 @@ def test_smooth_factor_intermediate_overflow_is_typed_admission() -> None:
                 },
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "analysis.improper_integral.smooth_factor_intermediate_bound"
+    )
 
 
 def test_large_positive_target_width_does_not_require_a_large_fraction() -> None:
@@ -260,11 +261,12 @@ def test_transformed_expression_growth_is_typed_operation_admission() -> None:
         }
     request = _request(smooth_expression=expression)
 
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="endpoint substitution exceeds",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enclose_endpoint_log_improper_integral(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "analysis.improper_integral.transformed_expression_bound"
+    )
 
 
 def test_forged_tail_does_not_round_trip() -> None:
@@ -290,5 +292,8 @@ def test_result_decoding_does_not_replay_combined_enclosure_arithmetic() -> None
 
 
 def test_malformed_direct_native_request_is_typed() -> None:
-    with pytest.raises(OperationDomainValidationError, match="validated endpoint-log"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enclose_endpoint_log_improper_integral("not a request")  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"] == "analysis.improper_integral.request_type"
+    )

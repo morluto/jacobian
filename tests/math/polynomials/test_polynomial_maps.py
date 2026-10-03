@@ -208,11 +208,13 @@ def test_unified_evaluation_validates_full_axis_before_routing(
         variables=point_variables,
         values=(CanonicalRational(num=1, den=1),) * len(point_variables),
     )
-    with pytest.raises(OperationDomainValidationError, match="complete ordered axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_polynomial(source, point)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.map_invariant"
     short_point = point.model_copy(update={"variables": variables, "values": ()})
-    with pytest.raises(OperationDomainValidationError, match="complete ordered axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_polynomial(source, short_point)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.map_invariant"
 
 
 def test_jacobian_entries_are_directly_composable_polynomials() -> None:

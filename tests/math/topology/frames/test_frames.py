@@ -70,8 +70,9 @@ def test_decoded_gram_rejects_shape_forgery() -> None:
     result = gram(VectorFamily(dimension=2, vectors=((1, 0), (0, 1))))
     payload = result.model_dump()
     payload["gram"]["row_count"] = 1
-    with pytest.raises(ValueError, match="shape"):
+    with pytest.raises(ValueError) as exc_info:
         GramResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
     malformed = GramResult.model_construct(
         vectors=((1, 0), (0, 1)),
         dimension=2,
@@ -144,8 +145,9 @@ def test_tight_equiangular_profile_is_exact_and_serializable() -> None:
 
     forged = json.loads(result.model_dump_json())
     forged["common_squared_inner_product"] = None
-    with pytest.raises(ValueError, match="common squared inner product"):
+    with pytest.raises(ValueError) as exc_info:
         type(result).model_validate_json(json.dumps(forged))
+    assert exc_info.value.errors()[0]["type"] == "frames.profile_shape"
 
     singleton = _tight_equiangular_profile(VectorFamily(dimension=1, vectors=((1,),)))
     payload = json.loads(singleton.model_dump_json())
@@ -165,14 +167,16 @@ def test_exact_complex_mub_profile_and_forged_shape_rejection() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
     forged = json.loads(result.model_dump_json())
     forged["basis_pair_count"] = 0
-    with pytest.raises(ValueError, match="pair count"):
+    with pytest.raises(ValueError) as exc_info:
         type(result).model_validate_json(json.dumps(forged))
+    assert exc_info.value.errors()[0]["type"] == "frames.mub_profile_shape"
     non_mub = _mutually_unbiased_bases(
         MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
     )
     assert non_mub.is_mutually_unbiased is False
-    with pytest.raises(ValueError, match="at most 16"):
+    with pytest.raises(ValueError) as exc_info:
         MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard,) * 17)
+    assert exc_info.value.errors()[0]["type"] == "too_long"
 
 
 def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
@@ -198,8 +202,9 @@ def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
     assert type(sic).model_validate_json(sic.model_dump_json()) == sic
     forged = json.loads(sic.model_dump_json())
     forged["squared_overlaps"] = []
-    with pytest.raises(ValueError, match="SIC ledgers"):
+    with pytest.raises(ValueError) as exc_info:
         type(sic).model_validate_json(json.dumps(forged))
+    assert exc_info.value.errors()[0]["type"] == "frames.sic_profile_axes"
 
     phase_scaled = _sic_profile(
         SicProfileRequest(
@@ -393,10 +398,11 @@ def test_complex_derived_denominator_growth_is_admitted_before_basis_grams() -> 
     )
     frame = ComplexFrame(dimension=33, vectors=(vector,) * 33)
 
-    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         _mutually_unbiased_bases(
             MutuallyUnbiasedBasesRequest(dimension=33, bases=(frame,))
         )
+    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
     assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
 
 
@@ -459,8 +465,9 @@ def test_sic_profile_rejects_forged_structural_residuals() -> None:
     )
     forged = json.loads(result.model_dump_json())
     forged["cardinality_residual"] = "1"
-    with pytest.raises(ValueError, match="cardinality residual"):
+    with pytest.raises(ValueError) as exc_info:
         type(result).model_validate_json(json.dumps(forged))
+    assert exc_info.value.errors()[0]["type"] == "frames.sic_profile_cardinality"
 
     forged = json.loads(result.model_dump_json())
     forged["common_squared_overlap_residual"] = None
@@ -811,10 +818,11 @@ def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
         for denominator in denominators
     )
     frame = ComplexFrame(dimension=64, vectors=(vector,) * 64)
-    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         _mutually_unbiased_bases(
             MutuallyUnbiasedBasesRequest(dimension=64, bases=(frame,))
         )
+    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
     assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
 
 

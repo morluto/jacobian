@@ -104,5 +104,6 @@ def test_native_part_count_rejection_does_not_iterate_the_parts() -> None:
 
     graph = _complete(2)
     parts = UnreadableParts(((),) * (MAX_PARTITION_PARTS + 1))
-    with pytest.raises(OperationResourceAdmissionError, match="parts"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         check_edge_clique_partition(graph, parts)
+    assert exc_info.value.errors()[0]["type"] == "graph.clique_partition.too_many_parts"

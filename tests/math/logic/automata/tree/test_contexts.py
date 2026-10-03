@@ -30,10 +30,9 @@ def test_context_accepts_canonical_frames_and_sibling_values():
 
 
 def test_context_rejects_nested_arity_entries_before_canonicalization():
-    with pytest.raises(
-        ValueError, match="context arities must be in the supported range"
-    ):
+    with pytest.raises(ValueError) as exc_info:
         FiniteTreeContext.model_validate({"arity": [[0] * 10000], "frames": []})
+    assert exc_info.value.errors()[0]["type"] == "tree_context.rank"
 
 
 def test_context_plugging_preserves_ranked_tree_structure():
@@ -178,13 +177,14 @@ def test_context_json_admission_bounds_tree_growth_before_parsing():
     sibling = {"symbol": 0, "children": []}
     for _ in range(128):
         sibling = {"symbol": 1, "children": [sibling]}
-    with pytest.raises(ValueError, match="context exceeds the supported tree depth"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteTreeContext.model_validate(
             {
                 "arity": [0, 1],
                 "frames": [{"symbol": 1, "hole_child": 0, "siblings": [sibling]}],
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "tree_context.depth"
 
 
 def test_native_tree_and_context_bounds_run_before_serialization(monkeypatch):

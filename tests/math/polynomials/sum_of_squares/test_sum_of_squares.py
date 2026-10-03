@@ -109,8 +109,9 @@ class TestSOSDecompositionCheck:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         q1 = _poly(("y",), (1, 1, (1,)))
         request = SOSDecompositionCheckRequest(polynomial=p, summands=(q1,))
-        with pytest.raises(OperationDomainValidationError, match="same ring"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _check_sos(request)
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.ring_mismatch"
 
     def test_single_summand(self) -> None:
         """x^2 = (x)^2 is valid."""
@@ -282,8 +283,9 @@ class TestGramCertificateAdmission:
 
     def test_non_square_side_vs_basis_rejected(self) -> None:
         request = self._request(((self._entry("1"),),))
-        with pytest.raises(OperationDomainValidationError, match="square"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _check_gram(request)
+        assert exc_info.value.errors()[0]["type"] == "sum_of_squares.gram_shape"
 
     def test_over_limit_coefficient_rejected_during_admission(self) -> None:
         huge = "9" * 129

@@ -103,10 +103,9 @@ def test_same_rank_different_ordered_cartan_parent_is_rejected() -> None:
         element=weyl_element_from_word(_A2, (0,)),
         vector=root_lattice_vector(_B2, (1, 0)),
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="same ordered Cartan datum"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_act_on_root(request.element, request.vector)
+    assert exc_info.value.errors()[0]["type"] == "root_system.weyl_root_parent_mismatch"
 
 
 def test_non_weyl_root_system_automorphism_is_rejected() -> None:
@@ -197,10 +196,11 @@ def test_caller_constructed_vector_with_noncanonical_cartan_axis_is_rejected() -
         element=weyl_element_from_word(_A2, ()), vector=vector
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical ordered Cartan axis"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_act_on_root(request.element, request.vector)
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_system.invalid_lattice_vector_datum"
+    )
 
 
 def test_caller_constructed_vector_with_boolean_cartan_axis_is_rejected() -> None:
@@ -218,10 +218,11 @@ def test_caller_constructed_vector_with_boolean_cartan_axis_is_rejected() -> Non
         datum=malformed_datum, coordinates=(1, 0)
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical ordered Cartan axis"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_act_on_root(weyl_element_from_word(_A2, ()), vector)
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_system.invalid_lattice_vector_datum"
+    )
 
 
 @pytest.mark.parametrize(
@@ -261,8 +262,9 @@ def test_caller_constructed_vector_with_wrong_axis_length_is_rejected() -> None:
     request = WeylElementRootActionRequest.model_construct(
         element=weyl_element_from_word(_A2, ()), vector=vector
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="root-lattice coordinates must be a bounded integer tuple",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_act_on_root(request.element, request.vector)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "root_system.invalid_lattice_vector_coordinates"
+    )

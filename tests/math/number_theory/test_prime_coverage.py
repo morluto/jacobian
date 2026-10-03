@@ -65,26 +65,34 @@ def test_prime_coverage_admits_narrow_high_interval() -> None:
 def test_prime_coverage_rejects_materialized_row_overflow() -> None:
     request = PrimeCoverageProfileRequest(lower_bound=1, upper_bound=1_000_000)
 
-    with pytest.raises(
-        OperationDomainValidationError, match=r"materialized.*row bound"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_prime_coverage_profile(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.prime_coverage_rows_exceeded"
+    )
 
 
 def test_prime_coverage_rejects_square_root_work_budget() -> None:
     request = PrimeCoverageProfileRequest(lower_bound=10**13, upper_bound=10**13)
 
-    with pytest.raises(
-        OperationDomainValidationError, match="segmented prime-coverage work budget"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_prime_coverage_profile(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.prime_coverage_work_exceeded"
+    )
 
 
 def test_binomial_valuation_rejects_composite_base() -> None:
     request = BinomialValuationProfileRequest(n=4, prime=4)
 
-    with pytest.raises(OperationDomainValidationError, match="prime must be"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_binomial_valuation_profile(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.binomial_profile_base_not_prime"
+    )
 
 
 def test_binomial_valuation_admits_output_bound_n_and_large_prime() -> None:
@@ -102,8 +110,12 @@ def test_binomial_valuation_admits_output_bound_n_and_large_prime() -> None:
 def test_binomial_valuation_rejects_digitwise_work_budget() -> None:
     request = BinomialValuationProfileRequest(n=120_000, prime=2)
 
-    with pytest.raises(OperationDomainValidationError, match="digitwise work budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_binomial_valuation_profile(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.binomial_profile_work_exceeded"
+    )
 
 
 def test_binomial_valuation_basic() -> None:

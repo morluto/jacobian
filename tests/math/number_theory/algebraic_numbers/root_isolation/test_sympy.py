@@ -157,7 +157,8 @@ def test_forged_overlapping_isolation_conclusion_is_rejected() -> None:
             ),
         )
 
-    with pytest.raises(ValidationError, match="disjoint"):
+    with pytest.raises(ValidationError) as exc_info:
         RootIsolationResult(
             source_polynomial=source, roots=(_entry(0, 2), _entry(1, 3))
         )
+    assert exc_info.value.errors()[0]["type"] == "root_isolation.intervals_not_disjoint"

@@ -145,8 +145,11 @@ def test_native_admission_rejects_unbounded_retained_labels() -> None:
         ],
     )
 
-    with pytest.raises(OperationDomainValidationError, match="label-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_common_neighbor_profile(graph)
+    assert (
+        exc_info.value.errors()[0]["type"] == "common_neighbor.retained_labels_exceeded"
+    )
 
 
 def test_native_admission_rejects_complete_profile_over_cell_bound() -> None:
@@ -154,8 +157,9 @@ def test_native_admission_rejects_complete_profile_over_cell_bound() -> None:
     vertices = sorted(str(i) for i in range(256))
     edges = [(vertices[i], vertices[j]) for i in range(256) for j in range(i + 1, 256)]
     g = _graph(vertices, edges)
-    with pytest.raises(OperationDomainValidationError, match="common-neighbor-cell"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_common_neighbor_profile(g)
+    assert exc_info.value.errors()[0]["type"] == "common_neighbor.result_cells_exceeded"
 
 
 def test_result_bound_uses_actual_common_neighbor_labels() -> None:

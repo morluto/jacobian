@@ -72,21 +72,34 @@ def test_theta_prefix_rejects_nonintegral_and_indefinite_forms() -> None:
     nonintegral = RationalQuadraticForm(
         axis=("x",), diagonal_coefficients=({"num": 1, "den": 2},)
     )
-    with pytest.raises(OperationDomainValidationError, match="integral"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         theta_series_prefix(nonintegral, 1)
-    with pytest.raises(OperationDomainValidationError, match="positive-definite"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.theta_requires_integral_coefficients"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         theta_series_prefix(_form((1, -1)), 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.theta_requires_positive_definite"
+    )
 
 
 def test_theta_prefix_rejects_nonpositive_definite_singular_form() -> None:
-    with pytest.raises(OperationDomainValidationError, match="positive-definite"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         theta_series_prefix(_form((1, 1), ((0, 1, 2),)), 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.theta_requires_positive_definite"
+    )
 
 
 def test_theta_prefix_rejects_when_proved_box_exceeds_vector_admission() -> None:
     broad = _form((1, 1, 1, 1, 1, 1, 1))
-    with pytest.raises(OperationResourceAdmissionError, match="lattice box"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         theta_series_prefix(broad, 512)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.theta_vector_bound"
 
 
 def test_theta_prefix_result_requires_complete_prefix_shape() -> None:

@@ -78,7 +78,9 @@ def test_sturmian_prefix_complexity() -> None:
 def test_order_budget_is_resource_refusal() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
-    with pytest.raises(OperationDomainValidationError, match="between 0"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         factor_complexity_prefix(_word(), 100)
-    with pytest.raises(OperationDomainValidationError, match="between 0"):
+    assert exc_info.value.errors()[0]["type"] == "word.complexity_order_out_of_range"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rauzy_graph(_word(), 5)
+    assert exc_info.value.errors()[0]["type"] == "word.rauzy_order_out_of_range"

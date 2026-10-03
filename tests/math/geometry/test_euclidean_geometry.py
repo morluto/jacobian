@@ -719,8 +719,12 @@ def test_weighted_triangulation_rejects_positive_turn_self_intersection() -> Non
             if j != i + 1 and (i, j) != (0, 4)
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match="strict CCW convexity"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         minimum_weight_triangulation(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.weighted_triangulation_requires_strict_ccw_convexity"
+    )
 
 
 def test_convex_hull_containment_order_and_area() -> None:

@@ -73,12 +73,14 @@ def test_rejects_noncanonical_claimed_card_classes() -> None:
         classes=deck.classes[:1],
         card_count=deck.card_count,
     )
-    with pytest.raises(OperationDomainValidationError, match="exact multiset quotient"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_edge_count(forged)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.edge_count_class_partition"
 
 
 def test_rejects_source_order_below_kelly_edge_count_boundary() -> None:
     graph = SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
     deck = unlabelled_vertex_deck(vertex_deletion_family(graph))
-    with pytest.raises(OperationDomainValidationError, match="at least three"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_edge_count(deck)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.edge_count_order"

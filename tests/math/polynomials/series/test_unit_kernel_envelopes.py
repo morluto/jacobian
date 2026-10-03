@@ -131,10 +131,12 @@ def test_large_order_refuses_before_backend(monkeypatch: pytest.MonkeyPatch) -> 
         pytest.fail("out-of-envelope source entered FLINT")
 
     monkeypatch.setattr(_flint, "_series_from_fractions", unexpected)
-    with pytest.raises(OperationResourceAdmissionError, match="2048"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         inverse(_unit(2049))
-    with pytest.raises(OperationResourceAdmissionError, match="2048"):
+    assert exc_info.value.errors()[0]["type"] == "formal_power_series.input_order"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         divide(_unit(2049), _unit(2049))
+    assert exc_info.value.errors()[0]["type"] == "formal_power_series.input_order"
 
 
 def test_high_source_height_retains_useful_accepted_edge() -> None:
@@ -276,8 +278,9 @@ def test_replay_limb_work_refuses_before_multiplication(
     )
     claim = claim.model_copy(update={"result": false_result})
     monkeypatch.setattr(_unit_bounds, "MAX_UNIT_LIMB_WORK", 1 << 29)
-    with pytest.raises(OperationResourceAdmissionError, match="limb_work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_inverse(claim)
+    assert exc_info.value.errors()[0]["type"] == "formal_power_series.unit_limb_work"
 
 
 def test_supplied_denominator_diversity_refuses_before_backend(
@@ -300,5 +303,6 @@ def test_supplied_denominator_diversity_refuses_before_backend(
         pytest.fail("unadmitted common denominator entered FLINT")
 
     monkeypatch.setattr(_flint, "_series_from_fractions", unexpected)
-    with pytest.raises(OperationResourceAdmissionError, match="clearing"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_inverse(claim.model_copy(update={"result": result}))
+    assert exc_info.value.errors()[0]["type"] == "formal_power_series.unit_scratch"

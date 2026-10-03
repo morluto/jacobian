@@ -133,10 +133,14 @@ def test_certificate_search_rejects_expansion_before_enumeration() -> None:
     zero = _polynomial(variables, ())
     request = _request((zero,), _polynomial(variables, ((1, (0,) * 8),)), 16)
 
-    with pytest.raises(OperationDomainValidationError, match="column"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ideal_membership_certificate(
             request.ideal, request.polynomial, request.cofactor_degree_bound
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.ideal_certificate.work_budget_exceeded"
+    )
 
 
 def test_certificate_schema_publishes_its_narrow_source_bounds() -> None:
@@ -207,8 +211,12 @@ def test_membership_verifier_propagates_source_resource_admission() -> None:
         }
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="column"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_ideal_membership_certificate(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.ideal_certificate.work_budget_exceeded"
+    )
 
 
 @pytest.mark.parametrize("zero", [True, False])

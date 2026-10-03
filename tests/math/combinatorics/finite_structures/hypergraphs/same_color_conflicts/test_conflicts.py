@@ -255,8 +255,11 @@ def test_all_source_edges_with_distinct_colors_are_accepted() -> None:
 
 
 def test_two_same_colored_empty_source_edges_compose_with_independence() -> None:
-    with pytest.raises(OperationDomainValidationError, match="empty source"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct(coloring(("a",), [(), ()], [0, 0]))
+    assert (
+        exc_info.value.errors()[0]["type"] == "same_color_conflicts.empty_source_pair"
+    )
 
 
 def test_many_duplicate_sources_fit_one_union_at_pair_boundary() -> None:

@@ -222,8 +222,12 @@ def test_projective_single_class_known_answer() -> None:
 
 def test_projective_rejects_inhomogeneous() -> None:
     system = _split_system()
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         projective_zero_set(system)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.projective_system_must_be_homogeneous"
+    )
 
 
 def test_equation_reordering_is_a_metamorphism() -> None:
@@ -273,8 +277,12 @@ def test_base_change_rejects_bad_generator_image() -> None:
         target=target,
         generator_image=element(target, (1, 0)),
     )
-    with pytest.raises(OperationDomainValidationError, match="source modulus"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         base_change_system(system, bad)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.embedding_generator_not_root"
+    )
 
 
 def test_base_change_rejects_characteristic_mismatch() -> None:
@@ -285,8 +293,12 @@ def test_base_change_rejects_characteristic_mismatch() -> None:
         target=target,
         generator_image=element(target, (0,)),
     )
-    with pytest.raises(OperationDomainValidationError, match="characteristics"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         base_change_system(system, embedding)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.embedding_characteristic_mismatch"
+    )
 
 
 def test_ambient_budget_is_resource_refusal() -> None:
@@ -367,18 +379,22 @@ def test_projective_result_rejects_duplicate_scalar_classes() -> None:
     system = _projective_system()
     points = projective_zero_set(system)
     assert len(points) == 1
-    with pytest.raises(ValidationError, match="distinct scalar classes"):
+    with pytest.raises(ValidationError) as exc_info:
         ProjectiveZeroSetResult(
             system=system,
             points=(*points, points[0]),
             point_count=2,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.algebraic_set_duplicate_point"
+    )
 
 
 def test_projective_point_rejects_nonnormalized_coordinates() -> None:
     presentation = _gf4()
     axis = Axis(name="vars", labels=("x", "y"))
-    with pytest.raises(ValidationError, match="normalized"):
+    with pytest.raises(ValidationError) as exc_info:
         ProjectivePoint(
             presentation=presentation,
             axis=axis,
@@ -387,6 +403,10 @@ def test_projective_point_rejects_nonnormalized_coordinates() -> None:
                 element(presentation, (1, 0)),
             ),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.projective_coordinates_normalized"
+    )
 
 
 def test_verify_affine_zero_set_accepts_exact_family_and_rejects_forgery() -> None:

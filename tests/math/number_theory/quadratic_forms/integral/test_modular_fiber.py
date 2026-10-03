@@ -110,10 +110,13 @@ def test_domain_work_is_admitted_before_enumeration() -> None:
         diagonal_residues=(0,) * 11,
         cross_terms=(),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="100000 vectors"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_modular_quadratic_fiber(
             polynomial, ModularInteger(modulus=3, residue=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.modular.fiber.state_bound"
+    )
 
 
 def test_worst_case_output_size_is_admitted_before_enumeration() -> None:
@@ -123,10 +126,14 @@ def test_worst_case_output_size_is_admitted_before_enumeration() -> None:
         diagonal_residues=(1,),
         cross_terms=(),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="digit-value bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_modular_quadratic_fiber(
             polynomial, ModularInteger(modulus=100_000, residue=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.modular.fiber.output_bound"
+    )
 
 
 def test_digit_work_is_admitted_before_enumeration() -> None:
@@ -142,10 +149,13 @@ def test_digit_work_is_admitted_before_enumeration() -> None:
         diagonal_residues=(1,) * 16,
         cross_terms=cross_terms,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="operation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_modular_quadratic_fiber(
             polynomial, ModularInteger(modulus=2, residue=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.modular.fiber.work_bound"
+    )
 
 
 def test_request_parent_and_result_json_round_trip() -> None:
@@ -155,10 +165,14 @@ def test_request_parent_and_result_json_round_trip() -> None:
         diagonal_residues=(1, 1),
         cross_terms=({"left": 0, "right": 1, "coefficient": 1},),
     )
-    with pytest.raises(ValidationError, match="moduli must agree"):
+    with pytest.raises(ValidationError) as exc_info:
         ModularQuadraticFiberRequest(
             polynomial=polynomial, target=ModularInteger(modulus=5, residue=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.modular.fiber.parent_mismatch"
+    )
     fiber = compute_modular_quadratic_fiber(
         polynomial, ModularInteger(modulus=3, residue=0)
     )
@@ -198,9 +212,10 @@ def test_fiber_values_preserve_structural_vectors_and_reject_forged_cross_indice
         diagonal_residues=(0, 0),
         cross_terms=(forged_term,),
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="support must be canonical"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_modular_quadratic_fiber(
             forged_polynomial, ModularInteger(modulus=5, residue=0)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.modular.polynomial_shape"
+    )

@@ -87,13 +87,15 @@ def test_result_sensitive_admission_accepts_edge_free_shifted_interval() -> None
 
 
 def test_rejects_actual_hypergraph_envelope() -> None:
-    with pytest.raises(ValueError, match="exact triple family"):
+    with pytest.raises(ValueError) as exc_info:
         construct_divisibility_sum_triples_hypergraph(1, 90)
+    assert exc_info.value.errors()[0]["type"] == "divisibility_sum.output_too_large"
 
 
 def test_native_rejects_reversed_interval() -> None:
-    with pytest.raises(ValueError, match="must not exceed"):
+    with pytest.raises(ValueError) as exc_info:
         construct_divisibility_sum_triples_hypergraph(4, 1)
+    assert exc_info.value.errors()[0]["type"] == "divisibility_sum.invalid_bounds"
 
 
 def test_serialized_divisibility_claim_is_verifiable_and_forgery_is_structural() -> (

@@ -60,7 +60,7 @@ def test_unit_interval_has_zero_dilate_and_exact_linear_coefficients() -> None:
 
 
 def test_rational_vertices_are_rejected_until_quasipolynomial_scope_exists() -> None:
-    with pytest.raises(ValidationError, match="requires integral vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         EhrhartRequest.model_validate(
             {
                 "vertices": [
@@ -70,16 +70,21 @@ def test_rational_vertices_are_rejected_until_quasipolynomial_scope_exists() -> 
                 "degree_bound": 1,
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lattice_polytope.ehrhart_requires_integral_vertices"
+    )
 
 
 def test_degree_bound_must_cover_dimension() -> None:
-    with pytest.raises(ValidationError, match="cover the polytope dimension"):
+    with pytest.raises(ValidationError) as exc_info:
         EhrhartRequest.model_validate(
             {
                 "vertices": [_vertex(0, 0), _vertex(1, 0), _vertex(0, 1)],
                 "degree_bound": 1,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice_polytope.ehrhart_degree_bound"
 
 
 def test_non_full_dimensional_one_point_source_is_rejected_at_native_admission() -> (
@@ -199,7 +204,7 @@ def test_result_round_trip_retains_source_and_canonical_polynomial() -> None:
 
 
 def test_forged_count_axes_and_values_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="dilation"):
+    with pytest.raises(ValidationError) as exc_info:
         EhrhartResult.model_validate(
             {
                 "vertices": [_vertex(0), _vertex(1)],
@@ -220,7 +225,10 @@ def test_forged_count_axes_and_values_are_rejected() -> None:
                 },
             }
         )
-    with pytest.raises(ValidationError, match="nonnegative"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "lattice_polytope.ehrhart_count_dilation"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         EhrhartResult.model_validate(
             {
                 "vertices": [_vertex(0), _vertex(1)],
@@ -241,6 +249,7 @@ def test_forged_count_axes_and_values_are_rejected() -> None:
                 },
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice_polytope.ehrhart_count_value"
 
 
 @pytest.mark.parametrize("max_dilation", [0, 1])

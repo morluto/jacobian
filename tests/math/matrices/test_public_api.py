@@ -101,8 +101,9 @@ def test_native_determinant_rejects_input_scalars_above_the_shared_digit_bound()
 ):
     source = sympy.diag(10**256, *[1] * 64)
 
-    with pytest.raises(OperationDomainValidationError, match="256 decimal digits"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         matrices.determinant(source)
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_multiply_preserves_exact_algebraic_inputs() -> None:

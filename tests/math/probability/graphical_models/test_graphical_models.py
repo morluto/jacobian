@@ -341,8 +341,12 @@ class TestFactorValuesAndOperations:
         left = _factor((0,), ("1", "1"))
         right = _factor((0,), ("1", "1", "1"), domain_sizes=(3,))
 
-        with pytest.raises(ValueError, match="exact model"):
+        with pytest.raises(ValueError) as exc_info:
             factor_multiply(left, right)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graphical_model.factor_domains_mismatch"
+        )
 
     def test_local_product_preserves_seventeen_axis_ambient_domain(self) -> None:
         domain_sizes = (2,) * 17

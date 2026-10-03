@@ -180,5 +180,6 @@ def test_serialized_game_dag_is_admitted_by_consumers() -> None:
     game = ImpartialGame.model_validate_json(
         '{"positions":["a","b"],"moves":[{"source":"a","target":"b"},{"source":"b","target":"a"}]}'
     )
-    with pytest.raises(ValueError, match="acyclic"):
+    with pytest.raises(ValueError) as exc_info:
         grundy_table(game)
+    assert exc_info.value.errors()[0]["type"] == "impartial_game_acyclic"

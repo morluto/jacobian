@@ -129,8 +129,11 @@ def test_result_json_rejects_missing_face_or_hasse_cover() -> None:
 
     missing_cover = json.loads(cube.model_dump_json())
     missing_cover["covers"].pop()
-    with pytest.raises(ValidationError, match="every dimension-adjacent"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopeFaceLatticeResult.model_validate_json(json.dumps(missing_cover))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytope.face_lattice_incomplete_covers"
+    )
 
     missing_edge = next(
         index for index, face in enumerate(payload["faces"]) if face["dimension"] == 1
@@ -148,8 +151,11 @@ def test_result_json_rejects_missing_face_or_hasse_cover() -> None:
             cover["upper_face_index"] -= 1
         adjusted_covers.append(cover)
     payload["covers"] = adjusted_covers
-    with pytest.raises(ValidationError, match="every vertex, edge, facet"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopeFaceLatticeResult.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytope.face_lattice_incomplete_faces"
+    )
 
     payload = json.loads(cube.model_dump_json())
     missing_facet = next(
@@ -168,8 +174,9 @@ def test_result_json_rejects_missing_face_or_hasse_cover() -> None:
             cover["upper_face_index"] -= 1
         adjusted_covers.append(cover)
     payload["covers"] = adjusted_covers
-    with pytest.raises(ValidationError, match="Euler identity"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopeFaceLatticeResult.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "polytope.face_lattice_euler_identity"
 
 
 def test_redundant_source_rows_are_retained_but_not_called_faces() -> None:

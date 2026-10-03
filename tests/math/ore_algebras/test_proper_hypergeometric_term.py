@@ -67,17 +67,29 @@ def test_binomial_factorization_retains_support_and_well_defined_regions() -> No
 def test_factor_order_axes_and_factor_multiplicity_are_canonical() -> None:
     value = binomial_term().model_dump()
     value["factorial_factors"] = list(reversed(value["factorial_factors"]))
-    with pytest.raises(ValidationError, match="proper_hypergeometric_factor_order"):
+    with pytest.raises(ValidationError) as exc_info:
         ProperHypergeometricTerm.model_validate(value)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.proper_hypergeometric_factor_order"
+    )
 
-    with pytest.raises(ValidationError, match="proper_hypergeometric_polynomial_axes"):
+    with pytest.raises(ValidationError) as exc_info:
         ProperHypergeometricTerm(polynomial=polynomial(("k", "n"), [((0, 0), 1, 1)]))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.proper_hypergeometric_polynomial_axes"
+    )
 
     duplicate = binomial_term().model_dump()
     factors = duplicate["factorial_factors"]
     duplicate["factorial_factors"] = (*factors[:1], factors[0], *factors[1:])
-    with pytest.raises(ValidationError, match="proper_hypergeometric_duplicate_factor"):
+    with pytest.raises(ValidationError) as exc_info:
         ProperHypergeometricTerm.model_validate(duplicate)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.proper_hypergeometric_duplicate_factor"
+    )
 
 
 def test_zero_term_has_one_structural_spelling() -> None:
@@ -87,15 +99,27 @@ def test_zero_term_has_one_structural_spelling() -> None:
 
     noncanonical = zero.model_dump()
     noncanonical["n_base"] = {"num": 2, "den": 1}
-    with pytest.raises(ValidationError, match="proper_hypergeometric_zero_normal_form"):
+    with pytest.raises(ValidationError) as exc_info:
         ProperHypergeometricTerm.model_validate(noncanonical)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.proper_hypergeometric_zero_normal_form"
+    )
 
 
 def test_affine_factor_bounds_and_zero_power_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="proper_hypergeometric_constant_factor"):
+    with pytest.raises(ValidationError) as exc_info:
         IntegerAffineFactorial(n_coefficient=0, k_coefficient=0, offset=3, power=1)
-    with pytest.raises(ValidationError, match="proper_hypergeometric_zero_power"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.proper_hypergeometric_constant_factor"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         IntegerAffineFactorial(n_coefficient=1, k_coefficient=0, offset=0, power=0)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.proper_hypergeometric_zero_power"
+    )
     with pytest.raises(ValidationError):
         IntegerAffineFactorial(n_coefficient=129, k_coefficient=0, offset=0, power=1)
 
@@ -124,8 +148,9 @@ def test_affine_offset_uses_the_exact_integer_wire_codec() -> None:
 
 def test_affine_offset_digit_bound_is_enforced() -> None:
     bound = 10**MAX_CANONICAL_INTEGER_DIGITS
-    with pytest.raises(ValidationError, match=r"exact_integer\.digit_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         IntegerAffineFactorial(n_coefficient=1, k_coefficient=0, offset=bound, power=1)
+    assert exc_info.value.errors()[0]["type"] == "exact_integer.digit_bound"
     admitted = IntegerAffineFactorial(
         n_coefficient=1, k_coefficient=0, offset=bound - 1, power=1
     )

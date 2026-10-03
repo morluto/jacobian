@@ -160,11 +160,9 @@ def test_raw_embedded_matrix_bounds_field_polynomial_iterables(
     else:
         payload["embedding"]["root"]["polynomial"] = repeat("0")
 
-    with pytest.raises(
-        ValidationError,
-        match="simple number-field polynomials have at most",
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 @pytest.mark.parametrize(

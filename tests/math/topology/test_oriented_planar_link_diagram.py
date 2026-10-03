@@ -206,10 +206,12 @@ def test_diagram_bound_accepts_64_crossings_and_rejects_65_before_validation() -
         )
     )
     assert len(OrientedLinkDiagram(crossings=crossings, arcs=arcs).crossings) == 64
-    with pytest.raises(ValidationError, match="at most 64"):
+    with pytest.raises(ValidationError) as exc_info:
         OrientedLinkDiagram(crossings=(*crossings, crossings[-1]), arcs=arcs)
-    with pytest.raises(ValidationError, match="less than or equal to 64"):
+    assert exc_info.value.errors()[0]["type"] == "too_long"
+    with pytest.raises(ValidationError) as exc_info:
         OrientedLinkDiagram(crossings=(), arcs=(), free_loops=65)
+    assert exc_info.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_reidemeister_and_braid_relation_closures_preserve_normalized_jones() -> None:

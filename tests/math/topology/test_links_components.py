@@ -94,8 +94,9 @@ class TestKnownAnswer:
                 letters=tuple(BraidLetter(generator=1, exponent=1) for _ in range(13)),
             )
         ).diagram
-        with pytest.raises(OperationResourceAdmissionError, match=r"2\^12"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             link_bracket(over_bound)
+        assert exc_info.value.errors()[0]["type"] == "link_diagram.bracket.state_bound"
 
     def test_public_jones_operation_matches_standard_knot_fixtures(self) -> None:
         """Independent standard V(t) values, converted by t=A^(-4)."""

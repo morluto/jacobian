@@ -98,15 +98,21 @@ def test_adjacency_uses_shared_facets_and_not_vertex_contacts() -> None:
 def test_adjacency_admits_only_bounded_cell_families() -> None:
     triangle = _cell(((0, 0), (1, 0), (0, 1)))
     cells = (triangle,) * 17
-    with pytest.raises(
-        OperationResourceAdmissionError, match="16-cell adjacency envelope"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polytopal_complex_adjacency_graph(cells)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.adjacency.cell_count_over_envelope"
+    )
 
 
 def test_adjacency_requires_the_pure_full_dimensional_closure_contract() -> None:
-    with pytest.raises(OperationDomainValidationError, match="full-dimensional"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))), _segment()))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.facet_profile_not_admitted"
+    )
 
 
 def test_multi_digit_cell_ids_keep_numeric_vertices_and_lexical_graph_edges() -> None:
@@ -140,8 +146,12 @@ def test_result_json_rejects_forged_nonfacet_with_correct_declared_dimension() -
     facet = payload["facet_edges"][0]["facet"]
     facet["vertices"] = [facet["vertices"][0]]
 
-    with pytest.raises(ValidationError, match="exactly the common cell vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.adjacency_facet_vertices"
+    )
 
 
 @pytest.mark.parametrize(
@@ -187,5 +197,9 @@ def test_result_json_bounds_coordinate_height_before_exact_hull_validation() -> 
     payload = json.loads(result.model_dump_json())
     payload["cells"][0]["vertices"][0]["coordinates"][0]["num"] = "1" + "0" * 1_024
 
-    with pytest.raises(ValidationError, match="exceeds the 1024-digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.adjacency_coordinate_digits"
+    )

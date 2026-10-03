@@ -217,17 +217,25 @@ def test_pell_equation_long_period() -> None:
 
 
 def test_contract_rejects_non_squarefree() -> None:
-    with pytest.raises(ValueError, match="squarefree"):
+    with pytest.raises(ValueError) as exc_info:
         compute_continued_fraction(
             ContinuedFractionRequest(discriminant=8, term_count=5)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine.discriminant_must_be_squarefree"
+    )
 
 
 def test_contract_rejects_perfect_square() -> None:
-    with pytest.raises(ValueError, match="perfect square"):
+    with pytest.raises(ValueError) as exc_info:
         compute_continued_fraction(
             ContinuedFractionRequest(discriminant=9, term_count=5)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine.discriminant_must_not_be_square"
+    )
 
 
 def test_contract_rejects_out_of_range() -> None:
@@ -236,12 +244,24 @@ def test_contract_rejects_out_of_range() -> None:
 
 
 def test_public_kernels_reject_perfect_square() -> None:
-    with pytest.raises(OperationDomainValidationError, match="perfect square"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         continued_fraction(4, 5)
-    with pytest.raises(OperationDomainValidationError, match="perfect square"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine.discriminant_must_not_be_square"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         convergents(9, 3)
-    with pytest.raises(OperationDomainValidationError, match="perfect square"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine.discriminant_must_not_be_square"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         solve_pell(16)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine.discriminant_must_not_be_square"
+    )
 
 
 @pytest.mark.parametrize(
@@ -257,10 +277,12 @@ def test_public_kernels_reject_unbounded_prefix_requests(
 
 
 def test_public_kernels_reject_unbounded_discriminants() -> None:
-    with pytest.raises(OperationDomainValidationError, match="between 2 and 1000000"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         continued_fraction(1_000_001, 1)
-    with pytest.raises(OperationDomainValidationError, match="between 2 and 1000000"):
+    assert exc_info.value.errors()[0]["type"] == "diophantine.discriminant_out_of_range"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         solve_pell(1_000_001)
+    assert exc_info.value.errors()[0]["type"] == "diophantine.discriminant_out_of_range"
 
 
 def test_public_kernels_return_typed_values() -> None:
@@ -682,8 +704,11 @@ def test_range_profile_admits_retained_allocation_before_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(surd_kernel, "MAX_SURD_RANGE_ALLOCATION_UNITS", 1)
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         range_profile((2, 3), 2, 32)
+    assert (
+        exc_info.value.errors()[0]["type"] == "diophantine.range_profile_output_bound"
+    )
 
 
 def test_serialized_range_rejects_forged_factor_axes() -> None:

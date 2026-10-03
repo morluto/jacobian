@@ -66,8 +66,9 @@ def test_edge_profile_round_trip_checks_map_relations() -> None:
     )
     forged = profile.model_dump(mode="python")
     forged["vertex_maps"] = ((0, 0, 1, 2), *profile.vertex_maps[1:])
-    with pytest.raises(ValidationError, match="vertex permutation"):
+    with pytest.raises(ValidationError) as exc_info:
         EdgeDeckIsomorphismProfile.model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_map_shape"
 
 
 @pytest.mark.parametrize(
@@ -131,8 +132,11 @@ def test_native_operation_admits_work_before_card_canonicalization(monkeypatch) 
         "_canonical_card_form",
         lambda *_: pytest.fail("permutation work must be admitted first"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         edge_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_work_bound"
+    )
 
 
 def test_work_and_output_bounds_have_exact_boundaries(monkeypatch) -> None:
@@ -154,8 +158,11 @@ def test_work_and_output_bounds_have_exact_boundaries(monkeypatch) -> None:
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work - 1
     )
-    with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         edge_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_work_bound"
+    )
 
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work
@@ -165,10 +172,11 @@ def test_work_and_output_bounds_have_exact_boundaries(monkeypatch) -> None:
         "MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS",
         exact_cells - 1,
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="materialization-cell bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         edge_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_output_bound"
+    )
 
 
 def test_raw_tuple_preflight_rejects_order_before_nested_family_parsing() -> None:
@@ -181,8 +189,9 @@ def test_raw_tuple_preflight_rejects_order_before_nested_family_parsing() -> Non
             "cards": "malformed but over the admitted order",
         }
     }
-    with pytest.raises(ValidationError, match="at most 10 source vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         EdgeDeckIsomorphismProfileRequest.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_bound"
 
 
 def test_wire_output_shape_bound_precedes_nested_representative_canonicalization(
@@ -198,8 +207,11 @@ def test_wire_output_shape_bound_precedes_nested_representative_canonicalization
             "shape admission must precede representative validation"
         ),
     )
-    with pytest.raises(ValidationError, match="simple-graph edge bound"):
+    with pytest.raises(ValidationError) as exc_info:
         EdgeDeckIsomorphismProfile.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_class_shape"
+    )
 
 
 def test_wire_output_class_count_is_capped_before_row_preflight(monkeypatch) -> None:
@@ -211,10 +223,11 @@ def test_wire_output_class_count_is_capped_before_row_preflight(monkeypatch) -> 
         "_preflight_edge_profile_result_rows",
         lambda *_: pytest.fail("class count must be capped before row traversal"),
     )
-    with pytest.raises(
-        ValidationError, match="more isomorphism classes than edge cards"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         EdgeDeckIsomorphismProfile.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_class_count"
+    )
 
 
 def test_native_operation_rejects_boolean_retained_edge_count() -> None:
@@ -222,5 +235,8 @@ def test_native_operation_rejects_boolean_retained_edge_count() -> None:
     forged_card = family.cards[0].model_copy(update={"retained_edge_count": True})
     forged = family.model_copy(update={"cards": (forged_card, *family.cards[1:])})
     request = EdgeDeckIsomorphismProfileRequest.model_construct(deck=forged)
-    with pytest.raises(OperationDomainValidationError, match="canonical graph axes"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         edge_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.edge_iso_profile_card_shape"
+    )

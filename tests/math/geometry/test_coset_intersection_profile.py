@@ -127,14 +127,16 @@ def test_authored_non_rref_claims_are_rejected_even_for_empty_subset(
 ) -> None:
     space = PrimeFieldVectorSpace(field_order=3, axis=("x", "y"))
     authored = LinearSubspace(space=space, basis=basis)
-    with pytest.raises(OperationDomainValidationError, match="row echelon"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         coset_intersection_profile(space, authored, ())
+    assert exc_info.value.errors()[0]["type"] == "finite_geometry.basis_not_rref"
 
 
 def test_composite_field_is_rejected_even_when_subset_empty() -> None:
     space = PrimeFieldVectorSpace(field_order=9, axis=("x",))
-    with pytest.raises(OperationDomainValidationError, match="prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         coset_intersection_profile(space, LinearSubspace(space=space, basis=()), ())
+    assert exc_info.value.errors()[0]["type"] == "finite_geometry.field_order_not_prime"
 
 
 def test_intersection_row_rejects_cardinality_mismatch() -> None:
@@ -192,8 +194,11 @@ def test_many_occupied_cosets_in_large_ambient_space_are_accepted() -> None:
 def test_excessive_coordinate_allocation_is_rejected() -> None:
     space = PrimeFieldVectorSpace(field_order=2, axis=tuple(f"x{i}" for i in range(32)))
     subset = tuple((*v, *([0] * 18)) for v in product(range(2), repeat=14))
-    with pytest.raises(OperationResourceAdmissionError, match="allocation"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         coset_intersection_profile(space, LinearSubspace(space=space, basis=()), subset)
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_geometry.coset_partition_budget"
+    )
 
 
 def test_full_space_uses_one_occupied_row_at_large_subset_boundary() -> None:

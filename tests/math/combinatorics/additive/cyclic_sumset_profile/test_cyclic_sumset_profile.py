@@ -48,13 +48,15 @@ def test_result_preserves_source() -> None:
 
 
 def test_nonpositive_modulus_is_rejected_before_arithmetic() -> None:
-    with pytest.raises(OperationDomainValidationError, match="must be positive"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_cyclic_sumset_profile(0, (0,), (0,))
+    assert exc_info.value.errors()[0]["type"] == "cyclic_sumset.positive_modulus"
 
 
 def test_noncanonical_residue_is_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="canonical residues"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_cyclic_sumset_profile(5, (5,), (0,))
+    assert exc_info.value.errors()[0]["type"] == "cyclic_sumset.canonical_residue"
 
 
 @pytest.mark.parametrize(
@@ -64,13 +66,15 @@ def test_noncanonical_residue_is_rejected() -> None:
 def test_duplicate_subset_elements_are_rejected(
     left: tuple[int, ...], right: tuple[int, ...]
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match="distinct residues"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_cyclic_sumset_profile(5, left, right)
+    assert exc_info.value.errors()[0]["type"] == "cyclic_sumset.duplicate_operand"
 
 
 def test_request_rejects_duplicate_subset_elements() -> None:
-    with pytest.raises(ValidationError, match="distinct residues"):
+    with pytest.raises(ValidationError) as exc_info:
         CyclicSumsetRequest(modulus=2, left=(0, 0), right=(0,))
+    assert exc_info.value.errors()[0]["type"] == "cyclic_sumset.duplicate_operand"
 
 
 def test_native_operation_is_exported_by_owner_package() -> None:

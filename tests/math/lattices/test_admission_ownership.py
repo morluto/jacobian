@@ -27,8 +27,9 @@ def test_saturation_checks_authored_rank_once(
     lattice = IntegerLattice.model_validate_json(lattice.model_dump_json())
     assert calls == 0
     if dependent:
-        with pytest.raises(OperationDomainValidationError, match="full row rank"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_saturation(lattice)
+        assert exc_info.value.errors()[0]["type"] == "lattice.basis_not_full_rank"
     else:
         result = compute_saturation(lattice)
         assert result.saturated_basis.entries == ((1, 1),)

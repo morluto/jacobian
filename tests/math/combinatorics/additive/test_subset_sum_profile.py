@@ -250,11 +250,12 @@ def test_profile_entry_sum_digit_bound_applies_to_either_sign(
     prefix: str,
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as exc_info:
         SubsetSumProfileEntry(
             sum=(-1 if prefix else 1) * (10 ** (MAX_SUBSET_SUM_SUM_DIGITS + 1) - 1),
             multiplicity=1,
         )
+    assert exc_info.value.errors()[0]["type"] == "exact_integer.digit_bound"
 
 
 def test_request_schema_exposes_source_shape_and_character_bounds() -> None:

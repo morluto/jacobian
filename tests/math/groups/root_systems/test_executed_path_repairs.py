@@ -113,8 +113,9 @@ def test_parabolic_result_model_rejects_a_negative_index() -> None:
     payload = result.model_dump()
     payload["simple_root_indices"] = (-1,)
 
-    with pytest.raises(ValueError, match="greater_than_equal"):
+    with pytest.raises(ValueError) as exc_info:
         WeylParabolicWeightOrbitResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "greater_than_equal"
 
 
 def test_weight_orbit_admits_a_representable_complete_orbit() -> None:

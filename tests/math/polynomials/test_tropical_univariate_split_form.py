@@ -190,8 +190,9 @@ def test_support_growth_is_rejected_before_root_computation(monkeypatch) -> None
         "jacobian.math.polynomials.tropical.operations.tropical_polynomial_univariate_roots",
         unexpected_root_computation,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="consecutive split form"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_univariate_split_form(UnivariateSplitFormRequest(polynomial=source))
+    assert exc_info.value.errors()[0]["type"] == "tropical.split_form_terms"
 
 
 def test_split_form_cancellation_is_admitted_and_package_exports_function() -> None:
@@ -237,8 +238,9 @@ def test_split_form_skips_unused_root_profile_cell_envelope(
     monkeypatch.setattr(
         tropical_operations, "MAX_TROPICAL_ROOT_RESULT_CELLS", 4, raising=False
     )
-    with pytest.raises(OperationResourceAdmissionError, match="result cell"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         tropical_polynomial_univariate_roots(source)
+    assert exc_info.value.errors()[0]["type"] == "tropical.root_result_cells"
     result = compute_univariate_split_form(
         UnivariateSplitFormRequest(polynomial=source)
     )

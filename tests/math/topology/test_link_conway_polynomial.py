@@ -102,12 +102,14 @@ def test_unknot_and_mirror_normalizations() -> None:
 
 def test_conway_is_knot_only_and_keeps_alexander_bound() -> None:
     hopf = braid_closure(_two_braid(1, 1)).diagram
-    with pytest.raises(OperationDomainValidationError, match="exactly one component"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         link_conway_polynomial(hopf)
+    assert exc_info.value.errors()[0]["type"] == "link_diagram.alexander_requires_knot"
 
     over_bound_knot = braid_closure(_two_braid(*([1] * 9))).diagram
-    with pytest.raises(OperationResourceAdmissionError, match="eight crossings"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         link_conway_polynomial(over_bound_knot)
+    assert exc_info.value.errors()[0]["type"] == "link_diagram.alexander_crossing_bound"
 
 
 def test_result_rejects_non_conway_exponent_lattice() -> None:
@@ -123,8 +125,11 @@ def test_result_rejects_non_conway_exponent_lattice() -> None:
             "exponents": [0],
         },
     ]
-    with pytest.raises(ValidationError, match="nonnegative even exponents"):
+    with pytest.raises(ValidationError) as exc_info:
         ConwayPolynomialResult.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"] == "link_diagram.conway_polynomial_support"
+    )
 
 
 def test_conway_operation_is_published_in_link_manifest() -> None:

@@ -368,8 +368,12 @@ def test_hook_content_rejects_column_count_beyond_digit_limit() -> None:
     request = SemistandardYoungTableauCountRequest.model_validate(
         {"partition": {"parts": [1] * 500}, "alphabet_size": alphabet_size}
     )
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         semistandard_young_tableaux_count(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.hook_content_result_digits"
+    )
     exact_digits = _upper_decimal_digits(math.comb(alphabet_size, 500))
     bound = _ssyt_count_digit_bound(
         IntegerPartition(parts=(1,) * 500),
@@ -685,8 +689,12 @@ def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning() -> None:
 
     partition = IntegerPartition(parts=(500,))
     started = time.monotonic()
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         native.semistandard_young_tableaux_count(partition, 10**32767)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.hook_content_result_digits"
+    )
     assert time.monotonic() - started < 2.0
 
 
@@ -775,8 +783,12 @@ def test_ssyt_digit_bound_refuses_far_overflow_without_exact_resolution() -> Non
     request = SemistandardYoungTableauCountRequest.model_validate(
         {"partition": {"parts": [500]}, "alphabet_size": alphabet_size}
     )
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         semistandard_young_tableaux_count(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.hook_content_result_digits"
+    )
 
 
 def test_decimal_width_matches_str_beyond_the_conversion_limit() -> None:

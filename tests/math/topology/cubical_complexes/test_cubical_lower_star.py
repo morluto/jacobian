@@ -215,11 +215,12 @@ def test_lower_star_commutes_with_integer_translation() -> None:
 def test_lower_star_rejects_missing_or_extra_vertex_values() -> None:
     square = (_cell(((0, 1), (0, 1))),)
     values = {(0, 0): Fraction(0), (0, 1): Fraction(0), (1, 0): Fraction(0)}
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="vertex values must cover exactly",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _lower_star(_request(square, values))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.lower_star_vertex_domain_mismatch"
+    )
 
     with pytest.raises(ValidationError):
         CubicalVertexFiltrationValue(
@@ -234,24 +235,31 @@ def test_decoded_lower_star_must_retain_source_boundary_and_birth_filtration() -
     payload["filtered_chain_complex"]["complex"]["differential_matrices"] = (
         ((0,), (0,)),
     )
-    with pytest.raises(ValidationError, match="source cubical boundaries"):
+    with pytest.raises(ValidationError) as exc_info:
         FilteredCubicalComplex.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.chain_differential_not_bound"
+    )
 
     payload = result.model_dump(mode="python")
     payload["filtered_chain_complex"]["filtration"][0]["subspaces"][1]["vectors"] = ()
-    with pytest.raises(ValidationError, match="cells born by each critical value"):
+    with pytest.raises(ValidationError) as exc_info:
         FilteredCubicalComplex.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "cubical_complex.filtration_not_bound"
 
 
 def test_lower_star_preflights_filtered_chain_levels_and_face_growth() -> None:
     interval_chain = tuple(_cell(((index, index + 1),)) for index in range(9))
     too_many_levels = {(index,): Fraction(index) for index in range(10)}
-    with pytest.raises(
-        OperationResourceAdmissionError, match="distinct lower-star values"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _lower_star(_request(interval_chain, too_many_levels))
+    assert (
+        exc_info.value.errors()[0]["type"] == "cubical_complex.lower_star_level_budget"
+    )
 
     six_cube = (_cell(((0, 1),) * 6),)
     all_vertices = {vertex: Fraction(0) for vertex in product((0, 1), repeat=6)}
-    with pytest.raises(OperationResourceAdmissionError, match="256-cell output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _lower_star(_request(six_cube, all_vertices))
+    assert exc_info.value.errors()[0]["type"] == "cubical_complex.face_output_budget"

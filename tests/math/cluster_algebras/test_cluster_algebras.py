@@ -125,22 +125,29 @@ class TestSeedMutation:
     def test_skew_symmetrizable(self) -> None:
         """A non-skew-symmetrizable matrix should fail."""
         matrix = em(2, ((0, 1), (1, 0)), (1, 1))
-        with pytest.raises(
-            OperationDomainValidationError, match="skew-symmetrizability"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_seed_mutation(
                 SeedMutationRequest(exchange_matrix=matrix, mutation_index=0)
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "cluster_algebra.skew_symmetrizable"
+        )
 
     def test_zero_symmetrizer_rejected(self) -> None:
         """A symmetrizer with a zero entry is not an exchange matrix."""
-        with pytest.raises(ValueError, match="strictly positive"):
+        with pytest.raises(ValueError) as exc_info:
             em(2, ((0, 1), (-1, 0)), (0, 2))
+        assert (
+            exc_info.value.errors()[0]["type"] == "cluster_algebra.symmetrizer_positive"
+        )
 
     def test_negative_symmetrizer_rejected(self) -> None:
         """A symmetrizer with a negative entry is rejected."""
-        with pytest.raises(ValueError, match="strictly positive"):
+        with pytest.raises(ValueError) as exc_info:
             em(2, ((0, 1), (-1, 0)), (1, -1))
+        assert (
+            exc_info.value.errors()[0]["type"] == "cluster_algebra.symmetrizer_positive"
+        )
 
 
 def test_native_surface_accepts_exchange_matrix_value() -> None:

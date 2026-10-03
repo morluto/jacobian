@@ -126,14 +126,21 @@ def test_common_refinement_rejects_different_supports():
     left = complex_of(poly(((0, 0), (1, 0), (1, 1), (0, 1)), "a"))
     right = complex_of(poly(((0, 0), (2, 0), (2, 1), (0, 1)), "b"))
 
-    with pytest.raises(OperationDomainValidationError, match="exactly equal support"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_common_refinement(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.refinement_support_mismatch"
+    )
 
 
 def test_common_refinement_revalidates_both_complexes_before_reading_fields():
     malformed = PolytopalComplexClosureResult.model_construct()
-    with pytest.raises(OperationDomainValidationError, match="canonical structure"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_common_refinement(malformed, malformed)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytopal_complex.refinement_malformed"
+    )
 
 
 def test_common_refinement_rejects_unmeasured_lower_dimensional_components():
@@ -158,11 +165,12 @@ def test_common_refinement_rejects_unmeasured_lower_dimensional_components():
     )
     right = complex_of(poly(((0, 0), (1, 0), (1, 1), (0, 1)), "right"))
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="every maximal cell must have the full ambient dimension",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_common_refinement(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.refinement_non_full_dimensional_cell"
+    )
 
 
 def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width():
@@ -182,8 +190,9 @@ def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width()
         deep=True,
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="complex ambient coordinate axes",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_common_refinement(malformed_square, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.refinement_vertex_ambient_dimension"
+    )

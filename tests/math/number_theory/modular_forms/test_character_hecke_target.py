@@ -164,10 +164,18 @@ def test_character_hecke_admits_large_coordinate_without_double_charge() -> None
 
 
 def test_character_hecke_rejects_bad_prime_for_its_exact_level() -> None:
-    with pytest.raises(OperationDomainValidationError, match="gcd"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_character_coordinates_hecke(_form(), 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_hecke_coprime_level"
+    )
 
 
 def test_character_hecke_advertises_precision_limited_index_for_level_26() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="through 18"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         modular_character_coordinates_hecke(_form(), 19)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.character_hecke_precision_bound"
+    )

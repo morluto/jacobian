@@ -153,8 +153,11 @@ def test_non_squarefree_radicand_is_rejected_by_arithmetic_admission() -> None:
         radical_coefficient=_cr(1),
         radicand=12,
     )
-    with pytest.raises(OperationDomainValidationError, match="square-free"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_algebraic_add(AlgebraicAdditionRequest(left=value, right=value))
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.radicand_not_square_free"
+    )
 
 
 def test_arithmetic_admits_shared_radicand_once(
@@ -182,8 +185,11 @@ def test_arithmetic_admits_shared_radicand_once(
         radical_coefficient=_cr(1),
         radicand=4,
     )
-    with pytest.raises(OperationDomainValidationError, match="square-free"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_algebraic_add(AlgebraicAdditionRequest(left=value, right=value))
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.radicand_not_square_free"
+    )
 
 
 def test_result_remains_consumable() -> None:

@@ -226,15 +226,22 @@ def test_uniformity_domain_is_explicit(
 def test_nonuniform_source_is_rejected() -> None:
     source = make_coloring(("a", "b", "c"), [("a",), ("a", "b")], [0, 0])
 
-    with pytest.raises(OperationDomainValidationError, match="source edge"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct(source, 1, 2)
+    assert (
+        exc_info.value.errors()[0]["type"] == "monochromatic_profile.nonuniform_source"
+    )
 
 
 def test_duplicate_source_vertex_sets_are_rejected() -> None:
     source = make_coloring(("a", "b", "c"), [("a", "b"), ("b", "a")], [0, 0])
 
-    with pytest.raises(OperationDomainValidationError, match="once"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct(source, 2, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "monochromatic_profile.duplicate_source_edge"
+    )
 
 
 def test_source_sensitive_candidate_bound_rejects_large_possible_profile() -> None:
@@ -254,8 +261,9 @@ def test_enumerated_target_count_is_charged_for_sparse_high_uniformity() -> None
     ]
     source = make_coloring(vertices, members, [0] * 11)
 
-    with pytest.raises(OperationResourceAdmissionError, match="lookup bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct(source, 10, 11)
+    assert exc_info.value.errors()[0]["type"] == "monochromatic_profile.work_bound"
 
 
 def test_long_source_labels_remain_native_admissible() -> None:

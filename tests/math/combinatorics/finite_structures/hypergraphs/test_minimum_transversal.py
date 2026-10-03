@@ -186,7 +186,7 @@ class TestMinimumTransversal:
         from itertools import combinations
 
         vertices = [f"v{i}" for i in range(21)]
-        with pytest.raises(ValueError, match="search exceeds"):
+        with pytest.raises(ValueError) as exc_info:
             _transversal(
                 {
                     "vertices": vertices,
@@ -196,6 +196,10 @@ class TestMinimumTransversal:
                     ],
                 }
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "hypergraph.minimum_transversal.search_bound"
+        )
 
     def test_decomposed_search_matches_undecomposed_search(self) -> None:
         from itertools import combinations

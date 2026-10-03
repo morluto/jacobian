@@ -367,8 +367,11 @@ def test_native_interior_rejects_subset_outside_carrier() -> None:
     from jacobian.math.topology.finite.spaces.operations import from_preorder, interior
 
     space = from_preorder(("a",), ((0,),))
-    with pytest.raises(OperationDomainValidationError, match="subset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         interior(space, frozenset({1}))
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology_space.subset_index_range"
+    )
 
 
 @pytest.mark.parametrize("kind", ["interior", "closure", "boundary"])

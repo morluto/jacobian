@@ -187,8 +187,12 @@ def test_induced_map_still_rejects_oversized_rational_quotients() -> None:
     scale = 10**63
     components = tuple((face, ((_q(scale),),)) for face in sheaf.canonical_face_order)
 
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cohomology_map(morphism(sheaf, sheaf, components))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.cohomology_map.scalar_growth_bound"
+    )
 
 
 def test_cohomology_map_admits_quotient_work_before_reductions() -> None:
@@ -215,8 +219,12 @@ def test_cohomology_map_admits_quotient_work_before_reductions() -> None:
     )
     components = tuple((face, identity) for face in sheaf.canonical_face_order)
 
-    with pytest.raises(OperationResourceAdmissionError, match="scalar steps"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cohomology_map(morphism(sheaf, sheaf, components))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.cohomology_map.work_bound"
+    )
 
 
 def test_map_into_zero_stalks_preserves_empty_cohomology_axes() -> None:
@@ -251,8 +259,12 @@ def test_nonnatural_morphism_has_no_induced_cohomology_map() -> None:
     components = tuple((face, ((_q(2 if face == ("a",) else 1),),)) for face in axis)
     nonnatural = morphism(sheaf, sheaf, components)
     assert not nonnatural.natural
-    with pytest.raises(OperationDomainValidationError, match="natural"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         cohomology_map(nonnatural)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.cochain_map.cochain_map_non_natural"
+    )
 
 
 def test_cohomology_map_reuses_both_canonical_parent_admissions() -> None:

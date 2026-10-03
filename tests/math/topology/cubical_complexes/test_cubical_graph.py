@@ -67,5 +67,8 @@ def test_face_work_is_rejected_before_closure_expansion(
         raise AssertionError("face closure ran before work admission")
 
     monkeypatch.setattr(operations, "_canonical_complex", forbidden)
-    with pytest.raises(OperationResourceAdmissionError, match="face-generation work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         one_skeleton(cells)
+    assert (
+        exc_info.value.errors()[0]["type"] == "cubical_complex.one_skeleton.work_bound"
+    )

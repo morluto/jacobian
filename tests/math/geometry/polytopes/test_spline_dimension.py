@@ -181,8 +181,9 @@ def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound() -> N
     complex_value = polytopal_complex_closure(cells)
     request = SplineDimensionRequest(complex=complex_value, degree=12, smoothness=0)
 
-    with pytest.raises(OperationResourceAdmissionError, match="exact result"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         spline_space(complex_value, 12, 0)
+    assert exc_info.value.errors()[0]["type"] == "polytopal_complex.spline_result_cells"
 
     result = spline_dimension(request)
 
@@ -196,10 +197,16 @@ def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound() -> N
 
 
 def test_native_spline_entry_points_reject_forged_requests_with_typed_errors() -> None:
-    with pytest.raises(OperationDomainValidationError, match="dimension request"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         spline_dimension(SplineDimensionRequest.model_construct())
-    with pytest.raises(OperationDomainValidationError, match="evaluation request"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytopal_complex.spline_dimension_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         spline_evaluate(SplineEvaluationRequest.model_construct())
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytopal_complex.spline_evaluation_type"
+    )
 
 
 def test_spline_evaluation_admits_scalars_whose_exact_result_is_at_the_limit() -> None:
@@ -249,7 +256,7 @@ def test_spline_evaluation_admits_scalars_whose_exact_result_is_at_the_limit() -
     oversized_point = ComplexPoint(
         coordinates=(CanonicalRational(num=1, den=at_limit),)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         spline_evaluate(
             SplineEvaluationRequest(
                 complex=complex_value,
@@ -263,6 +270,10 @@ def test_spline_evaluation_admits_scalars_whose_exact_result_is_at_the_limit() -
                 point=oversized_point,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.spline_evaluation_growth"
+    )
 
 
 def test_spline_evaluation_cancels_factors_before_summing() -> None:

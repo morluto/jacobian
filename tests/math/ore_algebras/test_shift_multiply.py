@@ -251,8 +251,9 @@ class TestShiftMultiplyAdmission:
             "model_construct",
             fail_ledger_construction,
         )
-        with pytest.raises(OperationResourceAdmissionError, match="degree"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             shift_operator_multiply(left, right)
+        assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_product_degree"
 
     def test_shifted_coefficient_height_is_rejected_before_ledger(
         self, monkeypatch: pytest.MonkeyPatch
@@ -271,8 +272,12 @@ class TestShiftMultiplyAdmission:
             "model_construct",
             fail_ledger_construction,
         )
-        with pytest.raises(OperationResourceAdmissionError, match="coefficient-digit"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             shift_operator_multiply(left, right)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "ore_algebra.shift_product_coefficient_digits"
+        )
 
     def test_exact_littlewood_self_product_at_128_digits_is_admitted(self) -> None:
         signs = "--++--+-+-++-++--+--+-++++++-+-+++-----++---+-+-++---------+-+--"

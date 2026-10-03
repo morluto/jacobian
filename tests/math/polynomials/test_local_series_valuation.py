@@ -177,5 +177,6 @@ def test_native_rejects_forged_infinity_center() -> None:
         coefficients=(_rational(1),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="infinity"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         laurent_valuation_profile(forged)
+    assert exc_info.value.errors()[0]["type"] == "local_series.infinity_center"

@@ -136,11 +136,12 @@ def test_membership_rejects_extension_elements_before_zero_shortcut() -> None:
         field=field,
         coordinates=(_rf(5, (0,)), _rf(5, (1,))),
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="currently supported only for the rational function field",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         function_field_riemann_roch_membership(generator_y, _divisor(field, 0))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "function_field.riemann_roch_membership_requires_rational_field"
+    )
 
 
 def test_genus_two_special_and_large_degree_spaces_match_closed_form() -> None:
@@ -201,10 +202,18 @@ def test_basis_growth_is_rejected_before_construction() -> None:
 
     genus_two = _hyperelliptic_field(5, (0, 4, 0, 0, 0, 1))
     assert function_field_riemann_roch_space(_divisor(genus_two, 14)).dimension == 13
-    with pytest.raises(OperationResourceAdmissionError, match="basis exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         function_field_riemann_roch_space(_divisor(genus_two, 15))
-    with pytest.raises(OperationResourceAdmissionError, match="basis exceeds"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "function_field.riemann_roch_basis_exceeds_envelope"
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         function_field_riemann_roch_space(_divisor(field, 100_000))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "function_field.riemann_roch_basis_exceeds_envelope"
+    )
 
 
 def test_request_keeps_signed_divisor_coefficient_as_canonical_decimal() -> None:

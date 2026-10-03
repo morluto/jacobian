@@ -159,10 +159,7 @@ def test_nonconstant_or_higher_order_inputs_are_outside_the_slice() -> None:
         ),
         denominator=_constant(1).denominator,
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="rational constant coefficients only",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_operator_gcrd(
             DifferentialOreOperator(
                 variable="x",
@@ -170,9 +167,14 @@ def test_nonconstant_or_higher_order_inputs_are_outside_the_slice() -> None:
             ),
             _operator({1: 1}),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.differential_gcrd_constant_coefficients"
+    )
 
-    with pytest.raises(OperationResourceAdmissionError, match="order at most one"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         differential_operator_gcrd(_operator({2: 1}), _operator({1: 1}))
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.differential_gcrd_order"
 
 
 def test_large_inputs_with_small_exact_outputs_are_accepted() -> None:

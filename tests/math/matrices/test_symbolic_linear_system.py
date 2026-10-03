@@ -254,8 +254,9 @@ class TestSymbolicLinearSystem:
         )
         request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(nonreduced,))
 
-        with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _run_linear_system(request)
+        assert exc_info.value.errors()[0]["type"] == "polynomial.not_coprime"
 
 
 class TestSolutionGrowthAdmission:

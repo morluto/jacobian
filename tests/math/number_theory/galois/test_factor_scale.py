@@ -75,5 +75,6 @@ def test_native_modulus_is_bounded_before_primality(
         pytest.fail("out-of-envelope modulus must not reach primality testing")
 
     monkeypatch.setattr(sympy, "isprime", unexpected)
-    with pytest.raises(OperationDomainValidationError, match=r"2\.\.251"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         galois_factor(10**10000 + 1, (1, 1))
+    assert exc_info.value.errors()[0]["type"] == "galois_theory.field_order_bound"

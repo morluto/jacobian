@@ -87,7 +87,7 @@ def test_subspace_checks_declared_ambient_axes_not_only_agreement_between_matric
     matrix = AxisBoundMatrix(
         presentation=field, row_axis=rows, column_axis=columns, entries=((),)
     )
-    with pytest.raises(ValueError, match="share their parent and axes"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteDimensionalSubspace(
             presentation=field,
             row_axis=Axis(name="rows", labels=("other",)),
@@ -95,6 +95,10 @@ def test_subspace_checks_declared_ambient_axes_not_only_agreement_between_matric
             basis_axis=Axis(name="basis", labels=("B",)),
             basis=(matrix,),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.subspace_matrices_share_parent_axes"
+    )
 
 
 def test_empty_basis_still_requires_an_admitted_field() -> None:
@@ -114,7 +118,9 @@ def test_empty_basis_still_requires_an_admitted_field() -> None:
             "coordinates": [{"presentation": field, "coordinates": (1,)}],
         }
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="characteristic must be prime"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_scalars(subspace, direction)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.characteristic_prime_integer"
+    )

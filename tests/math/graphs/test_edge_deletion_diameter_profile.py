@@ -114,14 +114,21 @@ def test_square_cycle() -> None:
 
 def test_disconnected_rejected() -> None:
     g = _graph(["0", "1", "2"], [["0", "1"]])
-    with pytest.raises(OperationDomainValidationError, match="connected"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         edge_deletion_diameter_profile(g)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.edge_deletion_diameter.not_connected"
+    )
 
 
 def test_empty_graph_rejected() -> None:
     g = SimpleUndirectedGraph(vertices=(), edges=())
-    with pytest.raises(OperationDomainValidationError, match=r"nonempty|connected"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         edge_deletion_diameter_profile(g)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.edge_deletion_diameter.empty_graph"
+    )
 
 
 def test_json_round_trip() -> None:
@@ -201,8 +208,12 @@ def test_work_bound_charges_per_vertex_traversals() -> None:
         for left in range(vertex_count)
         for right in range(left + 1, vertex_count)
     ]
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         edge_deletion_diameter_profile(_graph(vertices, edges))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.edge_deletion_diameter.work_exceeds_bound"
+    )
 
 
 def test_native_result_accepts_retained_labels_at_character_bound() -> None:
@@ -214,15 +225,23 @@ def test_native_result_accepts_retained_labels_at_character_bound() -> None:
 
 def test_native_result_rejects_labels_above_retained_character_bound() -> None:
     graph = _graph(["x" * (MAX_RETAINED_LABEL_CHARACTERS + 1)], [])
-    with pytest.raises(OperationDomainValidationError, match="retained-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         edge_deletion_diameter_profile(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.edge_deletion_diameter.retained_labels_exceed_bound"
+    )
 
 
 def test_entry_projections_count_toward_the_retained_label_bound() -> None:
     label = "x" * (MAX_RETAINED_LABEL_CHARACTERS // 3 + 1)
     graph = _graph([f"a{label}", f"b{label}"], [[f"a{label}", f"b{label}"]])
-    with pytest.raises(OperationDomainValidationError, match="retained-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         edge_deletion_diameter_profile(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.edge_deletion_diameter.retained_labels_exceed_bound"
+    )
 
 
 def test_cancellation_is_observed_during_the_deletion_loop() -> None:

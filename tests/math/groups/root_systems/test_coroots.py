@@ -85,8 +85,9 @@ def test_single_positive_root_conversion_matches_euclidean_oracle() -> None:
 
 def test_single_root_conversion_requires_positive_root_of_source_datum() -> None:
     matrix = CartanMatrix.model_validate(((2, -1), (-1, 2)))
-    with pytest.raises(OperationDomainValidationError, match="positive root"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         root_to_coroot(matrix, (2, 0))
+    assert exc_info.value.errors()[0]["type"] == "root_system.root_not_positive_root"
 
 
 def test_single_root_conversion_catalog_example_executes() -> None:

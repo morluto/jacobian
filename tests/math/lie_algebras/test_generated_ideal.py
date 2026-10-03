@@ -164,10 +164,12 @@ def test_operation_rejects_generators_on_a_different_axis() -> None:
     alien = LieAlgebraElement.model_validate(
         {"basis": ["a", "b", "c"], "coordinates": [{"num": 1, "den": 1}] * 3}
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="ideal generators must use"
-    ) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         lie_generated_ideal(HEISENBERG, [alien])
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lie_algebra.generated_ideal_generator_basis"
+    )
     assert (
         exc_info.value.errors()[0]["type"]
         == "lie_algebra.generated_ideal_generator_basis"
@@ -192,8 +194,12 @@ def test_request_rejects_generators_on_another_basis_axis() -> None:
             "coordinates": [{"num": 1, "den": 1}] * 3,
         }
     )
-    with pytest.raises(ValidationError, match="ideal generators must use"):
+    with pytest.raises(ValidationError) as exc_info:
         LieGeneratedIdealRequest(algebra=HEISENBERG, generators=(foreign,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lie_algebra.generated_ideal_generator_basis"
+    )
 
 
 def test_catalog_declares_generated_ideal_value() -> None:

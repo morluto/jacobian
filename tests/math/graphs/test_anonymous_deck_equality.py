@@ -135,8 +135,9 @@ def test_forged_fieldless_representatives_are_rejected_at_admission(
     forged = AnonymousGraphCardMultiset.model_construct(
         card_order=1, classes=(forged_class,)
     )
-    with pytest.raises(OperationDomainValidationError, match="bounded representative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         anonymous_deck_equality(forged, valid)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.equality_class"
 
 
 def test_admits_aggregate_work_before_canonicalization(

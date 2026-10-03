@@ -388,8 +388,12 @@ def test_a_decoded_profile_must_re_derive_each_valuation_from_the_element() -> N
         update={"profile": (forged_row,), "status": "IN_SPACE"}
     ).model_dump()
 
-    with pytest.raises(ValidationError, match="exact valuation"):
+    with pytest.raises(ValidationError) as exc_info:
         FunctionFieldRiemannRochMembership.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "function_field.riemann_roch_membership_valuation"
+    )
 
 
 def test_a_genuine_profile_still_decodes_and_the_kernel_is_unchanged() -> None:

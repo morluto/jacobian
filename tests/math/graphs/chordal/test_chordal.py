@@ -184,8 +184,9 @@ class TestContracts:
 
 def test_edgeless_encoded_order_is_charged_in_chordal_admission() -> None:
     graph = _graph([f"v{i}" for i in range(MAX_ENCODED_SIMPLE_GRAPH_VERTICES)], [])
-    with pytest.raises(OperationDomainValidationError, match="ordering verification"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         recognize_chordal(graph)
+    assert exc_info.value.errors()[0]["type"] == "graph.chordal.order_work_bound"
 
 
 def test_encoded_cycle_certificate_matches_the_widened_carrier() -> None:

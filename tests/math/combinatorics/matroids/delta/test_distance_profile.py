@@ -118,8 +118,12 @@ def test_profile_rejects_inconsistent_histogram_and_coerced_integers() -> None:
         "nearest_feasible_count_by_mask": [1, 1],
         "distance_histogram": [0, 2],
     }
-    with pytest.raises(ValueError, match="distance histogram must count"):
+    with pytest.raises(ValueError) as exc_info:
         PublicDeltaMatroidDistanceProfile.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "delta_matroid.distance_histogram_mismatch"
+    )
 
     for invalid in (False, 0.0, "0"):
         malformed = {
@@ -258,10 +262,13 @@ def test_a_decoded_profile_must_match_its_retained_feasible_family() -> None:
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
 
     # Mask 3 is {a, b}; its only feasible set is (), at distance 2, not 1.
-    with pytest.raises(ValidationError, match="must match the retained"):
+    with pytest.raises(ValidationError) as exc_info:
         DeltaMatroidDistanceProfile.model_validate(
             _profile_payload(source, (0, 1, 1, 1), (1, 1, 1, 1), (1, 3, 0))
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "delta_matroid.distance_profile_relation"
+    )
 
 
 def test_a_decoded_profile_must_match_its_nearest_feasible_counts() -> None:
@@ -274,7 +281,7 @@ def test_a_decoded_profile_must_match_its_nearest_feasible_counts() -> None:
     exact = distance_profile(source)
     assert exact.nearest_feasible_count_by_mask == (1, 2, 2, 1)
 
-    with pytest.raises(ValidationError, match="must match the retained"):
+    with pytest.raises(ValidationError) as exc_info:
         DeltaMatroidDistanceProfile.model_validate(
             _profile_payload(
                 source,
@@ -283,6 +290,9 @@ def test_a_decoded_profile_must_match_its_nearest_feasible_counts() -> None:
                 exact.distance_histogram,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "delta_matroid.distance_profile_relation"
+    )
 
 
 def test_a_genuine_profile_still_round_trips_through_decoding() -> None:

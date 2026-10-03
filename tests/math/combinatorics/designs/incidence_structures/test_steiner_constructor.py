@@ -310,6 +310,10 @@ def test_computed_result_rejects_forged_undeclared_members() -> None:
     wrapped = ComputedSteinerTripleSystem.model_construct(design=forged_design)
     with pytest.raises(ValidationError) as exc_info:
         SteinerTripleSystemResult(order=7, outcome=wrapped)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "incidence_structure.steiner_design_undeclared_member"
+    )
     assert exc_info.value.errors()[0]["type"] == (
         "incidence_structure.steiner_design_undeclared_member"
     )
@@ -413,6 +417,10 @@ def test_orders_below_three_are_refused_at_every_layer() -> None:
 def test_native_admission_rejects_invalid_order_before_materialization() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_steiner_triple_system(5, 100)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "incidence_structure.steiner_order_necessary_condition"
+    )
     assert exc_info.value.errors()[0]["type"] == (
         "incidence_structure.steiner_order_necessary_condition"
     )

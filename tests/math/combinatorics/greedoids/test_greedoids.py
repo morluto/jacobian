@@ -139,7 +139,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
 
 
 def test_recognition_rejects_a_ground_label_outside_utf8_budget() -> None:
-    with pytest.raises(OperationDomainValidationError, match="ground label exceeds"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _recognize(
             RecognizeRequest(
                 system=FiniteFeasibleSetSystem(
@@ -148,6 +148,7 @@ def test_recognition_rejects_a_ground_label_outside_utf8_budget() -> None:
                 )
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "greedoid.ground_label_exceeds_budget"
 
 
 # ---------------------------------------------------------------------------
@@ -499,8 +500,12 @@ class TestNativeCarrierAdmission:
     def test_recognize_rejects_family_over_row_budget(self) -> None:
         system = self._over_row_budget_system()
         assert isinstance(system, FiniteFeasibleSetSystem)
-        with pytest.raises(ValueError, match="feasible-set count"):
+        with pytest.raises(ValueError) as exc_info:
             greedoids.recognize(system)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "greedoid.feasible_count_exceeds_budget"
+        )
 
     def test_union_closed_rejects_family_over_row_budget(self) -> None:
         with pytest.raises(ValueError, match="feasible-set count"):

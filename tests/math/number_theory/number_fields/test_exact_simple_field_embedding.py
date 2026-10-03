@@ -54,8 +54,9 @@ def test_rejects_image_that_does_not_satisfy_source_relation() -> None:
         element=_element(source, 0, 1),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="exact root"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         apply_simple_number_field_embedding(request)
+    assert exc_info.value.errors()[0]["type"] == "number_field.embedding.image_not_root"
 
 
 def test_rejects_reducible_source_before_map_evaluation() -> None:
@@ -68,8 +69,12 @@ def test_rejects_reducible_source_before_map_evaluation() -> None:
         element=_element(reducible, 0, 1),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="must define a field"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         apply_simple_number_field_embedding(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_field.embedding.reducible_presentation"
+    )
 
 
 def test_models_bind_source_target_and_element_parents() -> None:
@@ -113,8 +118,11 @@ def test_model_constructed_generator_image_degree_mismatch_is_rejected() -> None
         element=_element(source, 1, 1),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical validated"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         apply_simple_number_field_embedding(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_field.embedding.invalid_request"
+    )
 
 
 def test_model_constructed_element_wrong_parent_is_rejected() -> None:
@@ -127,8 +135,11 @@ def test_model_constructed_element_wrong_parent_is_rejected() -> None:
         element=_element(target, 1, 0, 0, 0),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical validated"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         apply_simple_number_field_embedding(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "number_field.embedding.invalid_request"
+    )
 
 
 def test_identity_embedding_at_advertised_maximum_degree_is_admitted() -> None:
@@ -148,7 +159,7 @@ def test_identity_embedding_at_advertised_maximum_degree_is_admitted() -> None:
 
 def test_degree_eight_identity_is_rejected_by_degree_admission() -> None:
     octic = _field(1, 0, 0, 0, 0, 0, 0, 0, 2)
-    with pytest.raises(OperationDomainValidationError, match="degrees at most 6"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         apply_simple_number_field_embedding(
             SimpleNumberFieldEmbeddingRequest(
                 source=octic,
@@ -157,6 +168,7 @@ def test_degree_eight_identity_is_rejected_by_degree_admission() -> None:
                 element=_element(octic, 1, 1, 0, 0, 0, 0, 0, 0),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "number_field.embedding.degree_bound"
 
 
 def test_transport_preserves_products_against_independent_polynomial_remainder() -> (

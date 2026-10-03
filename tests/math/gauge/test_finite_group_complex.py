@@ -121,10 +121,11 @@ def test_open_or_foreign_face_boundary_is_rejected() -> None:
             ),
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match="must be closed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_finite_group_gauge_complex(
             request.lattice, request.group, request.faces
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.complex.face_closed"
 
     foreign = FiniteGroupGaugeComplex.model_construct(
         lattice=lattice,
@@ -142,8 +143,9 @@ def test_open_or_foreign_face_boundary_is_rejected() -> None:
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="source lattice edges"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupGaugeComplex.model_validate(foreign.model_dump())
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.complex_face_edge"
 
 
 def test_aggregate_face_growth_is_rejected_before_nested_value_parsing() -> None:
@@ -157,8 +159,9 @@ def test_aggregate_face_growth_is_rejected_before_nested_value_parsing() -> None
         "group": {"multiplication": [[0]], "identity": 0, "inverse": [0]},
         "faces": [{"face_id": f"f{i:02}", "boundary": boundary} for i in range(17)],
     }
-    with pytest.raises(ValidationError, match="complex_boundary_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteGroupGaugeComplexRequest.model_validate(raw)
+    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.complex_boundary_bound"
 
 
 def test_face_orientation_requires_a_strict_boolean() -> None:

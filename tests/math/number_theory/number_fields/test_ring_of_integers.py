@@ -159,10 +159,14 @@ def test_ring_of_integers_request_schema_and_parser_share_degree_boundary() -> N
     )
     assert accepted.field.degree == 31
 
-    with pytest.raises(ValidationError, match="degree at most 31"):
+    with pytest.raises(ValidationError) as exc_info:
         NumberFieldRingOfIntegersRequest.model_validate(
             {"field": {"coefficients_descending": (1, *(0,) * 31, -2)}}
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_field.ring_of_integers_degree_bound"
+    )
 
 
 def test_package_entry_point_uses_the_typed_implementation() -> None:

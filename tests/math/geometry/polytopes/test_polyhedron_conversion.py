@@ -150,8 +150,9 @@ def test_coefficient_growth_is_admitted_before_kernel_expansion(
             ),
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="generator coefficients"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         halfspaces_to_v_presentation(source)
+    assert exc_info.value.errors()[0]["type"] == "polyhedron.h_to_v.kernel_admission"
 
 
 def test_wire_size_bound_is_admitted_before_kernel_expansion(
@@ -182,7 +183,6 @@ def test_wire_size_bound_is_admitted_before_kernel_expansion(
         for index in range(51)
     )
     source = RationalHPolyhedron(space=_space("x", "y", "z"), inequalities=tuple(rows))
-    with pytest.raises(
-        OperationResourceAdmissionError, match="conservative V-result bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         halfspaces_to_v_presentation(source)
+    assert exc_info.value.errors()[0]["type"] == "polyhedron.h_to_v.result_output"

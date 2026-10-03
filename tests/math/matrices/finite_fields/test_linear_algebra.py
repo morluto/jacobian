@@ -74,8 +74,12 @@ def test_empty_shapes_remain_explicit() -> None:
 
 
 def test_input_rejects_nonprime_or_ragged_semantics() -> None:
-    with pytest.raises(OperationDomainValidationError, match="prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rank(PrimeFieldMatrix(prime=4, entries=((1,),), columns=1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.characteristic_prime_integer"
+    )
     with pytest.raises(ValueError, match="column"):
         PrimeFieldMatrix(prime=2, entries=((1,),), columns=2)
 

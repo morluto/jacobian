@@ -374,12 +374,16 @@ def test_group_rank_and_order_boundaries() -> None:
         left=((0, 0),),
         right=((0, 0),),
     )
-    with pytest.raises(ValueError, match=f"{MAX_FINITE_GROUP_ORDER:,}-element"):
+    with pytest.raises(ValueError) as exc_info:
         finite_abelian_group_factorization(
             FiniteAbelianProductGroup(moduli=factorization_request.moduli),
             factorization_request.left,
             factorization_request.right,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_abelian_group.factorization_group_order"
+    )
 
 
 def test_native_factorization_accepts_canonical_group_values() -> None:

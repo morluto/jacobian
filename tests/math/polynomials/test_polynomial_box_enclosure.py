@@ -537,8 +537,9 @@ def test_exact_result_digit_growth_boundary() -> None:
         coefficient_numerator=1,
         coefficient_denominator_digits=64,
     )
-    with pytest.raises(OperationDomainValidationError, match="exact-result bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_polynomial_box_enclosure(above_limit)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.box_invariant"
 
 
 def test_intermediate_digit_growth_boundary() -> None:

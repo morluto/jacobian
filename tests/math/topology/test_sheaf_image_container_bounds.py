@@ -104,8 +104,12 @@ def test_nested_restriction_containers_are_bounded_before_parent_copy(
         update={container: (restriction.model_copy(update=update),)}
     )
     forged = _identity(sheaf).model_copy(update={role: malformed})
-    with pytest.raises(OperationResourceAdmissionError, match=r"restriction.*envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         image_of_morphism(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_restriction_shape"
+    )
 
 
 def test_deeply_nested_restriction_scalar_is_rejected_without_recursive_copy() -> None:
@@ -119,8 +123,12 @@ def test_deeply_nested_restriction_scalar_is_rejected_without_recursive_copy() -
     )
     malformed = sheaf.model_copy(update={"cover_restrictions": (restriction,)})
     forged = _identity(sheaf).model_copy(update={"source": malformed})
-    with pytest.raises(OperationDomainValidationError, match="scalar"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         image_of_morphism(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_restriction_scalar"
+    )
 
 
 @pytest.mark.parametrize("rank", (0, 8))
@@ -161,8 +169,12 @@ def test_malformed_parent_container_kinds_are_refused_before_copy(
     sheaf = constant_sheaf(canonical_complex(vertices, (vertices,)))
     malformed = sheaf.model_copy(update={field: value})
     forged = _identity(sheaf).model_copy(update={"source": malformed})
-    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         image_of_morphism(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_container_type"
+    )
 
 
 @pytest.mark.parametrize(
@@ -220,10 +232,12 @@ def test_parent_sheaf_subclasses_are_rejected_before_copy(role: str) -> None:
         nested = (nested,)
     parent = ExtendedSheaf.model_construct(**sheaf.__dict__, payload=nested)
     forged = _identity(sheaf).model_copy(update={role: parent})
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical finite cellular sheaves"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         image_of_morphism(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_type"
+    )
 
 
 class _UnvisitedList(list[object]):
@@ -240,8 +254,12 @@ class _UnvisitedList(list[object]):
 def test_parent_container_subclasses_are_refused_without_inspection(field: str) -> None:
     sheaf = constant_sheaf(canonical_complex(("a", "b", "c"), (("a", "b", "c"),)))
     parent = sheaf.model_copy(update={field: _UnvisitedList()})
-    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         image_of_morphism(_identity(sheaf).model_copy(update={"source": parent}))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_container_type"
+    )
 
 
 @pytest.mark.parametrize(
@@ -258,16 +276,24 @@ def test_restriction_container_subclasses_are_refused_without_inspection(
     )
     restriction = sheaf.cover_restrictions[0].model_copy(update=update)
     parent = sheaf.model_copy(update={"cover_restrictions": (restriction,)})
-    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         image_of_morphism(_identity(sheaf).model_copy(update={"target": parent}))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_restriction_structure"
+    )
 
 
 def test_stalk_basis_subclasses_are_refused_without_inspection() -> None:
     sheaf = constant_sheaf(canonical_complex(("a",), (("a",),)))
     stalk = sheaf.stalks[0].model_copy(update={"basis": _UnvisitedList()})
     parent = sheaf.model_copy(update={"stalks": (stalk,)})
-    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         image_of_morphism(_identity(sheaf).model_copy(update={"source": parent}))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.morphism_image.parent_restriction_structure"
+    )
 
 
 class _UnvisitedPayload(tuple[int, ...]):

@@ -183,8 +183,12 @@ def test_scaled_coefficient_growth_is_admitted_before_root_isolation(
 ) -> None:
     """The transformed polynomial envelope is checked before SymPy isolation."""
     monkeypatch.setattr(radix_module, "MAX_RADIX_SCALED_COEFFICIENT_DIGITS", 2)
-    with pytest.raises(OperationResourceAdmissionError, match="scaled defining"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_number.radix_scaled_coefficient_bound"
+    )
 
 
 def test_result_allocation_is_admitted_before_root_isolation(
@@ -192,8 +196,12 @@ def test_result_allocation_is_admitted_before_root_isolation(
 ) -> None:
     """The retained source and digit list have an allocation envelope."""
     monkeypatch.setattr(radix_module, "MAX_RADIX_RESULT_ALLOCATION_UNITS", 1)
-    with pytest.raises(OperationResourceAdmissionError, match="result allocation"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_number.radix_result_allocation_bound"
+    )
 
 
 def test_prefix_round_trips_through_strict_json() -> None:
@@ -230,8 +238,9 @@ def test_package_exports_the_native_radix_entrypoint() -> None:
 
 
 def test_reducible_polynomial_is_rejected_inside_isolation_admission() -> None:
-    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         radix_prefix(_value((1, 0, -1), 0), 10, 2)
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.not_irreducible"
 
 
 def _spy_lease(

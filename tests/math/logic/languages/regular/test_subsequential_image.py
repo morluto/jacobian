@@ -123,8 +123,12 @@ def test_image_matches_independent_exhaustive_finite_language_oracle() -> None:
 def test_image_requires_matching_alphabet_identity() -> None:
     source, transducer = carriers()
     mismatch = source.model_copy(update={"alphabet_id": "different"})
-    with pytest.raises(ValidationError, match="image_alphabet_identity_mismatch"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsequentialImageRequest(dfa=mismatch, transducer=transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.image_alphabet_identity_mismatch"
+    )
 
 
 def test_multi_symbol_emission_fits_admitted_work_bound() -> None:
@@ -205,9 +209,15 @@ def test_image_revalidates_model_constructed_carriers() -> None:
             "transitions": (*transducer.transitions, transducer.transitions[0]),
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="canonical DFA"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dfa_subsequential_image(malformed_source, transducer)
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical subsequential transducer"
-    ):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.image.invalid_dfa_carrier"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dfa_subsequential_image(source, malformed_transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.image.invalid_transducer_carrier"
+    )

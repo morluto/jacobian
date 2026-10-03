@@ -68,8 +68,9 @@ def test_rees_collapse_and_projection() -> None:
     result = rees_quotient(source, ("0", "1", "2"))
     assert len(result.quotient.elements) == 1
     assert all(target == result.quotient.elements[0] for _, target in result.projection)
-    with pytest.raises(OperationDomainValidationError, match="two-sided"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rees_quotient(source, ("1",))
+    assert exc_info.value.errors()[0]["type"] == "finite_semigroup.not_two_sided_ideal"
 
 
 def test_karoubi_envelope_of_group() -> None:

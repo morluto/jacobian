@@ -87,10 +87,11 @@ def test_group_binding_and_result_round_trip() -> None:
     group = FiniteAbelianProductGroup(moduli=(2, 3))
     other = FiniteAbelianProductGroup(moduli=(6,))
     element = FiniteAbelianGroupElement(group=other, coordinates=(1,))
-    with pytest.raises(ValueError, match="supplied group"):
+    with pytest.raises(ValueError) as exc_info:
         SubsetSumResidueProfileRequest(
             group=group, sequence=(element,), include_empty_subset=True
         )
+    assert exc_info.value.errors()[0]["type"] == "additive_combinatorics.group_binding"
 
     result = _run((2, 3), ((1, 1), (1, 2)))
     assert type(result).model_validate_json(result.model_dump_json()) == result
@@ -194,7 +195,7 @@ def test_forged_result_rejects_high_rank_before_group_order(
     moduli = (2,) * (MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER + 1)
     group = FiniteAbelianProductGroup(moduli=moduli)
     zero = FiniteAbelianGroupElement(group=group, coordinates=(0,) * len(moduli))
-    with pytest.raises(ValidationError, match="group order exceeds"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsetSumResidueProfileResult.model_validate(
             {
                 "source": {"items": []},
@@ -209,6 +210,7 @@ def test_forged_result_rejects_high_rank_before_group_order(
                 "covers_group": False,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "additive_combinatorics.result_shape"
 
 
 def test_forged_result_rejects_oversized_order_before_full_product(
@@ -220,7 +222,7 @@ def test_forged_result_rejects_oversized_order_before_full_product(
     monkeypatch.setattr(FiniteAbelianProductGroup, "order", property(explode))
     group = FiniteAbelianProductGroup(moduli=(2,) * 13)
     zero = FiniteAbelianGroupElement(group=group, coordinates=(0,) * 13)
-    with pytest.raises(ValidationError, match="group order exceeds"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsetSumResidueProfileResult.model_validate(
             {
                 "source": {"items": []},
@@ -235,3 +237,4 @@ def test_forged_result_rejects_oversized_order_before_full_product(
                 "covers_group": False,
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "additive_combinatorics.result_shape"

@@ -139,15 +139,20 @@ def test_exponential_candidate_family_is_rejected_before_enumeration() -> None:
         poset=poset, min_cardinality=0, max_cardinality=24
     )
 
-    with pytest.raises(OperationDomainValidationError, match="candidate bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_antichains(poset, 0, 24)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "poset.antichain_enumeration_envelope_exceeded"
+    )
 
 
 def test_request_retains_intrinsic_cardinality_range_shape() -> None:
-    with pytest.raises(ValidationError, match="max_cardinality"):
+    with pytest.raises(ValidationError) as exc_info:
         AntichainEnumerationRequest(
             poset=_make_chain(3), min_cardinality=2, max_cardinality=1
         )
+    assert exc_info.value.errors()[0]["type"] == "poset.antichain_cardinality_range"
 
 
 def test_rejects_forged_poset_relation_claims() -> None:
@@ -168,10 +173,12 @@ def test_enumeration_admits_before_inspecting_the_carrier() -> None:
     poset = _make_chain(2)
     malformed = poset.model_copy(update={"elements": object()})
 
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_antichains(malformed, 1, 1)
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_antichains(cast(FinitePoset, object()), 1, 1)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_enumeration_rejects_size_bound_before_strict_closure(

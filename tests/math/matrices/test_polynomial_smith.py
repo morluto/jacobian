@@ -234,8 +234,9 @@ def test_sparse_coefficients_exceeding_total_integer_storage_are_rejected() -> N
     source = RationalPolynomialMatrix(
         variables=("t",), row_count=1, column_count=1, entries=((polynomial,),)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient storage"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_smith_decomposition(source)
+    assert exc_info.value.errors()[0]["type"] == "matrix.polynomial_smith_budget"
 
 
 def test_proportional_sparse_polynomial_entries_retain_the_common_factor() -> None:
@@ -253,5 +254,6 @@ def test_proportional_sparse_polynomial_entries_retain_the_common_factor() -> No
 def test_copied_inconsistent_axes_are_rejected_before_admission() -> None:
     source = _matrix([[t]])
     forged = source.model_copy(update={"row_count": 0})
-    with pytest.raises(OperationDomainValidationError, match="structural"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_smith_decomposition(forged)
+    assert exc_info.value.errors()[0]["type"] == "matrix.polynomial_smith_domain"

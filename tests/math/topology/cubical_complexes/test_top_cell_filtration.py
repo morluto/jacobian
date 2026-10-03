@@ -120,14 +120,18 @@ def test_top_cell_values_must_cover_exactly_maximal_generators() -> None:
     left = _cell((0, 1), (0, 1))
     right = _cell((1, 2), (0, 1))
     shared_edge = _cell((1, 1), (0, 1))
-    with pytest.raises(OperationDomainValidationError, match="cover exactly"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _from_top_cell_values(
             CubicalTopCellFiltrationRequest(
                 cells=(left, right),
                 top_cell_values=(_value(left, Fraction(0)),),
             )
         )
-    with pytest.raises(OperationDomainValidationError, match="cover exactly"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.top_cell_value_domain_mismatch"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _from_top_cell_values(
             CubicalTopCellFiltrationRequest(
                 cells=(left, right),
@@ -138,6 +142,10 @@ def test_top_cell_values_must_cover_exactly_maximal_generators() -> None:
                 ),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.top_cell_value_domain_mismatch"
+    )
     with pytest.raises(ValidationError):
         CubicalTopCellFiltrationRequest(cells=(), top_cell_values=())
 
@@ -153,8 +161,12 @@ def test_decoded_top_cell_filtration_must_retain_source_boundary() -> None:
     payload["filtered_chain_complex"]["complex"]["differential_matrices"] = (
         ((0,), (0,)),
     )
-    with pytest.raises(ValidationError, match="source cubical boundaries"):
+    with pytest.raises(ValidationError) as exc_info:
         FilteredCubicalComplexFromTopCells.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cubical_complex.chain_differential_not_bound"
+    )
 
 
 def test_top_cell_filtration_is_published_with_a_composable_example() -> None:

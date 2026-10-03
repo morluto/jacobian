@@ -105,20 +105,28 @@ def test_target_parent_axis_and_canonical_residues_are_enforced() -> None:
         diagonal_residues=(2,),
         cross_terms=(),
     )
-    with pytest.raises(ValidationError, match="polynomial and vector moduli"):
+    with pytest.raises(ValidationError) as exc_info:
         ModularEvaluationRequest(
             polynomial=polynomial,
             vector=ModularCoordinateVector(modulus=5, axis=("x",), coordinates=(1,)),
         )
-    with pytest.raises(ValidationError, match="axes must agree"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.modular.parent_mismatch"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ModularEvaluationRequest(
             polynomial=polynomial,
             vector=ModularCoordinateVector(modulus=6, axis=("y",), coordinates=(1,)),
         )
-    with pytest.raises(ValidationError, match="diagonal coefficients"):
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.modular.axis_mismatch"
+    with pytest.raises(ValidationError) as exc_info:
         ModularQuadraticPolynomial(
             modulus=6, axis=("x",), diagonal_residues=(6,), cross_terms=()
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.modular.coefficient_residue"
+    )
 
 
 def test_serialized_values_round_trip_and_compose() -> None:

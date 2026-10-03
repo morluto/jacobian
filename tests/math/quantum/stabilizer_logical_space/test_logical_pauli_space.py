@@ -218,8 +218,9 @@ def test_nonisotropic_checks_are_not_a_logical_quotient() -> None:
         register=register,
         basis=(_pauli(register, 0b01), _pauli(register, 0b10)),
     )
-    with pytest.raises(OperationDomainValidationError, match="isotropic"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         logical_pauli_space(source)
+    assert exc_info.value.errors()[0]["type"] == "quantum.stabilizer.not_isotropic"
 
 
 def test_malformed_typed_check_row_uses_operation_domain_error() -> None:
@@ -228,10 +229,12 @@ def test_malformed_typed_check_row_uses_operation_domain_error() -> None:
     source = CheckSpaceValue.model_construct(
         qubit_register=register, basis=(malformed,)
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="check rows must be binary Paulis"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         logical_pauli_space(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quantum.stabilizer.logical_pauli_space.invalid_row"
+    )
 
 
 def test_maximum_register_and_check_row_boundary_remain_accepted() -> None:
@@ -249,8 +252,9 @@ def test_structural_roundtrip_rejects_a_foreign_register_claim() -> None:
     value = logical_pauli_space(CheckSpaceValue(register=register, basis=()))
     payload = value.model_dump(mode="json")
     payload["normalizer_embedding"]["target_axis"]["labels"][0] = "X:other"
-    with pytest.raises(ValidationError, match="source-bound binary coordinate axes"):
+    with pytest.raises(ValidationError) as exc_info:
         LogicalPauliSpace.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "quantum.logical_pauli_space.map_axes"
 
 
 @pytest.mark.parametrize(

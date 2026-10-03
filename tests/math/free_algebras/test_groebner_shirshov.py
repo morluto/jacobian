@@ -114,5 +114,9 @@ def test_completion_rejects_inhomogeneous_generators() -> None:
         alphabet=alphabet, generators=(relation,), side="two-sided"
     )
 
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         groebner_shirshov_through_degree(ideal, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.gs_requires_homogeneous_generators"
+    )

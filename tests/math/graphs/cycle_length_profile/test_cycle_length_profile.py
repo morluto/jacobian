@@ -198,8 +198,9 @@ def test_near_complete_graph_uses_exhaustive_work_bound() -> None:
     edges = list(combinations(vertices, 2))
     edges.remove(("v00", "v01"))
     edges.remove(("v00", "v02"))
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_cycle_length_profile(_graph(vertices, edges))
+    assert exc_info.value.errors()[0]["type"] == "cycle_profile.work_bound"
 
 
 def test_wheel_uses_first_witness_bound() -> None:
@@ -275,5 +276,9 @@ def test_cycle_profile_rejects_unbounded_retained_labels() -> None:
         [(labels[0], labels[1]), (labels[1], labels[2]), (labels[0], labels[2])],
     )
 
-    with pytest.raises(OperationDomainValidationError, match="label-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_cycle_length_profile(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "cycle_profile.retained_labels_exceed_bound"
+    )

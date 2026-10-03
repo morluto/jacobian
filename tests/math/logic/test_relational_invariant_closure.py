@@ -146,15 +146,17 @@ def test_non_polymorphism_is_rejected_before_it_can_claim_invariance() -> None:
         polymorphisms=(constant_one,),
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="fails to preserve relation P"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         close_relation_under_polymorphisms(
             request.source,
             request.relation_arity,
             request.generator_tuples,
             request.polymorphisms,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "relational.invariant_closure.not_polymorphism"
+    )
 
 
 def test_empty_and_nullary_relations_keep_exact_power_semantics() -> None:
@@ -193,10 +195,13 @@ def test_admission_refuses_large_power_before_product_expansion(
         raise AssertionError("tuple products were expanded before admission")
 
     monkeypatch.setattr(operations, "product", forbidden)
-    with pytest.raises(OperationResourceAdmissionError, match="generated relation"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         close_relation_under_polymorphisms(
             request.source,
             request.relation_arity,
             request.generator_tuples,
             request.polymorphisms,
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "relational.invariant_closure.state_bound"
+    )

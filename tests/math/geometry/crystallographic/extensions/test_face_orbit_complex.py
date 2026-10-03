@@ -160,7 +160,11 @@ def test_face_orbit_value_rejects_incomplete_endpoint_map_ledger() -> None:
     result = _compute(klein=False)
     forged = result.model_copy(update={"orbit_maps": result.orbit_maps[:-1]})
 
-    with pytest.raises(ValidationError, match="complete endpoint maps"):
+    with pytest.raises(ValidationError) as exc_info:
         BieberbachFaceOrbitComplex.model_validate(
             forged.model_dump(mode="python", warnings=False), strict=True
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "crystallographic.extension.face_orbit_source"
+    )

@@ -122,13 +122,14 @@ def test_newton_evaluation_rejects_admitted_intermediate_growth(
         coefficients=(_q(10**6), _q(10**6)),
     )
     monkeypatch.setattr(interpolation_operations, "MAX_CANONICAL_RATIONAL_DIGITS", 8)
-    with pytest.raises(OperationDomainValidationError, match="intermediate growth"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_newton(
             # This test narrows the operation envelope without constructing a
             # 32,768-digit fixture; the exact recurrence remains unchanged.
             form,
             _q(10**6),
         )
+    assert exc_info.value.errors()[0]["type"] == "polynomial.interpolation_contract"
 
 
 def test_equal_rational_nodes_are_rejected_before_division() -> None:

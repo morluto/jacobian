@@ -576,10 +576,11 @@ def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> 
             }
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="anonymous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         expression_enclosure(
             request.expression, request.argument, request.precision_bits
         )
+    assert exc_info.value.errors()[0]["type"] == "analysis.expression.named_variable"
 
 
 def test_box_interval_endpoints_are_ordered_and_bounded() -> None:

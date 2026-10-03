@@ -155,8 +155,12 @@ def test_mixed_composition_retains_the_path_output_envelope(first_edges: int) ->
         assert isinstance(result.map, PresentationTransportedSimplicialMap)
         assert len(result.map.basepoint_path.path_vertices) == 129
     else:
-        with pytest.raises(OperationResourceAdmissionError, match="word bound"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             _compose(transported, second)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "fundamental_group_map.composition_path_output"
+        )
 
 
 def test_native_composition_rechecks_forged_transported_path_binding() -> None:
@@ -176,8 +180,9 @@ def test_native_composition_rechecks_forged_transported_path_binding() -> None:
     request = PresentationMapCompositionRequest.model_construct(
         first=forged, second=identity
     )
-    with pytest.raises(OperationDomainValidationError, match="basepoint"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_fundamental_group_maps(request)
+    assert exc_info.value.errors()[0]["type"] == "fundamental_group_map.result_axes"
 
 
 @pytest.mark.parametrize("field", ("basepoint_path", "simplicial_map"))
@@ -198,8 +203,12 @@ def test_transported_carrier_rejects_malformed_nested_types(
     request = PresentationMapCompositionRequest.model_construct(
         first=forged, second=identity
     )
-    with pytest.raises(OperationDomainValidationError, match="typed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_fundamental_group_maps(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.transport_structure"
+    )
 
 
 @pytest.mark.parametrize(
@@ -231,8 +240,12 @@ def test_transported_carrier_rejects_malformed_member_fields(
     request = PresentationMapCompositionRequest.model_construct(
         first=forged, second=identity
     )
-    with pytest.raises(OperationDomainValidationError, match="typed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_fundamental_group_maps(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.transport_structure"
+    )
 
 
 @pytest.mark.parametrize("member", ("basepoint_path", "simplicial_map"))
@@ -268,8 +281,9 @@ def test_composition_bounds_retained_complexes_before_serialization(
     request = PresentationMapCompositionRequest.model_construct(
         first=forged, second=identity
     )
-    with pytest.raises(OperationResourceAdmissionError, match="envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compose_fundamental_group_maps(request)
+    assert exc_info.value.errors()[0]["type"] == "topology.complex_shape_bound"
 
 
 @pytest.mark.parametrize("field", ("source_presentation", "target_presentation"))
@@ -284,8 +298,9 @@ def test_composition_bounds_presentation_complexes_before_comparison(
     request = PresentationMapCompositionRequest.model_construct(
         first=first, second=identity
     )
-    with pytest.raises(OperationResourceAdmissionError, match="envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compose_fundamental_group_maps(request)
+    assert exc_info.value.errors()[0]["type"] == "topology.complex_shape_bound"
 
 
 def test_transported_path_subclasses_are_refused_before_dumping() -> None:
@@ -307,17 +322,29 @@ def test_transported_path_subclasses_are_refused_before_dumping() -> None:
     request = PresentationMapCompositionRequest.model_construct(
         first=forged, second=identity
     )
-    with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compose_fundamental_group_maps(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.native_carrier_shape"
+    )
 
 
 def test_native_producers_reject_missing_request_fields() -> None:
-    with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         induced_fundamental_group_map(FundamentalGroupMapRequest.model_construct())
-    with pytest.raises(OperationDomainValidationError, match="exact typed carrier"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.native_carrier_shape"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         change_fundamental_group_basepoint(
             FundamentalGroupBasepointChangeRequest.model_construct()
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "fundamental_group_map.native_carrier_shape"
+    )
 
 
 class _UnvisitedAxisList(list[str]):

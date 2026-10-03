@@ -189,13 +189,20 @@ def test_deserialization_checks_inverse_and_congruence_relations() -> None:
     result = unimodular_change(*_request(source, ((1,),), ("u",)))
     forged_inverse = result.model_dump(mode="python")
     forged_inverse["inverse"]["entries"] = ((0,),)
-    with pytest.raises(ValidationError, match="inverse must be two-sided"):
+    with pytest.raises(ValidationError) as exc_info:
         UnimodularChangeResult.model_validate(forged_inverse)
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.unimodular.result_inverse"
+    )
 
     forged_target = result.model_dump(mode="python")
     forged_target["target"]["diagonal_coefficients"] = (2,)
-    with pytest.raises(ValidationError, match="exact congruence image"):
+    with pytest.raises(ValidationError) as exc_info:
         UnimodularChangeResult.model_validate(forged_target)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quadratic_form.unimodular.result_congruence"
+    )
 
 
 def test_matrix_shape_and_entry_limits_precede_nested_matrix_parse() -> None:

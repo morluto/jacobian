@@ -169,10 +169,18 @@ def test_coherent_relabelling_preserves_clique_id_positions() -> None:
 
 def test_rejects_graph_labels_outside_hypergraph_carrier() -> None:
     graph = _graph(["x" * 65], [])
-    with pytest.raises(ValidationError, match="64 characters"):
+    with pytest.raises(ValidationError) as exc_info:
         MaximalCliqueHypergraphRequest(graph=graph)
-    with pytest.raises(OperationDomainValidationError, match="64 characters"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.maximal_clique_hypergraph.label_length"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_maximal_clique_hypergraph(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.maximal_clique_hypergraph.label_length"
+    )
 
 
 def test_rejects_complete_family_above_hypergraph_incidence_bound() -> None:
@@ -185,11 +193,12 @@ def test_rejects_complete_family_above_hypergraph_incidence_bound() -> None:
         for right in right_part
     ]
     graph = _graph(vertices, edges)
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="36,000-incidence hypergraph bound",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_maximal_clique_hypergraph(graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.maximal_clique_hypergraph.incidence_bound"
+    )
 
 
 def test_rejects_complete_family_above_hypergraph_edge_bound() -> None:

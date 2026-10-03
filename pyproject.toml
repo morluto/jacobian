@@ -188,6 +188,14 @@ module = ["benchmarks.tooling.heldout_smoke"]
 disable_error_code = ["str-bytes-safe"]
 
 [[tool.mypy.overrides]]
+module = ["tools.match_recorder", "tools.rewrite_match_pins"]
+# The recorder replaces pytest.raises with a capturing wrapper so one test run
+# can record the owner error code behind every message-pinned site. That
+# rebinding cannot be expressed to mypy.
+disable_error_code = ["no-untyped-def", "assignment", "arg-type", "misc", "union-attr", "operator", "unused-ignore"]
+
+
+[[tool.mypy.overrides]]
 module = ["tools.benchmark_plan.compiler"]
 disable_error_code = ["arg-type"]
 

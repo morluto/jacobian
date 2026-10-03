@@ -296,17 +296,20 @@ class TestIncidenceGraph:
         result = incidence_graph(_hypergraph(HYPERGRAPH))
         payload = result.model_dump()
         payload["vertex_labels"] = (("a", "e0"), ("b", "v1"), ("c", "v2"), ("d", "v3"))
-        with pytest.raises(ValidationError, match="incidence_graph"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "hypergraph.incidence_graph"
         payload = result.model_dump()
         payload["graph"]["edges"] = []
-        with pytest.raises(ValidationError, match="incidence_graph"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "hypergraph.incidence_graph"
         payload = result.model_dump()
         payload["edges"] = []
         payload["graph"]["edges"] = []
-        with pytest.raises(ValidationError, match="incidence"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "hypergraph.validation"
 
     def test_no_edges(self) -> None:
         r = incidence_graph(_hypergraph(NO_EDGES))

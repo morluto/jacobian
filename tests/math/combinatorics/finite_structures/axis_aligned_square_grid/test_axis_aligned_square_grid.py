@@ -87,8 +87,9 @@ def test_n16_is_admitted_by_carrier_bounds() -> None:
 
 
 def test_native_admission_rejects_n17_before_enumeration() -> None:
-    with pytest.raises(OperationDomainValidationError, match="between 1 and 16"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_axis_aligned_square_grid(17)
+    assert exc_info.value.errors()[0]["type"] == "square_grid.side_length_bound"
 
 
 def test_serialized_grid_claim_is_verifiable_and_forgery_is_structural() -> None:

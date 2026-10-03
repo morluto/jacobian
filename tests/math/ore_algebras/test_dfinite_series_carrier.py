@@ -294,10 +294,12 @@ def test_polynomial_coefficient_precondition_applies_to_degenerate_prefixes() ->
             ),
             {"values": [1] * order},
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="polynomial coefficients"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             differential_series_generate_prefix(series, count)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "ore_algebra.dfinite_prefix_polynomial_coefficients"
+        )
 
 
 def test_rational_coefficient_outside_current_prefix_domain_is_rejected() -> None:
@@ -322,16 +324,21 @@ def test_rational_coefficient_outside_current_prefix_domain_is_rejected() -> Non
         ),
         {"values": [1]},
     )
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficients"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_series_generate_prefix(carrier, 4)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.dfinite_prefix_polynomial_coefficients"
+    )
 
 
 def test_large_prefix_is_rejected_by_admission() -> None:
     carrier = differential_series_construct(
         _sinh_operator(), FiniteRationalSequence.model_validate({"values": [0, 1]})
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         differential_series_generate_prefix(carrier, 100_000)
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.dfinite_prefix_work"
 
 
 def test_prefix_admission_runs_before_coefficient_scaling() -> None:
@@ -392,8 +399,9 @@ def test_prefix_count_respects_existing_finite_sequence_length() -> None:
     carrier = differential_series_construct(
         _sinh_operator(), FiniteRationalSequence.model_validate({"values": [0, 1]})
     )
-    with pytest.raises(OperationDomainValidationError, match="bounded count"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_series_generate_prefix(carrier, 100_001)
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.dfinite_prefix_request"
 
 
 def test_zero_operator_cannot_define_a_dfinite_series() -> None:

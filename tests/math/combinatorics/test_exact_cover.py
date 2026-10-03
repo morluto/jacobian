@@ -546,6 +546,10 @@ def test_dense_cyclic_instance_refuses_before_the_residual_scan() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
     # The previous per-primary row scan performed ~134 million comparisons here.
+    # The wall-time bound is deliberate evidence, not slop: it shows the guard
+    # ran before the expensive pass. That pass is inlined in the kernel loop
+    # rather than a patchable helper, so no parent-side sentinel can prove the
+    # same ordering without a kernel refactor first.
     assert time.monotonic() - started < 2.0
 
 

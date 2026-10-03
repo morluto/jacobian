@@ -242,6 +242,10 @@ def test_deep_enlargement_rejection_propagates_through_the_worker() -> None:
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_round_two_work_bound"
     )
+    # The wall-time bound is the evidence, not a stopwatch for its own sake: the
+    # expensive work runs in a killable worker subprocess, so a parent-side
+    # sentinel cannot observe it. Returning the typed admission error this far
+    # below the worker lease is what shows the guard ran before that work.
     assert time.monotonic() - started < 30
 
 

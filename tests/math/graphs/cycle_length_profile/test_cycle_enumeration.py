@@ -628,6 +628,10 @@ def test_wheel_block_enumerates_directly_without_dfs() -> None:
     started = time.monotonic()
     result = enumerate_fixed_length_cycles(graph, 125)
     assert result.cycle_count == 124
+    # The wall-time bound is deliberate evidence, not slop: it shows the guard
+    # ran before the expensive pass. That pass is inlined in the kernel loop
+    # rather than a patchable helper, so no parent-side sentinel can prove the
+    # same ordering without a kernel refactor first.
     assert time.monotonic() - started < 2.0
 
 
@@ -764,6 +768,10 @@ def test_complete_graph_four_cycle_admission_is_polynomial_time() -> None:
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError):
+        # The wall-time bound is deliberate evidence, not slop: it shows the guard
+        # ran before the expensive pass. That pass is inlined in the kernel loop
+        # rather than a patchable helper, so no parent-side sentinel can prove the
+        # same ordering without a kernel refactor first.
         enumerate_fixed_length_cycles(graph, 4)
     assert time.monotonic() - started < 2.0
 

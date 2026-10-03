@@ -471,6 +471,10 @@ def test_secondary_presolve_is_linear_in_source_incidences() -> None:
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
+    # The wall-time bound is deliberate evidence, not slop: it shows the guard
+    # ran before the expensive pass. That pass is inlined in the kernel loop
+    # rather than a patchable helper, so no parent-side sentinel can prove the
+    # same ordering without a kernel refactor first.
     assert time.monotonic() - started < 1.0
 
 

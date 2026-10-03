@@ -878,6 +878,10 @@ def test_active_worker_cancellation_is_preserved_as_execution_state() -> None:
         timer.cancel()
         timer.join()
 
+    # The wall-time bound is the evidence, not a stopwatch for its own sake: the
+    # expensive work runs in a killable worker subprocess, so a parent-side
+    # sentinel cannot observe it. Returning the typed admission error this far
+    # below the worker lease is what shows the guard ran before that work.
     assert time.monotonic() - started < 5.0
 
 

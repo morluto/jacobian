@@ -554,6 +554,10 @@ def test_collision_group_growth_is_bounded_before_materialization() -> None:
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
+    # The wall-time bound is the evidence, not a stopwatch for its own sake: the
+    # expensive work runs in a killable worker subprocess, so a parent-side
+    # sentinel cannot observe it. Returning the typed admission error this far
+    # below the worker lease is what shows the guard ran before that work.
     assert time.monotonic() - started < 2.0
 
 

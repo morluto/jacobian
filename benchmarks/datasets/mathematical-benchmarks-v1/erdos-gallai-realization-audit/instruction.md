@@ -13,7 +13,7 @@ Write `/app/submission.json` according to the schema.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+Submit one row for each case_id in /app/input.json, exactly once, in any order. The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

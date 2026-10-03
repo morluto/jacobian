@@ -38,6 +38,8 @@ _PYTEST_LIFECYCLE_HOOKS = frozenset(
     {
         "setup_module",
         "teardown_module",
+        "setUpModule",
+        "tearDownModule",
         "setup_function",
         "teardown_function",
         "pytest_addoption",
@@ -609,6 +611,22 @@ def _scan_class_statement(
             outer_bound,
             deferred,
         )
+        if isinstance(statement.test, ast.Constant) and isinstance(
+            statement.test.value, bool
+        ):
+            branch = statement.body if statement.test.value else statement.orelse
+            _scan_class_body(
+                branch,
+                bound,
+                module_names,
+                referenced,
+                fixtures,
+                pytest_aliases,
+                reference_sites,
+                deferred,
+                outer_bound,
+            )
+            return
         _scan_class_body(
             statement.body,
             bound,
@@ -870,6 +888,15 @@ def _pattern_binding_names(pattern: ast.pattern) -> frozenset[str]:
 
 
 def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
+    if isinstance(statement, ast.If):
+        if isinstance(statement.test, ast.Constant) and isinstance(
+            statement.test.value, bool
+        ):
+            branch = statement.body if statement.test.value else statement.orelse
+            return _class_suite_bindings(branch)
+        body_names = _class_suite_bindings(statement.body)
+        else_names = _class_suite_bindings(statement.orelse)
+        return body_names & else_names
     names: set[str] = set()
     declared_global: set[str] = set()
     stack = [statement]
@@ -1080,7 +1107,7 @@ def _waived(lines: list[str], line: int) -> bool:
 
 
 def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[int, ...]:
-    """Module-time direct calls to the function owning a deferred name load."""
+    """Module-time calls, including functions called by module-time helpers."""
 
     if function_line is None:
         return ()
@@ -1095,34 +1122,60 @@ def _module_eager_calls(tree: ast.Module, function_line: int | None) -> tuple[in
     )
     if function is None:
         return ()
-    eager_calls: list[int] = []
-    stack: list[ast.AST] = list(tree.body)
-    while stack:
-        node = stack.pop()
+    definitions_by_name: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+    for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            stack.extend(node.decorator_list)
-            stack.extend(_header_expressions(node))
+            definitions_by_name.setdefault(node.name, []).append(node)
+
+    def calls(nodes: Sequence[ast.AST]) -> list[tuple[str, int]]:
+        found: list[tuple[str, int]] = []
+        stack = list(nodes)
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                stack.extend(node.decorator_list)
+                stack.extend(_header_expressions(node))
+                continue
+            if isinstance(node, ast.Lambda):
+                stack.extend(_header_expressions(node))
+                continue
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                found.append((node.func.id, node.lineno))
+            stack.extend(ast.iter_child_nodes(node))
+        return found
+
+    pending = calls(tree.body)
+    visited: set[tuple[int, int]] = set()
+    invocation_lines: set[int] = set()
+    while pending:
+        called_name, invocation_line = pending.pop()
+        candidates = [
+            candidate
+            for candidate in definitions_by_name.get(called_name, ())
+            if candidate.lineno < invocation_line
+        ]
+        if not candidates:
             continue
-        if isinstance(node, ast.Lambda):
-            stack.extend(_header_expressions(node))
+        target = max(candidates, key=lambda candidate: candidate.lineno)
+        state = (target.lineno, invocation_line)
+        if state in visited:
             continue
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == function.name
-            and node.lineno > function_line
-        ):
-            prior_definitions = [
-                candidate.lineno
-                for candidate in tree.body
-                if isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and candidate.name == function.name
-                and candidate.lineno < node.lineno
-            ]
-            if prior_definitions and max(prior_definitions) == function_line:
-                eager_calls.append(node.lineno)
-        stack.extend(ast.iter_child_nodes(node))
-    return tuple(eager_calls)
+        visited.add(state)
+        if target.lineno == function_line:
+            invocation_lines.add(invocation_line)
+        pending.extend(calls(target.body))
+    return tuple(sorted(invocation_lines))
+
+
+def _reachable_bindings(roots: set[int], edges: dict[int, set[int]]) -> set[int]:
+    reachable = set(roots)
+    pending = list(roots)
+    while pending:
+        source = pending.pop()
+        for target in edges.get(source, set()) - reachable:
+            reachable.add(target)
+            pending.append(target)
+    return reachable
 
 
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
@@ -1139,28 +1192,45 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     bindings: dict[str, list[tuple[int, int]]] = {}
     for index, (name, line, _kind, _node) in enumerate(definitions):
         bindings.setdefault(name, []).append((index, line))
-    referenced_bindings: set[int] = set()
+    function_bindings = {
+        node.lineno: index
+        for index, (_name, _line, kind, node) in enumerate(definitions)
+        if kind == "function"
+        and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    module_roots: set[int] = set()
+    runtime_roots: set[int] = set()
+    module_edges: dict[int, set[int]] = {}
+    runtime_edges: dict[int, set[int]] = {}
     for name, line, deferred, scope_line in reference_sites:
         choices = bindings.get(name, [])
         if not choices:
             continue
+        source = function_bindings.get(scope_line) if scope_line is not None else None
         if deferred:
-            eager_calls = _module_eager_calls(tree, scope_line)
-            if eager_calls:
-                for call_line in eager_calls:
-                    eligible = [
-                        index
-                        for index, binding_line in choices
-                        if binding_line < call_line
-                    ]
-                    if eligible:
-                        referenced_bindings.add(eligible[-1])
+            if source is None:
+                runtime_roots.add(choices[-1][0])
             else:
-                referenced_bindings.add(choices[-1][0])
+                runtime_edges.setdefault(source, set()).add(choices[-1][0])
+            for call_line in _module_eager_calls(tree, scope_line):
+                eligible = [
+                    index for index, binding_line in choices if binding_line < call_line
+                ]
+                if eligible:
+                    if source is None:
+                        module_roots.add(eligible[-1])
+                    else:
+                        module_edges.setdefault(source, set()).add(eligible[-1])
         else:
             eligible = [index for index, binding_line in choices if binding_line < line]
             if eligible:
-                referenced_bindings.add(eligible[-1])
+                if source is None:
+                    module_roots.add(eligible[-1])
+                else:
+                    runtime_edges.setdefault(source, set()).add(eligible[-1])
+    referenced_bindings = _reachable_bindings(
+        module_roots, module_edges
+    ) | _reachable_bindings(runtime_roots, runtime_edges)
     for index, (name, line, kind, _node) in enumerate(definitions):
         if not _waived(lines, line) and index not in referenced_bindings:
             violations.append(Violation(relative, line, name, kind))

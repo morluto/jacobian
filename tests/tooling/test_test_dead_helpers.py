@@ -215,6 +215,22 @@ def test_class_bindings_update_within_each_compound_suite(
     assert "helper" in _reported(tmp_path, "test_compound_suite.py", body)
 
 
+def test_false_class_branch_preserves_global_helper_fallback(tmp_path: Path) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class TestCase:
+        if False:
+            helper = 2
+        value = helper()
+
+        def test_value(self):
+            assert self.value == 1
+    """
+    assert _reported(tmp_path, "test_class_fallback.py", body) == set()
+
+
 def test_nested_class_does_not_close_over_outer_class_bindings(
     tmp_path: Path,
 ) -> None:
@@ -342,6 +358,19 @@ def test_pytest_lifecycle_hooks_are_not_dead_helpers(tmp_path: Path) -> None:
     assert _reported(tmp_path, "test_lifecycle.py", body) == set()
 
 
+def test_unittest_module_lifecycle_hooks_are_not_dead_helpers(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def setUpModule():
+        pass
+
+    def tearDownModule():
+        pass
+    """
+    assert _reported(tmp_path, "test_unittest_lifecycle.py", body) == set()
+
+
 def test_all_default_pytest_test_function_prefixes_are_collected(
     tmp_path: Path,
 ) -> None:
@@ -411,6 +440,30 @@ def test_eager_module_call_resolves_deferred_load_before_reassignment(
     path = _write(tmp_path, "test_eager_call.py", body)
     violations = _check_file(tmp_path, path)
     assert [(item.name, item.line) for item in violations] == [("helper", 8)]
+
+
+def test_nested_eager_calls_keep_the_binding_used_during_import(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    def inner():
+        return helper()
+
+    def outer():
+        return inner()
+
+    VALUE = outer()
+    helper = None
+
+    def test_value():
+        assert VALUE == 1
+    """
+    path = _write(tmp_path, "test_nested_eager_call.py", body)
+    violations = _check_file(tmp_path, path)
+    assert [(item.name, item.line) for item in violations] == [("helper", 11)]
 
 
 def test_default_pytest_filename_pattern_is_scanned(tmp_path: Path) -> None:
@@ -487,6 +540,17 @@ def test_self_recursion_does_not_rescue_unused_helper(tmp_path: Path) -> None:
         return helper()
     """
     assert _reported(tmp_path, "test_self_recursive.py", body) == {"helper"}
+
+
+def test_mutually_recursive_helpers_without_a_root_are_dead(tmp_path: Path) -> None:
+    body = """\
+    def first():
+        return second()
+
+    def second():
+        return first()
+    """
+    assert _reported(tmp_path, "test_recursive_cycle.py", body) == {"first", "second"}
 
 
 def test_collected_class_base_is_scanned_in_module_scope(tmp_path: Path) -> None:

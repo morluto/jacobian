@@ -56,7 +56,7 @@ class _RecordingRaises:
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> object:
         accepted = self._ctx.__exit__(exc_type, exc, tb)
-        if exc is not None:
+        if isinstance(exc, BaseException) and _matches_expected(exc, self._expected):
             record: dict[str, object] = {
                 "expected": getattr(self._expected, "__name__", str(self._expected)),
                 "match": self._match,
@@ -80,6 +80,25 @@ class _RecordingRaises:
             if self._key:
                 RECORD[self._key] = merge_record(RECORD.get(self._key), record)
         return accepted
+
+
+def _matches_expected(exc: BaseException, expected: object) -> bool:
+    """Whether pytest would accept the exception class before match/check."""
+
+    if expected is None:
+        return True
+    if isinstance(expected, type):
+        return issubclass(expected, BaseException) and isinstance(exc, expected)
+    if isinstance(expected, tuple):
+        return (
+            bool(expected)
+            and all(
+                isinstance(item, type) and issubclass(item, BaseException)
+                for item in expected
+            )
+            and isinstance(exc, expected)
+        )
+    return False
 
 
 def _site_key() -> str | None:

@@ -171,6 +171,28 @@ def test_recorder_does_not_record_exception_rejected_by_match() -> None:
     assert pytest.raises is original_raises
 
 
+def test_recorder_does_not_record_exception_rejected_by_type() -> None:
+    import pytest
+    import tools.match_recorder as recorder
+
+    class CodedError(ValueError):
+        def errors(self) -> list[dict[str, str]]:
+            return [{"type": "owner.specific"}]
+
+    original_raises = pytest.raises
+    recorder.pytest_configure(None)
+    try:
+        expected_line = sys._getframe().f_lineno + 2
+        with pytest.raises(TypeError):  # noqa: SIM117
+            with pytest.raises(CodedError, match="detail"):
+                raise TypeError("wrong exception class")
+        key = f"tests/tooling/test_match_pin_rewriter.py:{expected_line}"
+        assert key not in recorder.RECORD
+    finally:
+        recorder.pytest_unconfigure(None)
+    assert pytest.raises is original_raises
+
+
 def test_recorder_import_and_supported_raises_forms() -> None:
     import pytest
     import tools.match_recorder as recorder

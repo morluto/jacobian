@@ -4,6 +4,168 @@
   "properties": {
     "result": {
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 1,
+              "minItems": 1
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 1,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 1,
+              "minItems": 1
+            },
+            "sample_n": {
+              "const": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 3,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "sample_n": {
+              "const": 2
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 7,
+              "minItems": 7
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 7,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 7,
+              "minItems": 7
+            },
+            "sample_n": {
+              "const": 3
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 15,
+              "minItems": 15
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 15,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 15,
+              "minItems": 15
+            },
+            "sample_n": {
+              "const": 4
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 31,
+              "minItems": 31
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 31,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 31,
+              "minItems": 31
+            },
+            "sample_n": {
+              "const": 5
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 63,
+              "minItems": 63
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 63,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 63,
+              "minItems": 63
+            },
+            "sample_n": {
+              "const": 6
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 127,
+              "minItems": 127
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 127,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 127,
+              "minItems": 127
+            },
+            "sample_n": {
+              "const": 7
+            }
+          }
+        },
+        {
+          "properties": {
+            "diagonal_weights": {
+              "maxItems": 255,
+              "minItems": 255
+            },
+            "mask_order": {
+              "items": {
+                "maximum": 255,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxItems": 255,
+              "minItems": 255
+            },
+            "sample_n": {
+              "const": 8
+            }
+          }
+        }
+      ],
       "properties": {
         "diagonal_weights": {
           "items": {
@@ -66,6 +228,8 @@
           "uniqueItems": true
         },
         "sample_n": {
+          "maximum": 8,
+          "minimum": 1,
           "type": "integer"
         },
         "trace": {
@@ -94,6 +258,8 @@
             ],
             "type": "object"
           },
+          "maxItems": 8,
+          "minItems": 8,
           "type": "array"
         }
       },

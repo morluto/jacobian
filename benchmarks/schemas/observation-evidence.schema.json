@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jacobian.invalid/benchmarks/schemas/observation-evidence.schema.json",
   "title": "Jacobian Harbor workflow observation evidence",
-  "description": "Strict normalized observation evidence v4. Binds the immutable benchmark snapshot ID and Harbor version (read from explicit job/runtime/held-out manifest bindings, never invented), normalized evaluation arguments, runtime/model/agent/repetition/budgets/results/rewards/verifier states/failures, and manifest-driven per-artifact identity. Fails closed: VALID only when execution is complete and every binding matches. No compatibility path for earlier evidence versions.",
+  "description": "Normalized evidence v5 retains nullable frozen task-family lineage. Historical v4 is accepted only for descriptive comparison with unknown family identity. Binds the immutable benchmark snapshot ID and Harbor version (read from explicit job/runtime/held-out manifest bindings, never invented), normalized evaluation arguments, runtime/model/agent/repetition/budgets/results/rewards/verifier states/failures, and manifest-driven per-artifact identity. Fails closed: VALID only when execution is complete and every binding matches. No compatibility path for versions before v4.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,7 +24,8 @@
     "validation_failures"
   ],
   "properties": {
-    "schema_version": {"const": "4"},
+    "schema_version": {"enum": ["4", "5"]},
+    "task_family_binding": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["manifest_digest", "tasks"], "properties": {"manifest_digest": {"$ref": "#/$defs/digest"}, "tasks": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["task", "digest", "family"], "properties": {"task": {"type": "string", "minLength": 1}, "digest": {"$ref": "#/$defs/digest"}, "family": {"type": "string", "minLength": 1}}}}}}]},
     "evidence_class": {"type": "string", "minLength": 1},
     "causal_claim_authorized": {"const": false},
     "status": {"enum": ["VALID", "INCOMPLETE"]},
@@ -48,6 +49,7 @@
     "validation_failures": {"type": "array", "items": {"type": "string"}}
   },
   "allOf": [
+    {"if": {"properties": {"schema_version": {"const": "5"}}}, "then": {"required": ["task_family_binding"]}, "else": {"not": {"required": ["task_family_binding"]}}},
     {
       "if": {
         "properties": {"status": {"const": "VALID"}},

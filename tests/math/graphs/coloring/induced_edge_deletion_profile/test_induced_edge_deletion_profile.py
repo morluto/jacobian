@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from collections.abc import Sequence
+from contextlib import ExitStack
 from itertools import combinations, product
 
 import pytest
@@ -462,34 +463,66 @@ def test_result_rejects_a_profile_missing_one_vertex_subset() -> None:
         InducedEdgeDeletionProfileResult.model_validate(payload)
 
 
-def test_z3_watchdog_interrupts_a_cancelled_request() -> None:
+class _FalseyEvent(threading.Event):
+    def __bool__(self) -> bool:
+        return False
+
+
+@pytest.mark.parametrize("signal_type", [threading.Event, _FalseyEvent])
+@pytest.mark.parametrize("envelope_only", [False, True])
+def test_z3_watchdog_interrupts_a_cancelled_request(
+    signal_type: type[threading.Event], envelope_only: bool
+) -> None:
     import jacobian.math.graphs.coloring.induced_edge_deletion_profile.operations as operations
 
     interrupted = threading.Event()
+    cancelled = signal_type()
 
     class SlowSolver:
-        def set(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
         def check(self) -> object:
+            cancelled.set()
             assert interrupted.wait(2), "watchdog did not interrupt the fake solver"
             return object()
 
         def interrupt(self) -> None:
             interrupted.set()
 
-    cancelled = threading.Event()
-    timer = threading.Timer(0.02, cancelled.set)
-    timer.start()
-    try:
-        with (
-            request_execution(time.monotonic()),
-            request_cancellation(cancelled),
-            pytest.raises(OperationExecutionCancelledError, match="cancelled"),
-        ):
+    with ExitStack() as stack:
+        if envelope_only:
+            stack.enter_context(
+                request_execution(time.monotonic(), cancellation_signal=cancelled)
+            )
+        else:
+            stack.enter_context(request_cancellation(cancelled))
+        with pytest.raises(OperationExecutionCancelledError, match="cancelled"):
             operations._run_z3_check(SlowSolver(), "test solver check")
-    finally:
-        timer.cancel()
+
+
+@pytest.mark.parametrize("signal_source", ["none", "legacy", "envelope", "both"])
+def test_z3_check_returns_result_with_unset_selected_signal(signal_source: str) -> None:
+    import z3
+
+    import jacobian.math.graphs.coloring.induced_edge_deletion_profile.operations as operations
+
+    legacy = _FalseyEvent()
+    envelope = _FalseyEvent()
+    if signal_source == "both":
+        envelope.set()
+    solver = z3.Solver()
+    value = z3.Int("value")
+    solver.add(value == 7)
+
+    with ExitStack() as stack:
+        if signal_source in {"envelope", "both"}:
+            stack.enter_context(
+                request_execution(time.monotonic(), cancellation_signal=envelope)
+            )
+        if signal_source in {"legacy", "both"}:
+            stack.enter_context(request_cancellation(legacy))
+        assert operations._run_z3_check(solver, "satisfiable check") == z3.sat
+        assert solver.model()[value].as_long() == 7
+        solver.add(value == 8)
+        assert operations._run_z3_check(solver, "unsatisfiable check") == z3.unsat
 
 
 def test_z3_watchdog_interrupts_at_the_request_deadline() -> None:

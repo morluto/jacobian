@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result. The public certificate domain permits moduli from 2 through 64. Submit 2 through 64 distinct quadratic residues, each an integer from 0 through 63, and an integer target residue from 0 through 63. These bounds follow from the largest permitted modulus; the verifier checks the complete residue set, target, and obstruction for the chosen modulus.",
     "schema_definitions": {},
     "schema_version": "1",
     "submission_path": "/app/submission.json",
@@ -40,14 +40,17 @@
                     },
                     "quadratic_residues": {
                         "items": {
+                            "maximum": 63,
                             "minimum": 0,
                             "type": "integer"
                         },
+                        "maxItems": 64,
                         "minItems": 2,
                         "type": "array",
                         "uniqueItems": true
                     },
                     "target_residue": {
+                        "maximum": 63,
                         "minimum": 0,
                         "type": "integer"
                     }

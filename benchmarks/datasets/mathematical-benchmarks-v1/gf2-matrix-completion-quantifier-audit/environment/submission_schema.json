@@ -1,15 +1,217 @@
 {
   "$defs": {
-    "matrix": {
+    "bit": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "matrix_10": {
       "items": {
-        "$ref": "#/$defs/row"
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 10,
+        "minItems": 10,
+        "type": "array"
+      },
+      "maxItems": 10,
+      "minItems": 10,
+      "type": "array"
+    },
+    "matrix_11": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 11,
+        "minItems": 11,
+        "type": "array"
+      },
+      "maxItems": 11,
+      "minItems": 11,
+      "type": "array"
+    },
+    "matrix_12": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 12,
+        "minItems": 12,
+        "type": "array"
+      },
+      "maxItems": 12,
+      "minItems": 12,
+      "type": "array"
+    },
+    "matrix_13": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 13,
+        "minItems": 13,
+        "type": "array"
+      },
+      "maxItems": 13,
+      "minItems": 13,
+      "type": "array"
+    },
+    "matrix_14": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 14,
+        "minItems": 14,
+        "type": "array"
       },
       "maxItems": 14,
+      "minItems": 14,
+      "type": "array"
+    },
+    "matrix_8": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 8,
+        "minItems": 8,
+        "type": "array"
+      },
+      "maxItems": 8,
       "minItems": 8,
+      "type": "array"
+    },
+    "matrix_9": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/bit"
+        },
+        "maxItems": 9,
+        "minItems": 9,
+        "type": "array"
+      },
+      "maxItems": 9,
+      "minItems": 9,
       "type": "array"
     },
     "result": {
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "dimension": {
+              "const": 8
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_8"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_8"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_8"
+            }
+          }
+        },
+        {
+          "properties": {
+            "dimension": {
+              "const": 9
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_9"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_9"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_9"
+            }
+          }
+        },
+        {
+          "properties": {
+            "dimension": {
+              "const": 10
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_10"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_10"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_10"
+            }
+          }
+        },
+        {
+          "properties": {
+            "dimension": {
+              "const": 11
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_11"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_11"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_11"
+            }
+          }
+        },
+        {
+          "properties": {
+            "dimension": {
+              "const": 12
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_12"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_12"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_12"
+            }
+          }
+        },
+        {
+          "properties": {
+            "dimension": {
+              "const": 13
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_13"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_13"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_13"
+            }
+          }
+        },
+        {
+          "properties": {
+            "dimension": {
+              "const": 14
+            },
+            "full_rank_completion": {
+              "$ref": "#/$defs/matrix_14"
+            },
+            "low_rank_completion": {
+              "$ref": "#/$defs/matrix_14"
+            },
+            "pattern": {
+              "$ref": "#/$defs/matrix_14"
+            }
+          }
+        }
+      ],
       "properties": {
         "defects": {
           "const": [
@@ -23,13 +225,13 @@
           "type": "integer"
         },
         "full_rank_completion": {
-          "$ref": "#/$defs/matrix"
+          "type": "array"
         },
         "low_rank_completion": {
-          "$ref": "#/$defs/matrix"
+          "type": "array"
         },
         "pattern": {
-          "$ref": "#/$defs/matrix"
+          "type": "array"
         }
       },
       "required": [
@@ -40,16 +242,6 @@
         "full_rank_completion"
       ],
       "type": "object"
-    },
-    "row": {
-      "items": {
-        "maximum": 1,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 14,
-      "minItems": 8,
-      "type": "array"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

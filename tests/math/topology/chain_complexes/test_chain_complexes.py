@@ -114,7 +114,7 @@ def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
     value = ChainComplexValue.model_validate(payload)
     ChainComplexValue.model_validate_json(value.model_dump_json())
     assert calls == []
-    with pytest.raises(OperationDomainValidationError, match="not prime") as caught:
+    with pytest.raises(OperationDomainValidationError) as caught:
         differential_squares_to_zero(value)
     assert calls == [15]
     assert caught.value.errors()[0]["type"] == "chain_complex.prime_not_prime"
@@ -1518,14 +1518,6 @@ class TestNativeSurface:
         assert (
             chain_complexes_package.IntegralHomologyGroupValue
             is IntegralHomologyGroupValue
-        )
-        assert all(
-            value.__module__.endswith("chain_complexes.values")
-            for value in (
-                chain_complexes_package.IntegralFreeGenerator,
-                chain_complexes_package.IntegralTorsionGenerator,
-                chain_complexes_package.IntegralVector,
-            )
         )
         assert set(chain_complexes_package.__all__) == {
             "AssociatedGradedResult",

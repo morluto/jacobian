@@ -294,8 +294,9 @@ def test_empty_axes_remain_canonical(case: AnalysisRationalCase) -> None:
     operation = Catalog.open().operation(case.operation)
     assert operation is not None
     if case.operation == "matrix.inertia.compute":
-        with pytest.raises(OperationDomainValidationError, match="square matrix"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             invoke_operation(case.operation, payload, Catalog.open())
+        assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
         return
     output = invoke_operation(case.operation, payload, Catalog.open()).output
     assert (

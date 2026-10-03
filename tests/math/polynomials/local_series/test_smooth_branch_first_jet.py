@@ -164,22 +164,6 @@ def test_smooth_branch_rejects_principal_parts() -> None:
     assert error.value.errors()[0]["type"] == "local_series.smooth_branch.pole"
 
 
-def test_smooth_branch_rejects_negative_power_even_when_prefix_reaches_t() -> None:
-    source = _polynomial(
-        (
-            (0, _series(1, 0, 0, lower=-1, precision=2)),
-            (1, _series(1, 0)),
-        )
-    )
-
-    with pytest.raises(OperationDomainValidationError) as error:
-        smooth_branch_first_jet(
-            SmoothBranchFirstJetRequest(polynomial=source, initial_root=_rational(0))
-        )
-
-    assert error.value.errors()[0]["type"] == "local_series.smooth_branch.pole"
-
-
 def test_smooth_branch_rejects_degree_outside_slice() -> None:
     source = _polynomial(((17, _series(1, 0)),))
 

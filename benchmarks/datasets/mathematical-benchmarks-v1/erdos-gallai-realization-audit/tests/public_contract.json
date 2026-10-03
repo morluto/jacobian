@@ -1,10 +1,14 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "Submit one row for each case_id in /app/input.json, exactly once, in any order. The verifier replays the task-specific mathematical predicate from the submitted result.",
     "schema_definitions": {
         "case": {
             "additionalProperties": false,
             "properties": {
                 "case_id": {
+                    "enum": [
+                        "constructive",
+                        "obstruction"
+                    ],
                     "type": "string"
                 },
                 "edges": {
@@ -72,6 +76,38 @@
         "additionalProperties": false,
         "properties": {
             "cases": {
+                "allOf": [
+                    {
+                        "contains": {
+                            "properties": {
+                                "case_id": {
+                                    "const": "constructive"
+                                }
+                            },
+                            "required": [
+                                "case_id"
+                            ],
+                            "type": "object"
+                        },
+                        "maxContains": 1,
+                        "minContains": 1
+                    },
+                    {
+                        "contains": {
+                            "properties": {
+                                "case_id": {
+                                    "const": "obstruction"
+                                }
+                            },
+                            "required": [
+                                "case_id"
+                            ],
+                            "type": "object"
+                        },
+                        "maxContains": 1,
+                        "minContains": 1
+                    }
+                ],
                 "items": {
                     "$ref": "#/$defs/case"
                 },

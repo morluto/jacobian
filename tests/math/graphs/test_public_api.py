@@ -144,6 +144,7 @@ def test_constructor_native_surface_excludes_wire_handlers() -> None:
     # The module's declared __all__ is the source of truth: every
     # advertised name must stay exported, but adding one is allowed.
     assert set(expected) <= set(constructors.__all__)
+    assert len(constructors.__all__) == len(set(constructors.__all__))
     # The subset assertion above cannot see a newly added name, so the
     # private-name rule is checked over the complete __all__.
     assert all(not name.startswith("_") for name in constructors.__all__)

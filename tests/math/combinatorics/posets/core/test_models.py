@@ -130,10 +130,12 @@ def test_serialized_poset_keeps_order_profile_as_a_claim() -> None:
         }
     )
     assert verify_finite_poset(poset) is False
-    with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(poset)
-    with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
+    assert exc_info.value.errors()[0]["type"] == "poset.relation_antisymmetric"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         lower_closure(LowerClosureRequest.model_construct(poset=poset, subset=("a",)))
+    assert exc_info.value.errors()[0]["type"] == "poset.relation_antisymmetric"
 
 
 def test_consumers_reject_forged_noncanonical_carrier_order() -> None:
@@ -164,8 +166,10 @@ def test_consumers_reject_forged_noncanonical_carrier_order() -> None:
     )
 
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         lower_closure(LowerClosureRequest.model_construct(poset=forged, subset=("b",)))
+    # Canonical carrier order must be sorted.
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_model_bypassed_nested_claims_as_domain_errors() -> None:
@@ -184,10 +188,9 @@ def test_consumers_reject_model_bypassed_nested_claims_as_domain_errors() -> Non
 
     for malformed in malformed_claims:
         assert verify_finite_poset(malformed) is False
-        with pytest.raises(
-            OperationDomainValidationError, match="canonical finite poset"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             width(malformed)
+        assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
@@ -195,8 +198,9 @@ def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
     malformed = poset.model_copy(update={"elements": ("a", object())})
 
     assert verify_finite_poset(malformed) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(malformed)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_str_subclass_carrier_labels_as_domain_errors() -> None:
@@ -224,8 +228,9 @@ def test_consumers_reject_str_subclass_carrier_labels_as_domain_errors() -> None
     )
 
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_str_subclass_pair_labels_as_domain_errors() -> None:
@@ -256,8 +261,9 @@ def test_consumers_reject_str_subclass_pair_labels_as_domain_errors() -> None:
         }
     )
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
     antichain = _materialize(["a", "b"], [])
     forged_incomparable = tuple(
@@ -282,8 +288,9 @@ def test_consumers_reject_str_subclass_pair_labels_as_domain_errors() -> None:
         }
     )
     assert verify_finite_poset(forged_antichain) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged_antichain)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
     forged_ranks = tuple(
         ElementRank.model_construct(
@@ -307,8 +314,9 @@ def test_consumers_reject_str_subclass_pair_labels_as_domain_errors() -> None:
         }
     )
     assert verify_finite_poset(forged_ranked) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged_ranked)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_integer_graded_flag_as_domain_errors() -> None:
@@ -332,8 +340,9 @@ def test_consumers_reject_integer_graded_flag_as_domain_errors() -> None:
     assert type(forged.graded) is int
     assert forged.graded == 1
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_foreign_ordered_pair_models_as_domain_errors() -> None:
@@ -364,8 +373,9 @@ def test_consumers_reject_foreign_ordered_pair_models_as_domain_errors() -> None
     assert all(isinstance(pair, OrderedPair) for pair in forged.strict_order_pairs)
     assert any(type(pair) is not OrderedPair for pair in forged.strict_order_pairs)
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_foreign_rank_models_as_domain_errors() -> None:
@@ -394,8 +404,9 @@ def test_consumers_reject_foreign_rank_models_as_domain_errors() -> None:
     )
 
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_foreign_incomparable_pair_models_as_domain_errors() -> None:
@@ -424,8 +435,9 @@ def test_consumers_reject_foreign_incomparable_pair_models_as_domain_errors() ->
     )
 
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_list_incomparable_pair_containers_as_domain_errors() -> None:
@@ -436,8 +448,9 @@ def test_consumers_reject_list_incomparable_pair_containers_as_domain_errors() -
 
     assert type(cast(object, forged.incomparable_pairs)) is list
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_duck_typed_ordered_pair_carriers_as_domain_errors() -> None:
@@ -476,8 +489,9 @@ def test_consumers_reject_duck_typed_ordered_pair_carriers_as_domain_errors() ->
         }
     )
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_equality_forging_digest_subclasses_as_domain_errors() -> None:
@@ -496,8 +510,9 @@ def test_consumers_reject_equality_forging_digest_subclasses_as_domain_errors() 
     assert forged.poset_digest == poset.poset_digest
     assert poset.poset_digest != "sha256:" + "0" * 64
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_consumers_reject_equality_forging_extremal_label_subclasses() -> None:
@@ -529,10 +544,13 @@ def test_consumers_reject_equality_forging_extremal_label_subclasses() -> None:
     )
 
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         maximal_chains(forged)
+    # Noncanonical order/Hasse claims are rejected before enumeration.
+    assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.source_claims"
 
 
 def test_consumers_reject_finite_poset_subclasses_as_domain_errors() -> None:
@@ -545,10 +563,13 @@ def test_consumers_reject_finite_poset_subclasses_as_domain_errors() -> None:
     assert isinstance(forged, FinitePoset)
     assert type(forged) is not FinitePoset
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
-    with pytest.raises(OperationDomainValidationError, match="typed finite poset"):
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         maximal_chains(forged)
+    # Subclassed posets are not the canonical typed value.
+    assert exc_info.value.errors()[0]["type"] == "poset.maximal_chains.request_type"
 
 
 def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:
@@ -562,8 +583,9 @@ def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:
     forged = poset.model_copy(update={"ranks": forged_ranks})
 
     assert verify_finite_poset(forged) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         width(forged)
+    assert exc_info.value.errors()[0]["type"] == "poset.invalid_canonical_value"
 
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:

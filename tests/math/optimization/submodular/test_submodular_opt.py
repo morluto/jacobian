@@ -210,12 +210,6 @@ class TestKernelEquivalence:
         n = function.ground_set_size
         masks = list(range(1 << n))
 
-        def to_mask(subset: tuple[int, ...]) -> int:
-            value = 0
-            for element in subset:
-                value |= 1 << element
-            return value
-
         for left in range(len(keys)):
             s_set = set(keys[left])
             for right in range(left + 1, len(keys)):

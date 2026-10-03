@@ -49,6 +49,10 @@ _PUBLIC_MATH_FILES = frozenset(
         "values.py",
     }
 )
+# Direct linear-optimization modules own the source-coordinate LP evidence in
+# tests/integration/linear. Match the source package exactly: nested owners such
+# as optimization/submodular do not share that dependency.
+_INTEGRATION_MATH_OWNERS = frozenset({"src/jacobian/math/optimization"})
 _PYTHON_LANES = ("dispatch", "cli", "tooling", "integration")
 _BOUNDARY_LANES = ("process", "mcp")
 _SCALE_TEST_PREFIXES = ("tests/math/geometry/polytopes/lattice/",)
@@ -245,13 +249,16 @@ def _classify_math_path(path: str, repository: Path) -> PathDecision:
         if selected is None:
             return _complete_decision(f"math owner has no explicit test root: {path}")
         public_contract = _is_public_math_path(path)
+        python_lanes: tuple[str, ...] = ("dispatch",) if public_contract else ()
+        if PurePosixPath(path).parent.as_posix() in _INTEGRATION_MATH_OWNERS:
+            python_lanes += ("integration",)
         run_singular = _requires_singular_runtime(path)
         run_qepcad = _requires_qepcad_runtime(path)
         return PathDecision(
             math_tests=selected,
             run_catalog=public_contract,
             run_catalog_examples=public_contract,
-            python_lanes=("dispatch",) if public_contract else (),
+            python_lanes=python_lanes,
             run_scale=_includes_scale_tests(selected),
             boundary_lanes=(
                 ("process",)

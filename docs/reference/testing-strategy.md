@@ -150,6 +150,15 @@ the direct-dispatch lane, and the advertised-example integration test. Shared
 runtime, CI, dependency, and unmapped paths without a narrower ownership rule
 fail closed to the complete ordinary suite.
 
+The linear-optimization source owner also selects the non-catalog integration
+lane, including its existing source-coordinate LP tests in
+`tests/integration/linear`. This relation covers private models, admission,
+normalization, and kernels as well as public entry points. It matches the direct
+`src/jacobian/math/optimization` package; independent nested owners such as
+`optimization/submodular` retain their own evidence selection. Keep source-owner
+integration relations in `tools/ci_test_plan.py`, and regress them with source-only
+changes so edits to integration tests cannot conceal a missing dependency.
+
 The planner selects Singular and QEPCAD independently. Changes to
 `src/jacobian/process.py` select both runtime suites and the process boundary
 lane because both backends use the shared supervisor. Backend-specific changes

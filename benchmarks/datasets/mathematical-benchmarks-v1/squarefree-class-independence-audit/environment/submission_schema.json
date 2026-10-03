@@ -39,14 +39,17 @@
             },
             "quadratic_residues": {
               "items": {
+                "maximum": 63,
                 "minimum": 0,
                 "type": "integer"
               },
+              "maxItems": 64,
               "minItems": 2,
               "type": "array",
               "uniqueItems": true
             },
             "target_residue": {
+              "maximum": 63,
               "minimum": 0,
               "type": "integer"
             }

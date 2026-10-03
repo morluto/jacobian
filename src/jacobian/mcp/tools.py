@@ -78,7 +78,8 @@ class _CoalescingProgressSink(ProgressSink):
         self, progress: int, *, total: int | None = None, message: str | None = None
     ) -> None:
         with self._lock:
-            if self._closed or progress < self._last_progress:
+            # MCP requires an increase even when only the metadata changes.
+            if self._closed or progress <= self._last_progress:
                 return
             self._last_progress = progress
             self._latest = (progress, total, message)
@@ -147,6 +148,18 @@ def _find_invalid_request_error(
         "message": message,
     }
     return ToolError(json.dumps(diagnostic, separators=(",", ":")))
+
+
+def _unknown_operation_error_detail(operation_id: str) -> OperationDiscoveryErrorDetail:
+    return OperationDiscoveryErrorDetail(
+        code="UNKNOWN_OPERATION",
+        stage="operation_resolution",
+        message=f"Unknown operation: {operation_id}",
+        hint=(
+            "Call math.find with a local mathematical need to match installed "
+            "operations."
+        ),
+    )
 
 
 async def math_find(
@@ -227,19 +240,10 @@ def _math_find_sync(
         )
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
-        hint = (
-            "Call math.find with a local mathematical need to match installed "
-            "operations."
-        )
         return OperationFindResponse(
             root=OperationDiscoveryError(
                 kind="error",
-                error=OperationDiscoveryErrorDetail(
-                    code="UNKNOWN_OPERATION",
-                    stage="operation_resolution",
-                    message=f"Unknown operation: {operation_id}",
-                    hint=hint,
-                ),
+                error=_unknown_operation_error_detail(operation_id),
             )
         )
     return OperationFindResponse(
@@ -281,7 +285,9 @@ async def math_run(
                 ctx,
             )
         except _OperationResolutionError as exc:
-            raise ToolError(str(exc)) from exc
+            raise ToolError(
+                _unknown_operation_error_detail(operation_id).model_dump_json()
+            ) from exc
 
 
 @contextmanager
@@ -362,14 +368,24 @@ def _invalid_request_error(
 ) -> ToolError:
     """Project one owner-bound rejection without reflecting caller values."""
 
-    issues = _bounded_validation_issues(error.errors())
+    records = error.errors()
+    issues = _bounded_validation_issues(records)
+    omitted_error_count = len(records) - len(issues)
     if isinstance(error, OperationResourceAdmissionError):
         data: OperationInvalidRequestData | OperationResourceAdmissionData = (
-            OperationResourceAdmissionData(operation_id=operation_id, errors=issues)
+            OperationResourceAdmissionData(
+                operation_id=operation_id,
+                errors=issues,
+                omitted_error_count=omitted_error_count,
+            )
         )
         message = "operation request exceeds its admitted resource envelope"
     else:
-        data = OperationInvalidRequestData(operation_id=operation_id, errors=issues)
+        data = OperationInvalidRequestData(
+            operation_id=operation_id,
+            errors=issues,
+            omitted_error_count=omitted_error_count,
+        )
         message = "operation payload failed validation"
     diagnostic = data.model_dump(mode="json")
     diagnostic["message"] = message

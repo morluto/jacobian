@@ -40,6 +40,10 @@ to continue; the limit may change. Ordered matches are deterministic retrieval c
 applicability claims; inspect a promising operation before math.run. Read
 `operation://catalog` only when the complete bulk catalog is genuinely needed.
 
+An unknown operation ID returns `kind: "error"` with `error.code: "UNKNOWN_OPERATION"`;
+inspect `kind` even when MCP `isError` is false. Search with `query` to find an
+installed operation, then inspect its exact ID. Zero matches is a successful search.
+
 Examples:
 - `{"query":"exact determinant of a rational matrix","namespace":"matrix","limit":3}`
 - `{"operation_id":"polynomial.compute.gcd"}`

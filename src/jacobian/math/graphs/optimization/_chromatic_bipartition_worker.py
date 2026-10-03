@@ -17,7 +17,12 @@ from jacobian.math.graphs.optimization._chromatic_bipartition import (
 
 def main() -> int:
     try:
-        with request_execution(time.monotonic()), worker_execution_errors():
+        # The kernel's source wall (1..120) and fixed two-component field path
+        # make a timeout frame at most 160 bytes, below every result envelope.
+        with (
+            request_execution(time.monotonic()),
+            worker_execution_errors(preserve_timeout_context=True),
+        ):
             payload = json.loads(sys.stdin.buffer.read())
             bind_worker_deadline(payload)
             request = ChromaticBipartitionRequest.model_validate(payload)

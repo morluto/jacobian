@@ -109,6 +109,118 @@ def test_scalar_storage_is_opaque_and_left_for_scalar_validation() -> None:
     assert error.value.errors()[0]["type"] == "int_type"
 
 
+@pytest.mark.parametrize("annotation", [int, int | str])
+@pytest.mark.parametrize("nullable", [False, True])
+@pytest.mark.parametrize("defaulted", [False, True])
+def test_scalar_metadata_is_opaque_through_transparent_wrappers(
+    annotation: Any, nullable: bool, defaulted: bool
+) -> None:
+    class Scalar:
+        @property  # type: ignore[misc]
+        def __class__(self) -> Any:
+            raise AssertionError("scalar metadata executed")
+
+    model: Any = create_model(
+        "ScalarModel",
+        __base__=StrictModel,
+        value=(
+            annotation | None if nullable else annotation,
+            Field(7 if defaulted else ...),
+        ),
+    )
+    scalar = Scalar()
+    projected = project_owned_containers({"value": scalar}, model)
+    assert projected["value"] is scalar
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(projected, strict=True)
+    assert [item["type"] for item in error.value.errors()] == (
+        ["int_type"] if annotation is int else ["int_type", "string_type"]
+    )
+    assert (
+        model.model_validate(
+            project_owned_containers({"value": 3}, model), strict=True
+        ).value
+        == 3
+    )
+
+    absent = project_owned_containers({}, model)
+    assert absent == {}
+    if defaulted:
+        default = model.model_validate(absent, strict=True)
+        assert default.value == 7
+        assert default.model_fields_set == set()
+    else:
+        with pytest.raises(ValidationError) as error:
+            model.model_validate(absent, strict=True)
+        assert error.value.errors()[0]["type"] == "missing"
+
+    present_null = project_owned_containers({"value": None}, model)
+    assert present_null == {"value": None}
+    if nullable:
+        null = model.model_validate(present_null, strict=True)
+        assert null.value is None
+        assert null.model_fields_set == {"value"}
+    else:
+        with pytest.raises(ValidationError) as error:
+            model.model_validate(present_null, strict=True)
+        assert error.value.errors()[0]["type"] == "int_type"
+
+
+def test_scalar_default_factory_runs_only_during_validation() -> None:
+    calls: list[str] = []
+
+    def default() -> int:
+        calls.append("default")
+        return 7
+
+    class Defaults(StrictModel):
+        value: int | None = Field(default_factory=default)
+
+    absent = project_owned_containers({}, Defaults)
+    present = project_owned_containers({"value": None}, Defaults)
+    assert absent == {}
+    assert calls == []
+    assert Defaults.model_validate(present, strict=True).value is None
+    assert calls == []
+    assert Defaults.model_validate(absent, strict=True).value == 7
+    assert calls == ["default"]
+
+
+def test_wrapped_model_instances_and_after_validators_stay_opaque() -> None:
+    calls: list[str] = []
+
+    class Child(StrictModel):
+        own: tuple[int, ...] = Field(max_length=3)
+
+        @model_validator(mode="after")
+        def record(self) -> Child:
+            calls.append("after")
+            return self
+
+    class Parent(StrictModel):
+        child: Child | None = None
+        pair: tuple[Child] | None = None
+
+    native = Child(own=(1,))
+    calls.clear()
+    assert project_owned_containers(native, Child) is native
+    projected = project_owned_containers({"child": native, "pair": [native]}, Parent)
+    assert projected["child"] is native
+    assert projected["pair"][0] is native
+    assert calls == []
+    assert project_owned_containers({"pair": native}, Parent)["pair"] is native
+    assert calls == []
+    projected_raw = project_owned_containers(
+        {"child": {"own": [2]}, "pair": [{"own": [3]}]}, Parent
+    )
+    assert projected_raw == {"child": {"own": (2,)}, "pair": ({"own": (3,)},)}
+    assert calls == []
+    validated = Parent.model_validate(projected_raw, strict=True)
+    assert validated.child is not None and validated.child.own == (2,)
+    assert validated.pair is not None and validated.pair[0].own == (3,)
+    assert calls == ["after", "after"]
+
+
 def test_variadic_bounds_precede_element_projection() -> None:
     assert project_owned_containers({"own": [1, 2, 3]}, Leaf) == {"own": (1, 2, 3)}
 
@@ -264,6 +376,23 @@ def test_deep_valid_structure_has_bounded_failure_and_shallow_success() -> None:
         raw = {"children": [raw]}
     with pytest.raises(CanonicalizationError, match="nesting"):
         project_owned_containers(raw, Recursive)
+
+
+def test_transparent_wrappers_preserve_structural_depth_boundary() -> None:
+    class Node(StrictModel):
+        value: int = 0
+        child: Node | None = None
+
+    raw: dict[str, Any] = {"value": 1}
+    for _ in range(64):
+        raw = {"child": raw}
+    projected = project_owned_containers(raw, Node)
+    for _ in range(64):
+        projected = projected["child"]
+    assert projected == {"value": 1}
+
+    with pytest.raises(CanonicalizationError, match="nesting"):
+        project_owned_containers({"child": raw}, Node)
 
 
 def test_repeated_dag_edges_are_charged_per_output_occurrence() -> None:

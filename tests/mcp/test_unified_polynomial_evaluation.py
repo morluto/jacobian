@@ -72,7 +72,10 @@ def test_mcp_discovers_one_qq_evaluator_with_both_visible_regimes() -> None:
             )
             assert retired.is_error
             assert isinstance(retired.content[0], TextContent)
-            assert "unknown operation" in retired.content[0].text
+            diagnostic = json.loads(
+                retired.content[0].text.removeprefix("Error executing tool math.run: ")
+            )
+            assert diagnostic["code"] == "UNKNOWN_OPERATION"
 
     asyncio.run(scenario())
 

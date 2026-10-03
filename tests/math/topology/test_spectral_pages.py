@@ -79,23 +79,6 @@ def _three_step_filtration() -> tuple[FiltrationLevel, ...]:
     )
 
 
-def _late_differential_complex() -> ChainComplexValue:
-    """A two-term complex whose only boundary lowers filtration by two."""
-    return ChainComplexValue(
-        coefficient_ring=CoefficientRing.RATIONAL,
-        prime=None,
-        degree_min=0,
-        degree_max=1,
-        basis_sizes=(1, 1),
-        differential_matrices=(((1,),),),
-    )
-
-
-def _late_differential_filtration() -> tuple[FiltrationLevel, ...]:
-    low = _level(((1,),), ())
-    return (low, low, _level(((1,),), ((1,),)))
-
-
 def _native(
     complex_value: ChainComplexValue,
     filtration: tuple[FiltrationLevel, ...],

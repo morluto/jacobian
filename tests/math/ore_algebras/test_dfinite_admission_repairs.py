@@ -261,14 +261,6 @@ def test_nonpolynomial_coefficients_are_still_refused() -> None:
 # --- the recurrence observes cancellation ----------------------------------
 
 
-def test_recurrence_requests_checkpoints() -> None:
-    """The prefix recurrence must honour the shared request envelope."""
-    import inspect
-
-    source = inspect.getsource(ore_operations._compute_admitted_dfinite_prefix)
-    assert "request_checkpoint" in source
-
-
 def test_recurrence_stops_on_a_cancellation_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

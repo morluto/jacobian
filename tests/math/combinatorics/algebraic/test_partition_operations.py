@@ -799,9 +799,37 @@ def test_constructed_partition_without_parts_is_a_typed_domain_error() -> None:
         native.partition_dominance(forged, IntegerPartition(parts=(1,)))
 
 
-def test_exact_boundary_resolver_uses_the_admitted_product_tree() -> None:
+def test_exact_boundary_resolver_uses_the_admitted_product_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A rejected exact boundary count does not run a sequential multiply."""
     partition = IntegerPartition(parts=(500,))
     alphabet_size = 155_000 * 2**208
+    factor_counts: list[int] = []
+    tree_levels: list[int] = []
+    balanced = native._balanced_product
+    checkpoint = native.request_checkpoint  # type: ignore[attr-defined]
+
+    def spy_product(values: tuple[int, ...]) -> int:
+        factor_counts.append(len(values))
+        return balanced(values)
+
+    def spy_checkpoint(reason: str = "") -> None:
+        if "product tree" in reason:
+            tree_levels.append(1)
+        checkpoint(reason)
+
+    monkeypatch.setattr(native, "_balanced_product", spy_product)
+    monkeypatch.setattr(
+        "jacobian.math.combinatorics.algebraic.operations.request_checkpoint",
+        spy_checkpoint,
+    )
     with pytest.raises(OperationResourceAdmissionError):
         native.semistandard_young_tableaux_count(partition, alphabet_size)
+    # Every numerator factor is handed over at once rather than accumulated one
+    # at a time, and the product visits them in ceil(log2(500)) == 9 levels. A
+    # sequential left-to-right multiply takes no levels at all, so both
+    # observations fail on that regression instead of the test still passing on
+    # the admission error alone.
+    assert factor_counts == [500]
+    assert len(tree_levels) == 9

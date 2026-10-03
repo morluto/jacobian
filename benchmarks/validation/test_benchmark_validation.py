@@ -199,3 +199,41 @@ def test_aggregate_rejects_selected_lane_that_was_skipped(tmp_path: Path) -> Non
             receipt_root=receipts,
             timing_path=timings,
         )
+
+
+@pytest.mark.parametrize("result", ["success", "cancelled", "skipped", "failure"])
+def test_selected_oracle_requires_success_even_after_cancellation(
+    tmp_path: Path, result: str
+) -> None:
+    payload = _plan_payload(())
+    payload["oracle_scope"] = "changed-tasks"
+    payload["prospective_digest"] = True
+    payload["oracle_matrix"] = [
+        {
+            "dataset": "example-v1",
+            "shard": "01-of-01",
+            "tasks": ["example"],
+            "task_digests": [{"task": "example", "digest": DIGEST}],
+            "predicted_seconds": 1.0,
+        }
+    ]
+    plan = _write_plan(tmp_path, payload)
+    lanes = _lanes()
+    lanes["host-validation"] = LaneResult(False, "skipped")
+    lanes["oracle"] = LaneResult(True, result)
+
+    def validate() -> None:
+        validate_aggregate(
+            plan_result="success",
+            plan_path=plan,
+            execution_sha=EXECUTION_SHA,
+            lanes=lanes,
+            receipt_root=None,
+            timing_path=None,
+        )
+
+    if result == "success":
+        validate()
+    else:
+        with pytest.raises(HarborSuiteError, match="oracle expected success"):
+            validate()

@@ -1740,7 +1740,20 @@ def test_zero_power_returns_one_without_expanding_the_base() -> None:
 
 def test_non_node_operand_is_rejected_before_container_copy() -> None:
     """An ADD operand that is a large list is rejected before the copy."""
-    operands = _HugeList(65, _HugeList(5_000_000))
+    oversized_operand = _HugeList(5_000_000)
+    operands = [oversized_operand]
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {"kind": "ADD", "operands": operands},
+    }
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert oversized_operand.iterated == 0
+
+
+def test_oversized_operand_arity_is_rejected_before_iteration() -> None:
+    operands = _HugeList(65)
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],

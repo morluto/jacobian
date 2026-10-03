@@ -10,10 +10,12 @@ def merge_record(
 
     if previous is None:
         return record
-    observed = previous.get("codes")
-    codes: set[str | None] = set(observed) if isinstance(observed, list) else set()
-    codes.add(_as_code(previous.get("code")))
-    codes.add(_as_code(record.get("code")))
+    codes: set[str | None] = set()
+    for source in (previous, record):
+        observed = source.get("codes")
+        if isinstance(observed, list):
+            codes.update(_as_code(item) for item in observed)
+        codes.add(_as_code(source.get("code")))
     merged = dict(previous)
     merged["codes"] = sorted(codes, key=lambda item: (item is not None, item or ""))
     merged["code"] = next(iter(codes)) if len(codes) == 1 else None

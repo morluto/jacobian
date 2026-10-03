@@ -315,6 +315,19 @@ def test_merge_record_preserves_incoming_aggregated_matches() -> None:
     assert merged["matches"] == ["bang", "boom", "zap"]
 
 
+def test_merge_record_preserves_incoming_aggregated_codes() -> None:
+    merged = merge_record(
+        {"code": "polynomial.degree", "match": "boom"},
+        {
+            "code": None,
+            "codes": [None, "polynomial.leading"],
+            "match": "boom",
+        },
+    )
+    assert merged["codes"] == [None, "polynomial.degree", "polynomial.leading"]
+    assert merged["code"] is None
+
+
 def test_agreeing_matches_still_convert(tmp_path: Path) -> None:
     path = _write(
         tmp_path,

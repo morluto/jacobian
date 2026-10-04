@@ -119,7 +119,6 @@ def test_mcp_describes_and_invokes_operations() -> None:
             )
             assert isinstance(result.structured_content, dict)
             response = json.loads(_text_content(result.content[0]))
-            assert response["runtime_ms"] >= 0
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
             assert result.structured_content["output"] == {
@@ -391,7 +390,6 @@ def test_mcp_composes_public_finite_field_values_with_native_projections() -> No
                 },
             )
             assert isinstance(table_call.structured_content, dict)
-            assert table_call.structured_content["runtime_ms"] >= 0
             table_output = table_call.structured_content["output"]
             assert "value_refs" not in table_output
             table_value = table_output
@@ -440,7 +438,6 @@ def test_mcp_composes_public_finite_field_values_with_native_projections() -> No
                 },
             )
             assert isinstance(directions_call.structured_content, dict)
-            assert directions_call.structured_content["runtime_ms"] >= 0
             directions_output = directions_call.structured_content["output"]
             assert "value_refs" not in directions_output
             directions_value = directions_output

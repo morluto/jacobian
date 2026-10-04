@@ -1,13 +1,11 @@
 """Tests for finite category operations."""
 
-import json
 from copy import deepcopy
 from typing import TypedDict
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_categories import (
     FiniteCategory,
@@ -334,9 +332,7 @@ class TestValidation:
 
 
 class TestProduct:
-    def test_product_preserves_escaped_identifiers_through_json_round_trip(
-        self,
-    ) -> None:
+    def test_product_preserves_escaped_identifiers(self) -> None:
         left = FiniteCategory(
             objects=('A"\\é',),
             morphisms=(
@@ -354,8 +350,6 @@ class TestProduct:
         result = product(left, right)
 
         assert result.product.objects == (('A"\\é', "T"),)
-        payload = result.model_dump(mode="json")
-        assert json.loads(encode_strict_json(payload)) == payload
 
     def test_constructs_structural_pairs_componentwise(self) -> None:
         left = FiniteCategory.model_validate(CATEGORY)

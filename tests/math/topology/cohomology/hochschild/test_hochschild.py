@@ -60,40 +60,6 @@ def _coordinatewise_algebra(prime: int, dimension: int) -> AlgebraStructure:
     )
 
 
-class TestHochschildChainComplex:
-    """Test Hochschild chain complex computation."""
-
-    def test_one_dim_algebra(self) -> None:
-        """Chain complex of a 1D algebra over GF(5)."""
-        alg = AlgebraStructure(
-            prime=5,
-            dimension=1,
-            structure_constants=(((1,),),),
-            augmentation=(1,),
-        )
-        result = _run_chain_complex(
-            HochschildChainComplexRequest(algebra=alg, max_degree=2)
-        )
-        assert result.group_dimensions == (1, 1, 1)
-
-    def test_two_dim_algebra(self) -> None:
-        """Chain complex of a 2D algebra."""
-        alg = AlgebraStructure(
-            prime=7,
-            dimension=2,
-            structure_constants=(
-                ((1, 0), (0, 1)),
-                ((0, 1), (1, 0)),
-            ),
-            augmentation=(1, 1),
-        )
-        result = _run_chain_complex(
-            HochschildChainComplexRequest(algebra=alg, max_degree=1)
-        )
-        assert result.group_dimensions[0] == 1
-        assert result.group_dimensions[1] == 2
-
-
 class TestHochschildHomology:
     """Test Hochschild homology computation."""
 

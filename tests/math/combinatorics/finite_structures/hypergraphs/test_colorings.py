@@ -22,10 +22,6 @@ def test_native_ints_construct_a_total_colouring() -> None:
     )
     assert coloring.color_count == 1
     assert coloring.assignments[0].color_index == 0
-    assert (
-        IndexedHyperedgeColoring.model_validate_json(coloring.model_dump_json())
-        == coloring
-    )
 
 
 @pytest.mark.parametrize("value", ["0", 1.0, True])

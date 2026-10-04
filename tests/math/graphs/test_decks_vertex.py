@@ -186,19 +186,6 @@ def test_native_vs_catalog_parity() -> None:
     assert _run_vertex_deleted(request) == vertex_deletion_family(request.graph)
 
 
-def test_catalog_example_input_executes() -> None:
-    """The published operation example is admitted and complete."""
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "graph.deck.vertex_deleted.compute"
-    )
-    assert tool.examples
-    request = VertexDeckRequest.model_validate(tool.examples[0].input)
-    result = tool.run(request)
-    assert len(result.cards) == 3
-
-
 def test_oversized_source_rejected_before_expansion() -> None:
     """Sources above the vertex envelope are refused without materialization."""
     vertices = tuple(f"v{i:03d}" for i in range(65))

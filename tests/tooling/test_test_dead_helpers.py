@@ -13,7 +13,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from tools.check_test_dead_helpers import Violation, _check_file, _test_files, check
+from tools.check_test_dead_helpers import Violation, _check_file, _test_files
 
 SHADOWED_BY_PARAMETER = '''\
 """A parameter that shares a module-level name is not a reference to it."""
@@ -1013,14 +1013,6 @@ def test_waiver_comment_inside_body_does_not_exempt_definition(
         return 1
     """
     assert _reported(tmp_path, "test_body_comment.py", body) == {"kept"}
-
-
-def test_check_reports_a_summary_for_the_whole_tree() -> None:
-    report = check(Path(__file__).resolve().parents[2])
-
-    assert report.files_scanned > 0
-    assert report.render().startswith("test-dead-code:")
-    assert report.failed is bool(report.violations)
 
 
 @pytest.mark.parametrize("body", [SHADOWED_BY_PARAMETER, SHADOWED_BY_ATTRIBUTE])

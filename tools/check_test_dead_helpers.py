@@ -114,7 +114,7 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
     found: list[tuple[str, int, str, ast.AST]] = []
     callable_test_aliases = _pytest_callable_test_aliases(tree)
     unittest_classes = _pytest_unittest_testcase_classes(tree)
-    for node in tree.body:
+    for node in _module_scope_statements(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             # pytest uses distinct name prefixes for test functions and classes.
             if isinstance(
@@ -151,42 +151,48 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
     return found
 
 
-def _pytest_callable_test_aliases(tree: ast.Module) -> frozenset[str]:
+def _pytest_callable_test_aliases(tree: ast.Module) -> dict[str, tuple[str, int]]:
     """Module assignment aliases that pytest collects as test callables."""
 
-    callable_names: set[str] = set()
-    aliases: set[str] = set()
-    for statement in tree.body:
+    callable_targets: dict[str, str] = {}
+    aliases: dict[str, tuple[str, int]] = {}
+    for statement in _module_scope_statements(tree):
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            callable_names.add(statement.name)
+            callable_targets[statement.name] = statement.name
+            continue
+        if isinstance(statement, ast.ClassDef):
+            callable_targets.pop(statement.name, None)
             continue
         value = (
             statement.value
             if isinstance(statement, (ast.Assign, ast.AnnAssign))
             else None
         )
-        callable_alias = isinstance(value, ast.Name) and value.id in callable_names
+        callable_target = (
+            callable_targets.get(value.id) if isinstance(value, ast.Name) else None
+        )
         if isinstance(statement, ast.Assign):
             targets = statement.targets
         elif isinstance(statement, ast.AnnAssign):
             targets = [statement.target]
         else:
             targets = []
-        for target in targets:
-            for name in _assignment_names(target):
-                if name.startswith("test") and callable_alias:
-                    aliases.add(name)
-                    callable_names.add(name)
+        for assignment_target in targets:
+            for name in _assignment_names(assignment_target):
+                if name.startswith("test") and callable_target is not None:
+                    aliases[name] = (callable_target, statement.lineno)
+                    callable_targets[name] = callable_target
                 else:
-                    callable_names.discard(name)
-                    aliases.discard(name)
-    return frozenset(aliases)
+                    callable_targets.pop(name, None)
+                    aliases.pop(name, None)
+    return aliases
 
 
 def _pytest_unittest_testcase_classes(tree: ast.Module) -> frozenset[str]:
     module_aliases = {"unittest"}
     testcase_aliases: set[str] = set()
-    for statement in tree.body:
+    statements = _module_scope_statements(tree)
+    for statement in statements:
         if isinstance(statement, ast.Import):
             for item in statement.names:
                 if item.name == "unittest":
@@ -199,7 +205,7 @@ def _pytest_unittest_testcase_classes(tree: ast.Module) -> frozenset[str]:
             )
 
     collected: set[str] = set()
-    for statement in tree.body:
+    for statement in statements:
         if not isinstance(statement, ast.ClassDef):
             continue
         for base in statement.bases:
@@ -257,7 +263,7 @@ def _definition_only_references(
     unittest_classes = _pytest_unittest_testcase_classes(tree)
     collected_class_lines = frozenset(
         node.lineno
-        for node in tree.body
+        for node in _module_scope_statements(tree)
         if isinstance(node, ast.ClassDef)
         and (
             node.name.startswith(_PYTEST_COLLECTED_PREFIX)
@@ -275,6 +281,10 @@ def _definition_only_references(
     reference_sites: set[tuple[str, int, bool, int | None]] = set()
     _scan(
         tree, frozenset(), module_names, referenced, fixtures, aliases, reference_sites
+    )
+    reference_sites.update(
+        (target, line, True, None)
+        for target, line in _pytest_callable_test_aliases(tree).values()
     )
     reference_sites.update(
         _pytest_injected_fixture_reference_sites(
@@ -320,6 +330,25 @@ def _ast_nodes_and_parents(
             parents[child] = node
             pending.append(child)
     return nodes, parents
+
+
+def _module_scope_statements(tree: ast.Module) -> list[ast.stmt]:
+    """Statements executed in module scope, including compound suites."""
+
+    statements: list[ast.stmt] = []
+    pending: list[ast.AST] = [tree]
+    while pending:
+        node = pending.pop()
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                statements.append(child)
+                continue
+            if isinstance(child, ast.stmt):
+                statements.append(child)
+            if isinstance(child, (ast.Lambda, *_COMPREHENSIONS)):
+                continue
+            pending.append(child)
+    return sorted(statements, key=lambda statement: statement.lineno)
 
 
 def _assignment_names(target: ast.expr) -> frozenset[str]:
@@ -549,7 +578,7 @@ def _module_string_constants_at_definitions(
 ) -> tuple[dict[int, dict[str, str]], dict[str, str]]:
     constants: dict[str, str] = {}
     snapshots: dict[int, dict[str, str]] = {}
-    for statement in tree.body:
+    for statement in _module_scope_statements(tree):
         if isinstance(statement, _SCOPE_NODES):
             snapshots[statement.lineno] = constants.copy()
             if isinstance(
@@ -565,7 +594,7 @@ def _pytest_import_aliases(tree: ast.Module) -> dict[str, str]:
     """Map local pytest import spellings to their canonical names."""
 
     aliases: dict[str, str] = {}
-    for node in tree.body:
+    for node in _module_scope_statements(tree):
         if isinstance(node, ast.Import):
             for item in node.names:
                 if item.name == "pytest":
@@ -678,10 +707,11 @@ def _pytest_fixture_declarations(
 ) -> tuple[tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool], ...]:
     aliases = _pytest_import_aliases(tree)
     constants: dict[str, str] = {}
+    boolean_constants: dict[str, bool] = {}
     declarations: list[
         tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool]
     ] = []
-    for node in tree.body:
+    for node in _module_scope_statements(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for decorator in node.decorator_list:
                 fixture_decorator = (
@@ -709,26 +739,41 @@ def _pytest_fixture_declarations(
                     if name_keyword is not None
                     else node.name
                 )
-                autouse = isinstance(decorator, ast.Call) and any(
-                    keyword.arg == "autouse"
-                    and isinstance(keyword.value, ast.Constant)
-                    and keyword.value.value is True
-                    for keyword in decorator.keywords
+                autouse_keyword = (
+                    next(
+                        (
+                            keyword.value
+                            for keyword in decorator.keywords
+                            if keyword.arg == "autouse"
+                        ),
+                        None,
+                    )
+                    if isinstance(decorator, ast.Call)
+                    else None
+                )
+                autouse_value = (
+                    _module_boolean_value(autouse_keyword, boolean_constants)
+                    if autouse_keyword is not None
+                    else False
                 )
                 declarations.append(
                     (
                         node,
                         fixture_name,
-                        autouse,
-                        name_keyword is not None and fixture_name is None,
+                        autouse_value is True,
+                        (name_keyword is not None and fixture_name is None)
+                        or (autouse_keyword is not None and autouse_value is None),
                     )
                 )
                 break
             constants.pop(node.name, None)
+            boolean_constants.pop(node.name, None)
         elif isinstance(node, ast.ClassDef):
             constants.pop(node.name, None)
+            boolean_constants.pop(node.name, None)
         else:
             _update_module_string_constants(node, constants)
+            _update_module_boolean_constants(node, boolean_constants)
     return tuple(declarations)
 
 
@@ -738,6 +783,59 @@ def _module_string_value(node: ast.AST, constants: dict[str, str]) -> str | None
     if isinstance(node, ast.Name):
         return constants.get(node.id)
     return None
+
+
+def _module_boolean_value(node: ast.AST, constants: dict[str, bool]) -> bool | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, bool):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    return None
+
+
+def _update_module_boolean_constants(
+    statement: ast.stmt, constants: dict[str, bool]
+) -> None:
+    bound: set[str] = set()
+    pending: list[ast.AST] = [statement]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, _SCOPE_NODES):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound.add(node.name)
+            continue
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bound.add(node.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            bound.update(
+                (item.asname or item.name).split(".")[0] for item in node.names
+            )
+        elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+            bound.add(node.name)
+        pending.extend(ast.iter_child_nodes(node))
+
+    assigned: dict[str, bool] = {}
+    if isinstance(statement, ast.Assign):
+        value = _module_boolean_value(statement.value, constants)
+        if value is not None:
+            assigned = {
+                target.id: value
+                for target in statement.targets
+                if isinstance(target, ast.Name)
+            }
+    elif isinstance(statement, ast.AnnAssign) and isinstance(
+        statement.target, ast.Name
+    ):
+        value = (
+            _module_boolean_value(statement.value, constants)
+            if statement.value is not None
+            else None
+        )
+        if value is not None:
+            assigned[statement.target.id] = value
+    for name in bound:
+        constants.pop(name, None)
+    constants.update(assigned)
 
 
 def _update_module_string_constants(
@@ -1566,7 +1664,7 @@ def _module_eager_call_map(tree: ast.Module) -> dict[int, tuple[int, ...]]:
     """Map functions to module-time invocation lines in one pass per module."""
 
     definitions_by_name: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
-    for node in tree.body:
+    for node in _module_scope_statements(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             definitions_by_name.setdefault(node.name, []).append(node)
 
@@ -1717,7 +1815,8 @@ def _referenced_bindings(
             )
         if deferred:
             if source is None:
-                runtime_roots.add(choices[-1][0])
+                target = _binding_before(choices, line)
+                runtime_roots.add(choices[-1][0] if target is None else target)
             else:
                 runtime_edges.setdefault(source, set()).add(choices[-1][0])
             for call_line in eager_call_lines.get(scope_line, ()):

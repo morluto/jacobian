@@ -182,6 +182,9 @@ def _definition_only_references(
     _scan(
         tree, frozenset(), module_names, referenced, fixtures, aliases, reference_sites
     )
+    reference_sites.update(
+        _pytest_injected_fixture_reference_sites(tree, fixtures, aliases)
+    )
     synthetic_line = (
         max(
             (
@@ -289,6 +292,84 @@ def _pytest_fixture_reference_sites(
     return sites
 
 
+def _pytest_injected_fixture_reference_sites(
+    tree: ast.Module, fixtures: dict[str, str], aliases: dict[str, str]
+) -> set[tuple[str, int, bool, int | None]]:
+    """Resolve fixture arguments only on module-collected tests and fixtures."""
+
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    fixture_lines = {
+        definition.lineno
+        for definition, _fixture_name, _autouse, _unknown_name in _pytest_fixture_declarations(
+            tree
+        )
+    }
+    sites: set[tuple[str, int, bool, int | None]] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.lineno in fixture_lines:
+            class_parameters = frozenset()
+        elif _is_pytest_collected_test(node, parents):
+            class_parameters = _pytest_test_class_parameters(node, parents, aliases)
+        else:
+            continue
+        requested = (
+            _argument_names(node)
+            - _direct_parametrize_names(node, aliases)
+            - class_parameters
+        )
+        sites.update(
+            (fixtures[name], node.lineno, True, node.lineno)
+            for name in requested
+            if name in fixtures
+        )
+    return sites
+
+
+def _is_pytest_collected_test(
+    node: ast.FunctionDef | ast.AsyncFunctionDef, parents: dict[ast.AST, ast.AST]
+) -> bool:
+    if not node.name.startswith("test"):
+        return False
+    parent = parents.get(node)
+    while parent is not None and not isinstance(
+        parent, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    ):
+        parent = parents.get(parent)
+    if isinstance(parent, ast.Module):
+        return True
+    if not isinstance(parent, ast.ClassDef) or not parent.name.startswith(
+        _PYTEST_COLLECTED_PREFIX
+    ):
+        return False
+    enclosing = parents.get(parent)
+    while enclosing is not None and not isinstance(
+        enclosing, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    ):
+        enclosing = parents.get(enclosing)
+    return isinstance(enclosing, ast.Module)
+
+
+def _pytest_test_class_parameters(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    parents: dict[ast.AST, ast.AST],
+    aliases: dict[str, str],
+) -> frozenset[str]:
+    parent = parents.get(node)
+    while parent is not None and not isinstance(
+        parent, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    ):
+        parent = parents.get(parent)
+    if isinstance(parent, ast.ClassDef):
+        return _direct_parametrize_names(parent, aliases)
+    return frozenset()
+
+
 def _pytest_import_aliases(tree: ast.Module) -> dict[str, str]:
     """Map local pytest import spellings to their canonical names."""
 
@@ -363,61 +444,137 @@ def _fixture_names(tree: ast.Module) -> dict[str, str]:
     fixture reference, so that assignment stays subject to the dead-code gate.
     """
 
-    names: dict[str, str] = {}
-    aliases = _pytest_import_aliases(tree)
-    for node in _definition_names(tree):
-        _name, _line, kind, definition = node
-        if kind != "function":
-            continue
-        if not isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for decorator in definition.decorator_list:
-            fixture_decorator = (
-                decorator.func if isinstance(decorator, ast.Call) else decorator
-            )
-            if _canonical_pytest_name(fixture_decorator, aliases) != "pytest.fixture":
-                continue
-            fixture_name = definition.name
-            if isinstance(decorator, ast.Call):
-                for keyword in decorator.keywords:
-                    if (
-                        keyword.arg == "name"
-                        and isinstance(keyword.value, ast.Constant)
-                        and isinstance(keyword.value.value, str)
-                    ):
-                        fixture_name = keyword.value.value
-                        break
-            names[fixture_name] = definition.name
-            break
-    return names
+    return {
+        fixture_name or definition.name: definition.name
+        for definition, fixture_name, _autouse, _unknown_name in _pytest_fixture_declarations(
+            tree
+        )
+    }
 
 
 def _autouse_fixture_definitions(tree: ast.Module) -> frozenset[str]:
-    names: set[str] = set()
+    return frozenset(
+        definition.name
+        for definition, _fixture_name, autouse, unknown_name in _pytest_fixture_declarations(
+            tree
+        )
+        if autouse or unknown_name
+    )
+
+
+def _pytest_fixture_declarations(
+    tree: ast.Module,
+) -> tuple[tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool], ...]:
     aliases = _pytest_import_aliases(tree)
-    for _name, _line, kind, definition in _definition_names(tree):
-        if kind != "function" or not isinstance(
-            definition, (ast.FunctionDef, ast.AsyncFunctionDef)
-        ):
-            continue
-        for decorator in definition.decorator_list:
-            if (
-                not isinstance(decorator, ast.Call)
-                or _canonical_pytest_name(decorator.func, aliases) != "pytest.fixture"
-            ):
-                continue
-            if any(
-                keyword.arg == "autouse"
-                and isinstance(keyword.value, ast.Constant)
-                and keyword.value.value is True
-                for keyword in decorator.keywords
-            ):
-                names.add(definition.name)
+    constants: dict[str, str] = {}
+    declarations: list[
+        tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool]
+    ] = []
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for decorator in node.decorator_list:
+                fixture_decorator = (
+                    decorator.func if isinstance(decorator, ast.Call) else decorator
+                )
+                if (
+                    _canonical_pytest_name(fixture_decorator, aliases)
+                    != "pytest.fixture"
+                ):
+                    continue
+                name_keyword = (
+                    next(
+                        (
+                            keyword.value
+                            for keyword in decorator.keywords
+                            if keyword.arg == "name"
+                        ),
+                        None,
+                    )
+                    if isinstance(decorator, ast.Call)
+                    else None
+                )
+                fixture_name = (
+                    _module_string_value(name_keyword, constants)
+                    if name_keyword is not None
+                    else node.name
+                )
+                autouse = isinstance(decorator, ast.Call) and any(
+                    keyword.arg == "autouse"
+                    and isinstance(keyword.value, ast.Constant)
+                    and keyword.value.value is True
+                    for keyword in decorator.keywords
+                )
+                declarations.append(
+                    (
+                        node,
+                        fixture_name,
+                        autouse,
+                        name_keyword is not None and fixture_name is None,
+                    )
+                )
                 break
-    return frozenset(names)
+            constants.pop(node.name, None)
+        elif isinstance(node, ast.ClassDef):
+            constants.pop(node.name, None)
+        else:
+            _update_module_string_constants(node, constants)
+    return tuple(declarations)
 
 
-def _scan(  # noqa: C901
+def _module_string_value(node: ast.AST, constants: dict[str, str]) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    return None
+
+
+def _update_module_string_constants(
+    statement: ast.stmt, constants: dict[str, str]
+) -> None:
+    bound: set[str] = set()
+    pending: list[ast.AST] = [statement]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, _SCOPE_NODES):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound.add(node.name)
+            continue
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bound.add(node.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            bound.update(
+                (item.asname or item.name).split(".")[0] for item in node.names
+            )
+        elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+            bound.add(node.name)
+        pending.extend(ast.iter_child_nodes(node))
+
+    assigned: dict[str, str] = {}
+    if isinstance(statement, ast.Assign):
+        value = _module_string_value(statement.value, constants)
+        if value is not None:
+            assigned = {
+                target.id: value
+                for target in statement.targets
+                if isinstance(target, ast.Name)
+            }
+    elif isinstance(statement, ast.AnnAssign) and isinstance(
+        statement.target, ast.Name
+    ):
+        value = (
+            _module_string_value(statement.value, constants)
+            if statement.value
+            else None
+        )
+        if value is not None:
+            assigned[statement.target.id] = value
+    for name in bound:
+        constants.pop(name, None)
+    constants.update(assigned)
+
+
+def _scan(
     node: ast.AST | Sequence[ast.AST],
     bound: frozenset[str],
     module_names: set[str],
@@ -428,7 +585,6 @@ def _scan(  # noqa: C901
     class_outer_bound: frozenset[str] | None = None,
     deferred: bool = False,
     scope_line: int | None = None,
-    class_direct_parameters: frozenset[str] = frozenset(),
 ) -> None:
     """Record module-level loads and the binding each load can reach."""
 
@@ -480,23 +636,7 @@ def _scan(  # noqa: C901
                     deferred,
                     scope_line,
                 )
-            if _is_pytest_injected(child, fixtures):
-                requested = (
-                    _argument_names(child)
-                    - _direct_parametrize_names(child, pytest_aliases)
-                    - class_direct_parameters
-                )
-                for name in requested:
-                    if name in fixtures:
-                        referenced.add(fixtures[name])
-                        reference_sites.add(
-                            (fixtures[name], child.lineno, True, child.lineno)
-                        )
             if isinstance(child, ast.ClassDef):
-                child_class_parameters = (
-                    class_direct_parameters
-                    | _direct_parametrize_names(child, pytest_aliases)
-                )
                 _scan_class_body(
                     child.body,
                     class_outer_bound if class_outer_bound is not None else bound,
@@ -507,7 +647,6 @@ def _scan(  # noqa: C901
                     reference_sites,
                     deferred,
                     class_outer_bound if class_outer_bound is not None else bound,
-                    child_class_parameters,
                 )
                 continue
             body_bound = bound | _scope_bindings(child)
@@ -637,7 +776,6 @@ def _scan_class_body(
     reference_sites: set[tuple[str, int, bool, int | None]],
     deferred: bool,
     class_outer_bound: frozenset[str] | None = None,
-    class_direct_parameters: frozenset[str] = frozenset(),
 ) -> None:
     """Scan class statements in order because class locals bind when assigned."""
 
@@ -654,7 +792,6 @@ def _scan_class_body(
             reference_sites,
             lexical_outer,
             deferred,
-            class_direct_parameters,
         )
         bound = bound | _class_statement_bindings(statement)
 
@@ -669,7 +806,6 @@ def _scan_class_statement(
     reference_sites: set[tuple[str, int, bool, int | None]],
     outer_bound: frozenset[str],
     deferred: bool,
-    class_direct_parameters: frozenset[str],
 ) -> None:
     if isinstance(statement, ast.If):
         _scan(
@@ -697,7 +833,6 @@ def _scan_class_statement(
                 reference_sites,
                 deferred,
                 outer_bound,
-                class_direct_parameters,
             )
             return
         _scan_class_body(
@@ -710,7 +845,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         _scan_class_body(
             statement.orelse,
@@ -722,7 +856,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         return
     if isinstance(statement, (ast.For, ast.AsyncFor)):
@@ -748,7 +881,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         _scan_class_body(
             statement.orelse,
@@ -760,7 +892,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         return
     if isinstance(statement, ast.While):
@@ -785,7 +916,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         _scan_class_body(
             statement.orelse,
@@ -797,7 +927,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         return
     if isinstance(statement, (ast.With, ast.AsyncWith)):
@@ -826,7 +955,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         return
     if isinstance(statement, (ast.Try, ast.TryStar)):
@@ -840,7 +968,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         for handler in statement.handlers:
             if handler.type is not None:
@@ -866,7 +993,6 @@ def _scan_class_statement(
                 reference_sites,
                 deferred,
                 outer_bound,
-                class_direct_parameters,
             )
         body_bound = bound | _class_suite_bindings(statement.body)
         _scan_class_body(
@@ -879,7 +1005,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         final_bound = body_bound | _class_suite_bindings(statement.orelse)
         _scan_class_body(
@@ -892,7 +1017,6 @@ def _scan_class_statement(
             reference_sites,
             deferred,
             outer_bound,
-            class_direct_parameters,
         )
         return
     if isinstance(statement, ast.Match):
@@ -942,7 +1066,6 @@ def _scan_class_statement(
                 reference_sites,
                 deferred,
                 outer_bound,
-                class_direct_parameters,
             )
         return
     _scan(
@@ -956,7 +1079,6 @@ def _scan_class_statement(
         outer_bound,
         deferred,
         None,
-        class_direct_parameters,
     )
 
 
@@ -1044,16 +1166,6 @@ def _record(
     if isinstance(context, ast.Load) and name in module_names and name not in bound:
         referenced.add(name)
         reference_sites.add((name, line, deferred, scope_line))
-
-
-def _is_pytest_injected(node: ast.AST, fixtures: dict[str, str]) -> bool:
-    """Whether pytest resolves this function's parameters by name."""
-
-    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        return False
-    if node.name.startswith("test"):
-        return True
-    return node.name in fixtures.values()
 
 
 def _argument_names(node: ast.AST) -> frozenset[str]:
@@ -1268,19 +1380,23 @@ def _reachable_bindings(roots: set[int], edges: dict[int, set[int]]) -> set[int]
     return reachable
 
 
-def _class_binding_for_method(
+def _scope_owner_binding(
     line: int | None,
     function_nodes: dict[int, ast.FunctionDef | ast.AsyncFunctionDef],
     parents: dict[ast.AST, ast.AST],
+    function_bindings: dict[int, int],
     class_bindings: dict[int, int],
 ) -> int | None:
     current = function_nodes.get(line) if line is not None else None
-    owner = None
     while current is not None:
-        current = parents.get(current)
-        if isinstance(current, ast.ClassDef) and current.lineno in class_bindings:
-            owner = class_bindings[current.lineno]
-    return owner
+        parent = parents.get(current)
+        if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if parent.lineno in function_bindings:
+                return function_bindings[parent.lineno]
+        elif isinstance(parent, ast.ClassDef) and parent.lineno in class_bindings:
+            return class_bindings[parent.lineno]
+        current = parent
+    return None
 
 
 def _binding_before(choices: list[tuple[int, int, int]], line: int) -> int | None:
@@ -1354,8 +1470,8 @@ def _referenced_bindings(
             continue
         source = function_bindings.get(scope_line) if scope_line is not None else None
         if source is None:
-            source = _class_binding_for_method(
-                scope_line, function_nodes, parents, class_bindings
+            source = _scope_owner_binding(
+                scope_line, function_nodes, parents, function_bindings, class_bindings
             )
         if deferred:
             if source is None:

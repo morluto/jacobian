@@ -655,6 +655,24 @@ def test_class_parametrize_argnames_do_not_request_method_fixtures(
     assert _reported(tmp_path, "test_class_parametrize.py", body) == {"item"}
 
 
+def test_nested_test_named_method_is_not_collected_from_local_class(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def unused():
+        return 1
+
+    def test_outer():
+        class Helper:
+            def test_nested(self, unused):
+                assert unused == 1
+    """
+    assert _reported(tmp_path, "test_local_class.py", body) == {"unused"}
+
+
 def test_empty_class_loop_preserves_module_helper_fallback(tmp_path: Path) -> None:
     body = """\
     def helper():
@@ -669,6 +687,49 @@ def test_empty_class_loop_preserves_module_helper_fallback(tmp_path: Path) -> No
             assert self.value == 1
     """
     assert _reported(tmp_path, "test_class_loop_fallback.py", body) == set()
+
+
+def test_nested_function_load_depends_on_its_outer_helper(tmp_path: Path) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    def outer():
+        def inner():
+            return helper()
+        return inner
+    """
+    assert _reported(tmp_path, "test_nested_helper.py", body) == {"outer", "helper"}
+
+
+def test_fixture_alias_can_use_a_module_string_constant(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    FIXTURE_NAME = "item"
+
+    @pytest.fixture(name=FIXTURE_NAME)
+    def item_fixture():
+        return 1
+
+    def test_item(item):
+        assert item == 1
+    """
+    assert _reported(tmp_path, "test_fixture_constant_alias.py", body) == set()
+
+
+def test_dynamic_fixture_alias_is_kept_live_conservatively(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    def fixture_name():
+        return "item"
+
+    @pytest.fixture(name=fixture_name())
+    def item_fixture():
+        return 1
+    """
+    assert _reported(tmp_path, "test_fixture_dynamic_alias.py", body) == set()
 
 
 def test_class_body_bindings_apply_in_execution_order(tmp_path: Path) -> None:

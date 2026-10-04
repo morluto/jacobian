@@ -9,9 +9,6 @@ from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
-    CartanMatrix as CartanMatrixValue,
-)
-from jacobian.math.groups.root_systems._models import (
     WeylLongestElementResult,
 )
 from jacobian.math.groups.root_systems.operations import (
@@ -59,10 +56,6 @@ VALID_RANKS = {
     "F": (4,),
     "G": (2,),
 }
-
-
-def _cartan(rows: Matrix) -> CartanMatrixValue:
-    return CartanMatrixValue.model_validate(rows)
 
 
 def _reflect(root: tuple[int, ...], index: int, rows: Matrix) -> tuple[int, ...]:

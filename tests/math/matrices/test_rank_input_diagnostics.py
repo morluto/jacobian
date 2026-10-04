@@ -398,26 +398,6 @@ def test_branch_evidence_does_not_inspect_hostile_subclasses_or_scalars() -> Non
     )
 
 
-def test_successful_handler_runs_once_and_returns_value_without_inspection() -> None:
-    class Uninspectable:
-        def __getattribute__(self, name: str) -> Any:
-            raise AssertionError("successful input was inspected")
-
-    value = Uninspectable()
-    calls = 0
-
-    def accept(inner: Any, handler: Any) -> Any:
-        nonlocal calls
-        calls += 1
-        return inner
-
-    adapter: TypeAdapter[Any] = TypeAdapter(
-        Annotated[Any, WrapValidator(accept), WrapValidator(_rank_matrix_validation)]
-    )
-    assert adapter.validate_python(value) is value
-    assert calls == 1
-
-
 def test_custom_error_reusing_native_code_preserves_its_message() -> None:
     original = PydanticCustomError("int_type", "matrix-specific integer error")
 

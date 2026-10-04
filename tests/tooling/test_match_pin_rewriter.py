@@ -99,7 +99,7 @@ def test_split_parametrization_to_two_codes_is_rejected(tmp_path: Path) -> None:
     assert rejected["multiple_codes_across_executions"] == 1
 
 
-def test_agreeing_coded_observations_still_convert(tmp_path: Path) -> None:
+def test_agreeing_coded_and_text_observations_still_convert(tmp_path: Path) -> None:
     # The merge must not reject a site merely because two workers both saw it.
     path = _write(
         tmp_path,

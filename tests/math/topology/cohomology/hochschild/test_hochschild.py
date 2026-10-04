@@ -148,7 +148,7 @@ class TestHochschildHomology:
         )
         result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         # With zero multiplication, the differential vanishes
-        assert result.groups[0].betti >= 0
+        assert [group.betti for group in result.groups] == [1, 1, 1]
 
 
 class TestHochschildAdmissionAndTopDegree:

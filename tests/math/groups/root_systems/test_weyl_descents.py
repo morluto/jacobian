@@ -5,9 +5,6 @@ import pytest
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
-    CartanMatrix as CartanMatrixValue,
-)
-from jacobian.math.groups.root_systems._models import (
     WeylDescentsResult,
 )
 from jacobian.math.groups.root_systems.operations import (
@@ -21,10 +18,6 @@ Matrix = tuple[tuple[int, ...], ...]
 A2: Matrix = ((2, -1), (-1, 2))
 B2: Matrix = ((2, -2), (-1, 2))
 A2_AFFINE: Matrix = ((2, -1, -1), (-1, 2, -1), (-1, -1, 2))
-
-
-def _cartan(rows: Matrix) -> CartanMatrixValue:
-    return CartanMatrixValue.model_validate(rows)
 
 
 class TestDescentsKnownAnswers:

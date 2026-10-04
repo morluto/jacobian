@@ -176,18 +176,3 @@ def test_grammar_rejects_overlapping_terminal_nonterminal() -> None:
     }
     with pytest.raises(ValueError):
         FiniteCFGO.model_validate(grammar)
-
-
-def test_grammar_accepts_declared_symbols() -> None:
-    """A grammar where every body symbol is declared is accepted."""
-    grammar = {
-        "nonterminals": ["S", "A"],
-        "terminals": ["a", "b"],
-        "rules": [
-            {"head": "S", "body": ["A", "a"]},
-            {"head": "A", "body": ["b"]},
-            {"head": "A", "body": []},
-        ],
-        "start_symbol": "S",
-    }
-    FiniteCFGO.model_validate(grammar)

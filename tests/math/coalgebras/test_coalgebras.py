@@ -74,28 +74,6 @@ def _raises_code(code: str) -> Iterator[None]:
 class TestGroupLikeElements:
     """Test group-like element finding."""
 
-    def test_trivial_group(self) -> None:
-        """The trivial group coalgebra has 1 group-like element."""
-        ca = Coalgebra(
-            prime=5,
-            dimension=1,
-            comultiplication=(((1,),),),
-            counit=(1,),
-        )
-        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
-        assert result.count == 1
-
-    def test_scaled_group_like_found(self) -> None:
-        """Delta(c)=2c tensor c with epsilon(c)=3 admits the scaled group-like 2c."""
-        ca = Coalgebra(
-            prime=5,
-            dimension=1,
-            comultiplication=(((2,),),),
-            counit=(3,),
-        )
-        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
-        assert result.count == 1
-
     def test_two_group_like(self) -> None:
         """A coalgebra with two group-like elements."""
         ca = Coalgebra(

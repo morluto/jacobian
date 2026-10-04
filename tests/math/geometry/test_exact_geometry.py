@@ -1089,7 +1089,8 @@ class TestPinnedCoordinateCapIsSchemaEnforced:
             LabelledRationalPoint(label="b", coordinates=(big, big)),
         )
         configuration = PointConfiguration(points=pts)
-        DistanceProfileRequest(configuration=configuration)
+        request = DistanceProfileRequest(configuration=configuration)
+        assert request.configuration.points[0].coordinates == (big, big)
 
     def test_shared_configuration_value_composes_unchanged(self) -> None:
         """An existing shared PointConfiguration instance is accepted by the
@@ -1098,8 +1099,7 @@ class TestPinnedCoordinateCapIsSchemaEnforced:
         request = PinnedLineDistanceRequest(
             configuration=cfg, anchor=self._anchor(0, 0)
         )
-        assert request.point_count if hasattr(request, "point_count") else True
-        assert len(request.configuration.points) == 3
+        assert request.configuration == cfg
 
 
 class TestAuthoredComponentBudget:

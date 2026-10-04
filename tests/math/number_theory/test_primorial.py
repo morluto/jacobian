@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from jacobian.math.number_theory._integer_models import PositiveIntegerRequest
 from jacobian.math.number_theory._prime_models import (
     PrimorialRequest,
     PrimorialResult,
@@ -41,11 +40,6 @@ def test_primorial_admits_exact_digit_boundary_1001() -> None:
     assert len(str(result.value)) == 3397
     with pytest.raises(ValidationError):
         PrimorialRequest(n=1002)
-
-
-def test_positive_integer_request_still_covers_other_operations() -> None:
-    """The shared arithmetic-function bound remains at 10,000."""
-    PositiveIntegerRequest(n=10_000)
 
 
 def test_primorial_5() -> None:

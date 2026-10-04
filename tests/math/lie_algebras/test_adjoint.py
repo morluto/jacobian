@@ -140,26 +140,12 @@ class TestAdjointMatrices:
             == matrices[2]
         )
 
-    def test_catalog_declares_and_runs_the_adjoint_operation(self) -> None:
-        from jacobian.canonical import encode_strict_json
+    def test_catalog_declares_the_adjoint_operation(self) -> None:
         from jacobian.math.lie_algebras._tools import TOOLS
 
-        matches = tuple(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "lie_algebra.adjoint_representation.compute"
-        )
-        assert len(matches) == 1
-        tool = matches[0]
-        assert tool.examples
-        request = tool.request_type.model_validate_json(
-            encode_strict_json(tool.examples[0].input), strict=True
-        )
-        result = tool.run(request)
-        assert isinstance(result, tool.result_type)
-        assert result.algebra == request.algebra
-        assert len(result.matrices) == len(request.algebra.basis)
-        assert tool.result_type.model_validate_json(result.model_dump_json()) == result
+        assert "lie_algebra.adjoint_representation.compute" in {
+            tool.operation_id for tool in TOOLS
+        }
 
     def test_adjoint_result_rejects_wrong_matrix_count(self) -> None:
         from pydantic import ValidationError
@@ -261,17 +247,3 @@ class TestSingleElementAdjoint:
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_adjoint(self._heisenberg(), too_large)
         assert "admission" in exc_info.value.errors()[0]["type"]
-
-    def test_public_tool_round_trips_exact_result(self) -> None:
-        from jacobian.canonical import encode_strict_json
-        from jacobian.math.lie_algebras._tools import TOOLS
-
-        (tool,) = (
-            item for item in TOOLS if item.operation_id == "lie_algebra.adjoint.compute"
-        )
-        request = tool.request_type.model_validate_json(
-            encode_strict_json(tool.examples[0].input), strict=True
-        )
-        result = tool.run(request)
-        assert result == lie_adjoint(request.algebra, request.element)
-        assert tool.result_type.model_validate_json(result.model_dump_json()) == result

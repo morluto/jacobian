@@ -160,7 +160,7 @@ def test_split_quadratic_has_one_subgroup_and_one_embedded_intermediate_field() 
     assert not result.intermediate_field_inclusion_poset.strict_order_pairs
 
 
-def test_correspondence_operation_is_published_with_exact_typed_example() -> None:
+def test_correspondence_operation_is_published_with_typed_contract() -> None:
     tool = next(
         tool
         for tool in TOOLS
@@ -169,4 +169,3 @@ def test_correspondence_operation_is_published_with_exact_typed_example() -> Non
     assert isinstance(tool, MathTool)
     assert tool.request_type is GaloisCorrespondenceRequest
     assert tool.result_type is GaloisCorrespondenceResult
-    assert len(tool.examples) == 1

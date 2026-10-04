@@ -252,23 +252,7 @@ class TestDefiningInvariant:
         assert composed == tuple(whole.holonomy.image)
 
 
-class TestNativeVsCatalogParity:
-    def test_catalog_entry_matches_native(self) -> None:
-        request = HolonomyRequest(
-            field=_triangle_field(),
-            path=_path(("ab", True), ("bc", True), ("ca", True)),
-        )
-        tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "lattice_gauge.holonomy.compute"
-        )
-        assert tool.request_type is HolonomyRequest
-        catalog_result = tool.run(request)
-        assert catalog_result == path_holonomy(
-            _triangle_field(), _path(("ab", True), ("bc", True), ("ca", True))
-        )
-
+class TestPublishedContract:
     def test_operation_is_published(self) -> None:
         assert "lattice_gauge.holonomy.compute" in {tool.operation_id for tool in TOOLS}
 

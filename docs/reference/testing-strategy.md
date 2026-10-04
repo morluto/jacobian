@@ -4,6 +4,22 @@
 
 Tests prove one observable mathematical or transport contract at a time.
 
+## Evidence priority and test selection
+
+Prefer one test at the highest useful boundary, in this order:
+
+1. Full end-to-end behavior through a real caller-visible path, with real
+   application components and no mocked data or API boundaries.
+2. Integration behavior across schemas, APIs, and producer-consumer seams.
+3. Golden cases using realistic inputs and exact expected results.
+
+These forms can overlap: an end-to-end test can also be an integration golden.
+Keep a lower-level unit test only when it proves a distinct mathematical
+invariant, admission rule, or failure mode that the higher-boundary test cannot
+exercise. Do not mirror implementation methods or rerun the same fixture in
+multiple lanes to satisfy a checklist. Classify evidence by the boundaries it
+actually crosses; an owner-local operation call is not an end-to-end test.
+
 ## Routine validation
 
 `test-focused`, `quick-scoped`, and `handoff-scoped` serve the edit loop.
@@ -322,13 +338,16 @@ problem: move the test, do not relax the gate.
 
 ### What an operation's tests should cover
 
-For an operation, test the typed request boundary, the domain result, and a
-real caller-visible invocation when the MCP projection changed. The integration
-catalog test executes every advertised invocation example. When one result feeds
-another operation, serialize the producer result and pass its canonical value
-unchanged through the consumer's typed payload. The test should fail if a caller
-would have to reconstruct mathematical context or translate between parallel
-representations.
+For an operation, prefer one representative public-path test that checks its
+typed request and observable result. Add a separate request-boundary case only
+for an accepted or rejected limit not exercised by that path. Test a
+caller-visible transport only when that projection changed. The catalog
+integration test already executes each advertised example and validates its
+request and result round trips; add an exact golden when the expected
+mathematical value is the claim. When one result feeds another operation,
+serialize the producer result and pass its canonical value unchanged through
+the consumer's typed payload. The test should fail if a caller would have to
+reconstruct mathematical context or translate between parallel representations.
 
 When a consumer relies on a stronger mathematical property than its input's
 structural type establishes, add an adversarial boundary fixture: construct a
@@ -431,12 +450,12 @@ mathematical behavior.
 
 ### Cross-surface and verifier independence
 
-For an operation owned in more than one calling surface, exercise the same
-canonical fixture through each surface: native calls, serialized
-tool/dispatch payloads, a changed MCP projection, and verifier or downstream
-consumer round trips. A success on one surface does not establish the others:
-transport and shaped validation establish projection and schema agreement, not
-mathematical truth.
+When a change affects more than one calling surface, exercise the same
+canonical fixture through each affected surface. Do not repeat unchanged
+surfaces solely because the operation is callable there. A success on one
+surface does not establish changed contracts on the others: transport and
+shaped validation establish projection and schema agreement, not mathematical
+truth.
 
 Keep scalar codec conformance in its owner: native construction, Python dump
 and revalidation, JSON round trips, schema agreement, malformed encodings, and
@@ -500,10 +519,11 @@ could otherwise reach indexing, tuple unpacking, helper arithmetic, or result
 construction. Assert the structured domain error and stable owner code rather
 than accepting a raw built-in or Pydantic exception.
 
-For an operation that uses a nontrivial backend, enumeration, solver, or
-certificate check, add the smallest owner-local regression that proves a
-successful producer performs that work once. If independently supplied claims
-are supported, separately prove a forged claim fails through the explicit
+Add a backend or verifier call-count regression only when repeated work is a
+demonstrated cost or correctness risk. Exercise the owning public boundary,
+assert its mathematical result, and keep the call-count assertion limited to
+that risk; do not pin internal call structure by default. If independently
+supplied claims are supported, prove a forged claim fails through the explicit
 verifier. Timing tests must state whether serialization is included in the
 reported duration or exposed as a distinct named phase; no mandatory phase may
 be absent from all timing evidence.
@@ -523,7 +543,7 @@ algebraic claim. Select evidence by the claim being made:
 | Algebraic operation | Defining identities or an independent oracle |
 | Isolating interval, rectangle, or box | Exactly one root by an independent count, pairwise disjointness, and a constructed near-degenerate sibling |
 | Enclosure or distance certificate | Independent containment oracle and the defining inequality at its boundary |
-| Public operation | Catalog mutation conformance |
+| Public operation | Accepted-request mutation conformance |
 | Process backend | Codec, version, timeout/output, and typed failure tests |
 
 When correcting an admission or boundedness rule, inspect the affected owner

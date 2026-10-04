@@ -183,10 +183,9 @@ def test_full_source_support_boundary_has_admitted_complete_profile() -> None:
     assert profile.all_basis_norms_even
 
 
-def test_profile_tool_is_declared_with_the_expected_typed_example() -> None:
+def test_profile_tool_is_declared_with_the_expected_typed_contract() -> None:
     (tool,) = TOOLS
     assert isinstance(tool, MathTool)
     assert tool.operation_id == "quadratic_form.parity_profile.compute"
     assert tool.request_type is ParityProfileRequest
     assert tool.result_type is ParityProfile
-    assert len(tool.examples) == 1

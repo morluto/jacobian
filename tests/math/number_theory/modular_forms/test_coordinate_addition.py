@@ -5,7 +5,6 @@ import pytest
 from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -17,9 +16,6 @@ from jacobian.math.number_theory.modular_forms.basis import (
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
     modular_form_coordinates_add,
     modular_form_coordinates_scalar_multiply,
-)
-from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models import (
-    ModularFormCoordinatesAddRequest,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -194,14 +190,10 @@ def test_coordinate_addition_supports_pari_sturm_basis() -> None:
     )
 
 
-def test_coordinate_addition_is_published_with_executable_example() -> None:
+def test_coordinate_addition_operation_is_published() -> None:
     operations = [
         operation
         for operation in TOOLS
         if operation.operation_id == "modular_form.coordinates.add.compute"
     ]
     assert len(operations) == 1
-    assert operations[0].examples
-    assert ModularFormCoordinatesAddRequest.model_validate_json(
-        encode_strict_json(operations[0].examples[0].input), strict=True
-    )

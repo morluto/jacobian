@@ -181,26 +181,14 @@ class TestUpperCentralSeries:
             ),
         )
 
-    def test_serialized_result_and_catalog_example(self) -> None:
+    def test_serialized_result_rejects_forged_nilpotency(self) -> None:
         import json
-
-        from jacobian.canonical import encode_strict_json
-        from jacobian.math.lie_algebras._tools import TOOLS
 
         result = lie_upper_central_series(HEISENBERG)
         assert (
             LieUpperCentralSeriesResult.model_validate_json(result.model_dump_json())
             == result
         )
-        tool = next(
-            t
-            for t in TOOLS
-            if t.operation_id == "lie_algebra.upper_central_series.compute"
-        )
-        payload = tool.request_type.model_validate_json(
-            encode_strict_json(tool.examples[0].input), strict=True
-        )
-        assert tool.run(payload) == lie_upper_central_series(payload.algebra)
         forged = json.loads(result.model_dump_json())
         forged["nilpotent"] = False
         with pytest.raises(ValidationError):
@@ -263,23 +251,12 @@ class TestSeriesComposition:
             == central
         )
 
-    def test_catalog_declares_both_operations_with_valid_examples(self) -> None:
-        from jacobian.canonical import encode_strict_json
+    def test_catalog_declares_both_operations(self) -> None:
         from jacobian.math.lie_algebras._tools import TOOLS
 
-        for operation_id, native in (
-            ("lie_algebra.derived_series.compute", lie_derived_series),
-            ("lie_algebra.lower_central_series.compute", lie_lower_central_series),
-        ):
-            tools = {
-                tool.operation_id: tool
-                for tool in TOOLS
-                if tool.operation_id == operation_id
-            }
-            assert set(tools) == {operation_id}
-            tool = tools[operation_id]
-            assert tool.examples
-            payload = tool.request_type.model_validate_json(
-                encode_strict_json(tool.examples[0].input), strict=True
-            )
-            assert tool.run(payload) == native(payload.algebra)
+        operation_ids = {tool.operation_id for tool in TOOLS}
+        assert {
+            "lie_algebra.derived_series.compute",
+            "lie_algebra.lower_central_series.compute",
+            "lie_algebra.upper_central_series.compute",
+        } <= operation_ids

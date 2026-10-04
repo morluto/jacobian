@@ -136,7 +136,6 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
     assert fixed.result_type is HomogeneousFixedSubspace
     assert jacobian_syzygy.request_type is JacobianSyzygyCheckRequest
     assert jacobian_syzygy.result_type is JacobianSyzygyCheckResult
-    assert 1 <= len(jacobian_syzygy.discovery_terms) <= 8
     assert jacobian_compute.request_type is FiniteFieldJacobianRequest
     assert jacobian_compute.result_type is FiniteFieldJacobianResult
     assert quotient_reduce.request_type is QuotientReduceRequest

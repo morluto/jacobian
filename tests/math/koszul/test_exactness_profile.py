@@ -1,10 +1,8 @@
 """Positive-degree exactness profiles for finite-module Koszul complexes."""
 
-import json
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.koszul._tools import TOOLS
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
@@ -60,15 +58,3 @@ def test_empty_sequence_has_no_positive_degree_and_does_not_require_h0_vanish() 
     )
     assert result.homology_dimensions == (1,)
     assert result.acyclic_above_zero
-
-
-def test_published_exactness_profile_example_runs() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "homological.koszul.exactness_profile.compute"
-    )
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    assert result.acyclic_above_zero
-    assert result.homology_dimensions == (0, 0)

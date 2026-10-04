@@ -510,13 +510,12 @@ def test_conclusion_union_rejects_cross_branch_field_combinations() -> None:
         PolynomialSystemRootBoxResult.model_validate_json(json.dumps(unknown))
 
 
-def test_public_declaration_has_one_executable_square_system_example() -> None:
+def test_public_example_certifies_a_square_system() -> None:
     assert len(TOOLS) == 1
     tool = TOOLS[0]
     assert tool.operation_id == "polynomial.system.real_root_box.certify"
     assert tool.request_type is PolynomialSystemRootBoxRequest
     assert tool.result_type is PolynomialSystemRootBoxResult
-    assert len(tool.examples) == 1
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert isinstance(result.conclusion, RootBoxCertifiedUniqueNonsingular)

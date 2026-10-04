@@ -3,7 +3,6 @@
 import pytest
 from jsonschema.validators import Draft202012Validator
 
-from jacobian.canonical import canonicalize_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import (
@@ -93,8 +92,6 @@ def test_dispatch_returns_maximal_enumeration() -> None:
     coordinates = result.output["sequence"]["coordinates"]
     assert len(coordinates) == MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1
     assert coordinates[0] == [0] * 15 + [1]
-    encoded = len(canonicalize_json(result.output))
-    assert encoded > 0
 
 
 def test_dispatch_rejects_oversized_axis_labels_as_invalid_request() -> None:

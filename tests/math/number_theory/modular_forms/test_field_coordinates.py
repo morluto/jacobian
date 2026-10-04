@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 
 import pytest
@@ -129,7 +128,7 @@ def test_scalar_extension_rejects_unadmitted_field() -> None:
     assert exc_info.value.errors()[0]["type"] == "modular_form.field_coordinates_field"
 
 
-def test_field_coordinate_operations_are_published_and_examples_execute() -> None:
+def test_field_coordinate_operations_are_published() -> None:
     expected = {
         "modular_form.coordinates.extend_field.compute",
         "modular_form.field_coordinates.q_expansion.compute",
@@ -140,14 +139,6 @@ def test_field_coordinate_operations_are_published_and_examples_execute() -> Non
         any(tool.operation_id == operation_id for tool in TOOLS)
         for operation_id in expected
     )
-    for tool in TOOLS:
-        if tool.operation_id not in expected:
-            continue
-        for example in tool.examples:
-            request = tool.request_type.model_validate_json(
-                json.dumps(example.input), strict=True
-            )
-            assert tool.run(request) is not None
 
 
 def test_field_operations_on_pari_backed_spaces_use_the_sturm_precision() -> None:

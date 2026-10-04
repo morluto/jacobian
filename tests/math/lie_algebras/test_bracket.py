@@ -148,14 +148,11 @@ class TestBracketInvariants:
     def test_bilinearity(
         self, algebra_basis: tuple[FiniteDimensionalLieAlgebra, tuple[str, ...]]
     ) -> None:
-        from jacobian.math.lie_algebras.operations import _bracket_table
-
         algebra, basis = algebra_basis
         dimension = len(basis)
         left = _element(basis, tuple(range(1, dimension + 1)))
         right = _element(basis, tuple(range(dimension, 0, -1)))
         other = _element(basis, tuple(-index for index in range(dimension)))
-        assert _bracket_table(algebra) is not None
         combined_coords = tuple(
             2 * value + other_value
             for value, other_value in zip(_coords(left), _coords(other), strict=True)
@@ -349,21 +346,6 @@ class TestBracketAdmission:
                 left=_element(("e", "f", "q"), (1, 0, 0)),
                 right=_element(SL2_BASIS, (0, 1, 0)),
             )
-
-    def test_native_and_catalog_paths_agree(self) -> None:
-        from jacobian.math.lie_algebras._tools import TOOLS
-
-        tool = next(
-            tool for tool in TOOLS if tool.operation_id == "lie_algebra.bracket.compute"
-        )
-        request = LieBracketRequest(
-            algebra=SL2,
-            left=_element(SL2_BASIS, (1, 0, 0)),
-            right=_element(SL2_BASIS, (0, 1, 0)),
-        )
-        assert tool.run(request) == lie_bracket(
-            request.algebra, request.left, request.right
-        )
 
     def test_published_example_validates(self) -> None:
         from jacobian.canonical import encode_strict_json

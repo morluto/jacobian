@@ -211,6 +211,8 @@ def _bounded_operands(operands: object) -> tuple[object, ...]:
         raise _MalformedExpressionError(
             "expression operands must be a bounded sequence"
         )
+    if len(operands) > 64:
+        raise _MalformedExpressionError("expression nodes may have at most 64 operands")
     bounded: list[object] = []
     for operand in operands:
         if len(bounded) >= 64:
@@ -267,6 +269,8 @@ def _bound_raw_request(value: Mapping[str, object]) -> None:
     """Bound every raw request field before the recursive canonicalization copy."""
 
     allowed = {"coefficient_domain", "variables", "expression"}
+    if isinstance(value, dict) and dict.__len__(value) > len(allowed):
+        raise ValueError("expression requests may not carry unexpected fields")
     # Iterate keys instead of materializing a set, and reject the first
     # unexpected key or any surplus key, so a request with millions of extra
     # fields never allocates a sorted copy of them.
@@ -334,26 +338,30 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
     }.get(kind if isinstance(kind, str) else "")
     if allowed is None:
         raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
-    unexpected = set(node).difference(allowed)
-    if unexpected:
+    if isinstance(node, dict) and dict.__len__(node) > len(allowed):
         raise _MalformedExpressionError(
-            "expression nodes may not carry unexpected fields: "
-            + ", ".join(sorted(map(str, unexpected)))
+            "expression nodes may not carry unexpected fields"
         )
+    for index, key in enumerate(node):
+        if index >= len(allowed) or key not in allowed:
+            raise _MalformedExpressionError(
+                f"expression nodes may not carry the unexpected field {key!r}"
+            )
     value = node.get("value")
     if "value" in node:
         if isinstance(value, (list, tuple)):
             raise _MalformedExpressionError(
                 "LITERAL value must be a num/den object, not a sequence"
             )
-        if isinstance(value, Mapping) and (
-            set(value).difference({"num", "den"}) or len(value) > 2
-        ):
-            raise _MalformedExpressionError(
-                "LITERAL value must contain only num and den"
-            )
         if isinstance(value, Mapping):
-            for component in value.values():
+            components: list[object] = []
+            for index, key in enumerate(value):
+                if index >= 2 or key not in {"num", "den"}:
+                    raise _MalformedExpressionError(
+                        "LITERAL value must contain only num and den"
+                    )
+                components.append(value[key])
+            for component in components:
                 if isinstance(component, (list, tuple, Mapping)):
                     raise _MalformedExpressionError(
                         "LITERAL components must be scalars, not containers"

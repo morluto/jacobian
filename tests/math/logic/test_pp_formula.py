@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -235,9 +236,7 @@ def test_defined_value_rejects_formula_incompatible_with_retained_structure() ->
     )
     with pytest.raises(ValueError) as exc_info:
         PPDefinedRelation(structure=structure, formula=formula, tuples=((0,),))
-    assert (
-        exc_info.value.errors()[0]["type"] == "relational.structure.pp.unknown_symbol"
-    )
+    assert error_code(exc_info.value) == "relational.structure.pp.unknown_symbol"
 
 
 def test_evaluation_admits_coordinate_work_separately_from_atom_checks() -> None:

@@ -5,6 +5,8 @@ from fractions import Fraction
 from itertools import combinations
 from math import comb
 
+from tests.error_assertions import error_code
+
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.additive.rational_fixed_arity.operations import (
@@ -98,7 +100,7 @@ def test_native_admission_rejects_combination_explosion() -> None:
     values = tuple(_cr(i + 1) for i in range(50))
     with pytest.raises(ValueError) as exc_info:
         compute_rational_fixed_arity_sum_profile(values, 10)
-    assert exc_info.value.errors()[0]["type"] == "rational_fixed_arity.work_bound"
+    assert error_code(exc_info.value) == "rational_fixed_arity.work_bound"
 
 
 def test_native_admission_rejects_rational_growth() -> None:
@@ -112,7 +114,7 @@ def test_native_admission_rejects_rational_growth() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         compute_rational_fixed_arity_sum_profile(values, 2)
-    assert exc_info.value.errors()[0]["type"] == "rational_fixed_arity.rational_growth"
+    assert error_code(exc_info.value) == "rational_fixed_arity.rational_growth"
 
 
 def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
@@ -129,7 +131,7 @@ def test_native_admission_rejects_negative_arity() -> None:
 
     with pytest.raises(ValueError) as exc_info:
         compute_rational_fixed_arity_sum_profile((_cr(1),), -1)
-    assert exc_info.value.errors()[0]["type"] == "rational_fixed_arity.arity_domain"
+    assert error_code(exc_info.value) == "rational_fixed_arity.arity_domain"
 
 
 def test_large_source_and_empty_out_of_range_arity_use_result_sensitive_admission() -> (

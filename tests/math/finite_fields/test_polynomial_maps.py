@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -205,19 +206,19 @@ def test_slice_b_values_reject_wrong_parent_and_incomplete_table() -> None:
             polynomial=wrong_polynomial,
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "finite_field.finite_polynomial_map_one_exact_presentation"
     )
     with pytest.raises(ValueError) as exc_info:
         FiniteMapTable(map=polynomial_map, entries=table.entries[:-1])
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "finite_field.finite_map_table_enumerate_complete_domain"
     )
     with pytest.raises(ValueError) as exc_info:
         FiniteMapTable(map=polynomial_map, entries=tuple(reversed(table.entries)))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "finite_field.finite_map_table_inputs_canonical_domain_order"
     )
 

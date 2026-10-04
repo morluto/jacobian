@@ -570,10 +570,7 @@ def test_collision_group_growth_is_bounded_before_materialization(
         OperationResourceAdmissionError, match="coefficient"
     ) as exc_info:
         rational_laurent_multiply(left, right)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "polynomial.laurent.coefficient_growth"
-    )
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
     assert encoded_digit_checks == 64
 
 

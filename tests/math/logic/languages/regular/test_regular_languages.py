@@ -5,6 +5,7 @@ from itertools import product
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.regular._models import (
@@ -527,10 +528,7 @@ def test_contract_rejects_out_of_range_word_symbol() -> None:
         compute_run(
             RunRequest(dfa=dfa, word=(5,))
         )  # symbol 5 is out of range for alphabet_size=2
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "regular_language.word_symbol_out_of_range"
-    )
+    assert error_code(exc_info.value) == "regular_language.word_symbol_out_of_range"
 
 
 def test_contract_rejects_non_total_dfa() -> None:

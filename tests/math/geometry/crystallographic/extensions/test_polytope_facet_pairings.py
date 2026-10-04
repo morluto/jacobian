@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -297,7 +298,7 @@ def test_negative_fundamental_domain_result_requires_explanation() -> None:
     with pytest.raises(ValueError) as exc_info:
         CrystallographicFundamentalDomainResult.model_validate(forged)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "crystallographic.extension.fundamental_domain_result"
     )
 

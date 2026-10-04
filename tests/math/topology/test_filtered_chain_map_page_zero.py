@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     MathTool,
@@ -88,10 +89,7 @@ def test_page_zero_map_rejects_a_non_filtration_preserving_map() -> None:
         filtered_chain_map_page_zero(
             request.chain_map, request.source_filtration, request.target_filtration
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "filtered_chain_map.not_filtration_preserving"
-    )
+    assert error_code(exc_info.value) == "filtered_chain_map.not_filtration_preserving"
 
 
 def test_page_zero_map_commutes_with_the_graded_boundary() -> None:

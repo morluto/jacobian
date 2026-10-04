@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.frames import VectorFamily, coherence, frame_potential, gram
@@ -102,7 +103,7 @@ def test_empty_gram_retains_ambient_dimension() -> None:
     assert GramResult.model_validate_json(result.model_dump_json()) == result
     with pytest.raises(ValueError) as exc_info:
         frame_potential(source)
-    assert exc_info.value.errors()[0]["type"] == "frames.frame_does_not_span"
+    assert error_code(exc_info.value) == "frames.frame_does_not_span"
 
 
 def test_zero_dimensional_frame_potential() -> None:
@@ -121,7 +122,7 @@ def test_zero_dimensional_vectors_have_zero_gram_but_no_coherence() -> None:
     assert frame_potential(source).potential == 0
     with pytest.raises(ValueError) as exc_info:
         coherence(source)
-    assert exc_info.value.errors()[0]["type"] == "frames.zero_vector"
+    assert error_code(exc_info.value) == "frames.zero_vector"
 
 
 def test_empty_zero_dimensional_coherence_has_no_maximizer() -> None:

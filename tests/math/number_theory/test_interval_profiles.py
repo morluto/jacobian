@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from sympy import factorint, isprime
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._interval_profile_models import (
@@ -207,7 +208,7 @@ class TestSquarefreeProfile:
         request = SquarefreeProfileRequest(lower_bound=10**13, upper_bound=10**13)
         with pytest.raises(ValueError) as exc_info:
             compute_squarefree_profile(request)
-        assert exc_info.value.errors()[0]["type"] == "number_theory.interval.work_bound"
+        assert error_code(exc_info.value) == "number_theory.interval.work_bound"
 
     def test_prime_square_boundary(self) -> None:
         """4 = 2^2 is the first non-squarefree, 9 = 3^2 is another."""

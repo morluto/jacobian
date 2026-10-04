@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics import greedoids
@@ -502,10 +503,7 @@ class TestNativeCarrierAdmission:
         assert isinstance(system, FiniteFeasibleSetSystem)
         with pytest.raises(ValueError) as exc_info:
             greedoids.recognize(system)
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "greedoid.feasible_count_exceeds_budget"
-        )
+        assert error_code(exc_info.value) == "greedoid.feasible_count_exceeds_budget"
 
     def test_union_closed_rejects_family_over_row_budget(self) -> None:
         with pytest.raises(ValueError, match="feasible-set count"):

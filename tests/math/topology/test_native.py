@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, Literal, cast, overload
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.topology._homology import (
@@ -301,7 +302,7 @@ def test_chain_result_parse_is_structural_and_consumer_admits_field(
     authored = ChainComplexResult.model_validate(payload)
     with pytest.raises(ValueError) as exc_info:
         homology_groups(simplicial_chain_complex_value(authored))
-    assert exc_info.value.errors()[0]["type"] == "chain_complex.prime_not_prime"
+    assert error_code(exc_info.value) == "chain_complex.prime_not_prime"
 
 
 def test_simplicial_homology_admits_characteristic_once(

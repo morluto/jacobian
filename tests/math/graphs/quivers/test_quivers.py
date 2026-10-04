@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -99,7 +100,7 @@ def test_adjacency_result_rejects_matrix_shape_forgery() -> None:
     payload["adjacency_matrix"]["row_count"] = 1
     with pytest.raises(ValueError) as exc_info:
         AdjacencyMatricesResult.model_validate_json(json.dumps(payload))
-    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
+    assert error_code(exc_info.value) == "matrix.shape_mismatch"
 
 
 def test_vertex_profiles_kronecker() -> None:

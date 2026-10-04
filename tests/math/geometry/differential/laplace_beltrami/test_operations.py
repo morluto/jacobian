@@ -5,6 +5,7 @@ from time import monotonic
 
 import pytest
 from sympy import cancel, symbols
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
@@ -312,4 +313,4 @@ def test_result_locus_guard_budget_is_bounded() -> None:
             value=one,
             retained_nonzero_denominators=guards,
         )
-    assert exc_info.value.errors()[0]["type"] == "too_long"
+    assert error_code(exc_info.value) == "too_long"

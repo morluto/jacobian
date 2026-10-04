@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
@@ -437,7 +438,7 @@ class TestSubsequentialRun:
         with pytest.raises(ValueError) as exc_info:
             run_subsequential(_flip(), (2,))
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "finite_state_transducer.word_symbol_out_of_range"
         )
 

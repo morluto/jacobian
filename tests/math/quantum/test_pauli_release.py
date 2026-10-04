@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
@@ -100,7 +101,7 @@ def test_normalizer_result_rejects_a_foreign_register_row() -> None:
                 "logical_dimension": 0,
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "stabilizer.normalizer_parent"
+    assert error_code(exc_info.value) == "stabilizer.normalizer_parent"
 
     forged_check = CheckSpaceValue.model_construct(
         qubit_register=first, basis=(foreign,)
@@ -127,10 +128,10 @@ def test_result_carriers_reject_foreign_registers_and_pairing_claims() -> None:
         PauliProductResult.model_validate(
             {"left": left, "right": right, "product": foreign}
         )
-    assert exc_info.value.errors()[0]["type"] == "stabilizer.register_binding"
+    assert error_code(exc_info.value) == "stabilizer.register_binding"
     with pytest.raises(ValueError) as exc_info:
         PauliInverseResult.model_validate({"source": left, "inverse": foreign})
-    assert exc_info.value.errors()[0]["type"] == "stabilizer.register_binding"
+    assert error_code(exc_info.value) == "stabilizer.register_binding"
     with pytest.raises(ValueError) as exc_info:
         PauliPairingResult.model_validate(
             {
@@ -140,7 +141,7 @@ def test_result_carriers_reject_foreign_registers_and_pairing_claims() -> None:
                 "commute": True,
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "stabilizer.register_binding"
+    assert error_code(exc_info.value) == "stabilizer.register_binding"
 
 
 def test_normalizer_result_bounds_orthogonal_carrier() -> None:

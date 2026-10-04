@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -91,7 +92,4 @@ def test_derived_line_key_growth_is_rejected_before_pair_enumeration() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         compute_spanned_line_profile(PointConfiguration(points=points))
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "geometry.spanned_line_profile.result_bound"
-    )
+    assert error_code(exc_info.value) == "geometry.spanned_line_profile.result_bound"

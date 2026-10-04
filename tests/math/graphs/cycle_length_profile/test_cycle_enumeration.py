@@ -6,6 +6,7 @@ from threading import Event
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -217,10 +218,7 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         FixedLengthCycleEnumerationResult.model_validate(
             json.loads(json.dumps(payload))
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "cycle_enumeration.edge_incidence_mismatch"
-    )
+    assert error_code(exc_info.value) == "cycle_enumeration.edge_incidence_mismatch"
 
     oversized = result.model_dump(mode="json")
     oversized["vertex_incidence"][0]["cycle_indices"] = list(range(20_001))
@@ -249,7 +247,7 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         FixedLengthCycleEnumerationResult.model_validate(
             json.loads(json.dumps(forged_cycle))
         )
-    assert exc_info.value.errors()[0]["type"] == "cycle_enumeration.cycle_edges_invalid"
+    assert error_code(exc_info.value) == "cycle_enumeration.cycle_edges_invalid"
 
 
 def test_chordless_family_rejects_cycles_that_retain_a_chord() -> None:
@@ -259,10 +257,7 @@ def test_chordless_family_rejects_cycles_that_retain_a_chord() -> None:
     payload["family_kind"] = "CHORDLESS"
     with pytest.raises(ValueError) as exc_info:
         FixedLengthCycleEnumerationResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "cycle_enumeration.chordless_cycle_has_a_chord"
-    )
+    assert error_code(exc_info.value) == "cycle_enumeration.chordless_cycle_has_a_chord"
 
 
 def _ring_edges(vertices: tuple[str, ...]) -> tuple[tuple[str, str], ...]:

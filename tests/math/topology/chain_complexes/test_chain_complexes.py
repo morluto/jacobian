@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -202,8 +203,7 @@ class TestConstructAdmitsOnlyChainComplexes:
         with pytest.raises(ValueError) as exc_info:
             construct_chain_complex(request)
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "chain_complex.differential_not_square_zero"
+            error_code(exc_info.value) == "chain_complex.differential_not_square_zero"
         )
 
 
@@ -1151,7 +1151,7 @@ class TestChainMapAdmission:
                 source=circle, target=shifted, map_matrices=(ones, ones)
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "chain_complex.chain_map_degree_interval_mismatch"
         )
         with pytest.raises(ValueError) as exc_info:
@@ -1161,7 +1161,7 @@ class TestChainMapAdmission:
                 )
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "chain_complex.chain_map_degree_interval_mismatch"
         )
 
@@ -1171,7 +1171,7 @@ class TestChainMapAdmission:
         with pytest.raises(ValueError) as exc_info:
             _verify_chain_map_request(source=circle, target=circle, map_matrices=())
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "chain_complex.chain_map_degree_count_mismatch"
         )
         with pytest.raises(ValueError) as exc_info:
@@ -1179,7 +1179,7 @@ class TestChainMapAdmission:
                 _mapping_cone_request(source=circle, target=circle, map_matrices=())
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "chain_complex.chain_map_degree_count_mismatch"
         )
         with pytest.raises(ValueError) as exc_info:
@@ -1187,7 +1187,7 @@ class TestChainMapAdmission:
                 source=circle, target=circle, map_matrices=(identity,)
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "chain_complex.chain_map_degree_count_mismatch"
         )
         with pytest.raises(ValueError) as exc_info:
@@ -1197,7 +1197,7 @@ class TestChainMapAdmission:
                 )
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "chain_complex.chain_map_degree_count_mismatch"
         )
 
@@ -1478,8 +1478,7 @@ class TestHomologySourceBinding:
                 complex=_point_complex(),
             )
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "chain_complex.homology_rank_identity_invalid"
+            error_code(exc_info.value) == "chain_complex.homology_rank_identity_invalid"
         )
         with pytest.raises(ValueError) as exc_info:
             HomologyResult(
@@ -1498,10 +1497,7 @@ class TestHomologySourceBinding:
                 degree_max=0,
                 complex=_point_complex(),
             )
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "chain_complex.homology_context_mismatch"
-        )
+        assert error_code(exc_info.value) == "chain_complex.homology_context_mismatch"
 
 
 class TestAggregateChainMapWork:
@@ -1528,8 +1524,7 @@ class TestAggregateChainMapWork:
                 source=complex_value, target=complex_value, map_matrices=components
             )
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "chain_complex.chain_map_cell_budget_exceeded"
+            error_code(exc_info.value) == "chain_complex.chain_map_cell_budget_exceeded"
         )
 
 
@@ -2062,7 +2057,7 @@ class TestTensorPrimeFieldResidues:
                     source=point, target=point, map_matrices=(((bad,),),)
                 )
             assert (
-                exc_info.value.errors()[0]["type"]
+                error_code(exc_info.value)
                 == "chain_complex.prime_field_residue_invalid"
             )
             with pytest.raises(ValueError) as exc_info:
@@ -2072,7 +2067,7 @@ class TestTensorPrimeFieldResidues:
                     )
                 )
             assert (
-                exc_info.value.errors()[0]["type"]
+                error_code(exc_info.value)
                 == "chain_complex.prime_field_residue_invalid"
             )
         request = _verify_chain_map_request(

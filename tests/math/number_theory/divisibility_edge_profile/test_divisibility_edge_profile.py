@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from sympy import nextprime
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
@@ -107,14 +108,14 @@ def test_native_rejects_oversized_value_before_parsing() -> None:
     """The representation bound rejects huge strings during preflight."""
     with pytest.raises(ValueError) as exc_info:
         divisibility_edge_profile(FiniteIntegerSet(elements=(int("1" * (256 + 1)),)))
-    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.value_digits"
+    assert error_code(exc_info.value) == "divisibility_edge.value_digits"
 
 
 def test_native_rejects_values_beyond_worker_factorization_envelope() -> None:
     """Derived quotients, rather than source widths, use the worker bound."""
     with pytest.raises(ValueError) as exc_info:
         divisibility_edge_profile(FiniteIntegerSet(elements=(1, 10**20)))
-    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.quotient_digits"
+    assert error_code(exc_info.value) == "divisibility_edge.quotient_digits"
 
 
 def test_native_allows_wide_sources_with_small_quotient() -> None:
@@ -129,7 +130,7 @@ def test_native_rejects_oversized_integer_before_formatting() -> None:
     """Huge integers are bounded by the digit limit before worker admission."""
     with pytest.raises(ValueError) as exc_info:
         divisibility_edge_profile(FiniteIntegerSet(elements=(int("1" * (256 + 1)),)))
-    assert exc_info.value.errors()[0]["type"] == "divisibility_edge.value_digits"
+    assert error_code(exc_info.value) == "divisibility_edge.value_digits"
 
 
 def test_resource_admission_belongs_to_operation_execution() -> None:

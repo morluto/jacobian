@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import canonicalize_json
@@ -622,7 +623,7 @@ class TestProperClassComposition:
                 BinaryQuadraticFormClassComposeRequest(first=first, second=second)
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "integral_binary_quadratic_form.class_discriminant_mismatch"
         )
 

@@ -2,6 +2,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -74,12 +75,12 @@ def test_prefix_deserialization_enforces_interval_and_value_count() -> None:
     payload["recurrence_indices"] = [99]
     with pytest.raises(ValueError) as exc_info:
         type(result).model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "ore_algebra.recurrence_indices"
+    assert error_code(exc_info.value) == "ore_algebra.recurrence_indices"
     payload = result.model_dump()
     payload["values"]["values"] = [0, 1]
     with pytest.raises(ValueError) as exc_info:
         type(result).model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "ore_algebra.prefix_value_count"
+    assert error_code(exc_info.value) == "ore_algebra.prefix_value_count"
 
 
 def test_rationally_scaled_fibonacci_has_linear_height_bound() -> None:
@@ -128,9 +129,7 @@ def test_prefix_deserialization_rejects_nonrecurrence_operator() -> None:
         from jacobian.math.ore_algebras._models import PolynomialRecurrencePrefix
 
         PolynomialRecurrencePrefix.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"] == "ore_algebra.polynomial_recurrence_shape"
-    )
+    assert error_code(exc_info.value) == "ore_algebra.polynomial_recurrence_shape"
 
 
 def test_alternating_recurrence_preserves_rational_values() -> None:

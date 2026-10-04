@@ -6,6 +6,7 @@ import json
 
 import pytest
 from sympy.ntheory.factor_ import factorint
+from tests.error_assertions import error_code
 
 from jacobian.math.number_theory._r_full_enumerate import (
     enumerate_r_full,
@@ -89,7 +90,7 @@ def test_result_requires_one_for_positive_cutoff() -> None:
             count=0,
             family=(),
         )
-    assert exc_info.value.errors()[0]["type"] == "r_full_enumerate.missing_one"
+    assert error_code(exc_info.value) == "r_full_enumerate.missing_one"
 
 
 def test_native_api_uses_integer_arguments() -> None:
@@ -170,7 +171,7 @@ def test_result_rejects_oversized_family_member_before_parsing() -> None:
                 }
             )
         )
-    assert exc_info.value.errors()[0]["type"] == "string_too_long"
+    assert error_code(exc_info.value) == "string_too_long"
 
 
 def test_result_rejects_oversized_cutoff_before_parsing() -> None:
@@ -186,4 +187,4 @@ def test_result_rejects_oversized_cutoff_before_parsing() -> None:
                 }
             )
         )
-    assert exc_info.value.errors()[0]["type"] == "string_too_long"
+    assert error_code(exc_info.value) == "string_too_long"

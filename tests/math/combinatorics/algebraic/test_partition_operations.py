@@ -692,7 +692,9 @@ def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning(
 
     monkeypatch.setattr(native, "_log10_upper_units", count_probe)
     partition = IntegerPartition(parts=(500,))
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound") as exc_info:
+    with pytest.raises(
+        OperationResourceAdmissionError, match="digit bound"
+    ) as exc_info:
         native.semistandard_young_tableaux_count(partition, 10**32767)
     assert (
         exc_info.value.errors()[0]["type"]

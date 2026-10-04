@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -76,7 +77,7 @@ def test_wire_result_roundtrip_binds_graph_axis_and_matrix() -> None:
     forged["matrix"]["entries"] = [[0]]
     with pytest.raises(ValueError) as exc_info:
         LoopedGraphDeltaMatroidResult.model_validate(forged)
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.graph_result_matrix"
+    assert error_code(exc_info.value) == "delta_matroid.graph_result_matrix"
 
 
 def test_looped_graph_rejects_duplicate_or_undeclared_loops() -> None:

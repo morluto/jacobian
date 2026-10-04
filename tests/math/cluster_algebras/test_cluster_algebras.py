@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -137,17 +138,13 @@ class TestSeedMutation:
         """A symmetrizer with a zero entry is not an exchange matrix."""
         with pytest.raises(ValueError) as exc_info:
             em(2, ((0, 1), (-1, 0)), (0, 2))
-        assert (
-            exc_info.value.errors()[0]["type"] == "cluster_algebra.symmetrizer_positive"
-        )
+        assert error_code(exc_info.value) == "cluster_algebra.symmetrizer_positive"
 
     def test_negative_symmetrizer_rejected(self) -> None:
         """A symmetrizer with a negative entry is rejected."""
         with pytest.raises(ValueError) as exc_info:
             em(2, ((0, 1), (-1, 0)), (1, -1))
-        assert (
-            exc_info.value.errors()[0]["type"] == "cluster_algebra.symmetrizer_positive"
-        )
+        assert error_code(exc_info.value) == "cluster_algebra.symmetrizer_positive"
 
 
 def test_native_surface_accepts_exchange_matrix_value() -> None:

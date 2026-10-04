@@ -9,6 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
@@ -254,7 +255,7 @@ def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:
     }
     with pytest.raises(Exception) as exc_info:
         FiniteRationalSequence.model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "sequences.sequence_length_exceeded"
+    assert error_code(exc_info.value) == "sequences.sequence_length_exceeded"
 
 
 def test_rational_sequence_rejects_oversized_integer_strings_before_parse() -> None:
@@ -263,7 +264,7 @@ def test_rational_sequence_rejects_oversized_integer_strings_before_parse() -> N
         FiniteRationalSequence.model_validate_json(
             '{"domain":"rational","values":["' + digits + '"]}'
         )
-    assert exc_info.value.errors()[0]["type"] == "sequences.integer_digits_exceeded"
+    assert error_code(exc_info.value) == "sequences.integer_digits_exceeded"
 
 
 def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:

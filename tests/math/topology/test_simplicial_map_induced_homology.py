@@ -1,6 +1,7 @@
 """Induced homology maps on exact finite simplicial-set prefixes."""
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.values import IntegralHomologyGroupValue
@@ -283,6 +284,5 @@ def test_rejects_noncomposable_homology_maps() -> None:
             induced_normalized_homology_map(simplex_identity),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "simplicial_set.homology_map_composition_mismatch"
+        error_code(exc_info.value) == "simplicial_set.homology_map_composition_mismatch"
     )

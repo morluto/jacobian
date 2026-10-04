@@ -9,6 +9,7 @@ from typing import TypedDict, cast
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -654,7 +655,7 @@ class TestRejection:
                     _h((-1, 1), (0, 1), offset=(-1, 1)),
                 )
             )
-        assert exc_info.value.errors()[0]["type"] == "polytope.h_representation"
+        assert error_code(exc_info.value) == "polytope.h_representation"
 
     def test_unbounded_halfspace_representation(self) -> None:
         """An unbounded H-representation (no upper bounds) is rejected."""
@@ -1746,7 +1747,7 @@ class TestCanonicalVPolytopeComposition:
                     ),
                 ),
             )
-        assert exc_info.value.errors()[0]["type"] == "polytope.halfspaces"
+        assert error_code(exc_info.value) == "polytope.halfspaces"
 
     def test_schema_publishes_canonical_v_polytope_acceptance(self) -> None:
         schema = PolytopeVolumeRequest.model_json_schema()

@@ -9,6 +9,7 @@ from threading import Event
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import OperationExecutionCancelledError, request_cancellation
 from jacobian.math.combinatorics.matroids.delta.extra import (
@@ -176,7 +177,7 @@ def test_native_twist_rejects_forged_coerced_matrix_entries(entry: object) -> No
     matrix = BinarySymmetricMatrix.model_construct(ground=("e0",), entries=((entry,),))
     with pytest.raises(Exception) as exc_info:
         binary_matrix_twist(matrix)
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.binary_carrier"
+    assert error_code(exc_info.value) == "delta_matroid.binary_carrier"
 
 
 def test_result_twist_rejects_coerced_non_integer_indices() -> None:

@@ -4,6 +4,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -343,10 +344,7 @@ class TestFactorValuesAndOperations:
 
         with pytest.raises(ValueError) as exc_info:
             factor_multiply(left, right)
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "graphical_model.factor_domains_mismatch"
-        )
+        assert error_code(exc_info.value) == "graphical_model.factor_domains_mismatch"
 
     def test_local_product_preserves_seventeen_axis_ambient_domain(self) -> None:
         domain_sizes = (2,) * 17

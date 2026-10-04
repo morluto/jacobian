@@ -10,6 +10,7 @@ from contextlib import contextmanager
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.words import (
@@ -211,7 +212,7 @@ def test_factor_length_is_validated_at_operation_time() -> None:
         compute_factors_length(
             FactorsLengthRequest(word=_word("aa", ("a",)), factor_length=3)
         )
-    assert exc_info.value.errors()[0]["type"] == "word.factor_length_out_of_range"
+    assert error_code(exc_info.value) == "word.factor_length_out_of_range"
 
 
 def test_periods_distinguish_overlap_period_from_proper_power() -> None:
@@ -690,7 +691,7 @@ def test_value_models_reject_ambiguous_or_unbounded_inputs() -> None:
             expanding,
             FiniteWord(alphabet=("a",), letters=("a",) * 500),
         )
-    assert exc_info.value.errors()[0]["type"] == "word.morphism_output_budget"
+    assert error_code(exc_info.value) == "word.morphism_output_budget"
 
 
 def test_empty_alphabet_carries_exactly_the_empty_word_through_json() -> None:
@@ -811,9 +812,7 @@ def test_composition_admits_length_before_expansion() -> None:
     try:
         with pytest.raises(ValueError) as exc_info:
             compose_morphisms(morphism, morphism)
-        assert (
-            exc_info.value.errors()[0]["type"] == "word.composed_morphism_image_budget"
-        )
+        assert error_code(exc_info.value) == "word.composed_morphism_image_budget"
         _, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()

@@ -4,6 +4,7 @@ import time
 from threading import Event
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -245,7 +246,7 @@ def test_combine_rejects_partial_child_coverage() -> None:
                 instance=instance, parent_shard=root, child_results=partial
             )
         )
-    assert exc_info.value.errors()[0]["type"] == "combinatorics.exact_cover_invariant"
+    assert error_code(exc_info.value) == "combinatorics.exact_cover_invariant"
 
 
 def test_shard_semantic_rejections_are_owner_typed() -> None:

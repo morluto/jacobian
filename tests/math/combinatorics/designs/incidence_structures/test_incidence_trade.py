@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures import (
@@ -224,17 +225,11 @@ def test_profile_admission_charges_structure_not_serialized_label_repetition() -
 def test_incidence_rejects_labels_above_intrinsic_byte_bound() -> None:
     with pytest.raises(ValueError) as exc_info:
         _family((("x" * 1_025,),), "b", points=("x" * 1_025,))
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "incidence_structure.label_exceeds_byte_bound"
-    )
+    assert error_code(exc_info.value) == "incidence_structure.label_exceeds_byte_bound"
 
     with pytest.raises(ValueError) as exc_info:
         _family(((),), "b" * 1_025, points=("p",))
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "incidence_structure.label_exceeds_byte_bound"
-    )
+    assert error_code(exc_info.value) == "incidence_structure.label_exceeds_byte_bound"
 
 
 def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> None:

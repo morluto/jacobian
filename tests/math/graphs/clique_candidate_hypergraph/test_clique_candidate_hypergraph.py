@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -99,7 +100,7 @@ class TestCompleteConstructor:
         payload["hypergraph"]["vertices"] = payload["hypergraph"]["vertices"][1:]
         with pytest.raises(ValueError) as exc_info:
             CliqueCandidateHypergraphResult.model_validate(payload)
-        assert exc_info.value.errors()[0]["type"] == "hypergraph.edge_members"
+        assert error_code(exc_info.value) == "hypergraph.edge_members"
 
     def test_serialized_result_rejects_oversized_candidate_axes(self) -> None:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))

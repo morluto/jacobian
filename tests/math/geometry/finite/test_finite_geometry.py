@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 from sympy import isprime
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -387,14 +388,14 @@ def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
 def test_enumerate_admission_rejects_oversized_axis_labels() -> None:
     with pytest.raises(ValueError) as exc_info:
         projective_space_enumerate(_space(2, ("x", "y" * (9 * 1024 * 1024))))
-    assert exc_info.value.errors()[0]["type"] == "string_too_long"
+    assert error_code(exc_info.value) == "string_too_long"
 
 
 def test_enumerate_admission_bounds_axis_label_characters() -> None:
     label = "x" + "\u0344" * (2_600_000)
     with pytest.raises(ValueError) as exc_info:
         projective_space_enumerate(_space(2, ("x", label)))
-    assert exc_info.value.errors()[0]["type"] == "string_too_long"
+    assert error_code(exc_info.value) == "string_too_long"
 
 
 def test_sequence_normalization_is_an_explicit_claim() -> None:

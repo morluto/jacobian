@@ -4,6 +4,7 @@ import itertools
 from typing import cast
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -85,7 +86,7 @@ def test_alphabet_mismatch_is_a_domain_error() -> None:
     unary = dfa(((0, 0, 0),), (), alphabet_size=1)
     with pytest.raises(ValueError) as exc_info:
         compute_equivalence(EquivalenceRequest(left=binary, right=unary))
-    assert exc_info.value.errors()[0]["type"] == "regular_language.alphabet_mismatch"
+    assert error_code(exc_info.value) == "regular_language.alphabet_mismatch"
     other_parent = binary.model_copy(update={"alphabet_id": "other", "alphabet": None})
     with pytest.raises(OperationDomainValidationError) as exc_info:
         operations.dfa_equivalence(binary, other_parent)
@@ -229,7 +230,7 @@ def test_result_shape_checks_are_structural_and_do_not_replay() -> None:
             right_state_trace=(0, 0),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "regular_language.counterexample_symbol_out_of_range"
     )
     with pytest.raises(ValueError) as exc_info:
@@ -241,7 +242,4 @@ def test_result_shape_checks_are_structural_and_do_not_replay() -> None:
             left_state_trace=(1, 0),
             right_state_trace=(0, 0),
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "regular_language.counterexample_trace_state"
-    )
+    assert error_code(exc_info.value) == "regular_language.counterexample_trace_state"

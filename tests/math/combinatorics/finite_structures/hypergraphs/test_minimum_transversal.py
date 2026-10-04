@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -197,8 +198,7 @@ class TestMinimumTransversal:
                 }
             )
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "hypergraph.minimum_transversal.search_bound"
+            error_code(exc_info.value) == "hypergraph.minimum_transversal.search_bound"
         )
 
     def test_decomposed_search_matches_undecomposed_search(self) -> None:

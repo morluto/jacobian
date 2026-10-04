@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -232,7 +233,7 @@ def test_page_map_rejects_malformed_native_page_before_arithmetic() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_page(request.map, request.page)
-    assert exc_info.value.errors()[0]["type"] == "filtered_chain_map.page_invalid"
+    assert error_code(exc_info.value) == "filtered_chain_map.page_invalid"
 
 
 def test_page_map_rejects_a_false_chain_map_claim() -> None:
@@ -246,7 +247,7 @@ def test_page_map_rejects_a_false_chain_map_claim() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_page(authored, 1)
-    assert exc_info.value.errors()[0]["type"] == "filtered_chain_map.not_chain_map"
+    assert error_code(exc_info.value) == "filtered_chain_map.not_chain_map"
 
 
 def test_page_map_admits_sparse_large_coefficients_by_entry() -> None:

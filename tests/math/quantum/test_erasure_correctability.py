@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.math.quantum import (
     CheckSpaceValue,
@@ -157,7 +158,7 @@ def test_uncorrectable_result_rejects_identity_witness() -> None:
                 register=value.qubit_register, x_bits=(0,), z_bits=(0,)
             ),
         )
-    assert exc_info.value.errors()[0]["type"] == "stabilizer.erasure_witness"
+    assert error_code(exc_info.value) == "stabilizer.erasure_witness"
 
 
 def test_nonisotropic_check_space_is_rejected() -> None:
@@ -168,4 +169,4 @@ def test_nonisotropic_check_space_is_rejected() -> None:
         stabilizer_erasure_correctability(
             CheckSpaceValue(register=register, basis=(x, z)), ("q0",)
         )
-    assert exc_info.value.errors()[0]["type"] == "quantum.stabilizer.not_isotropic"
+    assert error_code(exc_info.value) == "quantum.stabilizer.not_isotropic"

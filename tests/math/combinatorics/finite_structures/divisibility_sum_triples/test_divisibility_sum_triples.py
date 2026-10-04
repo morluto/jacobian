@@ -5,6 +5,7 @@ from collections.abc import Iterable
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     DivisibilitySumTriplesRequest,
@@ -89,13 +90,13 @@ def test_result_sensitive_admission_accepts_edge_free_shifted_interval() -> None
 def test_rejects_actual_hypergraph_envelope() -> None:
     with pytest.raises(ValueError) as exc_info:
         construct_divisibility_sum_triples_hypergraph(1, 90)
-    assert exc_info.value.errors()[0]["type"] == "divisibility_sum.output_too_large"
+    assert error_code(exc_info.value) == "divisibility_sum.output_too_large"
 
 
 def test_native_rejects_reversed_interval() -> None:
     with pytest.raises(ValueError) as exc_info:
         construct_divisibility_sum_triples_hypergraph(4, 1)
-    assert exc_info.value.errors()[0]["type"] == "divisibility_sum.invalid_bounds"
+    assert error_code(exc_info.value) == "divisibility_sum.invalid_bounds"
 
 
 def test_serialized_divisibility_claim_is_verifiable_and_forgery_is_structural() -> (

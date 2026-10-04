@@ -6,6 +6,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -205,14 +206,14 @@ def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:
             target_ground=("A", "B"),
             target_to_source=(0, 0),
         )
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.relabel_map_bijection"
+    assert error_code(exc_info.value) == "delta_matroid.relabel_map_bijection"
     with pytest.raises(ValueError) as exc_info:
         DeltaMatroidRelabelRequest(
             delta_matroid=source,
             target_ground=("A", "A"),
             target_to_source=(0, 1),
         )
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.relabel_ground_unique"
+    assert error_code(exc_info.value) == "delta_matroid.relabel_ground_unique"
     admitted_labels = ("A" * 2047, "B")
     accepted = relabel(source, admitted_labels, (0, 1))
     assert accepted.relabelled.ground == admitted_labels
@@ -250,7 +251,7 @@ def test_relabel_rejects_forged_source_that_violates_exchange() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         relabel(forged, ("A", "B", "C"), (0, 1, 2))
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.source_not_delta"
+    assert error_code(exc_info.value) == "delta_matroid.source_not_delta"
 
 
 def test_relabel_canonicalizes_a_forged_source_before_returning() -> None:
@@ -319,7 +320,7 @@ def test_twist_rejects_forged_non_delta_source() -> None:
     source = FiniteDeltaMatroid(ground=("a", "b", "c"), feasible=((), (0, 1), (2,)))
     with pytest.raises(ValueError) as exc_info:
         _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(1,)))
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.source_not_valid"
+    assert error_code(exc_info.value) == "delta_matroid.source_not_valid"
 
 
 def test_width_is_exact_and_preserves_source_binding() -> None:
@@ -500,7 +501,7 @@ def test_label_byte_budget_bounds_ground_count_without_a_fixed_cap() -> None:
     request = DeltaMatroidFromFeasibleSetsRequest(system=oversized)
     with pytest.raises(ValueError) as exc_info:
         _from_feasible_sets(request)
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.label_bytes_exceeded"
+    assert error_code(exc_info.value) == "delta_matroid.label_bytes_exceeded"
 
 
 def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> None:
@@ -515,7 +516,7 @@ def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> 
     request = DeltaMatroidFromFeasibleSetsRequest(system=system)
     with pytest.raises(ValueError) as exc_info:
         _from_feasible_sets(request)
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.labels_not_utf8"
+    assert error_code(exc_info.value) == "delta_matroid.labels_not_utf8"
 
     assert FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
 
@@ -571,7 +572,7 @@ def test_exchange_envelope_rejects_wide_families_without_a_row_cap() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         _from_feasible_sets(request)
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.candidate_work_exceeded"
+    assert error_code(exc_info.value) == "delta_matroid.candidate_work_exceeded"
 
 
 def test_native_admission_rejects_exchange_candidate_space_before_axiom_pass() -> None:
@@ -593,7 +594,7 @@ def test_native_admission_rejects_exchange_candidate_space_before_axiom_pass() -
     )
     with pytest.raises(ValueError) as exc_info:
         _from_feasible_sets(request)
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.candidate_work_exceeded"
+    assert error_code(exc_info.value) == "delta_matroid.candidate_work_exceeded"
 
 
 def test_dense_twist_composes_with_width_and_inverse_twist() -> None:
@@ -694,7 +695,7 @@ def test_twist_result_json_rejects_a_different_ground_axis() -> None:
 
     with pytest.raises(ValueError) as exc_info:
         DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
-    assert exc_info.value.errors()[0]["type"] == "delta_matroid.twist_ground_axis"
+    assert error_code(exc_info.value) == "delta_matroid.twist_ground_axis"
 
 
 def test_twist_result_json_rejects_changed_feasible_family_cardinality() -> None:
@@ -707,9 +708,7 @@ def test_twist_result_json_rejects_changed_feasible_family_cardinality() -> None
 
     with pytest.raises(ValueError) as exc_info:
         DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
-    assert (
-        exc_info.value.errors()[0]["type"] == "delta_matroid.twist_family_cardinality"
-    )
+    assert error_code(exc_info.value) == "delta_matroid.twist_family_cardinality"
 
 
 def test_twist_result_membership_admission_has_exact_boundary(

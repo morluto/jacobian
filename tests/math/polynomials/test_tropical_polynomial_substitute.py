@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -273,7 +274,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
                 images=(zero, zero),
             )
         )
-    assert exc_info.value.errors()[0]["type"] == "tropical.polynomial_axis"
+    assert error_code(exc_info.value) == "tropical.polynomial_axis"
 
 
 def test_scalar_dual_rejects_unknown_forged_kind() -> None:

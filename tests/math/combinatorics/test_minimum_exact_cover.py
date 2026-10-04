@@ -4,6 +4,7 @@ import time
 from typing import Any, NoReturn
 
 import pytest
+from tests.error_assertions import error_code
 
 import jacobian.math.combinatorics.exact_cover as exact_cover_module
 from jacobian._execution import (
@@ -311,7 +312,7 @@ def test_deserialized_exact_result_rejects_zero_primary_multiplicity() -> None:
     payload["item_multiplicities"][0]["multiplicity"] = 0
     with pytest.raises(ValueError) as exc_info:
         MinimumGeneralizedExactCoverResult.model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "combinatorics.exact_cover_bound"
+    assert error_code(exc_info.value) == "combinatorics.exact_cover_bound"
 
 
 def test_two_primary_min_degree_branching_is_admitted() -> None:

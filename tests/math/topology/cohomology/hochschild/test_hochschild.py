@@ -8,6 +8,7 @@ from contextlib import contextmanager
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.cohomology.hochschild._models import (
@@ -178,7 +179,7 @@ class TestHochschildAdmissionAndTopDegree:
             _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
-        assert exc_info.value.errors()[0]["type"] == "hochschild_complex.associativity"
+        assert error_code(exc_info.value) == "hochschild_complex.associativity"
 
     def test_top_degree_uses_extra_differential(self) -> None:
         """e*e=e algebra: H_1 must vanish because d_2 is nonzero."""
@@ -199,10 +200,10 @@ class TestHochschildAdmissionAndTopDegree:
         assert alg.dimension ** (4 + 1) <= 20_000
         with pytest.raises(ValueError) as exc_info:
             _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=4))
-        assert exc_info.value.errors()[0]["type"] == "hochschild_complex.matrix_budget"
+        assert error_code(exc_info.value) == "hochschild_complex.matrix_budget"
         with pytest.raises(ValueError) as exc_info:
             _run_chain_complex(HochschildChainComplexRequest(algebra=alg, max_degree=4))
-        assert exc_info.value.errors()[0]["type"] == "hochschild_complex.matrix_budget"
+        assert error_code(exc_info.value) == "hochschild_complex.matrix_budget"
 
     def test_largest_admitted_homology_request(self) -> None:
         """The densest admitted elimination stays inside the entry budget."""
@@ -247,10 +248,7 @@ class TestHochschildAdmissionAndTopDegree:
             _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "hochschild_complex.associativity_budget"
-        )
+        assert error_code(exc_info.value) == "hochschild_complex.associativity_budget"
 
     def test_structure_input_budget_rejected(self) -> None:
         """Multiplication tables beyond the dense-payload entry budget fail."""
@@ -265,7 +263,7 @@ class TestHochschildAdmissionAndTopDegree:
             _run_chain_complex(
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
-        assert exc_info.value.errors()[0]["type"] == "hochschild_complex.input_budget"
+        assert error_code(exc_info.value) == "hochschild_complex.input_budget"
 
     def test_request_budgets_bind_above_the_old_dimension_ceiling(self) -> None:
         """Larger admitted algebras still face the per-request envelopes."""
@@ -274,7 +272,7 @@ class TestHochschildAdmissionAndTopDegree:
         )
         with pytest.raises(ValueError) as exc_info:
             _run_homology(request)
-        assert exc_info.value.errors()[0]["type"] == "hochschild_complex.tensor_budget"
+        assert error_code(exc_info.value) == "hochschild_complex.tensor_budget"
 
 
 class TestChainComplexSourceBinding:
@@ -536,8 +534,7 @@ class TestAugmentationEndpointFaces:
                 HochschildChainComplexRequest(algebra=algebra, max_degree=1)
             )
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "hochschild_complex.augmentation_homomorphism"
+            error_code(exc_info.value) == "hochschild_complex.augmentation_homomorphism"
         )
 
     def test_noncanonical_and_mismatched_augmentation_rejected(self) -> None:

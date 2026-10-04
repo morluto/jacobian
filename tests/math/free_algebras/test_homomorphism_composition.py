@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -134,14 +135,12 @@ def test_wrong_intermediate_alphabet_and_order_are_rejected() -> None:
     with pytest.raises(ValueError) as exc_info:
         FreeAlgebraPolynomialHomomorphismCompositionRequest(f=f, g=g)
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "free_algebra.homomorphism_composition_alphabet"
+        error_code(exc_info.value) == "free_algebra.homomorphism_composition_alphabet"
     )
     with pytest.raises(ValueError) as exc_info:
         compose_polynomial_homomorphisms(f, g)
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "free_algebra.homomorphism_composition_alphabet"
+        error_code(exc_info.value) == "free_algebra.homomorphism_composition_alphabet"
     )
 
 

@@ -8,6 +8,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -265,13 +266,13 @@ def test_native_operations_reject_mismatched_markings() -> None:
 
     with pytest.raises(ValueError) as exc_info:
         petri_nets.enabled_transitions(net, marking)
-    assert exc_info.value.errors()[0]["type"] == "petri_net.marking_axis"
+    assert error_code(exc_info.value) == "petri_net.marking_axis"
     with pytest.raises(ValueError) as exc_info:
         petri_nets.fire_transition(net, marking, 0)
-    assert exc_info.value.errors()[0]["type"] == "petri_net.marking_axis"
+    assert error_code(exc_info.value) == "petri_net.marking_axis"
     with pytest.raises(ValueError) as exc_info:
         petri_nets.reachability_graph(net, marking)
-    assert exc_info.value.errors()[0]["type"] == "petri_net.marking_axis"
+    assert error_code(exc_info.value) == "petri_net.marking_axis"
 
 
 def test_serialized_claims_retain_sources_and_reject_forgery() -> None:

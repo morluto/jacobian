@@ -10,6 +10,7 @@ from fractions import Fraction
 from itertools import product
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -149,13 +150,13 @@ def test_word_comparison_admits_the_canonical_value_range() -> None:
             left=source.model_copy(update={"letters": ("x",) * 65}),
             right=source,
         )
-    assert exc_info.value.errors()[0]["type"] == "free_algebra.word_value_length"
+    assert error_code(exc_info.value) == "free_algebra.word_value_length"
     # The concatenating operations keep the source-word bound.
     with pytest.raises(ValueError) as exc_info:
         FreeAlgebraWordPairRequest(
             left=source.model_copy(update={"letters": ("x",) * 33}), right=source
         )
-    assert exc_info.value.errors()[0]["type"] == "free_algebra.word_source_length"
+    assert error_code(exc_info.value) == "free_algebra.word_source_length"
 
 
 def test_word_comparison_request_is_the_non_growing_pair() -> None:

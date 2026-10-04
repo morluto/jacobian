@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.neighborhood._models import (
@@ -151,7 +152,7 @@ def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
             graph=g,
             selected_vertices=("a",) * (MAX_SIMPLE_GRAPH_VERTICES + 1),
         )
-    assert exc_info.value.errors()[0]["type"] == "graph.selected_vertices_bound"
+    assert error_code(exc_info.value) == "graph.selected_vertices_bound"
 
 
 def test_catalog_request_reuses_selection_admission() -> None:

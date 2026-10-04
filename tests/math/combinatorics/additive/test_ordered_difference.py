@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.combinatorics.additive._models import (
     _MAX_DIMENSION,
@@ -76,7 +77,7 @@ class TestOrderedDifferenceProfile:
         with pytest.raises(ValueError) as exc_info:
             _run_ordered(request)
         assert (
-            exc_info.value.errors()[0]["type"]
+            error_code(exc_info.value)
             == "additive_combinatorics.ordered_difference_work_exceeded"
         )
 

@@ -7,6 +7,7 @@ negative control is this file run against unmodified `main`.
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -162,7 +163,7 @@ def test_infinity_valuation_result_rejects_mismatched_parents() -> None:
             }
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "function_field.infinity_valuation_parent_mismatch"
     )
 

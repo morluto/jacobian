@@ -4,6 +4,7 @@ from math import gcd
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
@@ -113,4 +114,4 @@ def test_serialized_graph_claim_verifies_and_rejects_forgery() -> None:
 def test_native_rejects_oversized_integer_before_gcd() -> None:
     with pytest.raises(ValueError) as exc_info:
         construct_non_coprimality_graph((10**256,))
-    assert exc_info.value.errors()[0]["type"] == "non_coprimality.digits"
+    assert error_code(exc_info.value) == "non_coprimality.digits"

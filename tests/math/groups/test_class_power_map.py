@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.groups._models import GroupConjugacyClassesRequest
 from jacobian.math.groups._tools import compute_group_conjugacy_classes
@@ -58,10 +59,7 @@ def test_class_power_map_reestablishes_input_partition() -> None:
     altered = partition.model_copy(update={"classes": partition.classes[:-1]})
     with pytest.raises(Exception) as exc_info:
         class_power_map(altered, 2)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "groups.characters.partition_not_group_bound"
-    )
+    assert error_code(exc_info.value) == "groups.characters.partition_not_group_bound"
 
 
 def test_power_exponent_is_bounded_before_execution() -> None:

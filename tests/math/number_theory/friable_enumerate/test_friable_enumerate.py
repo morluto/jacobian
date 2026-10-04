@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.math.number_theory._friable_enumerate import compute_friable_enumerate
 from jacobian.math.number_theory._friable_enumerate_kernels import enumerate_friable
@@ -187,7 +188,7 @@ def test_operation_rejects_unbounded_generated_prime_cutoff() -> None:
             )
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.generated_friable_enumerate_exceeds_the_admitted_prime_cutoff"
     )
 
@@ -201,7 +202,7 @@ def test_operation_rejects_family_above_result_size_budget() -> None:
             )
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.friable_enumerate_family_exceeds_the_result_size_budget"
     )
 
@@ -219,7 +220,7 @@ def test_result_rejects_impossible_degenerate_families() -> None:
             {"x": 0, "y": 5, "family": {"elements": [1]}}
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.friable_enumerate_zero_source_must_be_empty"
     )
 
@@ -228,7 +229,7 @@ def test_result_rejects_impossible_degenerate_families() -> None:
             {"x": 5, "y": 0, "family": {"elements": [2]}}
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.friable_enumerate_small_cutoff_is_singleton"
     )
 
@@ -244,6 +245,6 @@ def test_result_binds_zero_sources_by_value_and_requires_increasing_family() -> 
             {"x": 5, "y": 5, "family": {"elements": [2, 1]}}
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.friable_enumerate_family_must_be_increasing"
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes import filtered_extensions
@@ -147,7 +148,7 @@ def test_composition_rejects_a_mismatched_middle_filtration() -> None:
     with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_compose(*_composition(first, second))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "filtered_chain_map.composition_middle_filtration_mismatch"
     )
 
@@ -267,8 +268,7 @@ def test_composition_rejects_malformed_component_axes_before_indexing() -> None:
     with pytest.raises(ValueError) as exc_info:
         _native_compose(malformed)
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "filtered_chain_map.composition_middle_mismatch"
+        error_code(exc_info.value) == "filtered_chain_map.composition_middle_mismatch"
     )
 
 
@@ -452,7 +452,7 @@ def test_composition_rejects_rational_coefficient_in_finite_field_map() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         _native_compose(request)
-    assert exc_info.value.errors()[0]["type"] == "filtered_chain_map.entry_invalid"
+    assert error_code(exc_info.value) == "filtered_chain_map.entry_invalid"
 
 
 @pytest.mark.parametrize("entry", [3, -1])

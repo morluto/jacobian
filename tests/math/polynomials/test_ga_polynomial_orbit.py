@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -104,10 +105,7 @@ def test_orbit_rejects_wrong_ordered_ring_and_invalid_action() -> None:
             action=action,
             polynomial=_polynomial(("y", "x"), {(1, 0): 1}),
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "polynomial_ga_orbit.ordered_ring_mismatch"
-    )
+    assert error_code(exc_info.value) == "polynomial_ga_orbit.ordered_ring_mismatch"
 
     invalid = PolynomialGaAction(
         source_variables=("x",),

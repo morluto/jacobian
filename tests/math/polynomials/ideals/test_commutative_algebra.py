@@ -9,6 +9,7 @@ from itertools import combinations
 
 import pytest
 import sympy
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -168,7 +169,7 @@ def test_ideal_contract_rejects_mixed_polynomial_rings() -> None:
             variables=("x",),
             generators=(_polynomial(("y",), {(1,): 1}),),
         )
-    assert exc_info.value.errors()[0]["type"] == "polynomial.ideal_ring"
+    assert error_code(exc_info.value) == "polynomial.ideal_ring"
 
 
 def test_backend_unavailability_is_an_execution_failure(
@@ -542,7 +543,7 @@ def test_zero_basis_must_use_the_source_ideal_ring() -> None:
             generator_count=1,
             monomial_order="grevlex",
         )
-    assert exc_info.value.errors()[0]["type"] == "polynomial.ideal_contract"
+    assert error_code(exc_info.value) == "polynomial.ideal_contract"
     same_ring_zero_basis = _ideal(("x",), {})
     result = GroebnerBasisResult(
         ideal=request.ideal,

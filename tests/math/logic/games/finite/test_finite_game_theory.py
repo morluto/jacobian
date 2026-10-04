@@ -5,6 +5,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.logic.games.finite._models import (
@@ -106,9 +107,7 @@ class TestNashEquilibrium:
         )
         with pytest.raises(ValueError) as exc_info:
             nash_equilibrium(request.payoff_matrix)
-        assert (
-            exc_info.value.errors()[0]["type"] == "finite_game.exact_equilibrium_budget"
-        )
+        assert error_code(exc_info.value) == "finite_game.exact_equilibrium_budget"
 
     def test_pure_strategy(self) -> None:
         req = NashEquilibriumRequest(

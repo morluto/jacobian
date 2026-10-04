@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.boolean._models import (
@@ -145,13 +146,13 @@ def test_walsh_transform_rejects_non_power_of_two_length() -> None:
 def test_walsh_transform_rejects_empty_truth_table() -> None:
     with pytest.raises(ValueError) as exc_info:
         BooleanTruthTableRequest.model_validate({"truth_table": []})
-    assert exc_info.value.errors()[0]["type"] == "too_short"
+    assert error_code(exc_info.value) == "too_short"
 
 
 def test_walsh_transform_rejects_non_boolean_entries() -> None:
     with pytest.raises(ValueError) as exc_info:
         BooleanTruthTableRequest.model_validate({"truth_table": [0, 1, 1, 2]})
-    assert exc_info.value.errors()[0]["type"] == "literal_error"
+    assert error_code(exc_info.value) == "literal_error"
 
 
 def test_walsh_transform_kernel_rejects_non_binary_values() -> None:

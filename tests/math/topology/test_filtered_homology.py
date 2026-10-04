@@ -3,6 +3,7 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes._filtered_models import (
@@ -143,7 +144,7 @@ def test_filtered_homology_rejects_rational_domain_until_growth_is_bounded() -> 
         filtered_homology_filtration(
             rational_request.complex, rational_request.filtration
         )
-    assert exc_info.value.errors()[0]["type"] == "filtered_homology.field_required"
+    assert error_code(exc_info.value) == "filtered_homology.field_required"
 
 
 def test_filtered_homology_keeps_the_retained_output_cell_cap() -> None:

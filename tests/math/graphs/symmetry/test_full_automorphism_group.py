@@ -6,6 +6,7 @@ from threading import Event
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -86,7 +87,7 @@ def test_empty_source_generators_require_the_nested_identity() -> None:
     with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "graph.automorphism.trivial_group_requires_identity"
     )
 
@@ -106,7 +107,7 @@ def test_empty_source_generators_must_report_order_one() -> None:
     with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "graph.automorphism.empty_generators_have_order_one"
     )
 
@@ -128,7 +129,7 @@ def test_identity_source_generators_are_rejected() -> None:
     with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "graph.automorphism.source_generators_must_be_nonidentity"
     )
 
@@ -149,7 +150,7 @@ def test_full_group_orbits_require_sorted_representatives() -> None:
     with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "graph.automorphism.vertex_orbits_must_partition_axis"
     )
 

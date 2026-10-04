@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -224,10 +225,7 @@ def test_result_validation_checks_affine_relations_and_parent_dimensions() -> No
         TropicalPolynomialEssentialPart.model_validate(
             result.model_dump(mode="python") | {"affine_equalities": (bad_row,)}
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "tropical.essential_part_affine_equalities"
-    )
+    assert error_code(exc_info.value) == "tropical.essential_part_affine_equalities"
 
     child = result.face_incidence[0].model_copy(update={"dimension": 2})
     with pytest.raises(ValueError) as exc_info:
@@ -235,9 +233,7 @@ def test_result_validation_checks_affine_relations_and_parent_dimensions() -> No
             result.model_dump(mode="python")
             | {"face_incidence": (child, *result.face_incidence[1:])}
         )
-    assert (
-        exc_info.value.errors()[0]["type"] == "tropical.essential_part_face_incidence"
-    )
+    assert error_code(exc_info.value) == "tropical.essential_part_face_incidence"
 
 
 def test_affine_height_relation_makes_all_terms_tie_somewhere() -> None:

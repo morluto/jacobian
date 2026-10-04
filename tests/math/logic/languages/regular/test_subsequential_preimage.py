@@ -3,6 +3,7 @@
 import itertools
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -112,14 +113,14 @@ def test_cross_domain_preimage_requires_same_explicit_alphabet_parent() -> None:
     with pytest.raises(ValueError) as exc_info:
         SubsequentialPreimageRequest(dfa=mismatch, transducer=transducer)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "regular_language.preimage_alphabet_context_mismatch"
     )
     unparented = dfa.model_copy(update={"alphabet": None})
     with pytest.raises(ValueError) as exc_info:
         SubsequentialPreimageRequest(dfa=unparented, transducer=transducer)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "regular_language.preimage_alphabet_context_missing"
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -133,7 +134,7 @@ def test_cross_domain_preimage_requires_same_explicit_alphabet_parent() -> None:
     with pytest.raises(ValueError) as exc_info:
         SubsequentialPreimageRequest(dfa=different_identity, transducer=transducer)
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "regular_language.preimage_alphabet_identity_mismatch"
     )
 
@@ -237,4 +238,4 @@ def test_equivalence_rejects_equal_sized_but_different_parents() -> None:
     )
     with pytest.raises(ValueError) as exc_info:
         EquivalenceRequest(left=dfa, right=other)
-    assert exc_info.value.errors()[0]["type"] == "regular_language.alphabet_mismatch"
+    assert error_code(exc_info.value) == "regular_language.alphabet_mismatch"

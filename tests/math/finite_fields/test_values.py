@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -251,7 +252,7 @@ def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> N
             entries=((one, zero), (zero, _element(other_presentation, (1, 0, 0)))),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "finite_field.matrix_entries_matrix_field_presentation"
     )
     with pytest.raises(ValueError) as exc_info:
@@ -261,8 +262,7 @@ def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> N
             coordinates=(_element(presentation, (0, 1, 0)), zero),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_field.projective_coordinates_normalized"
+        error_code(exc_info.value) == "finite_field.projective_coordinates_normalized"
     )
     matrix = FiniteLinearMap(
         source_axis=column_axis,
@@ -276,8 +276,7 @@ def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> N
             matrix=PrimeFieldMatrix(2, ((1, 0),), 2),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_field.linear_map_rows_match_target_axis"
+        error_code(exc_info.value) == "finite_field.linear_map_rows_match_target_axis"
     )
     assert matrix.matrix.prime == presentation.characteristic
 
@@ -361,7 +360,7 @@ def test_presentation_rejects_oversized_characteristic_before_primality() -> Non
             modulus_coefficients=(1, 0, 1),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "finite_field.characteristic_exceeds_supported_field_order_bound"
     )
 
@@ -381,8 +380,7 @@ def test_presentation_rejects_oversized_modulus_length() -> None:
             modulus_coefficients=(1,) + (0,) * 17 + (1,),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_field.presentation_modulus_length_bound"
+        error_code(exc_info.value) == "finite_field.presentation_modulus_length_bound"
     )
 
 
@@ -390,8 +388,7 @@ def test_axis_rejects_oversized_label_set() -> None:
     with pytest.raises(ValueError) as exc_info:
         Axis(name="large", labels=tuple(f"x{i}" for i in range(1025)))
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_field.axis_exceeds_supported_label_bound"
+        error_code(exc_info.value) == "finite_field.axis_exceeds_supported_label_bound"
     )
 
 
@@ -419,6 +416,6 @@ def test_subspace_rejects_oversized_rank_matrix_before_allocation() -> None:
             basis=(matrix,) * 86,
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "finite_field.subspace_rank_matrix_exceeds_supported_bound"
     )

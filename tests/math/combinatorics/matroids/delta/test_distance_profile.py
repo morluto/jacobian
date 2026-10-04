@@ -6,6 +6,7 @@ import math
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -120,10 +121,7 @@ def test_profile_rejects_inconsistent_histogram_and_coerced_integers() -> None:
     }
     with pytest.raises(ValueError) as exc_info:
         PublicDeltaMatroidDistanceProfile.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "delta_matroid.distance_histogram_mismatch"
-    )
+    assert error_code(exc_info.value) == "delta_matroid.distance_histogram_mismatch"
 
     for invalid in (False, 0.0, "0"):
         malformed = {

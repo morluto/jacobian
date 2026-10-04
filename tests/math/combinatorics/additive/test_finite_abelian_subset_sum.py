@@ -4,6 +4,7 @@ from itertools import product
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.additive._subset_sum_residue import (
@@ -91,7 +92,7 @@ def test_group_binding_and_result_round_trip() -> None:
         SubsetSumResidueProfileRequest(
             group=group, sequence=(element,), include_empty_subset=True
         )
-    assert exc_info.value.errors()[0]["type"] == "additive_combinatorics.group_binding"
+    assert error_code(exc_info.value) == "additive_combinatorics.group_binding"
 
     result = _run((2, 3), ((1, 1), (1, 2)))
     assert type(result).model_validate_json(result.model_dump_json()) == result

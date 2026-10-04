@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -257,7 +258,7 @@ def test_duplicate_frames_do_not_claim_full_vertex_coverage() -> None:
         su2_gauge_transform(field, frames)
     with pytest.raises(ValueError) as exc_info:
         SU2GaugeTransformRequest(field=field, vertex_values=frames)
-    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.su2.transform_vertices"
+    assert error_code(exc_info.value) == "lattice_gauge.su2.transform_vertices"
 
 
 def test_path_work_charges_inverse_product_before_resetting_growth() -> None:

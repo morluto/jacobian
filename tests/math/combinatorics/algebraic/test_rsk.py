@@ -3,6 +3,7 @@
 import itertools
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.math.combinatorics.algebraic import (
     FinitePermutation,
@@ -24,6 +25,6 @@ def test_permutation_rsk_requires_canonical_finite_permutation() -> None:
     with pytest.raises(Exception) as exc_info:
         permutation_rsk((1, 2, 3))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "algebraic_combinatorics.permutation_carrier_required"
     )

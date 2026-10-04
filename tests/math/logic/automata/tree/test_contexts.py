@@ -1,6 +1,7 @@
 from itertools import product
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -32,7 +33,7 @@ def test_context_accepts_canonical_frames_and_sibling_values():
 def test_context_rejects_nested_arity_entries_before_canonicalization():
     with pytest.raises(ValueError) as exc_info:
         FiniteTreeContext.model_validate({"arity": [[0] * 10000], "frames": []})
-    assert exc_info.value.errors()[0]["type"] == "tree_context.rank"
+    assert error_code(exc_info.value) == "tree_context.rank"
 
 
 def test_context_plugging_preserves_ranked_tree_structure():
@@ -184,7 +185,7 @@ def test_context_json_admission_bounds_tree_growth_before_parsing():
                 "frames": [{"symbol": 1, "hole_child": 0, "siblings": [sibling]}],
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "tree_context.depth"
+    assert error_code(exc_info.value) == "tree_context.depth"
 
 
 def test_native_tree_and_context_bounds_run_before_serialization(monkeypatch):

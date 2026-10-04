@@ -13,6 +13,7 @@ from random import Random
 from typing import Any
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.matrices._operation_models import MatrixInverseResult
@@ -258,7 +259,7 @@ def test_inverse_rejects_dense_output_work_before_backend() -> None:
 
     with pytest.raises(ValueError) as exc_info:
         _run_inverse(source)
-    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
+    assert error_code(exc_info.value) == "matrix.budget_exceeded"
 
 
 def _entry_axis_limit(schema: dict[str, Any], field: str) -> int:

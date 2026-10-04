@@ -1,4 +1,5 @@
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.math.matrices.cyclic_linear._models import RationalCyclotomicField
 from jacobian.math.number_theory.characters.operations import dirichlet_character_value
@@ -102,9 +103,7 @@ def test_target_carrier_rejects_different_weight() -> None:
             target_space=target,
             divisor=5,
         )
-    assert (
-        exc_info.value.errors()[0]["type"] == "modular_forms.atkin_lehner_target_parent"
-    )
+    assert error_code(exc_info.value) == "modular_forms.atkin_lehner_target_parent"
 
 
 def test_target_carrier_rejects_partial_divisor() -> None:
@@ -115,7 +114,4 @@ def test_target_carrier_rejects_partial_divisor() -> None:
             target_space=source,
             divisor=1,
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "modular_forms.atkin_lehner_target_divisor"
-    )
+    assert error_code(exc_info.value) == "modular_forms.atkin_lehner_target_divisor"

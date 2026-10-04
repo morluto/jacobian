@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -542,7 +543,7 @@ def test_cyclotomic_parent_is_bound_to_exact_component_order() -> None:
         CyclicRationalRankKernelProfile.model_validate_json(
             json.dumps(payload), strict=True
         )
-    assert exc_info.value.errors()[0]["type"] == "matrix.cyclic.cyclotomic_field"
+    assert error_code(exc_info.value) == "matrix.cyclic.cyclotomic_field"
 
     extra_polynomial_payload = result.components[1].field.model_dump(mode="json")
     extra_polynomial_payload["coefficients_descending"] = ["1", "0", "1"]
@@ -551,7 +552,7 @@ def test_cyclotomic_parent_is_bound_to_exact_component_order() -> None:
             extra_polynomial_payload,
             strict=True,
         )
-    assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
+    assert error_code(exc_info.value) == "extra_forbidden"
 
 
 def test_crt_idempotents_select_exactly_their_components() -> None:
@@ -692,13 +693,13 @@ def test_published_profile_adapter_uses_the_mathematical_admission() -> None:
 def test_symbol_requires_canonical_support_and_bounded_rationals() -> None:
     with pytest.raises(ValueError) as exc_info:
         _symbol(period=3, entries=((0, 0, 1, 1), (0, 0, 0, 1)))
-    assert exc_info.value.errors()[0]["type"] == "matrix.cyclic.support_order"
+    assert error_code(exc_info.value) == "matrix.cyclic.support_order"
     with pytest.raises(ValueError) as exc_info:
         _symbol(period=3, entries=((0, 0, 0, 0),))
-    assert exc_info.value.errors()[0]["type"] == "matrix.cyclic.zero_coefficient"
+    assert error_code(exc_info.value) == "matrix.cyclic.zero_coefficient"
     with pytest.raises(ValueError) as exc_info:
         _symbol(period=3, entries=((0, 0, 0, 10**64),))
-    assert exc_info.value.errors()[0]["type"] == "matrix.cyclic.coefficient_bound"
+    assert error_code(exc_info.value) == "matrix.cyclic.coefficient_bound"
 
 
 def test_symbol_schema_projects_the_sign_aware_64_digit_rational_bound() -> None:

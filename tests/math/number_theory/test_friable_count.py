@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import FriableCountResult, count_friable
@@ -166,7 +167,7 @@ def test_request_rejects_unbounded_generated_prime_cutoff() -> None:
             )
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.generated_friable_counting_exceeds_the_admitted_prime_cutoff"
     )
 
@@ -175,7 +176,7 @@ def test_request_rejects_generated_search_above_node_budget() -> None:
     with pytest.raises(ValueError) as exc_info:
         compute_friable_count(FriableCountRequest(x=_MAX_FRIABLE_SOURCE_ABS // 10, y=5))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "number_theory.generated_friable_counting_exceeds_the_search_node_budget"
     )
 

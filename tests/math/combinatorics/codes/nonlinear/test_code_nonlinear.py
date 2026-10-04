@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear import (
@@ -374,9 +375,7 @@ class TestConstantWeightProfile:
         request = ConstantWeightProfileRequest(code=_code((0, 0, 1, 1), (1, 1, 1, 0)))
         with pytest.raises(ValueError) as exc_info:
             constant_weight_profile(request.code)
-        assert (
-            exc_info.value.errors()[0]["type"] == "nonlinear_code.not_constant_weight"
-        )
+        assert error_code(exc_info.value) == "nonlinear_code.not_constant_weight"
 
 
 class TestSetSystemConversion:
@@ -588,8 +587,7 @@ class TestDerivedAdmissionBoundaries:
         with pytest.raises(ValueError) as exc_info:
             constant_weight_code(request.length, request.weight)
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "nonlinear_code.constant_weight_not_admitted"
+            error_code(exc_info.value) == "nonlinear_code.constant_weight_not_admitted"
         )
         request = ConstantWeightRequest.model_validate(
             {
@@ -600,8 +598,7 @@ class TestDerivedAdmissionBoundaries:
         with pytest.raises(ValueError) as exc_info:
             constant_weight_code(request.length, request.weight)
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "nonlinear_code.constant_weight_not_admitted"
+            error_code(exc_info.value) == "nonlinear_code.constant_weight_not_admitted"
         )
 
 
@@ -637,8 +634,7 @@ class TestCanonicalConsumers:
         with pytest.raises(ValueError) as exc_info:
             constant_weight_code(request.length, request.weight)
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "nonlinear_code.constant_weight_not_admitted"
+            error_code(exc_info.value) == "nonlinear_code.constant_weight_not_admitted"
         )
         properties = ConstantWeightRequest.model_json_schema()["properties"]
         assert properties["length"]["maximum"] == MAX_EXPLICIT_CODE_LENGTH

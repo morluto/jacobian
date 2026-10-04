@@ -11,6 +11,7 @@ from math import gcd
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
@@ -109,7 +110,7 @@ def test_rank_gram_of_scaled_lattice() -> None:
 def test_rank_gram_rejects_dependent_basis_rows() -> None:
     with pytest.raises(ValueError) as exc_info:
         compute_rank_gram(_lattice(2, [[1, 0], [2, 0]]))
-    assert exc_info.value.errors()[0]["type"] == "lattice.basis_not_full_rank"
+    assert error_code(exc_info.value) == "lattice.basis_not_full_rank"
 
 
 # ---------------------------------------------------------------------------

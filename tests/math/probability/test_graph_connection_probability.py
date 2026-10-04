@@ -6,6 +6,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -57,8 +58,7 @@ def test_probability_domain_is_admitted_at_operation_time() -> None:
     with pytest.raises(ValueError) as exc_info:
         GRAPH_CONNECTION_PROBABILITY_OPERATION.run(request)
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "probability.graph_reliability.probability_range"
+        error_code(exc_info.value) == "probability.graph_reliability.probability_range"
     )
 
 

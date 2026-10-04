@@ -12,6 +12,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import OperationExecutionCancelledError, request_cancellation
 from jacobian.canonical import encode_strict_json
@@ -221,10 +222,7 @@ def test_contract_rejects_non_squarefree() -> None:
         compute_continued_fraction(
             ContinuedFractionRequest(discriminant=8, term_count=5)
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "diophantine.discriminant_must_be_squarefree"
-    )
+    assert error_code(exc_info.value) == "diophantine.discriminant_must_be_squarefree"
 
 
 def test_contract_rejects_perfect_square() -> None:
@@ -232,10 +230,7 @@ def test_contract_rejects_perfect_square() -> None:
         compute_continued_fraction(
             ContinuedFractionRequest(discriminant=9, term_count=5)
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "diophantine.discriminant_must_not_be_square"
-    )
+    assert error_code(exc_info.value) == "diophantine.discriminant_must_not_be_square"
 
 
 def test_contract_rejects_out_of_range() -> None:

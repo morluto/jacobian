@@ -4,6 +4,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -72,7 +73,7 @@ def test_decoded_gram_rejects_shape_forgery() -> None:
     payload["gram"]["row_count"] = 1
     with pytest.raises(ValueError) as exc_info:
         GramResult.model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
+    assert error_code(exc_info.value) == "matrix.shape_mismatch"
     malformed = GramResult.model_construct(
         vectors=((1, 0), (0, 1)),
         dimension=2,
@@ -147,7 +148,7 @@ def test_tight_equiangular_profile_is_exact_and_serializable() -> None:
     forged["common_squared_inner_product"] = None
     with pytest.raises(ValueError) as exc_info:
         type(result).model_validate_json(json.dumps(forged))
-    assert exc_info.value.errors()[0]["type"] == "frames.profile_shape"
+    assert error_code(exc_info.value) == "frames.profile_shape"
 
     singleton = _tight_equiangular_profile(VectorFamily(dimension=1, vectors=((1,),)))
     payload = json.loads(singleton.model_dump_json())
@@ -169,14 +170,14 @@ def test_exact_complex_mub_profile_and_forged_shape_rejection() -> None:
     forged["basis_pair_count"] = 0
     with pytest.raises(ValueError) as exc_info:
         type(result).model_validate_json(json.dumps(forged))
-    assert exc_info.value.errors()[0]["type"] == "frames.mub_profile_shape"
+    assert error_code(exc_info.value) == "frames.mub_profile_shape"
     non_mub = _mutually_unbiased_bases(
         MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
     )
     assert non_mub.is_mutually_unbiased is False
     with pytest.raises(ValueError) as exc_info:
         MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard,) * 17)
-    assert exc_info.value.errors()[0]["type"] == "too_long"
+    assert error_code(exc_info.value) == "too_long"
 
 
 def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
@@ -204,7 +205,7 @@ def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
     forged["squared_overlaps"] = []
     with pytest.raises(ValueError) as exc_info:
         type(sic).model_validate_json(json.dumps(forged))
-    assert exc_info.value.errors()[0]["type"] == "frames.sic_profile_axes"
+    assert error_code(exc_info.value) == "frames.sic_profile_axes"
 
     phase_scaled = _sic_profile(
         SicProfileRequest(
@@ -467,7 +468,7 @@ def test_sic_profile_rejects_forged_structural_residuals() -> None:
     forged["cardinality_residual"] = "1"
     with pytest.raises(ValueError) as exc_info:
         type(result).model_validate_json(json.dumps(forged))
-    assert exc_info.value.errors()[0]["type"] == "frames.sic_profile_cardinality"
+    assert error_code(exc_info.value) == "frames.sic_profile_cardinality"
 
     forged = json.loads(result.model_dump_json())
     forged["common_squared_overlap_residual"] = None

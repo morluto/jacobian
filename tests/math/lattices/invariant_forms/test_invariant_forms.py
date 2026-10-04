@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 from sympy import Matrix
+from tests.error_assertions import error_code
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
@@ -296,7 +297,7 @@ def test_raw_request_rejects_unknown_kind_before_nested_action_parsing() -> None
                 "kind": "UNKNOWN",
             }
         )
-    assert exc_info.value.errors()[0]["type"] == "lattice.invariant_form.invalid_kind"
+    assert error_code(exc_info.value) == "lattice.invariant_form.invalid_kind"
 
 
 def test_rational_action_regression_saturates_the_full_integer_kernel() -> None:

@@ -6,6 +6,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.algebraic_curves import (
@@ -247,7 +248,7 @@ def test_admission_bounds_each_component_before_expansion() -> None:
     with pytest.raises(Exception) as exc_info:
         gaussian_realification(polynomial, ("x", "y"))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "algebraic_geometry.gaussian_realification.result_terms"
     )
 
@@ -260,6 +261,6 @@ def test_admission_reserves_binomial_coefficient_digits() -> None:
     with pytest.raises(Exception) as exc_info:
         gaussian_realification(polynomial, ("x", "y"))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(exc_info.value)
         == "algebraic_geometry.gaussian_realification.coefficient_digits"
     )

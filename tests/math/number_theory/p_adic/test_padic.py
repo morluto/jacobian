@@ -6,6 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
@@ -73,10 +74,7 @@ class TestHenselRootLifting:
         }
         with pytest.raises(ValueError) as exc_info:
             HenselRootResult.model_validate(payload)
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "padic_arithmetic.lifted_root_out_of_range"
-        )
+        assert error_code(exc_info.value) == "padic_arithmetic.lifted_root_out_of_range"
 
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""

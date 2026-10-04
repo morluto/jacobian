@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from math import isqrt
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -445,7 +446,7 @@ def test_presentation_rejects_oversized_nested_rows(
         FiniteCosetCrossedProductPresentation.model_validate_json(
             encode_strict_json(payload)
         )
-    assert exc_info.value.errors()[0]["type"] == "too_long"
+    assert error_code(exc_info.value) == "too_long"
 
 
 def test_request_rejects_pairwise_convolution_before_expansion() -> None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -115,7 +116,7 @@ def test_parabolic_result_model_rejects_a_negative_index() -> None:
 
     with pytest.raises(ValueError) as exc_info:
         WeylParabolicWeightOrbitResult.model_validate(payload)
-    assert exc_info.value.errors()[0]["type"] == "greater_than_equal"
+    assert error_code(exc_info.value) == "greater_than_equal"
 
 
 def test_weight_orbit_admits_a_representable_complete_orbit() -> None:

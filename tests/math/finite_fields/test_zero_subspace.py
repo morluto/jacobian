@@ -1,6 +1,7 @@
 """Zero matrix subspaces retain their ambient axes through restriction."""
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -96,8 +97,7 @@ def test_subspace_checks_declared_ambient_axes_not_only_agreement_between_matric
             basis=(matrix,),
         )
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_field.subspace_matrices_share_parent_axes"
+        error_code(exc_info.value) == "finite_field.subspace_matrices_share_parent_axes"
     )
 
 

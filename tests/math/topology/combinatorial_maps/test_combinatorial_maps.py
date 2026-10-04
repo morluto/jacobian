@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.combinatorial_maps import FiniteCombinatorialMap
@@ -213,9 +214,7 @@ class TestFaces:
                     (1,),
                 ),
             )
-        assert (
-            exc_info.value.errors()[0]["type"] == "combinatorial_map.rotation_row_count"
-        )
+        assert error_code(exc_info.value) == "combinatorial_map.rotation_row_count"
 
     def test_face_result_rejects_malformed_retained_map(self) -> None:
         result = compute_faces(FacesRequest(map=_four_cycle()))

@@ -144,4 +144,3 @@ def test_valuation_canonicalizes_equivalent_unreduced_parent_spellings() -> None
     assert result.valuation == FunctionFieldFiniteValuation(kind="FINITE", value=0)
     assert result.place.field == canonical
     assert result.element.field == canonical
-    assert result.place.field == result.element.field

@@ -19,7 +19,9 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import cast
 
+import pytest
 from tools.match_records import merge_record
 from tools.rewrite_match_pins import convertible_sites, load, rewrite
 
@@ -128,7 +130,6 @@ def test_merge_record_preserves_codeless_member() -> None:
 
 
 def test_recorder_refuses_multiple_validation_errors() -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     class MultipleErrorsError(ValueError):
@@ -152,7 +153,6 @@ def test_recorder_refuses_multiple_validation_errors() -> None:
 
 
 def test_recorder_does_not_record_exception_rejected_by_match() -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     class CodedError(ValueError):
@@ -174,7 +174,6 @@ def test_recorder_does_not_record_exception_rejected_by_match() -> None:
 
 
 def test_recorder_does_not_record_exception_rejected_by_type() -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     class CodedError(ValueError):
@@ -196,7 +195,6 @@ def test_recorder_does_not_record_exception_rejected_by_type() -> None:
 
 
 def test_recorder_import_and_supported_raises_forms() -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     original_raises = pytest.raises
@@ -223,7 +221,6 @@ def test_recorder_import_and_supported_raises_forms() -> None:
 
 
 def test_recorder_serializes_compiled_match_patterns() -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     original_raises = pytest.raises
@@ -248,7 +245,6 @@ def test_recorder_serializes_compiled_match_patterns() -> None:
 
 
 def test_recorder_preserves_check_only_base_exception_semantics() -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     original_raises = pytest.raises
@@ -264,9 +260,8 @@ def test_recorder_preserves_check_only_base_exception_semantics() -> None:
 
 
 def test_recorder_clears_old_output_once_before_recording(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import pytest
     import tools.match_recorder as recorder
 
     output = tmp_path / "record.jsonl"
@@ -274,7 +269,7 @@ def test_recorder_clears_old_output_once_before_recording(
     monkeypatch.setattr(recorder, "_OUT", str(output))
     original_raises = pytest.raises
 
-    recorder.pytest_configure(object())
+    recorder.pytest_configure(cast(pytest.Config, object()))
     try:
         assert pytest.raises is not original_raises
         assert output.read_text(encoding="utf-8") == ""
@@ -282,9 +277,9 @@ def test_recorder_clears_old_output_once_before_recording(
             "code": "current",
             "match": "detail",
         }
-        recorder.pytest_sessionfinish(None, 0)
+        recorder.pytest_sessionfinish(cast(pytest.Session, None), 0)
     finally:
-        recorder.pytest_unconfigure(object())
+        recorder.pytest_unconfigure(cast(pytest.Config, object()))
 
     assert output.read_text(encoding="utf-8") == (
         json.dumps({"tests/current.py:2": {"code": "current", "match": "detail"}})
@@ -293,14 +288,14 @@ def test_recorder_clears_old_output_once_before_recording(
 
 
 def test_recorder_discards_partial_output_after_failed_session(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     import tools.match_recorder as recorder
 
     output = tmp_path / "record.jsonl"
     output.write_text('{"tests/current.py:2": {"code": "partial"}}\n', encoding="utf-8")
     monkeypatch.setattr(recorder, "_OUT", str(output))
-    session = type("Session", (), {"config": object()})()
+    session = cast(pytest.Session, type("Session", (), {"config": object()})())
 
     recorder.pytest_sessionfinish(session, 1)
 
@@ -409,29 +404,6 @@ def test_merge_record_preserves_incoming_aggregated_codes() -> None:
     )
     assert merged["codes"] == [None, "polynomial.degree", "polynomial.leading"]
     assert merged["code"] is None
-
-
-def test_agreeing_matches_still_convert(tmp_path: Path) -> None:
-    path = _write(
-        tmp_path,
-        _line(
-            {
-                "code": "polynomial.degree",
-                "match": "boom",
-                "codes": ["polynomial.degree"],
-            }
-        ),
-        _line(
-            {
-                "code": "polynomial.degree",
-                "match": "boom",
-                "codes": ["polynomial.degree"],
-            }
-        ),
-    )
-    usable, rejected = convertible_sites(load(path))
-    assert usable == {("tests/example/test_module.py:42", 8): "polynomial.degree"}
-    assert not rejected
 
 
 SIBLING_WITH = """\

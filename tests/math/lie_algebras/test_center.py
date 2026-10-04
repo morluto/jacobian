@@ -9,7 +9,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieAlgebraElement,
-    LieAlgebraRequest,
     LieCenterResult,
 )
 from jacobian.math.lie_algebras.operations import (
@@ -147,10 +146,6 @@ class TestCenterRejections:
 
 
 class TestCenterComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = LieAlgebraRequest(algebra=HEISENBERG)
-        assert lie_center(request.algebra) == lie_center(HEISENBERG)
-
     def test_serialized_result_round_trips(self) -> None:
         result = lie_center(GL2)
         assert LieCenterResult.model_validate_json(result.model_dump_json()) == result

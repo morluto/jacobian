@@ -115,9 +115,8 @@ class TestDefiningInvariants:
         result = chain_complex(cells)
         assert differential_squares_to_zero(result.value).is_valid
 
-    @pytest.mark.parametrize("prime", [2])
-    def test_d_squared_zero_over_prime_field(self, prime: int) -> None:
-        result = chain_complex(_CUBE, CubicalChainCoefficient.PRIME_FIELD, prime)
+    def test_d_squared_zero_over_prime_field(self) -> None:
+        result = chain_complex(_CUBE, CubicalChainCoefficient.PRIME_FIELD, 2)
         assert differential_squares_to_zero(result.value).is_valid
 
     def test_two_adjacent_squares(self) -> None:

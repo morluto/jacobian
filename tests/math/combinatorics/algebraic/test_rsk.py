@@ -5,6 +5,7 @@ import itertools
 import pytest
 from tests.error_assertions import error_code
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.algebraic import (
     FinitePermutation,
     inverse_permutation_rsk,
@@ -22,7 +23,7 @@ def test_permutation_rsk_round_trips_all_small_permutations(size: int) -> None:
 
 
 def test_permutation_rsk_requires_canonical_finite_permutation() -> None:
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         permutation_rsk((1, 2, 3))
     assert (
         error_code(exc_info.value)

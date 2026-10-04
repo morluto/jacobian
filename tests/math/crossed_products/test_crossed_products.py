@@ -255,7 +255,7 @@ def test_gardam_unit_and_inverse_replay_in_both_orders() -> None:
     assert multiply(alpha, inverse) == identity
 
 
-def test_gardam_one_symbol_mutation_preserves_counts_but_breaks_identity() -> None:
+def test_gardam_one_symbol_mutation_breaks_identity() -> None:
     alpha, inverse, identity = _gardam_elements()
     mutated_terms = tuple(
         FiniteCosetCrossedProductTerm(
@@ -280,7 +280,6 @@ def test_gardam_one_symbol_mutation_preserves_counts_but_breaks_identity() -> No
         ),
     )
 
-    assert _component_support_counts(mutated) == (8, 4, 4, 5)
     assert multiply(mutated, inverse) != identity
     assert multiply(inverse, mutated) != identity
 

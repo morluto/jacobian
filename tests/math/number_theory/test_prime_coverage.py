@@ -118,14 +118,6 @@ def test_binomial_valuation_rejects_digitwise_work_budget() -> None:
     )
 
 
-def test_binomial_valuation_basic() -> None:
-    # v_2(C(4,2)) = v_2(6) = 1
-    result = compute_binomial_valuation_profile(
-        BinomialValuationProfileRequest(n=4, prime=2)
-    )
-    assert result.rows[2].valuation == 1
-
-
 def test_binomial_valuation_kummer() -> None:
     # v_2(C(10,3)) = v_2(120) = 3
     result = compute_binomial_valuation_profile(

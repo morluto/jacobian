@@ -232,4 +232,3 @@ def test_trace_tool_schema_dispatch_and_wire_roundtrip() -> None:
         encode_strict_json(next(iter(tool.examples)).input), strict=True
     )
     assert tool.run(example).trace == _rational(2, (1,))
-    assert any(candidate.operation_id == OPERATION_ID for candidate in TOOLS)

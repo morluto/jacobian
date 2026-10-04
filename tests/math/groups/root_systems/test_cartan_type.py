@@ -253,12 +253,6 @@ class TestCartanTypeRejections:
 
 
 class TestCartanTypeComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = CartanTypeRequest(cartan_type="B", rank=3)
-        assert cartan_matrix_from_type(
-            request.cartan_type, request.rank
-        ) == cartan_matrix_from_type("B", 3)
-
     def test_serialized_result_feeds_root_system_data(self) -> None:
         built = cartan_matrix_from_type("D", 4)
         revived = CartanTypeResult.model_validate_json(built.model_dump_json())

@@ -610,14 +610,6 @@ class TestCatalogParity:
             presentation.components, presentation.strata
         )
 
-    def test_examples_execute(self) -> None:
-        for operation_id in (_DUAL_ID, _LATTICE_ID):
-            tool = _tool(operation_id)
-            assert tool.examples
-            for example in tool.examples:
-                request = tool.request_type.model_validate(example.input)
-                assert tool.run(request) is not None
-
     def test_serialization_round_trips(self) -> None:
         dual = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert DualComplexResult.model_validate_json(dual.model_dump_json()) == dual

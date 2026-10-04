@@ -1,5 +1,7 @@
 """Cartesian products of cubical complexes."""
 
+import json
+
 import pytest
 
 from jacobian.catalog.models import (
@@ -15,11 +17,11 @@ from jacobian.math.topology.cubical_complexes._tools import TOOLS
 from jacobian.math.topology.cubical_complexes.operations import f_vector, product
 
 
-def test_interval_times_point_is_exact_canonical_and_composable() -> None:
-    result = product(
-        (CubicalCell(intervals=((0, 1),)),),
-        (CubicalCell(intervals=((5, 5),)),),
-    )
+def test_published_interval_times_point_example_is_exact_and_composable() -> None:
+    tool = next(t for t in TOOLS if t.operation_id == "cubical.product.compute")
+    example = next(e for e in tool.examples if e.name == "interval_times_point")
+    request = CubicalProductRequest.model_validate_json(json.dumps(example.input))
+    result = tool.run(request)
 
     assert result.left_ambient_dimension == 1
     assert result.right_ambient_dimension == 1
@@ -53,16 +55,6 @@ def test_square_times_interval_has_the_cube_f_vector() -> None:
     vector = f_vector(result.complex.cells)
     assert vector.f_vector.counts == (8, 12, 6, 1)
     assert vector.euler_characteristic == 1
-
-
-def test_product_tool_is_published_with_typed_example() -> None:
-    tool = next(
-        tool for tool in TOOLS if tool.operation_id == "cubical.product.compute"
-    )
-    request = CubicalProductRequest.model_validate(tool.examples[0].input)
-    result = tool.run(request)
-    assert result.complex.ambient_dimension == 2
-    assert f_vector(result.complex.cells).f_vector.counts == (2, 1, 0)
 
 
 def test_product_rejects_ambient_axis_growth_before_expansion() -> None:

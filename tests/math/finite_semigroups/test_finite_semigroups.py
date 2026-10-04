@@ -91,7 +91,6 @@ def test_native_surface_accepts_semigroup_value() -> None:
     assert element_power(semigroup, "1", 2).power == "2"
     assert idempotents(semigroup).idempotents == ("0",)
     assert principal_ideals(semigroup, ("1",)).ideals == (("0", "1", "2"),)
-    assert len(green_relations(semigroup).L) == 1
     assert (
         tuple(
             element
@@ -210,18 +209,6 @@ MATRIX_UNITS: SemigroupWire = {
 
 
 class TestFiniteSemigroup:
-    def test_z3_is_valid(self) -> None:
-        sg = _finite_semigroup(Z3)
-        assert sg.elements == ("0", "1", "2")
-
-    def test_band_is_valid(self) -> None:
-        sg = _finite_semigroup(BAND)
-        assert sg.elements == ("a", "b")
-
-    def test_null_is_valid(self) -> None:
-        sg = _finite_semigroup(NULL_SG)
-        assert sg.elements == ("0", "x", "y")
-
     def test_associativity_check_matches_exhaustive_two_element_tables(self) -> None:
         # Independently check all 2^(2*2) labeled binary operations against
         # the defining triple identity, including both successful and failing

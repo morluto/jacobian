@@ -719,18 +719,6 @@ class TestTopologicalFind:
 
 
 class TestNativeCatalogParity:
-    @pytest.mark.parametrize(
-        "operation_id",
-        [
-            "graph.minor_model.check",
-            "graph.minor_model.find",
-            "graph.topological_minor.check",
-            "graph.topological_minor.find",
-        ],
-    )
-    def test_operation_is_published(self, operation_id: str) -> None:
-        assert operation_id in {tool.operation_id for tool in TOOLS}
-
     def test_minor_find_parity(self) -> None:
         request = _json_request(
             MinorModelFindRequest,

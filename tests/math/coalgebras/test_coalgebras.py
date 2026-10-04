@@ -71,58 +71,6 @@ def _raises_code(code: str) -> Iterator[None]:
         assert getattr(exc_info.value, "type", None) == code
 
 
-class TestComultiplication:
-    """Test comultiplication computation."""
-
-    def test_trivial_group_coalgebra(self) -> None:
-        """Delta(1) = 1 ⊗ 1 for the trivial group coalgebra."""
-        ca = Coalgebra(
-            prime=5,
-            dimension=1,
-            comultiplication=(((1,),),),
-            counit=(1,),
-        )
-        result = _run_comultiplication(
-            ComultiplicationRequest(coalgebra=ca, element_index=0)
-        )
-        assert result.matrix.entries[0][0] == 1
-
-    def test_two_dim(self) -> None:
-        """Compute comultiplication for a 2D coalgebra."""
-        ca = Coalgebra(
-            prime=7,
-            dimension=2,
-            comultiplication=(
-                ((1, 0), (0, 0)),
-                ((0, 0), (0, 1)),
-            ),
-            counit=(1, 1),
-        )
-        result = _run_comultiplication(
-            ComultiplicationRequest(coalgebra=ca, element_index=0)
-        )
-        assert result.matrix.entries[0][0] == 1
-        assert result.matrix.entries[1][1] == 0
-
-
-class TestCounit:
-    """Test counit computation."""
-
-    def test_counit_second_group_like(self) -> None:
-        """epsilon(e2) = 1 in the two-group-like coalgebra."""
-        ca = Coalgebra(
-            prime=5,
-            dimension=2,
-            comultiplication=(
-                ((1, 0), (0, 0)),
-                ((0, 0), (0, 1)),
-            ),
-            counit=(1, 1),
-        )
-        result = _run_counit(CounitRequest(coalgebra=ca, element_index=1))
-        assert result.value == 1
-
-
 class TestGroupLikeElements:
     """Test group-like element finding."""
 

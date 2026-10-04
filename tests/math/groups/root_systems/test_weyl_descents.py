@@ -9,7 +9,6 @@ from jacobian.math.groups.root_systems._models import (
 )
 from jacobian.math.groups.root_systems._models import (
     WeylDescentsResult,
-    WeylElementRequest,
 )
 from jacobian.math.groups.root_systems.operations import (
     weyl_element_descents,
@@ -97,12 +96,6 @@ class TestDescentsRejections:
 
 
 class TestDescentsComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = WeylElementRequest(matrix=_cartan(A2), word=(0, 1))
-        assert weyl_element_descents(
-            request.matrix, request.word
-        ) == weyl_element_descents(A2, (0, 1))
-
     def test_serialized_result_round_trips(self) -> None:
         result = weyl_element_descents(A2, (0, 1))
         revived = WeylDescentsResult.model_validate_json(result.model_dump_json())

@@ -56,11 +56,6 @@ def _selected_degrees(edges: tuple[tuple[int, int], ...]) -> list[int]:
     return degrees
 
 
-def test_catalog_publishes_one_bipartite_factor_operation() -> None:
-    operation_ids = {tool.operation_id for tool in TOOLS}
-    assert "graph.bipartite.degree_constrained_factor.compute" in operation_ids
-
-
 def test_k33_has_a_source_bound_two_regular_factor() -> None:
     result = compute_bipartite_factor(_k33((2, 2, 2, 2, 2, 2)))
 

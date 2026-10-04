@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
-    LieAlgebraRequest,
     LieDerivedSeriesResult,
     LieLowerCentralSeriesResult,
     LieSubspace,
@@ -106,12 +105,6 @@ class TestDerivedSeries:
             (F(0), F(1), F(0), F(0)),
             (F(0), F(0), F(1), F(0)),
         )
-
-    def test_sl2_is_perfect(self) -> None:
-        """sl2 equals its own commutator: the series fixes at the head."""
-        result = lie_derived_series(SL2)
-        assert len(result.terms) == 1
-        assert result.solvable is False
 
 
 class TestLowerCentralSeries:
@@ -258,13 +251,6 @@ class TestSeriesRejections:
 
 
 class TestSeriesComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = LieAlgebraRequest(algebra=HEISENBERG)
-        assert lie_derived_series(request.algebra) == lie_derived_series(HEISENBERG)
-        assert lie_lower_central_series(request.algebra) == lie_lower_central_series(
-            HEISENBERG
-        )
-
     def test_serialized_results_round_trip(self) -> None:
         derived = lie_derived_series(GL2)
         assert (

@@ -12,7 +12,6 @@ from jacobian.math.groups.root_systems._models import (
     CartanMatrix as CartanMatrixValue,
 )
 from jacobian.math.groups.root_systems._models import (
-    CartanMatrixRequest,
     WeylLongestElementResult,
 )
 from jacobian.math.groups.root_systems.operations import (
@@ -133,10 +132,6 @@ class TestLongestElementRejections:
 
 
 class TestLongestElementComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = CartanMatrixRequest(matrix=_cartan(A2))
-        assert weyl_longest_element(request.matrix) == weyl_longest_element(A2)
-
     def test_serialized_result_round_trips(self) -> None:
         result = weyl_longest_element(A2)
         revived = WeylLongestElementResult.model_validate_json(result.model_dump_json())

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.algebraic_curves import (
     gaussian_realification as public_gaussian_realification,
 )
@@ -245,7 +246,7 @@ def test_admission_bounds_each_component_before_expansion() -> None:
         variable="z",
         terms=tuple(_term(1, 1, degree) for degree in range(64, 59, -1)),
     )
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         gaussian_realification(polynomial, ("x", "y"))
     assert (
         error_code(exc_info.value)
@@ -258,7 +259,7 @@ def test_admission_reserves_binomial_coefficient_digits() -> None:
         variable="z",
         terms=(_term(10**256 - 1, 0, 64),),
     )
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         gaussian_realification(polynomial, ("x", "y"))
     assert (
         error_code(exc_info.value)

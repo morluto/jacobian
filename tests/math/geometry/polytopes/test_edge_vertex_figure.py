@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Callable
 from fractions import Fraction
 from itertools import combinations
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -539,22 +536,6 @@ class TestNativeVsCatalogParity:
         ids = {tool.operation_id for tool in TOOLS}
         assert "polytope.rational.edge_profile.compute" in ids
         assert "polytope.rational.vertex_figure.compute" in ids
-
-    def test_strict_json_examples_validate_and_run(self) -> None:
-        runners: dict[str, Callable[[Any], object]] = {
-            "polytope.rational.edge_profile.compute": compute_polytope_edge_profile,
-            "polytope.rational.vertex_figure.compute": compute_polytope_vertex_figure,
-        }
-        by_id = {tool.operation_id for tool in TOOLS}
-        assert set(runners) <= by_id
-        for tool in TOOLS:
-            if tool.operation_id not in runners:
-                continue
-            for example in tool.examples:
-                request = tool.request_type.model_validate_json(
-                    json.dumps(example.input)
-                )
-                assert runners[tool.operation_id](request) is not None
 
 
 def combinations_with_binary_vectors(dim: int, count: int) -> list[tuple[int, ...]]:

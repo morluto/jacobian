@@ -7,7 +7,7 @@ from jacobian.math.number_theory.characters.operations import dirichlet_characte
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 
-def test_character_parity_is_exactly_its_value_at_minus_one():
+def test_character_parity_is_exactly_its_value_at_minus_one() -> None:
     for modulus in (1, 3, 5, 8, 12, 15):
         group = character_group(modulus)
         family = dirichlet_character_group_enumerate(group)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from itertools import combinations, product
 
 import pytest
@@ -37,7 +38,9 @@ def _span(rows: tuple[tuple[int, ...], ...], width: int) -> set[tuple[int, ...]]
     }
 
 
-def _subsets(rows: tuple[tuple[int, ...], ...]):
+def _subsets(
+    rows: tuple[tuple[int, ...], ...],
+) -> Iterator[tuple[tuple[int, ...], ...]]:
     for size in range(len(rows) + 1):
         yield from combinations(rows, size)
 

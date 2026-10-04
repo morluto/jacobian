@@ -1,10 +1,15 @@
 """Independent finite checks for exact conjugacy-class power maps."""
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 from tests.error_assertions import error_code
 
-from jacobian.math.groups._models import GroupConjugacyClassesRequest
+from jacobian.math.groups._models import (
+    GroupConjugacyClassesRequest,
+    GroupConjugacyClassesResult,
+)
 from jacobian.math.groups._tools import compute_group_conjugacy_classes
 from jacobian.math.groups.characters._models import ClassPowerMapRequest
 from jacobian.math.groups.characters.operations import class_power_map
@@ -80,5 +85,5 @@ def test_native_power_map_rejects_malformed_inputs_without_pydantic_leak() -> No
         class_power_map(partition, 1_000_001)
     assert exc_info.value.errors()[0]["type"] == "groups.characters.power_map_exponent"
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        class_power_map({"degree": 3}, 2)
+        class_power_map(cast(GroupConjugacyClassesResult, {"degree": 3}), 2)
     assert exc_info.value.errors()[0]["type"] == "groups.characters.partition_type"

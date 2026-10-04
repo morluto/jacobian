@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -84,7 +85,10 @@ def test_generators_and_weight_zero_v2_edge_case() -> None:
         coordinates=(CanonicalRational(num=1, den=1),),
     )
     raised = modular_form_coordinates_v2(weight_two_generator)
-    assert tuple(value.as_fraction() for value in raised.coordinates) == (1, 0)
+    assert tuple(rational(value).as_fraction() for value in raised.coordinates) == (
+        Fraction(1),
+        Fraction(0),
+    )
 
     odd_weight_basis = modular_form_basis_q_expansions(
         ModularFormSpace(level=4, weight=3, kind="M"), 2
@@ -114,13 +118,16 @@ def test_v2_exact_target_coordinates_and_independent_coefficient_rule() -> None:
             assert image.space == target_space
             assert image.basis_id == "gamma0-four-weight-2-generators-v1"
             actual = modular_form_coordinates_q_expansion(image, target_precision)
-            src = [c.as_fraction() for c in element.expansion.q_expansion.coefficients]
+            src = [
+                rational(c).as_fraction()
+                for c in element.expansion.q_expansion.coefficients
+            ]
             expected = [
                 src[n // 2] if n % 2 == 0 else Fraction(0)
                 for n in range(target_precision)
             ]
             assert [
-                c.as_fraction() for c in actual.q_expansion.coefficients
+                rational(c).as_fraction() for c in actual.q_expansion.coefficients
             ] == expected
             assert (
                 ModularFormCoordinates.model_validate_json(image.model_dump_json())

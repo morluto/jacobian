@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from fractions import Fraction
 from typing import Any
 
@@ -116,16 +117,19 @@ def _independent_coaction_oracle(
     # independently from the expected triangular formulas.
     axes = 5
     one = Fraction(1)
-    x_s = {(1, 0, 0, 0, 0): one}
-    y_s = {(0, 1, 0, 0, 0): one, (1, 0, 0, 1, 0): one}
-    z_s = {
+    x_s: dict[tuple[int, ...], Fraction] = {(1, 0, 0, 0, 0): one}
+    y_s: dict[tuple[int, ...], Fraction] = {
+        (0, 1, 0, 0, 0): one,
+        (1, 0, 0, 1, 0): one,
+    }
+    z_s: dict[tuple[int, ...], Fraction] = {
         (0, 0, 1, 0, 0): one,
         (0, 1, 0, 1, 0): one,
         (1, 0, 0, 2, 0): Fraction(1, 2),
     }
     source_lifts = (x_s, y_s, z_s)
-    parameter_t = {(0, 0, 0, 0, 1): one}
-    parameter_s_plus_t = {
+    parameter_t: dict[tuple[int, ...], Fraction] = {(0, 0, 0, 0, 1): one}
+    parameter_s_plus_t: dict[tuple[int, ...], Fraction] = {
         (0, 0, 0, 1, 0): one,
         (0, 0, 0, 0, 1): one,
     }
@@ -134,7 +138,9 @@ def _independent_coaction_oracle(
         left: dict[tuple[int, ...], Fraction] = {}
         right: dict[tuple[int, ...], Fraction] = {}
         for powers, coefficient in _terms(image).items():
-            substituted = {(0, 0, 0, 0, 0): coefficient}
+            substituted: dict[tuple[int, ...], Fraction] = {
+                (0, 0, 0, 0, 0): coefficient
+            }
             for axis, exponent in enumerate(powers[:-1]):
                 substituted = _multiply(
                     substituted, _power(source_lifts[axis], exponent, axes)
@@ -142,7 +148,9 @@ def _independent_coaction_oracle(
             substituted = _multiply(substituted, _power(parameter_t, powers[-1], axes))
             left = _add(left, substituted)
 
-            unreplaced = {(*powers[:-1], 0, 0): coefficient}
+            unreplaced: dict[tuple[int, ...], Fraction] = {
+                (*powers[:-1], 0, 0): coefficient
+            }
             right = _add(
                 right,
                 _multiply(
@@ -174,51 +182,57 @@ def test_action_rejects_lying_outer_and_empty_inner_sequences() -> None:
     from collections.abc import Sequence
 
     derivation, chains = _derivation()
+    malformed_chains: Any
 
     class TooMany(Sequence[Any]):
         def __len__(self) -> int:
             return len(chains)
 
-        def __getitem__(self, index: int) -> Any:
+        def __getitem__(self, index: int | slice) -> Any:
+            if isinstance(index, slice):
+                return tuple(chains)[index]
             if index < len(chains):
                 return chains[index]
             raise IndexError
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[Any]:
             yield from chains
             while True:
                 yield chains[0]
 
     with pytest.raises(OperationDomainValidationError) as error:
-        ga_action_from_derivation(derivation, TooMany())
+        malformed_chains = TooMany()
+        ga_action_from_derivation(derivation, malformed_chains)
     assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
 
     class ShortOuter(Sequence[Any]):
         def __len__(self) -> int:
             return len(chains)
 
-        def __getitem__(self, index: int) -> Any:
+        def __getitem__(self, index: int | slice) -> Any:
             return chains[index] if index == 0 else (_ for _ in ()).throw(IndexError)
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[Any]:
             yield chains[0]
 
     with pytest.raises(OperationDomainValidationError) as error:
-        ga_action_from_derivation(derivation, ShortOuter())
+        malformed_chains = ShortOuter()
+        ga_action_from_derivation(derivation, malformed_chains)
     assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
 
     class EmptyChain(Sequence[Any]):
         def __len__(self) -> int:
             return 1
 
-        def __getitem__(self, index: int) -> Any:
+        def __getitem__(self, index: int | slice) -> Any:
             raise IndexError
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[Any]:
             return iter(())
 
     with pytest.raises(OperationDomainValidationError) as error:
-        ga_action_from_derivation(derivation, (EmptyChain(), *chains[1:]))
+        malformed_chains = (EmptyChain(), *chains[1:])
+        ga_action_from_derivation(derivation, malformed_chains)
     assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
 
 
@@ -319,15 +333,17 @@ def test_native_action_rejects_malformed_chains_as_domain_errors(
 def test_native_action_rejects_lazy_chain_iterables_without_materializing() -> None:
     derivation, _ = _derivation()
     pulled = 0
+    malformed_chains: Any
 
-    def lazy():
+    def lazy() -> Iterator[tuple[()]]:
         nonlocal pulled
         while pulled < 100_000:
             pulled += 1
             yield ()
 
     with pytest.raises(OperationDomainValidationError):
-        ga_action_from_derivation(derivation, lazy())
+        malformed_chains = lazy()
+        ga_action_from_derivation(derivation, malformed_chains)
     assert pulled == 0
 
 

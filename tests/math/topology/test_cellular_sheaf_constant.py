@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -191,4 +192,4 @@ def test_constant_sheaf_classifies_untrusted_non_tuple_basis_as_domain_error() -
     from jacobian.catalog.models import OperationDomainValidationError
 
     with pytest.raises(OperationDomainValidationError):
-        constant_sheaf(_POINT, basis=["e"])
+        constant_sheaf(_POINT, basis=cast(tuple[str, ...], ["e"]))

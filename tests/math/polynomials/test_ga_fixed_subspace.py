@@ -1,6 +1,7 @@
 """Exact fixed vectors of a bounded finite-dimensional polynomial Ga action."""
 
 from fractions import Fraction
+from typing import Any, NoReturn
 
 import pytest
 
@@ -131,13 +132,15 @@ def test_forged_action_matrix_is_rejected() -> None:
     )
 
 
-def test_kernel_work_is_admitted_before_exact_elimination(monkeypatch) -> None:
+def test_kernel_work_is_admitted_before_exact_elimination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stable = ga_stable_subrepresentation(
         _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
     )
     monkeypatch.setattr(_stable_kernels, "MAX_GA_FIXED_KERNEL_WORK", 1)
 
-    def elimination_must_not_start(_matrix):
+    def elimination_must_not_start(_matrix: Any) -> NoReturn:
         raise AssertionError("kernel elimination ran before work admission")
 
     monkeypatch.setattr(
@@ -202,7 +205,9 @@ def test_hadamard_bound_rejects_exact_matrix_before_kernel_elimination() -> None
     )
 
 
-def test_aggregate_polynomial_support_is_admitted_before_expansion(monkeypatch) -> None:
+def test_aggregate_polynomial_support_is_admitted_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     zero_action = PolynomialGaAction(
         source_variables=("x",),
         parameter="t",
@@ -212,7 +217,7 @@ def test_aggregate_polynomial_support_is_admitted_before_expansion(monkeypatch) 
     stable = ga_stable_subrepresentation(zero_action, basis)
     monkeypatch.setattr(_stable_kernels, "MAX_GA_FIXED_SUPPORT_TERMS", 1)
 
-    def expansion_must_not_start(*_args, **_kwargs):
+    def expansion_must_not_start(*_args: Any, **_kwargs: Any) -> NoReturn:
         raise AssertionError(
             "polynomial representatives were expanded before support admission"
         )
@@ -248,7 +253,7 @@ def test_malformed_typed_subrepresentation_is_revalidated() -> None:
 
 
 def test_oversized_claimed_matrix_is_rejected_before_reconstruction(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stable = ga_stable_subrepresentation(
         _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
@@ -270,7 +275,7 @@ def test_oversized_claimed_matrix_is_rejected_before_reconstruction(
         }
     )
 
-    def reconstruction_must_not_start(*_args, **_kwargs):
+    def reconstruction_must_not_start(*_args: Any, **_kwargs: Any) -> NoReturn:
         raise AssertionError("reconstruction ran before matrix width admission")
 
     monkeypatch.setattr(
@@ -285,7 +290,7 @@ def test_oversized_claimed_matrix_is_rejected_before_reconstruction(
 
 
 def test_oversized_claimed_matrix_degree_is_rejected_before_reconstruction(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stable = ga_stable_subrepresentation(
         _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
@@ -307,7 +312,7 @@ def test_oversized_claimed_matrix_degree_is_rejected_before_reconstruction(
         }
     )
 
-    def reconstruction_must_not_start(*_args, **_kwargs):
+    def reconstruction_must_not_start(*_args: Any, **_kwargs: Any) -> NoReturn:
         raise AssertionError("reconstruction ran before matrix degree admission")
 
     monkeypatch.setattr(
@@ -321,13 +326,15 @@ def test_oversized_claimed_matrix_degree_is_rejected_before_reconstruction(
     )
 
 
-def test_result_cell_admission_counts_retained_entries(monkeypatch) -> None:
+def test_result_cell_admission_counts_retained_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stable = ga_stable_subrepresentation(
         _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
     )
     monkeypatch.setattr(_stable_kernels, "MAX_GA_ACTION_OUTPUT_CELLS", 10**9)
-    narrow = [(Fraction(1), Fraction(0))]
-    wide = [
+    narrow: list[tuple[Fraction, ...]] = [(Fraction(1), Fraction(0))]
+    wide: list[tuple[Fraction, ...]] = [
         (Fraction(10**_stable_kernels.MAX_GA_FIXED_COORDINATE_DIGITS - 1), Fraction(1))
     ]
 
@@ -338,7 +345,9 @@ def test_result_cell_admission_counts_retained_entries(monkeypatch) -> None:
     ) == _stable_kernels._admit_fixed_result_cells(stable, wide, 1)
 
 
-def test_result_cell_envelope_rejects_before_construction(monkeypatch) -> None:
+def test_result_cell_envelope_rejects_before_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stable = ga_stable_subrepresentation(
         _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
     )

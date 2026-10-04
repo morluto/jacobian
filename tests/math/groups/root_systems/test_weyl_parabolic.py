@@ -27,7 +27,9 @@ A3 = ((2, -1, 0), (-1, 2, -1), (0, -1, 2))
         ((0, 1, 2), A3, 24),
     ),
 )
-def test_parabolic_value_retains_parent_embedding(indices, submatrix, order):
+def test_parabolic_value_retains_parent_embedding(
+    indices: tuple[int, ...], submatrix: tuple[tuple[int, ...], ...], order: int
+) -> None:
     result = weyl_parabolic(A3, indices)
     assert result.matrix == CartanMatrix.model_validate(A3)
     assert result.simple_root_indices == indices
@@ -38,7 +40,7 @@ def test_parabolic_value_retains_parent_embedding(indices, submatrix, order):
         assert weyl_group_order(submatrix).group_order == result.group_order
 
 
-def test_parabolic_request_rejects_noncanonical_or_out_of_range_indices():
+def test_parabolic_request_rejects_noncanonical_or_out_of_range_indices() -> None:
     with pytest.raises(ValueError):
         WeylParabolicRequest(
             matrix=CartanMatrix.model_validate(A3), simple_root_indices=(1, 0)
@@ -51,7 +53,7 @@ def test_parabolic_request_rejects_noncanonical_or_out_of_range_indices():
         weyl_parabolic(A3, (0, 0))
 
 
-def test_public_parabolic_operation_uses_the_typed_request_and_result():
+def test_public_parabolic_operation_uses_the_typed_request_and_result() -> None:
     tool = next(
         tool for tool in TOOLS if tool.operation_id == "weyl_group.parabolic.compute"
     )

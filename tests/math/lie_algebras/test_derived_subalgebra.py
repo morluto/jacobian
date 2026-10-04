@@ -10,7 +10,9 @@ from jacobian.math.lie_algebras.operations import (
 )
 
 
-def _algebra(basis: list[str], constants: list[tuple[int, int, int, int]]):
+def _algebra(
+    basis: list[str], constants: list[tuple[int, int, int, int]]
+) -> FiniteDimensionalLieAlgebra:
     return FiniteDimensionalLieAlgebra.model_validate(
         {
             "basis": basis,

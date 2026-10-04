@@ -25,7 +25,9 @@ _CASE = st.tuples(
 _ORDERS = {"LT": -1, "EQ": 0, "GT": 1}
 
 
-def _value_and_root(case: tuple[list[int], int]):
+def _value_and_root(
+    case: tuple[list[int], int],
+) -> tuple[RealAlgebraicValue, sympy.Expr] | None:
     coefficients = (1, *case[0])
     polynomial = sympy.Poly.from_list(list(coefficients), _VARIABLE, domain=sympy.ZZ)
     if polynomial.is_irreducible is not True:

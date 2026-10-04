@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from fractions import Fraction
 from itertools import product
 
 import pytest
@@ -23,7 +24,9 @@ from jacobian.math.polynomials.ideals.operations import (
 from jacobian.math.polynomials.values import RationalPolynomialIdeal
 
 
-def _configuration(weights: tuple[int, ...], labels: tuple[str, ...] | None = None):
+def _configuration(
+    weights: tuple[int, ...], labels: tuple[str, ...] | None = None
+) -> AffineConfiguration:
     names = labels or tuple(f"x{i + 1}" for i in range(len(weights)))
     return AffineConfiguration(
         row_labels=("degree",),
@@ -32,7 +35,9 @@ def _configuration(weights: tuple[int, ...], labels: tuple[str, ...] | None = No
     )
 
 
-def _exponent_coefficients(ideal: RationalPolynomialIdeal):
+def _exponent_coefficients(
+    ideal: RationalPolynomialIdeal,
+) -> tuple[tuple[tuple[tuple[int, ...], Fraction], ...], ...]:
     return tuple(
         tuple(
             (term.exponents, term.coefficient.as_fraction())
@@ -47,10 +52,10 @@ def test_toric_ideal_uses_the_labelled_axis_and_exact_graver_binomials() -> None
 
     assert ideal.variables == ("u", "v", "w")
     assert _exponent_coefficients(ideal) == (
-        (((0, 2, 0), 1), ((0, 0, 1), -1)),
-        (((1, 0, 0), 1), ((0, 1, 0), -1)),
-        (((1, 1, 0), 1), ((0, 0, 1), -1)),
-        (((2, 0, 0), 1), ((0, 0, 1), -1)),
+        (((0, 2, 0), Fraction(1)), ((0, 0, 1), Fraction(-1))),
+        (((1, 0, 0), Fraction(1)), ((0, 1, 0), Fraction(-1))),
+        (((1, 1, 0), Fraction(1)), ((0, 0, 1), Fraction(-1))),
+        (((2, 0, 0), Fraction(1)), ((0, 0, 1), Fraction(-1))),
     )
     for generator in ideal.generators:
         weighted_degrees = {
@@ -134,8 +139,8 @@ def test_graver_moves_connect_every_tiny_admitted_fiber() -> None:
 def test_zero_row_and_one_positive_weight_have_exact_kernel_ideals() -> None:
     zero_row = toric_ideal(_configuration((0, 0), ("a", "b")))
     assert _exponent_coefficients(zero_row) == (
-        (((0, 1), 1), ((0, 0), -1)),
-        (((1, 0), 1), ((0, 0), -1)),
+        (((0, 1), Fraction(1)), ((0, 0), Fraction(-1))),
+        (((1, 0), Fraction(1)), ((0, 0), Fraction(-1))),
     )
 
     zero_kernel = toric_ideal(_configuration((99_999_999,), ("q",)))
@@ -147,9 +152,13 @@ def test_zero_row_and_one_positive_weight_have_exact_kernel_ideals() -> None:
 def test_two_column_exact_kernel_avoids_coordinate_box_expansion() -> None:
     ideal = toric_ideal(_configuration((32_768, 32_767), ("p", "q")))
 
-    assert _exponent_coefficients(ideal) == ((((32_767, 0), 1), ((0, 32_768), -1)),)
+    assert _exponent_coefficients(ideal) == (
+        (((32_767, 0), Fraction(1)), ((0, 32_768), Fraction(-1))),
+    )
     scaled = toric_ideal(_configuration((99_999_999, 99_999_999), ("r", "s")))
-    assert _exponent_coefficients(scaled) == ((((1, 0), 1), ((0, 1), -1)),)
+    assert _exponent_coefficients(scaled) == (
+        (((1, 0), Fraction(1)), ((0, 1), Fraction(-1))),
+    )
 
 
 def test_toric_request_schema_publishes_its_representable_input_bounds() -> None:
@@ -199,11 +208,11 @@ def test_toric_ideal_admits_the_textbook_three_weight_configuration() -> None:
     # One binomial per independently verified Graver vector of [1 2 3]
     # (see tests/math/affine_semigroups/test_graver_basis.py), in sorted order.
     assert _exponent_coefficients(ideal) == (
-        (((0, 3, 0), 1), ((0, 0, 2), -1)),
-        (((1, 0, 1), 1), ((0, 2, 0), -1)),
-        (((1, 1, 0), 1), ((0, 0, 1), -1)),
-        (((2, 0, 0), 1), ((0, 1, 0), -1)),
-        (((3, 0, 0), 1), ((0, 0, 1), -1)),
+        (((0, 3, 0), Fraction(1)), ((0, 0, 2), Fraction(-1))),
+        (((1, 0, 1), Fraction(1)), ((0, 2, 0), Fraction(-1))),
+        (((1, 1, 0), Fraction(1)), ((0, 0, 1), Fraction(-1))),
+        (((2, 0, 0), Fraction(1)), ((0, 1, 0), Fraction(-1))),
+        (((3, 0, 0), Fraction(1)), ((0, 0, 1), Fraction(-1))),
     )
     for generator in ideal.generators:
         weighted_degrees = {
@@ -220,7 +229,7 @@ def test_toric_ideal_admits_the_textbook_three_weight_configuration() -> None:
 def test_candidate_work_envelope_rejects_before_graver_enumeration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_if_called(*_args, **_kwargs):
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError(
             "Graver enumeration ran before the work-envelope preflight"
         )

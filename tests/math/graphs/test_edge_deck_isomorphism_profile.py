@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -78,7 +81,9 @@ def test_edge_profile_round_trip_checks_map_relations() -> None:
         ("vertex_maps", lambda value: ((False, *value[0][1:]), *value[1:])),
     ],
 )
-def test_wire_profile_rejects_boolean_index_and_map_values(field, mutate) -> None:
+def test_wire_profile_rejects_boolean_index_and_map_values(
+    field: str, mutate: Callable[[Any], Any]
+) -> None:
     profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     forged = profile.model_dump(mode="python")
     forged[field] = mutate(forged[field])
@@ -116,10 +121,14 @@ def test_edgeless_graph_retains_empty_edge_profile() -> None:
     )
     profile = edge_deck_isomorphism_profile(family)
     assert profile.family == family
-    assert profile.classes == profile.class_indices == profile.vertex_maps == ()
+    assert profile.classes == ()
+    assert profile.class_indices == ()
+    assert profile.vertex_maps == ()
 
 
-def test_native_operation_admits_work_before_card_canonicalization(monkeypatch) -> None:
+def test_native_operation_admits_work_before_card_canonicalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = SimpleUndirectedGraph(
         vertices=tuple(f"v{index}" for index in range(10)),
         edges=(("v0", "v1"),),
@@ -139,7 +148,9 @@ def test_native_operation_admits_work_before_card_canonicalization(monkeypatch) 
     )
 
 
-def test_work_and_output_bounds_have_exact_boundaries(monkeypatch) -> None:
+def test_work_and_output_bounds_have_exact_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     family = edge_deletion_family(_path4())
     request = EdgeDeckIsomorphismProfileRequest.model_construct(deck=family)
     _, exact_work, exact_cells = deck_models._edge_iso_profile_resource_estimates(
@@ -195,7 +206,7 @@ def test_raw_tuple_preflight_rejects_order_before_nested_family_parsing() -> Non
 
 
 def test_wire_output_shape_bound_precedes_nested_representative_canonicalization(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     payload = profile.model_dump(mode="json")
@@ -214,7 +225,9 @@ def test_wire_output_shape_bound_precedes_nested_representative_canonicalization
     )
 
 
-def test_wire_output_class_count_is_capped_before_row_preflight(monkeypatch) -> None:
+def test_wire_output_class_count_is_capped_before_row_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     payload = profile.model_dump(mode="python")
     payload["classes"] = (*payload["classes"],) * 100

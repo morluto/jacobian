@@ -181,7 +181,9 @@ def test_nested_category_identifiers_are_counted_by_encoded_leaf_size() -> None:
     # Nested identifiers are pairs, so len(identifier) is always 2 even though
     # their wire form contains thousands of leaf characters.
     def identifier(tag: str) -> CategoryIdentifier:
-        leaves = (tag.ljust(16, "x"),) + ("x" * 16,) * 255
+        leaves: tuple[CategoryIdentifier, ...] = (tag.ljust(16, "x"),) + (
+            "x" * 16,
+        ) * 255
         while len(leaves) > 1:
             leaves = tuple((leaves[i], leaves[i + 1]) for i in range(0, len(leaves), 2))
         return leaves[0]
@@ -194,7 +196,7 @@ def test_nested_category_identifiers_are_counted_by_encoded_leaf_size() -> None:
         for obj_index, obj in enumerate(objects)
         for power in range(8)
     )
-    by_index = {
+    by_index: dict[tuple[int, int], MorphismSpec] = {
         (obj_index, power): morphisms[obj_index * 8 + power]
         for obj_index in range(8)
         for power in range(8)

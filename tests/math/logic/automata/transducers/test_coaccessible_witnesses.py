@@ -80,10 +80,14 @@ def test_witnesses_match_independent_shortest_word_enumeration() -> None:
         state: _direct_shortest(transducer, state)
         for state in range(transducer.state_count)
     }
-    expected = {state: witness for state, witness in expected.items() if witness}
+    expected = {
+        state: witness for state, witness in expected.items() if witness is not None
+    }
     assert tuple(row.state for row in result.witnesses) == tuple(expected)
     for row in result.witnesses:
-        suffix, trace, output = expected[row.state]
+        witness = expected[row.state]
+        assert witness is not None
+        suffix, trace, output = witness
         assert row.input_suffix == suffix
         assert row.state_trace == trace
         assert row.output_word == output

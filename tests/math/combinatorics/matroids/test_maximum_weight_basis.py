@@ -38,7 +38,9 @@ def _triangle() -> LinearMatroid:
     return _matroid(5, ((1, 0, 1), (0, 1, 1)))
 
 
-def _solve(matroid: LinearMatroid, weights: tuple[int, ...]):
+def _solve(
+    matroid: LinearMatroid, weights: tuple[int, ...]
+) -> MaximumWeightBasisResult:
     weight_function = MatroidWeightFunction.model_construct(
         ground_axis=matroid.ground_axis, values=weights
     )

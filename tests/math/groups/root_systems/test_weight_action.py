@@ -20,26 +20,33 @@ from jacobian.math.groups.root_systems.operations import (
 from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
 from jacobian.math.matrices.values import IntegerMatrix
 
-_A2 = ((2, -1), (-1, 2))
-_B2 = ((2, -2), (-1, 2))
+_A2 = CartanMatrix.model_validate(((2, -1), (-1, 2)))
+_B2 = CartanMatrix.model_validate(((2, -2), (-1, 2)))
 
 
-def _apply_simple_reflection(weight: tuple[int, ...], cartan, index: int):
+def _apply_simple_reflection(
+    weight: tuple[int, ...], cartan: CartanMatrix, index: int
+) -> tuple[int, ...]:
     """Independent fundamental-weight formula used as a small exact oracle."""
-    root_in_fundamental_basis = tuple(cartan[row][index] for row in range(len(cartan)))
+    entries = cartan.matrix.entries
+    root_in_fundamental_basis = tuple(
+        entries[row][index] for row in range(len(entries))
+    )
     return tuple(
         weight[row] - weight[index] * root_in_fundamental_basis[row]
-        for row in range(len(cartan))
+        for row in range(len(entries))
     )
 
 
-def _weight_action(cartan, word, coordinates):
+def _weight_action(
+    cartan: CartanMatrix, word: tuple[int, ...], coordinates: tuple[int, ...]
+) -> WeightLatticeVector:
     element = weyl_element_from_word(cartan, word)
     vector = weight_lattice_vector(cartan, coordinates)
     return weyl_element_act_on_weight(element, vector)
 
 
-def test_a2_action_matches_exact_reflection_formula_and_serializes():
+def test_a2_action_matches_exact_reflection_formula_and_serializes() -> None:
     element = weyl_element_from_word(_A2, (0, 1))
     source = weight_lattice_vector(_A2, (1, 0))
     request = WeylElementWeightActionRequest(element=element, weight=source)
@@ -62,14 +69,14 @@ def test_a2_action_matches_exact_reflection_formula_and_serializes():
     )
 
 
-def test_b2_unequal_root_lengths_use_the_exact_weight_basis_map():
+def test_b2_unequal_root_lengths_use_the_exact_weight_basis_map() -> None:
     assert _apply_simple_reflection((1, 0), _B2, 0) == (-1, 1)
     assert _apply_simple_reflection((0, 1), _B2, 1) == (2, -1)
     assert _weight_action(_B2, (0,), (1, 0)).coordinates == (-1, 1)
     assert _weight_action(_B2, (1,), (0, 1)).coordinates == (2, -1)
 
 
-def test_identity_reflection_composition_and_inverse_are_exact():
+def test_identity_reflection_composition_and_inverse_are_exact() -> None:
     source = weight_lattice_vector(_A2, (3, -2))
     identity = weyl_element_from_word(_A2, ())
     reflection = weyl_element_from_word(_A2, (0,))
@@ -80,7 +87,7 @@ def test_identity_reflection_composition_and_inverse_are_exact():
     assert twice == source
 
 
-def test_same_rank_but_different_cartan_parent_is_rejected():
+def test_same_rank_but_different_cartan_parent_is_rejected() -> None:
     element = weyl_element_from_word(_A2, (0,))
     weight = weight_lattice_vector(_B2, (1, 0))
     with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -90,7 +97,7 @@ def test_same_rank_but_different_cartan_parent_is_rejected():
     )
 
 
-def test_caller_constructed_invalid_weyl_element_is_re_admitted():
+def test_caller_constructed_invalid_weyl_element_is_re_admitted() -> None:
     invalid = WeylElement.model_construct(
         matrix=cartan_datum(_A2).cartan_matrix,
         root_action=IntegerMatrix(
@@ -111,7 +118,7 @@ def test_caller_constructed_invalid_weyl_element_is_re_admitted():
         IntegerMatrix.model_construct(row_count=2, column_count=2, entries=object()),
     ),
 )
-def test_malformed_nested_weyl_action_is_a_domain_error(root_action):
+def test_malformed_nested_weyl_action_is_a_domain_error(root_action: object) -> None:
     invalid = WeylElement.model_construct(
         matrix=cartan_datum(_A2).cartan_matrix,
         root_action=root_action,
@@ -121,7 +128,7 @@ def test_malformed_nested_weyl_action_is_a_domain_error(root_action):
         weyl_element_act_on_weight(invalid, weight)
 
 
-def test_huge_caller_constructed_cartan_entry_is_rejected_before_rendering():
+def test_huge_caller_constructed_cartan_entry_is_rejected_before_rendering() -> None:
     huge = 1 << 1_000_000
     matrix = IntegerMatrix.model_construct(
         row_count=2, column_count=2, entries=((2, huge), (-1, 2))
@@ -164,13 +171,15 @@ def test_huge_caller_constructed_cartan_entry_is_rejected_before_rendering():
         ),
     ),
 )
-def test_malformed_nested_weight_shapes_are_domain_errors(weight):
+def test_malformed_nested_weight_shapes_are_domain_errors(
+    weight: WeightLatticeVector,
+) -> None:
     element = weyl_element_from_word(_A2, (0,))
     with pytest.raises(OperationDomainValidationError):
         weyl_element_act_on_weight(element, weight)
 
 
-def test_oversized_input_weight_preserves_resource_admission_code():
+def test_oversized_input_weight_preserves_resource_admission_code() -> None:
     element = weyl_element_from_word(_A2, (0,))
     weight = WeightLatticeVector.model_construct(
         datum=cartan_datum(_A2), coordinates=(1 << 200, 0)
@@ -183,7 +192,7 @@ def test_oversized_input_weight_preserves_resource_admission_code():
     )
 
 
-def test_cancellation_keeps_admissible_output_coordinates():
+def test_cancellation_keeps_admissible_output_coordinates() -> None:
     element = weyl_element_from_word(_A2, (0,))
     source = WeightLatticeVector.model_construct(
         datum=cartan_datum(_A2),
@@ -193,7 +202,7 @@ def test_cancellation_keeps_admissible_output_coordinates():
     assert result.coordinates == (-(1 << 132), 0)
 
 
-def test_rank_eight_fraction_preflight_accepts_identity_action():
+def test_rank_eight_fraction_preflight_accepts_identity_action() -> None:
     e8 = cartan_matrix_from_type("E", 8).matrix
     source = weight_lattice_vector(e8, (1, 0, 0, 0, 0, 0, 0, 0))
     result = weyl_element_act_on_weight(weyl_element_from_word(e8, ()), source)

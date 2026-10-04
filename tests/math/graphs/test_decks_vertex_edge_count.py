@@ -1,5 +1,6 @@
 """Exact vertex-deck edge-count reconstruction and independent small oracle."""
 
+from collections.abc import Iterator
 from itertools import combinations
 
 import pytest
@@ -22,7 +23,7 @@ def _independent_card_edge_counts(graph: SimpleUndirectedGraph) -> tuple[int, ..
     )
 
 
-def _all_graphs(order: int):
+def _all_graphs(order: int) -> Iterator[SimpleUndirectedGraph]:
     vertices = tuple(f"v{index}" for index in range(order))
     possible_edges = tuple(combinations(vertices, 2))
     for mask in range(1 << len(possible_edges)):

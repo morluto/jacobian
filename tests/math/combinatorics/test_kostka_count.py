@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import permutations
 
 import pytest
@@ -20,10 +21,11 @@ from jacobian.math.combinatorics.semistandard_tableaux.content_count import (
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     TableauContent,
+    TableauContentTerm,
 )
 
 
-def _partitions(size: int, largest: int | None = None):
+def _partitions(size: int, largest: int | None = None) -> Iterator[tuple[int, ...]]:
     if size == 0:
         yield ()
         return
@@ -33,7 +35,7 @@ def _partitions(size: int, largest: int | None = None):
             yield (first, *rest)
 
 
-def _content_vectors(total: int, labels: int):
+def _content_vectors(total: int, labels: int) -> Iterator[tuple[int, ...]]:
     if labels == 0:
         if total == 0:
             yield ()
@@ -74,12 +76,14 @@ def _reference_count(parts: tuple[int, ...], labels: tuple[int, ...]) -> int:
     return valid
 
 
-def _request(parts: tuple[int, ...], weighted_labels: tuple[tuple[int, int], ...]):
+def _request(
+    parts: tuple[int, ...], weighted_labels: tuple[tuple[int, int], ...]
+) -> FixedContentCountRequest:
     return FixedContentCountRequest(
         partition=IntegerPartition(parts=parts),
         content=TableauContent(
             terms=tuple(
-                {"entry": entry, "multiplicity": multiplicity}
+                TableauContentTerm(entry=entry, multiplicity=multiplicity)
                 for entry, multiplicity in weighted_labels
             )
         ),
@@ -140,8 +144,10 @@ def test_wrong_total_and_too_few_distinct_labels_are_exact_zero() -> None:
     assert fixed_content_count(insufficient_height).count == 0
 
 
-def test_multiset_prefix_work_is_rejected_before_search(monkeypatch) -> None:
-    def unexpected_search(*_args, **_kwargs):
+def test_multiset_prefix_work_is_rejected_before_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_search(*_args: object, **_kwargs: object) -> None:
         pytest.fail("search began before fixed-content work admission")
 
     monkeypatch.setattr(kernel, "_count_by_row_major_search", unexpected_search)
@@ -150,11 +156,13 @@ def test_multiset_prefix_work_is_rejected_before_search(monkeypatch) -> None:
         fixed_content_count(request)
 
 
-def test_forged_oversized_carriers_are_rejected_before_dump(monkeypatch) -> None:
+def test_forged_oversized_carriers_are_rejected_before_dump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     partition = IntegerPartition.model_construct(parts=(1,) * 1_000_000)
     content = TableauContent(terms=())
 
-    def forbidden_dump(self, *args, **kwargs):
+    def forbidden_dump(self: IntegerPartition, *args: object, **kwargs: object) -> None:
         pytest.fail("oversized forged carrier was dumped before envelope check")
 
     monkeypatch.setattr(IntegerPartition, "model_dump", forbidden_dump)
@@ -165,11 +173,17 @@ def test_forged_oversized_carriers_are_rejected_before_dump(monkeypatch) -> None
 def test_content_terms_must_be_unique_and_in_increasing_label_order() -> None:
     with pytest.raises(ValueError):
         TableauContent(
-            terms=({"entry": 3, "multiplicity": 1}, {"entry": 2, "multiplicity": 1})
+            terms=(
+                TableauContentTerm(entry=3, multiplicity=1),
+                TableauContentTerm(entry=2, multiplicity=1),
+            )
         )
     with pytest.raises(ValueError):
         TableauContent(
-            terms=({"entry": 2, "multiplicity": 1}, {"entry": 2, "multiplicity": 1})
+            terms=(
+                TableauContentTerm(entry=2, multiplicity=1),
+                TableauContentTerm(entry=2, multiplicity=1),
+            )
         )
 
 
@@ -197,7 +211,7 @@ def test_two_row_dynamic_count_admits_three_label_fixed_content(
 ) -> None:
     request = _request((250, 250), ((1, 125), (2, 125), (3, 250)))
 
-    def multinomial_expansion_must_not_run(_content):
+    def multinomial_expansion_must_not_run(_content: TableauContent) -> int:
         pytest.fail("two-row reduction expanded the multiset word family")
 
     monkeypatch.setattr(
@@ -207,7 +221,9 @@ def test_two_row_dynamic_count_admits_three_label_fixed_content(
     assert fixed_content_count(request).count == 1
 
 
-def test_multiset_search_work_admits_its_exact_bound(monkeypatch) -> None:
+def test_multiset_search_work_admits_its_exact_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     request = _request((4, 3, 1), ((4, 3), (9, 3), (12, 2)))
     exact_work_bound = 9 * 560 * (3 + 2)
     monkeypatch.setattr(kernel, "MAX_KOSTKA_SEARCH_WORK", exact_work_bound)

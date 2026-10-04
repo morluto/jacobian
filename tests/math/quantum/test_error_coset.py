@@ -137,7 +137,7 @@ def test_coset_rejects_model_constructed_check_spaces() -> None:
     )
     for check_space in malformed_spaces:
         with pytest.raises(OperationDomainValidationError):
-            stabilizer_error_coset(check_space, error)  # type: ignore[arg-type]
+            stabilizer_error_coset(check_space, error)
 
 
 def test_catalog_publishes_coset_operation() -> None:

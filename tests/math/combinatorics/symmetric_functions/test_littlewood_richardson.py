@@ -18,6 +18,7 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SKEW_CELLS,
     LittlewoodRichardsonCoefficientRequest,
     SchurProductRequest,
+    _lr_prefix_state_bound,
 )
 from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 from jacobian.math.combinatorics.symmetric_functions.littlewood_richardson import (
@@ -157,9 +158,9 @@ def _coefficient(
 
 
 def test_lr_coefficient_uses_fixed_reverse_row_lattice_convention() -> None:
-    result = _request((3, 2, 1), (2, 1), (2, 1))
+    request = _request((3, 2, 1), (2, 1), (2, 1))
     result = littlewood_richardson_coefficient(
-        result.outer, result.inner, result.content
+        request.outer, request.inner, request.content
     )
     assert result.coefficient == 2
     assert (result.outer.parts, result.inner.parts, result.content.parts) == (
@@ -315,7 +316,7 @@ def test_schur_product_admission_is_invariant_under_operand_order() -> None:
 def test_catalog_lr_invocation_shares_one_admission_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = lr_operations._lr_prefix_state_bound
+    original = _lr_prefix_state_bound
     calls = 0
 
     def counting(content: IntegerPartition) -> int:

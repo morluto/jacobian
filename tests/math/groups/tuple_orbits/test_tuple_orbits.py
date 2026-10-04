@@ -1,5 +1,6 @@
 """Diagonal tuple-family orbit profiles."""
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -33,7 +34,7 @@ def _cyclic_action() -> FinitePermutationAction:
 class _Boom:
     """An iterable value that fails loudly if validation traverses it."""
 
-    def __iter__(self) -> Any:
+    def __iter__(self) -> Iterator[Any]:
         raise AssertionError("unknown field was traversed")
 
     def __len__(self) -> int:
@@ -217,7 +218,7 @@ def test_raw_family_dimensions_are_rejected_before_container_copy() -> None:
         TupleFamilyOrbitSource.model_validate(oversized)
     assert "input_bound" in family_bound.value.errors()[0]["type"]
 
-    class _HugeRow(tuple):
+    class _HugeRow(tuple[Any, ...]):
         def __len__(self) -> int:
             return MAX_TUPLE_ARITY + 1
 
@@ -250,7 +251,7 @@ def test_oversized_domain_clamps_generator_materialization() -> None:
         def __len__(self) -> int:
             return 2_000_000
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[object]:
             return iter(())
 
     payload = {
@@ -378,7 +379,7 @@ def test_range_source_indices_count_toward_the_aggregate_bound() -> None:
 
 
 def test_raw_action_generator_dimensions_are_rejected_before_container_copy() -> None:
-    class _HugeGenerator(tuple):
+    class _HugeGenerator(tuple[Any, ...]):
         def __len__(self) -> int:
             return 2_000_000
 
@@ -393,7 +394,7 @@ def test_raw_action_generator_dimensions_are_rejected_before_container_copy() ->
 
 
 def test_nested_constructed_action_is_preflighted_on_source_validate() -> None:
-    class _HugeGenerator(tuple):
+    class _HugeGenerator(tuple[Any, ...]):
         def __len__(self) -> int:
             return 2_000_000
 
@@ -410,7 +411,7 @@ def test_nested_constructed_action_is_preflighted_on_source_validate() -> None:
 
 
 def test_forged_action_generators_are_preflighted_before_pydantic() -> None:
-    class _HugeGenerator(tuple):
+    class _HugeGenerator(tuple[Any, ...]):
         def __len__(self) -> int:
             return 2_000_000
 
@@ -459,11 +460,11 @@ def test_incomplete_forged_action_with_family_is_a_typed_domain_error() -> None:
 
 
 def test_orbit_row_payloads_are_preflighted_before_container_copy() -> None:
-    class _HugeRepresentative(tuple):
+    class _HugeRepresentative(tuple[Any, ...]):
         def __len__(self) -> int:
             return 2_000_000
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             return iter(range(2_000_000))
 
     payload = {
@@ -498,7 +499,7 @@ def test_result_rows_generator_is_materialized_under_the_row_bound() -> None:
 
     yields = 0
 
-    def rows():
+    def rows() -> Iterator[dict[str, object]]:
         nonlocal yields
         while True:
             yields += 1
@@ -529,11 +530,11 @@ def test_missing_arity_on_forged_source_is_a_typed_domain_error() -> None:
 
 
 def test_constructed_result_rows_are_revalidated() -> None:
-    class _HugeRepresentative(tuple):
+    class _HugeRepresentative(tuple[Any, ...]):
         def __len__(self) -> int:
             return 2_000_000
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             return iter(range(2_000_000))
 
     row = TupleOrbitRow.model_construct(
@@ -640,8 +641,8 @@ def test_complete_orbit_family_is_not_rejected_by_tuple_count_times_order() -> N
         generators=(tuple(generator),),
     )
     seed = (0, 8, 17)
-    family = []
-    current = seed
+    family: list[tuple[int, ...]] = []
+    current: tuple[int, ...] = seed
     for _ in range(360):
         family.append(current)
         current = tuple(generator[value] for value in current)
@@ -664,8 +665,8 @@ def test_complete_prime_cycle_orbit_is_not_rejected_by_images_times_order() -> N
         generators=(tuple(generator),),
     )
     seed = (0, 17)
-    family = []
-    current = seed
+    family: list[tuple[int, ...]] = []
+    current: tuple[int, ...] = seed
     for _ in range(493):
         family.append(current)
         current = tuple(generator[value] for value in current)
@@ -765,7 +766,7 @@ def test_first_indexed_source_seeds_each_orbit() -> None:
     from jacobian.math.groups.tuple_orbits.operations import _next_unclassified_seed
 
     order = ((1,), (0,), (2,))
-    unclassified = {(1,), (0,), (2,)}
+    unclassified: set[tuple[int, ...]] = {(1,), (0,), (2,)}
     seed, index = _next_unclassified_seed(order, 0, unclassified)
     assert (seed, index) == ((1,), 0)
     unclassified.discard((1,))
@@ -797,7 +798,7 @@ def test_sized_iterable_length_is_not_trusted() -> None:
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             while True:
                 yield 0
 
@@ -811,7 +812,7 @@ def test_action_domain_iteration_is_bounded_before_canonicalization() -> None:
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             return iter(range(51))
 
     payload = {
@@ -872,11 +873,11 @@ def test_standalone_row_mapping_extra_field_is_not_copied() -> None:
 def test_forged_family_iterator_is_bounded_before_structural_scans() -> None:
     """A forged family whose iterator never ends is bounded by the row cap."""
 
-    class _LyingFamily(tuple):
+    class _LyingFamily(tuple[Any, ...]):
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[tuple[int, ...]]:
             while True:
                 yield (0,)
 
@@ -891,11 +892,11 @@ def test_forged_family_iterator_is_bounded_before_structural_scans() -> None:
 def test_forged_action_generator_row_is_bounded_despite_reported_length() -> None:
     """A generator row that lies about its length is still bounded."""
 
-    class _LyingRow(tuple):
+    class _LyingRow(tuple[Any, ...]):
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             return iter(range(2_000_000))
 
     action = FinitePermutationAction.model_construct(
@@ -911,8 +912,8 @@ def test_forged_action_generator_row_is_bounded_despite_reported_length() -> Non
 def test_nested_tuple_coordinate_is_rejected_before_container_copy() -> None:
     """A nested container coordinate is rejected without traversing it."""
 
-    class _BoomList(list):
-        def __iter__(self):
+    class _BoomList(list[Any]):
+        def __iter__(self) -> Iterator[Any]:
             raise AssertionError("nested coordinate was traversed")
 
     payload = {
@@ -944,7 +945,7 @@ def test_over_reporting_sized_domain_is_bounded_before_rebuild() -> None:
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             return iter(range(10_000_000))
 
     action = FinitePermutationAction.model_construct(
@@ -967,7 +968,7 @@ def test_over_reporting_sized_generators_collection_is_bounded() -> None:
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[list[int]]:
             while True:
                 yield [0]
 
@@ -986,11 +987,11 @@ def test_over_reporting_sized_generators_collection_is_bounded() -> None:
 def test_forged_family_member_is_materialized_before_coordinate_scan() -> None:
     """A member that lies about its length is bounded before the coordinate scan."""
 
-    class _LyingMember(tuple):
+    class _LyingMember(tuple[Any, ...]):
         def __len__(self) -> int:
             return 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             return iter(range(2_000_000))
 
     action = FinitePermutationAction(domain=("a",), generators=((0,),))
@@ -1006,8 +1007,8 @@ def test_forged_family_member_is_materialized_before_coordinate_scan() -> None:
 def test_standalone_row_rejects_nested_container_axis() -> None:
     """A standalone row axis rejects container entries before recursive copy."""
 
-    class _BoomList(list):
-        def __iter__(self):
+    class _BoomList(list[Any]):
+        def __iter__(self) -> Iterator[Any]:
             raise AssertionError("nested axis entry was traversed")
 
     with pytest.raises(ValidationError):

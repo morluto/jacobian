@@ -16,14 +16,17 @@ from jacobian.math.groups.characters._models import (
     CharacterTableResult,
     ConjugacyClassPartition,
 )
-from jacobian.math.groups.characters.operations import character_table
+from jacobian.math.groups.characters.operations import (
+    character_table,
+    class_function_pointwise_product,
+)
 from jacobian.math.groups.characters.representation_ring_operations import (
     character_tensor_product,
 )
 from jacobian.math.groups.operations import group_conjugacy_classes
 
 
-def _s3_table():
+def _s3_table() -> CharacterTableResult:
     source = PermutationGroup(degree=3, generators=((1, 2, 0), (1, 0, 2)))
     classes = group_conjugacy_classes(3, [list(g) for g in source.generators])
     partition = GroupConjugacyClassesResult._from_kernel(
@@ -32,13 +35,15 @@ def _s3_table():
     return character_table(partition)
 
 
-def _element(table, coordinates):
+def _element(
+    table: CharacterTableResult, coordinates: tuple[int, ...]
+) -> CharacterRingElement:
     return CharacterRingElement(
         table=table, irreducible_multiplicities=tuple(coordinates)
     )
 
 
-def _direct_s3_tensor_square_multiplicities() -> tuple[int, int, int]:
+def _direct_s3_tensor_square_multiplicities() -> tuple[int, ...]:
     # The standard module is the quotient of C^3 by the invariant line.
     # Thus its trace at a permutation is fixed_points(g)-1. Tensor traces
     # square pointwise; exact averaging over the six represented elements
@@ -138,14 +143,14 @@ def test_parent_mismatch_and_noncanonical_table_rejected() -> None:
 
 
 def test_oversized_model_constructed_coordinates_rejected_before_group_work(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = _s3_table()
     oversized = CharacterRingElement.model_construct(
         table=table, irreducible_multiplicities=(10**513, 0, 0)
     )
 
-    def unexpected_group_expansion(*args, **kwargs):
+    def unexpected_group_expansion(*args: object, **kwargs: object) -> None:
         raise AssertionError("group order must not run before raw input admission")
 
     # main derives the backend group once, through _admitted_backend_group.
@@ -168,7 +173,7 @@ def test_huge_model_constructed_integer_never_reaches_decimal_conversion() -> No
 
 
 def test_forged_order_one_partition_cannot_trigger_large_group_order_call(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A 64-cycle and a reflection generate D_64, of order 128. The forged
     # carrier claims a one-element partition, so admission must derive its
@@ -196,7 +201,7 @@ def test_forged_order_one_partition_cannot_trigger_large_group_order_call(
         table=forged_table, irreducible_multiplicities=(1,)
     )
 
-    def unexpected_group_order(*args, **kwargs):
+    def unexpected_group_order(*args: object, **kwargs: object) -> None:
         raise AssertionError("source-only admission must precede the backend call")
 
     monkeypatch.setattr(
@@ -218,9 +223,7 @@ def test_tensor_product_shares_the_decomposition_kernel() -> None:
     product = character_tensor_product(character, character)
     expanded = representation_ring_operations._expand_ring_element(character, table)
     direct = representation_ring_operations.class_function_character_decomposition(
-        representation_ring_operations.class_function_pointwise_product(
-            expanded, expanded
-        )
+        class_function_pointwise_product(expanded, expanded)
     )
     assert (
         product.irreducible_multiplicities

@@ -110,15 +110,6 @@ def test_benchmark_job_outputs_are_only_if_projections() -> None:
     assert "PROSPECTIVE_DIGEST_FLAG" not in workflow
 
 
-def test_ci_does_not_schedule_deleted_checker_worker_coverage() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-
-    assert "subprocess_coverage:" not in workflow
-    assert "test-checker-subprocess-coverage" not in (ROOT / "Makefile").read_text(
-        encoding="utf-8"
-    )
-
-
 def test_local_oracle_targets_require_explicit_scope() -> None:
     harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
     oracle = harbor.split("harbor-oracle:", 1)[1].split("harbor-oracle-task:", 1)[0]

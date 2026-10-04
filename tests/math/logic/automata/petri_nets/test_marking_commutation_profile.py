@@ -1,6 +1,7 @@
 """Exact sequential commutation profiles for Petri transition pairs."""
 
 from itertools import product
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -11,6 +12,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.automata.petri_nets import Marking, PetriNet
 from jacobian.math.logic.automata.petri_nets._models import (
+    FiringSequenceReplayResult,
     MarkingCommutationProfileRequest,
     MarkingCommutationProfileResult,
 )
@@ -20,7 +22,15 @@ from jacobian.math.logic.automata.petri_nets.operations import (
 )
 
 
-def _independent_replay(net: PetriNet, tokens: tuple[int, ...], order: tuple[int, int]):
+def _independent_replay(
+    net: PetriNet, tokens: tuple[int, ...], order: tuple[int, int]
+) -> tuple[
+    Literal["BLOCKED", "FIRES"],
+    tuple[tuple[int, ...], ...],
+    tuple[int, ...] | None,
+    int | None,
+    tuple[int, ...] | None,
+]:
     """Small direct oracle using only the P/T firing definition."""
 
     current = list(tokens)
@@ -40,7 +50,15 @@ def _independent_replay(net: PetriNet, tokens: tuple[int, ...], order: tuple[int
     return ("FIRES", tuple(prefixes), tuple(current), None, None)
 
 
-def _observed_replay(replay):
+def _observed_replay(
+    replay: FiringSequenceReplayResult,
+) -> tuple[
+    Literal["BLOCKED", "FIRES"],
+    tuple[tuple[int, ...], ...],
+    tuple[int, ...] | None,
+    int | None,
+    tuple[int, ...] | None,
+]:
     return (
         replay.status,
         tuple(marking.tokens for marking in replay.prefix_markings),
@@ -123,9 +141,12 @@ def test_request_and_native_api_reject_invalid_transition_pairs() -> None:
             net=net, marking=Marking(tokens=()), transitions=(0, 0)
         )
     assert exc_info.value.errors()[0]["type"] == "petri_net.commutation_transition_pair"
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_error:
         marking_commutation_profile(net, Marking(tokens=()), (1, 1))
-    assert exc_info.value.errors()[0]["type"] == "petri_net.commutation_transition_pair"
+    assert (
+        domain_error.value.errors()[0]["type"]
+        == "petri_net.commutation_transition_pair"
+    )
 
 
 def test_result_rejects_authored_flags_that_disagree_with_replays() -> None:

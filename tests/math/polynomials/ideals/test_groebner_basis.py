@@ -136,7 +136,9 @@ class TestGroebnerBasis:
         ids=("general-grevlex", "principal-lex", "two-generator-lex"),
     )
     def test_basis_is_source_bound_for_each_order(
-        self, ideal: RationalPolynomialIdeal, monomial_order: str
+        self,
+        ideal: RationalPolynomialIdeal,
+        monomial_order: Literal["lex", "grlex", "grevlex"],
     ) -> None:
         result = _run_groebner(
             GroebnerBasisRequest(ideal=ideal, monomial_order=monomial_order)

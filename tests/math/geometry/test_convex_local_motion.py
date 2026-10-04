@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.geometry.convex import (
     ConvexHPolytope,
     ConvexInequality,
@@ -15,7 +16,10 @@ from jacobian.math.geometry.convex import (
     RationalConvexDirection,
     RationalConvexPoint,
 )
-from jacobian.math.geometry.convex._models import DirectionLocalMotionRequest
+from jacobian.math.geometry.convex._models import (
+    DirectionLocalMotionRequest,
+    DirectionLocalMotionResult,
+)
 from jacobian.math.geometry.convex._tools import TOOLS
 from jacobian.math.geometry.convex.operations import direction_local_motion
 
@@ -194,11 +198,14 @@ class TestNativeVsCatalogParity:
         request = DirectionLocalMotionRequest(
             polytope=_square(), point=_point(0, 0), direction=_direction(1, 1)
         )
-        tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id
-            == "convex_geometry.polytope.direction_local_motion.compute"
+        tool = cast(
+            MathTool[DirectionLocalMotionRequest, DirectionLocalMotionResult],
+            next(
+                tool
+                for tool in TOOLS
+                if tool.operation_id
+                == "convex_geometry.polytope.direction_local_motion.compute"
+            ),
         )
         assert tool.run(request) == direction_local_motion(
             _square(), _point(0, 0), _direction(1, 1)

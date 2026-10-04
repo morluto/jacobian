@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -54,12 +55,12 @@ def test_profile_rejects_a_place_outside_its_net_axis() -> None:
 
 
 @pytest.mark.parametrize("malformed", [None, [0], (0,), {"places": (0,)}, 1])
-def test_native_malformed_place_sets_get_owner_domain_errors(malformed) -> None:
+def test_native_malformed_place_sets_get_owner_domain_errors(malformed: object) -> None:
     net = PetriNet(
         place_count=2, transition_count=1, pre=((1,), (0,)), post=((0,), (1,))
     )
     with pytest.raises(OperationDomainValidationError):
-        place_set_support(net, malformed)
+        place_set_support(net, cast(PetriPlaceSubset, malformed))
 
 
 def test_native_out_of_axis_place_gets_the_stable_domain_error() -> None:

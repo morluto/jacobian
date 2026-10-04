@@ -13,9 +13,10 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_mixed_jacobi_sum,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 
-def _principal_character(modulus: int):
+def _principal_character(modulus: int) -> DirichletCharacter:
     group = character_group(modulus)
     return dirichlet_character(group, (0,) * len(group.generator_orders))
 

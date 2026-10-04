@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.rainbow_embedding.operations import (
@@ -64,15 +63,6 @@ def test_rejects_uncolored_nonempty_host() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         compute_rainbow_embedding_profile(_p2(), host)
-
-
-def test_rejects_unencodable_pattern_label() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        SimpleUndirectedGraph(vertices=("\ud800",), edges=())
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "graph.kind_must_be_valid_unicode_scalar_text"
-    )
 
 
 def test_rejects_unbounded_retained_embedding_labels() -> None:

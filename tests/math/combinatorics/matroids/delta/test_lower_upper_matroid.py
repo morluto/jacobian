@@ -22,7 +22,10 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     lower_matroid,
     upper_matroid,
 )
-from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
+from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_MEMBERSHIPS,
+    FiniteDeltaMatroid,
+)
 from jacobian.math.combinatorics.matroids.values import FiniteBasisMatroid
 
 
@@ -191,7 +194,7 @@ def test_oversize_ground_axis_is_bounded_before_label_validation(
     operation: Callable[[FiniteDeltaMatroid], FiniteBasisMatroid],
 ) -> None:
     source = FiniteDeltaMatroid.model_construct(
-        ground=(object(),) * (delta_operations.MAX_DELTA_MEMBERSHIPS + 2),
+        ground=(object(),) * (MAX_DELTA_MEMBERSHIPS + 2),
         feasible=((),),
     )
     with pytest.raises(OperationResourceAdmissionError) as exc_info:

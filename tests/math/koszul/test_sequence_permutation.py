@@ -1,7 +1,9 @@
 """Exact exterior-power maps for permuted finite-module Koszul sequences."""
 
 import json
+from collections.abc import Mapping
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 from pydantic import ValidationError
@@ -17,7 +19,9 @@ from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
     ModuleDifferential,
+    ModuleKoszulComplex,
     ModuleKoszulRequest,
+    ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
     ModuleKoszulUnitContractionRequest,
 )
@@ -32,7 +36,7 @@ def q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _source(sequence):
+def _source(sequence: tuple[tuple[CanonicalRational, ...], ...]) -> ModuleKoszulComplex:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
     )
@@ -42,15 +46,19 @@ def _source(sequence):
     )
 
 
-def _sparse_columns(matrix):
-    columns = [{} for _ in range(matrix.column_count)]
+def _sparse_columns(
+    matrix: ModuleDifferential,
+) -> list[dict[int, Fraction]]:
+    columns: list[dict[int, Fraction]] = [{} for _ in range(matrix.column_count)]
     for row, column, coefficient in matrix.entries:
         columns[column][row] = Fraction(coefficient.num, coefficient.den)
     return columns
 
 
-def _apply(matrix, vector):
-    result = {}
+def _apply(
+    matrix: ModuleDifferential, vector: Mapping[int, Fraction]
+) -> dict[int, Fraction]:
+    result: dict[int, Fraction] = {}
     for row, column, coefficient in matrix.entries:
         scalar = vector.get(column, Fraction(0))
         if scalar:
@@ -60,7 +68,9 @@ def _apply(matrix, vector):
     return {index: value for index, value in result.items() if value}
 
 
-def _replay_chain_isomorphism(result):
+def _replay_chain_isomorphism(
+    result: ModuleKoszulSequencePermutation,
+) -> None:
     for degree, (source_d, target_d) in enumerate(
         zip(
             result.source_complex.differentials,
@@ -85,7 +95,7 @@ def _replay_chain_isomorphism(result):
             assert backward_columns[target_index] == {source_index: coefficient}
 
 
-def test_two_term_swap_reverses_exterior_sign_and_commutes_with_differential():
+def test_two_term_swap_reverses_exterior_sign_and_commutes_with_differential() -> None:
     source = _source(((q(1),), (q(2),)))
     result = module_koszul_sequence_permute(
         ModuleKoszulSequencePermutationRequest(complex=source, new_to_old=(1, 0))
@@ -100,7 +110,7 @@ def test_two_term_swap_reverses_exterior_sign_and_commutes_with_differential():
     _replay_chain_isomorphism(result)
 
 
-def test_three_cycle_uses_inverse_index_map_and_preserves_exterior_signs():
+def test_three_cycle_uses_inverse_index_map_and_preserves_exterior_signs() -> None:
     source = _source(((q(1),), (q(2),), (q(3),)))
     result = module_koszul_sequence_permute(
         ModuleKoszulSequencePermutationRequest(complex=source, new_to_old=(1, 2, 0))
@@ -120,7 +130,7 @@ def test_three_cycle_uses_inverse_index_map_and_preserves_exterior_signs():
     _replay_chain_isomorphism(result)
 
 
-def test_empty_and_identity_permutations_are_valid():
+def test_empty_and_identity_permutations_are_valid() -> None:
     empty = module_koszul_sequence_permute(
         ModuleKoszulSequencePermutationRequest(complex=_source(()), new_to_old=())
     )
@@ -138,7 +148,7 @@ def test_empty_and_identity_permutations_are_valid():
     )
 
 
-def test_source_differential_must_match_its_retained_sequence():
+def test_source_differential_must_match_its_retained_sequence() -> None:
     source = _source(((q(1),),))
     forged = source.model_copy(
         update={
@@ -154,17 +164,19 @@ def test_source_differential_must_match_its_retained_sequence():
     assert caught.value.errors()[0]["type"] == "koszul.module.source_complex_mismatch"
 
 
-def test_invalid_permutation_is_rejected():
+def test_invalid_permutation_is_rejected() -> None:
     with pytest.raises(ValidationError):
         ModuleKoszulSequencePermutationRequest(
             complex=_source(((q(1),), (q(2),))), new_to_old=(0, 0)
         )
 
 
-def test_transform_output_bound_rejects_before_rebuilding(monkeypatch):
+def test_transform_output_bound_rejects_before_rebuilding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _source(((q(1),), (q(2),)))
 
-    def build_must_not_run(_request):
+    def build_must_not_run(_request: object) -> NoReturn:
         raise AssertionError("complex expansion ran before transform admission")
 
     monkeypatch.setattr(operations, "_build_module_koszul_complex", build_must_not_run)
@@ -178,7 +190,7 @@ def test_transform_output_bound_rejects_before_rebuilding(monkeypatch):
     )
 
 
-def test_published_permutation_example_runs():
+def test_published_permutation_example_runs() -> None:
     tool = next(
         tool
         for tool in TOOLS
@@ -190,7 +202,9 @@ def test_published_permutation_example_runs():
     _replay_chain_isomorphism(result)
 
 
-def test_unit_contraction_returns_exact_homotopy_and_inverse_for_nonzero_index():
+def test_unit_contraction_returns_exact_homotopy_and_inverse_for_nonzero_index() -> (
+    None
+):
     algebra = FiniteCommutativeAlgebra(
         basis=("1", "e"),
         multiplication=(
@@ -250,7 +264,7 @@ def test_unit_contraction_returns_exact_homotopy_and_inverse_for_nonzero_index()
             assert {i: value for i, value in combined.items() if value} == basis
 
 
-def test_nonunit_entry_is_rejected_and_published_example_runs():
+def test_nonunit_entry_is_rejected_and_published_example_runs() -> None:
     source = _source(((q(0),),))
     with pytest.raises(OperationDomainValidationError) as caught:
         module_koszul_unit_contract(
@@ -268,7 +282,7 @@ def test_nonunit_entry_is_rejected_and_published_example_runs():
     assert result.homotopy[1].entries == ()
 
 
-def test_contraction_rejects_a_forged_square_zero_claim():
+def test_contraction_rejects_a_forged_square_zero_claim() -> None:
     source = _source(((q(1),),)).model_copy(update={"square_zero": False})
     with pytest.raises(OperationDomainValidationError) as caught:
         module_koszul_unit_contract(
@@ -277,10 +291,12 @@ def test_contraction_rejects_a_forged_square_zero_claim():
     assert caught.value.errors()[0]["type"] == "koszul.module.source_complex_mismatch"
 
 
-def test_contraction_budget_rejects_before_inverse_or_complex_rebuild(monkeypatch):
+def test_contraction_budget_rejects_before_inverse_or_complex_rebuild(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _source(((q(1),),))
 
-    def arithmetic_must_not_run(*_args, **_kwargs):
+    def arithmetic_must_not_run(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError(
             "unit solving or complex reconstruction ran before admission"
         )

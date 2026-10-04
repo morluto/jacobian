@@ -10,6 +10,7 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.complexes._models import (
     PieceAssignment,
     PiecewisePolynomialResult,
+    PolytopalComplexClosureResult,
 )
 from jacobian.math.geometry.polytopes.complexes._spline import (
     piecewise_polynomial_from_maximal_pieces,
@@ -31,7 +32,7 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
         vertices=tuple(
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{index}",
-                coordinates=({"num": value, "den": 1},),
+                coordinates=(CanonicalRational(num=value, den=1),),
             )
             for index, value in enumerate((left, right))
         ),
@@ -56,7 +57,10 @@ def _poly(
     )
 
 
-def _function(complex_value, by_cell):
+def _function(
+    complex_value: PolytopalComplexClosureResult,
+    by_cell: dict[str, RationalPolynomial],
+) -> PiecewisePolynomialResult:
     pieces = tuple(
         PieceAssignment(cell_id=cell.cell_id, polynomial=by_cell[cell.cell_id])
         for cell in complex_value.maximal_cells
@@ -64,7 +68,7 @@ def _function(complex_value, by_cell):
     return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
 
 
-def test_one_polynomial_on_each_cell_returns_source_bound_global_polynomial():
+def test_one_polynomial_on_each_cell_returns_source_bound_global_polynomial() -> None:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
@@ -81,7 +85,7 @@ def test_one_polynomial_on_each_cell_returns_source_bound_global_polynomial():
     assert result.polynomial == polynomial
 
 
-def test_continuous_but_different_cell_polynomials_are_not_global():
+def test_continuous_but_different_cell_polynomials_are_not_global() -> None:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
@@ -100,7 +104,7 @@ def test_continuous_but_different_cell_polynomials_are_not_global():
     assert result.polynomial is None
 
 
-def test_rebuilds_forged_compatibility_and_public_tool_roundtrips():
+def test_rebuilds_forged_compatibility_and_public_tool_roundtrips() -> None:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )

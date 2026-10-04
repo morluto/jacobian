@@ -420,8 +420,9 @@ def test_exact_flow_and_cut_height_is_admitted_before_backend(
             ),
         ),
     )
+    nx_module = cast(Any, vars(flow_operations))["nx"]
     monkeypatch.setattr(
-        flow_operations.nx,
+        nx_module,
         "maximum_flow" if compute is compute_max_flow else "minimum_cut",
         lambda *args, **kwargs: pytest.fail("backend ran before height admission"),
     )

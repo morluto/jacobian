@@ -13,9 +13,10 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_jacobi_sum,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 
-def _quadratic_character(prime: int):
+def _quadratic_character(prime: int) -> DirichletCharacter:
     group = character_group(prime)
     # In a cyclic group of even order, the order-two character is the half-order
     # dual coordinate along the canonical generator axis.

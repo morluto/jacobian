@@ -9,6 +9,7 @@ import pytest
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.codes.linear._canonicalization import (
     LinearCodeCanonicalizationRequest,
+    LinearCodeCanonicalizationResult,
     canonicalize_linear_code,
 )
 from jacobian.math.combinatorics.codes.linear._models import (
@@ -73,7 +74,7 @@ def _independent_rref(
     return tuple(tuple(r) for r in rows)
 
 
-def _canonical_key(result) -> tuple:
+def _canonical_key(result: LinearCodeCanonicalizationResult) -> tuple[object, ...]:
     encoder = result.canonical_encoder
     return (encoder.field_order, len(encoder.coordinate_axis), encoder.generator_matrix)
 

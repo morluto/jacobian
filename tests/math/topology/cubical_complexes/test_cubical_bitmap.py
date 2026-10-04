@@ -15,8 +15,10 @@ from jacobian.math.topology.cubical_complexes.extensions import bitmap_to_comple
 from jacobian.math.topology.cubical_complexes.operations import f_vector
 
 
-def _brute_face_closure(pixels: tuple[tuple[bool, ...], ...]):
-    cells = set()
+def _brute_face_closure(
+    pixels: tuple[tuple[bool, ...], ...],
+) -> tuple[tuple[tuple[int, int], ...], ...]:
+    cells: set[tuple[tuple[int, int], ...]] = set()
     for row, values in enumerate(pixels):
         for column, foreground in enumerate(values):
             if not foreground:
@@ -38,7 +40,9 @@ def _mask(rows: int, columns: int, bits: int) -> tuple[tuple[bool, ...], ...]:
 
 
 @pytest.mark.parametrize("shape", [(1, 1), (1, 2), (2, 1), (2, 2)])
-def test_every_tiny_bitmap_matches_independent_face_enumeration(shape) -> None:
+def test_every_tiny_bitmap_matches_independent_face_enumeration(
+    shape: tuple[int, int],
+) -> None:
     rows, columns = shape
     for bits in range(1 << (rows * columns)):
         pixels = _mask(rows, columns, bits)
@@ -111,7 +115,7 @@ def test_bitmap_admits_side_lengths_and_foreground_cell_count() -> None:
     assert error.value.errors()[0]["type"] == "cubical_complex.bitmap_top_cell_budget"
 
 
-def test_bitmap_output_preflight_keeps_the_result_f_vector_composable():
+def test_bitmap_output_preflight_keeps_the_result_f_vector_composable() -> None:
     below_limit = CubicalBitmapRequest(
         pixels=tuple(tuple(True for _ in range(34)) for _ in range(34))
     )

@@ -7,6 +7,7 @@ from itertools import combinations
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.topology._models import Simplex, SimplicialComplexRequest
 from jacobian.math.topology.discrete_morse._models import MatchingPair
 from jacobian.math.topology.discrete_morse.extensions import (
     CollapseSequenceRequest,
@@ -14,7 +15,9 @@ from jacobian.math.topology.discrete_morse.extensions import (
 )
 
 
-def _oracle_collapse(facets, face, coface):
+def _oracle_collapse(
+    facets: tuple[Simplex, ...], face: Simplex, coface: Simplex
+) -> set[Simplex] | None:
     """Rebuild the face family independently and apply one elementary collapse."""
     cells = {
         subset
@@ -46,10 +49,11 @@ def test_collapse_sequence_matches_independent_face_family_oracle() -> None:
         for size in range(1, len(facet) + 1)
         for subset in combinations(facet, size)
     }
-    facets = source_facets
+    facets: tuple[Simplex, ...] = source_facets
     for pair in pairs:
-        current = _oracle_collapse(facets, pair.face, pair.coface)
-        assert current is not None
+        updated = _oracle_collapse(facets, pair.face, pair.coface)
+        assert updated is not None
+        current = updated
         facets = tuple(
             sorted(
                 cell
@@ -62,7 +66,9 @@ def test_collapse_sequence_matches_independent_face_family_oracle() -> None:
         )
 
     request = CollapseSequenceRequest(
-        complex={"vertices": ("a", "b", "c"), "facets": source_facets},
+        complex=SimplicialComplexRequest(
+            vertices=("a", "b", "c"), facets=source_facets
+        ),
         pairs=pairs,
     )
     result = collapse_sequence(request)
@@ -77,7 +83,9 @@ def test_collapse_sequence_matches_independent_face_family_oracle() -> None:
 
 def test_nonfree_pair_reports_the_unchanged_current_complex() -> None:
     request = CollapseSequenceRequest(
-        complex={"vertices": ("a", "b", "c"), "facets": (("a", "b", "c"),)},
+        complex=SimplicialComplexRequest(
+            vertices=("a", "b", "c"), facets=(("a", "b", "c"),)
+        ),
         pairs=(MatchingPair(face=("a",), coface=("a", "b")),),
     )
     result = collapse_sequence(request)
@@ -86,12 +94,14 @@ def test_nonfree_pair_reports_the_unchanged_current_complex() -> None:
     assert result.target == result.source
 
 
-def test_sequence_work_bound_rejects_before_processing_pairs(monkeypatch) -> None:
+def test_sequence_work_bound_rejects_before_processing_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import jacobian.math.topology.discrete_morse.extensions as extension_module
 
     monkeypatch.setattr(extension_module, "MAX_COLLAPSE_SEQUENCE_FACE_WORK", 1)
     request = CollapseSequenceRequest(
-        complex={"vertices": ("a", "b"), "facets": (("a", "b"),)},
+        complex=SimplicialComplexRequest(vertices=("a", "b"), facets=(("a", "b"),)),
         pairs=(MatchingPair(face=("a",), coface=("a", "b")),),
     )
     with pytest.raises(OperationResourceAdmissionError) as error:

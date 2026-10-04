@@ -161,7 +161,9 @@ def test_oversized_caller_constructed_vector_is_resource_rejected() -> None:
 
 
 @pytest.mark.parametrize("num, den", [(True, 1), (1, True)])
-def test_caller_constructed_vector_with_malformed_symmetrizer_is_rejected(num, den):
+def test_caller_constructed_vector_with_malformed_symmetrizer_is_rejected(
+    num: int, den: int
+) -> None:
     datum = _datum(_A2)
     malformed = FiniteCartanDatum.model_construct(
         cartan_matrix=datum.cartan_matrix,
@@ -228,7 +230,9 @@ def test_caller_constructed_vector_with_boolean_cartan_axis_is_rejected() -> Non
 @pytest.mark.parametrize(
     "datum_field", ("cartan", "root_to_weight", "coroot_to_coweight")
 )
-def test_caller_constructed_vector_rejects_boolean_nested_datum_entries(datum_field):
+def test_caller_constructed_vector_rejects_boolean_nested_datum_entries(
+    datum_field: str,
+) -> None:
     datum = _datum(_A2)
     matrix = IntegerMatrix.model_construct(
         row_count=2, column_count=2, entries=((2, False), (-1, 2))
@@ -236,19 +240,18 @@ def test_caller_constructed_vector_rejects_boolean_nested_datum_entries(datum_fi
     malformed_cartan = CartanMatrix.model_construct(
         matrix=matrix, simple_root_axis=(0, 1)
     )
-    fields = {
-        "cartan_matrix": malformed_cartan
-        if datum_field == "cartan"
-        else datum.cartan_matrix,
-        "symmetrizer": datum.symmetrizer,
-        "root_to_weight": matrix
-        if datum_field == "root_to_weight"
-        else datum.root_to_weight,
-        "coroot_to_coweight": matrix
-        if datum_field == "coroot_to_coweight"
-        else datum.coroot_to_coweight,
-    }
-    malformed_datum = FiniteCartanDatum.model_construct(**fields)
+    malformed_datum = FiniteCartanDatum.model_construct(
+        cartan_matrix=(
+            malformed_cartan if datum_field == "cartan" else datum.cartan_matrix
+        ),
+        symmetrizer=datum.symmetrizer,
+        root_to_weight=(
+            matrix if datum_field == "root_to_weight" else datum.root_to_weight
+        ),
+        coroot_to_coweight=(
+            matrix if datum_field == "coroot_to_coweight" else datum.coroot_to_coweight
+        ),
+    )
     vector = RootLatticeVector.model_construct(
         datum=malformed_datum, coordinates=(1, 0)
     )

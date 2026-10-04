@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -37,7 +39,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 
-def _space(weight: int, kind: str = "M") -> ModularFormSpace:
+def _space(weight: int, kind: Literal["M", "S"] = "M") -> ModularFormSpace:
     return ModularFormSpace(level=1, weight=weight, kind=kind)
 
 
@@ -110,7 +112,10 @@ def test_weight_twelve_basis_has_the_exact_e4_cubed_and_e6_squared_prefixes() ->
     assert basis.basis_id == BASIS_ID
     assert tuple(element.label for element in basis.elements) == ("E4^3", "E6^2")
     assert tuple(
-        tuple(c.as_fraction() for c in element.expansion.q_expansion.coefficients)
+        tuple(
+            rational(c).as_fraction()
+            for c in element.expansion.q_expansion.coefficients
+        )
         for element in basis.elements
     ) == (
         (Fraction(1), Fraction(720), Fraction(179_280)),
@@ -169,7 +174,9 @@ def test_v3_reconstructs_level_one_form_in_gamma0_three_coordinates() -> None:
     # E4(q^3) has constant coefficient 1 and q coefficient 0. The Gamma0(3)
     # Sturm bound is 1 at weight 4, so these coefficients determine the form.
     expansion = modular_form_coordinates_q_expansion(image, 2)
-    assert tuple(c.as_fraction() for c in expansion.q_expansion.coefficients) == (
+    assert tuple(
+        rational(c).as_fraction() for c in expansion.q_expansion.coefficients
+    ) == (
         Fraction(1),
         Fraction(0),
     )
@@ -180,7 +187,7 @@ def test_v3_preserves_zero_and_weight_zero_identity() -> None:
         space=_space(4), basis_id=BASIS_ID, coordinates=_coordinate_values((0, 1))
     )
     assert all(
-        coordinate.as_fraction() == 0
+        rational(coordinate).as_fraction() == 0
         for coordinate in modular_form_coordinates_v3(zero).coordinates
     )
 
@@ -190,7 +197,7 @@ def test_v3_preserves_zero_and_weight_zero_identity() -> None:
     constant_image = modular_form_coordinates_v3(constant)
     assert constant_image.space.level == 3
     assert tuple(
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_q_expansion(
             constant_image, 1
         ).q_expansion.coefficients
@@ -213,7 +220,9 @@ def test_rational_coordinates_construct_an_arbitrary_global_form() -> None:
 
     assert expansion.space == space
     assert expansion.basis_id == BASIS_ID
-    assert tuple(c.as_fraction() for c in expansion.q_expansion.coefficients) == (
+    assert tuple(
+        rational(c).as_fraction() for c in expansion.q_expansion.coefficients
+    ) == (
         Fraction(1, 3),
         Fraction(816),
         Fraction(45_936),
@@ -241,10 +250,12 @@ def test_coordinates_remain_bound_to_their_space_and_basis() -> None:
     assert form == same_form
     assert form != different_form
     with pytest.raises(ValidationError):
-        ModularFormCoordinates(
-            space=space,
-            basis_id="another-basis",
-            coordinates=(),
+        ModularFormCoordinates.model_validate(
+            {
+                "space": space.model_dump(),
+                "basis_id": "another-basis",
+                "coordinates": (),
+            }
         )
     other_space = ModularFormCoordinates(
         space=_space(10),
@@ -291,10 +302,14 @@ def test_hecke_on_delta_returns_exact_rational_eigenvalue_coordinates() -> None:
     image = modular_form_coordinates_hecke(delta, 2)
 
     assert image.space == space
-    assert tuple(value.as_fraction() for value in image.coordinates) == (Fraction(-24),)
+    assert tuple(rational(value).as_fraction() for value in image.coordinates) == (
+        Fraction(-24),
+    )
     # Independent q-expansion check: T_2 Delta has q coefficient tau(2)=-24.
     prefix = modular_form_coordinates_q_expansion(image, 2)
-    assert tuple(c.as_fraction() for c in prefix.q_expansion.coefficients) == (
+    assert tuple(
+        rational(c).as_fraction() for c in prefix.q_expansion.coefficients
+    ) == (
         Fraction(0),
         Fraction(-24),
     )
@@ -312,8 +327,12 @@ def test_hecke_coordinate_matrix_matches_direct_coefficients_through_sturm() -> 
     source = modular_form_coordinates_q_expansion(form, 3)
     # The Sturm integer is one at weight 12; compute T_2 directly from its
     # defining coefficient formula, without using the coordinate operator.
-    a0, a1, a2 = tuple(c.as_fraction() for c in source.q_expansion.coefficients)
-    assert tuple(c.as_fraction() for c in actual.q_expansion.coefficients) == (
+    a0, a1, a2 = tuple(
+        rational(c).as_fraction() for c in source.q_expansion.coefficients
+    )
+    assert tuple(
+        rational(c).as_fraction() for c in actual.q_expansion.coefficients
+    ) == (
         2_049 * a0,
         a2,
     )
@@ -353,10 +372,12 @@ def test_gamma0_four_trivial_hecke_uses_sturm_reconstruction_and_preserves_paren
     source = modular_form_coordinates_q_expansion(form, 4)
     actual = modular_form_coordinates_q_expansion(image, 2)
     source_coefficients = tuple(
-        value.as_fraction() for value in source.q_expansion.coefficients
+        rational(value).as_fraction() for value in source.q_expansion.coefficients
     )
     # Independent T_3 coefficient formula at the level-four Sturm bound B=1.
-    assert tuple(value.as_fraction() for value in actual.q_expansion.coefficients) == (
+    assert tuple(
+        rational(value).as_fraction() for value in actual.q_expansion.coefficients
+    ) == (
         4 * source_coefficients[0],
         source_coefficients[3],
     )
@@ -372,7 +393,7 @@ def test_gamma0_four_b4_is_a_t3_eigenform() -> None:
 
     image = modular_form_coordinates_hecke(b4, 3)
 
-    assert tuple(value.as_fraction() for value in image.coordinates) == (
+    assert tuple(rational(value).as_fraction() for value in image.coordinates) == (
         Fraction(4),
         Fraction(0),
     )
@@ -417,7 +438,9 @@ def test_gamma0_four_trivial_u2_matches_direct_prefix_and_preserves_parent() -> 
     assert image.basis_id == form.basis_id
     source = modular_form_coordinates_q_expansion(form, 3)
     actual = modular_form_coordinates_q_expansion(image, 2)
-    assert tuple(value.as_fraction() for value in actual.q_expansion.coefficients) == (
+    assert tuple(
+        rational(value).as_fraction() for value in actual.q_expansion.coefficients
+    ) == (
         source.q_expansion.coefficients[0].as_fraction(),
         source.q_expansion.coefficients[2].as_fraction(),
     )
@@ -433,9 +456,9 @@ def test_v2_from_level_one_constants_and_positive_weight_into_gamma0_two() -> No
     constant_image = modular_form_coordinates_v2(constant)
     assert constant_image.space == ModularFormSpace(level=2, weight=0, kind="M")
     assert constant_image.basis_id == "gamma0-two-weight-2-4-monomials-v1"
-    assert tuple(value.as_fraction() for value in constant_image.coordinates) == (
-        Fraction(1),
-    )
+    assert tuple(
+        rational(value).as_fraction() for value in constant_image.coordinates
+    ) == (Fraction(1),)
 
     space = _space(8)
     e4_squared = ModularFormCoordinates(
@@ -450,12 +473,14 @@ def test_v2_from_level_one_constants_and_positive_weight_into_gamma0_two() -> No
     source = modular_form_coordinates_q_expansion(e4_squared, 2)
     actual = modular_form_coordinates_q_expansion(image, 3)
     source_coefficients = tuple(
-        value.as_fraction() for value in source.q_expansion.coefficients
+        rational(value).as_fraction() for value in source.q_expansion.coefficients
     )
     # For B_2=2, source precision floor(B_2/2)+1=2; the independent
     # degeneracy-map oracle reads a_0 at q^0 and a_1 at q^2.
     assert source_coefficients == (Fraction(1), Fraction(480))
-    assert tuple(value.as_fraction() for value in actual.q_expansion.coefficients) == (
+    assert tuple(
+        rational(value).as_fraction() for value in actual.q_expansion.coefficients
+    ) == (
         source_coefficients[0],
         Fraction(0),
         source_coefficients[1],
@@ -523,9 +548,9 @@ def test_upper_weight_sturm_source_is_accepted_and_matches_direct_formula() -> N
         )
 
     assert len(image.coordinates) == 11
-    assert tuple(c.as_fraction() for c in actual.q_expansion.coefficients) == tuple(
-        expected
-    )
+    assert tuple(
+        rational(c).as_fraction() for c in actual.q_expansion.coefficients
+    ) == tuple(expected)
 
 
 def test_u2_operator_image_retains_source_and_matches_independent_q_prefix() -> None:
@@ -546,10 +571,12 @@ def test_u2_operator_image_retains_source_and_matches_independent_q_prefix() -> 
     assert image.operator == "U"
     assert image.prime == 2
     assert image.codomain == ModularFormSpace(level=2, weight=12, kind="S")
-    assert tuple(c.as_fraction() for c in result.q_expansion.coefficients) == tuple(
-        source_coefficients[2 * index] for index in range(5)
-    )
-    assert tuple(c.as_fraction() for c in result.q_expansion.coefficients) == (
+    assert tuple(
+        rational(c).as_fraction() for c in result.q_expansion.coefficients
+    ) == tuple(source_coefficients[2 * index] for index in range(5))
+    assert tuple(
+        rational(c).as_fraction() for c in result.q_expansion.coefficients
+    ) == (
         Fraction(0),
         Fraction(-24),
         Fraction(-1_472),
@@ -574,7 +601,9 @@ def test_v2_operator_image_dilates_exact_q_prefix() -> None:
     image = modular_form_operator_image(delta, "V", 2)
     result = modular_form_operator_image_q_expansion(image, 9)
 
-    assert tuple(c.as_fraction() for c in result.q_expansion.coefficients) == (
+    assert tuple(
+        rational(c).as_fraction() for c in result.q_expansion.coefficients
+    ) == (
         Fraction(0),
         Fraction(0),
         Fraction(1),
@@ -627,7 +656,7 @@ def test_operator_image_prefix_composes_for_empty_cusp_space() -> None:
 
     assert image.codomain == ModularFormSpace(level=3, weight=10, kind="S")
     assert (
-        tuple(c.as_fraction() for c in result.q_expansion.coefficients)
+        tuple(rational(c).as_fraction() for c in result.q_expansion.coefficients)
         == (Fraction(0),) * 8
     )
 
@@ -642,11 +671,13 @@ def test_v_degeneracy_has_exact_parent_and_independent_sparse_expansion() -> Non
     result = modular_form_coordinates_v_degeneracy(source, 2)
     actual = modular_form_coordinates_q_expansion(result, 3)
     coefficients = tuple(
-        c.as_fraction() for c in source_series.q_expansion.coefficients
+        rational(c).as_fraction() for c in source_series.q_expansion.coefficients
     )
     assert result.space == ModularFormSpace(level=4, weight=4, kind="M")
     assert result.basis_id == "gamma0-four-weight-2-generators-v1"
-    assert tuple(c.as_fraction() for c in actual.q_expansion.coefficients) == (
+    assert tuple(
+        rational(c).as_fraction() for c in actual.q_expansion.coefficients
+    ) == (
         coefficients[0],
         Fraction(0),
         coefficients[1],

@@ -1,5 +1,6 @@
 import json
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
@@ -56,7 +57,7 @@ def test_s3_induction_from_transposition_subgroup(
     source_values: tuple[int, ...],
     expected_induced: tuple[int, ...],
     expected_multiplicities: tuple[int, ...],
-):
+) -> None:
     result = class_function_induce_from_subgroup(
         _class_function(_C2, source_values), _S3
     )
@@ -83,7 +84,7 @@ def test_s3_induction_from_transposition_subgroup(
     assert multiplicities == expected_multiplicities
 
 
-def test_induction_rejects_source_group_not_in_parent():
+def test_induction_rejects_source_group_not_in_parent() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         class_function_induce_from_subgroup(
             _class_function(_C2, (1, 1)),
@@ -95,7 +96,7 @@ def test_induction_rejects_source_group_not_in_parent():
     )
 
 
-def test_deserializing_induction_result_does_not_authenticate_class_map():
+def test_deserializing_induction_result_does_not_authenticate_class_map() -> None:
     result = class_function_induce_from_subgroup(_class_function(_C2, (1, 1)), _S3)
     payload = json.loads(result.model_dump_json())
     payload["subgroup_class_to_parent_class"][1] = 2
@@ -105,7 +106,7 @@ def test_deserializing_induction_result_does_not_authenticate_class_map():
     assert restored.subgroup_class_to_parent_class == (0, 2)
 
 
-def test_s3_induction_preserves_the_cyclotomic_field():
+def test_s3_induction_preserves_the_cyclotomic_field() -> None:
     classes = group_conjugacy_classes(
         _C3.degree, [list(generator) for generator in _C3.generators]
     )
@@ -143,14 +144,14 @@ def test_s3_induction_preserves_the_cyclotomic_field():
     )
 
 
-def test_native_induction_composes_from_canonical_values():
+def test_native_induction_composes_from_canonical_values() -> None:
     # Thread follow-up: native callers pass the canonical class function and
     # parent group directly; only _tools.py touches the wire request model.
     result = class_function_induce_from_subgroup(_class_function(_C2, (1, 1)), _S3)
     assert result.subgroup_class_to_parent_class == (0, 1)
 
 
-def test_native_induction_rejects_forged_class_function():
+def test_native_induction_rejects_forged_class_function() -> None:
     forged = FiniteClassFunction.model_construct(
         axis=ClassAxis(class_sizes=(1, 1), group_order=2, cyclotomic_order=1),
         values=(),
@@ -162,10 +163,14 @@ def test_native_induction_rejects_forged_class_function():
     )
 
 
-def test_native_induction_rejects_malformed_parent_group_without_pydantic_leak():
+def test_native_induction_rejects_malformed_parent_group_without_pydantic_leak() -> (
+    None
+):
     function = _class_function(_C2, (1, 1))
     with pytest.raises(OperationDomainValidationError) as error:
-        class_function_induce_from_subgroup(function, {"degree": 3})
+        class_function_induce_from_subgroup(
+            function, cast(PermutationGroup, {"degree": 3})
+        )
     assert error.value.errors()[0]["type"] == (
         "groups.characters.permutation_group_type"
     )

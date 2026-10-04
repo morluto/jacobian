@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import CartanMatrix, FiniteCartanDatum
@@ -121,6 +122,6 @@ def test_result_validator_revalidates_the_canonical_datum() -> None:
     payload["root_lattice"]["basis"]["entries"] = identity
     payload["root_to_weight_embedding"]["entries"] = identity
 
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValidationError) as error:
         RootWeightLatticePresentation.model_validate_json(json.dumps(payload))
     assert error.value.errors()[0]["type"] == ("root_system.lattice_presentation_datum")

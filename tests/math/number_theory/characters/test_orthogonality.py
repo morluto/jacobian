@@ -11,6 +11,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_orthogonality,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 _ROOTS = {
     1: ((1, 0),),
@@ -19,7 +20,7 @@ _ROOTS = {
 }
 
 
-def _exponent(character, residue: int) -> int | None:
+def _exponent(character: DirichletCharacter, residue: int) -> int | None:
     group = character.group
     try:
         row = group.unit_coordinates[group.unit_residues.index(residue)]
@@ -39,7 +40,9 @@ def _exponent(character, residue: int) -> int | None:
     )
 
 
-def _direct_root_sum(left, right) -> tuple[int, int]:
+def _direct_root_sum(
+    left: DirichletCharacter, right: DirichletCharacter
+) -> tuple[int, int]:
     """Independent direct residue sum in Q, Q(i), or Q(zeta_2)."""
 
     order = left.group.exponent

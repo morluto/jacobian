@@ -57,7 +57,7 @@ def test_full_polar_pairing_matches_independent_polarization_with_odd_cross_term
     def q(vector: tuple[Fraction, Fraction]) -> Fraction:
         return vector[0] ** 2 + 3 * vector[0] * vector[1] + 2 * vector[1] ** 2
 
-    summed = tuple(a + b for a, b in zip(x, y, strict=True))
+    summed = (x[0] + y[0], x[1] + y[1])
     expected = q(summed) - q(x) - q(y)
     assert expected == Fraction(107, 6)
     assert result.value == CanonicalRational.from_fraction(expected)
@@ -70,11 +70,18 @@ def test_full_polar_pairing_matches_independent_polarization_with_odd_cross_term
 def test_pairing_rejects_malformed_native_vector_shape() -> None:
     form = RationalQuadraticForm(
         axis=("x", "y"),
-        diagonal_coefficients=(_rational(1), _rational(1)),
+        diagonal_coefficients=(
+            CanonicalRational.from_integer_ratio(1, 1),
+            CanonicalRational.from_integer_ratio(1, 1),
+        ),
         cross_terms=(),
     )
     valid = RationalCoordinateVector(
-        axis=("x", "y"), coordinates=(_rational(1), _rational(1))
+        axis=("x", "y"),
+        coordinates=(
+            CanonicalRational.from_integer_ratio(1, 1),
+            CanonicalRational.from_integer_ratio(1, 1),
+        ),
     )
     malformed = valid.model_copy(update={"coordinates": (_rational(1),)})
     with pytest.raises(OperationDomainValidationError) as error:

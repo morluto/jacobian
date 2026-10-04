@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import combinations, pairwise
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
@@ -36,7 +38,7 @@ _DUAL_ID = "topology.normal_crossings.dual_complex.compute"
 _LATTICE_ID = "topology.normal_crossings.nearby_cycle_lattices.compute"
 
 
-def _tool(operation_id: str):
+def _tool(operation_id: str) -> MathTool[Any, Any]:
     return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
@@ -107,9 +109,9 @@ _TWO_NODES = _request(
 
 
 def _matmul(
-    left: tuple[tuple[int, ...], ...],
-    right: tuple[tuple[int, ...], ...],
-) -> tuple[tuple[int, ...], ...]:
+    left: tuple[tuple[int | Fraction, ...], ...],
+    right: tuple[tuple[int | Fraction, ...], ...],
+) -> tuple[tuple[int | Fraction, ...], ...]:
     left_columns = len(left[0]) if left else 0
     right_columns = len(right[0]) if right else 0
     return (

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import permutations
+from typing import cast
 
 import pytest
 
@@ -131,7 +132,9 @@ def test_lr_tableau_families_match_exhaustive_small_filling_oracle(size: int) ->
 def test_native_nonpartition_argument_is_a_domain_error() -> None:
     with pytest.raises(OperationDomainValidationError):
         littlewood_richardson_tableaux(
-            None, IntegerPartition(parts=()), IntegerPartition(parts=())
+            cast(IntegerPartition, None),
+            IntegerPartition(parts=()),
+            IntegerPartition(parts=()),
         )
 
 

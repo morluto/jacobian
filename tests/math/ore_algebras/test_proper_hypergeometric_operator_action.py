@@ -1,5 +1,7 @@
+from collections.abc import Iterable
 from fractions import Fraction
 from math import factorial
+from typing import cast
 
 import pytest
 
@@ -24,7 +26,9 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _polynomial(terms):
+def _polynomial(
+    terms: Iterable[tuple[tuple[int, int], int]],
+) -> RationalPolynomial:
     return RationalPolynomial(
         variables=("n", "k"),
         polynomial=SparseRationalPolynomial(
@@ -39,7 +43,7 @@ def _polynomial(terms):
     )
 
 
-def _binomial_term():
+def _binomial_term() -> ProperHypergeometricTerm:
     return ProperHypergeometricTerm(
         polynomial=_polynomial([((0, 0), 1)]),
         factorial_factors=(
@@ -55,19 +59,27 @@ def _binomial_term():
 
 
 def _rf_value(value: RationalFunction, n: int, k: int) -> Fraction:
-    def evaluate(polynomial):
+    def evaluate(polynomial: SparseRationalPolynomial) -> Fraction:
         return sum(
-            term.coefficient.as_fraction()
-            * n ** term.exponents[0]
-            * k ** term.exponents[1]
-            for term in polynomial.terms
+            (
+                term.coefficient.as_fraction()
+                * n ** term.exponents[0]
+                * k ** term.exponents[1]
+                for term in polynomial.terms
+            ),
+            Fraction(0),
         )
 
     return evaluate(value.numerator) / evaluate(value.denominator)
 
 
-def _bivariate_rf(numerator_terms, denominator_terms):
-    def polynomial(terms):
+def _bivariate_rf(
+    numerator_terms: Iterable[tuple[tuple[int, int], int]],
+    denominator_terms: Iterable[tuple[tuple[int, int], int]],
+) -> RationalFunction:
+    def polynomial(
+        terms: Iterable[tuple[tuple[int, int], int]],
+    ) -> SparseRationalPolynomial:
         return SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
@@ -89,7 +101,7 @@ def _direct_binomial(n: int, k: int) -> int:
     return factorial(n) // (factorial(k) * factorial(n - k))
 
 
-def _operator(*terms):
+def _operator(*terms: int) -> ShiftOreOperator:
     one_poly = SparseRationalPolynomial(
         terms=(
             RationalPolynomialTerm(
@@ -105,7 +117,7 @@ def _operator(*terms):
     )
 
 
-def test_shift_operator_action_matches_independent_binomial_values():
+def test_shift_operator_action_matches_independent_binomial_values() -> None:
     term = _binomial_term()
     result = proper_hypergeometric_operator_action(_operator(1), term)
     assert result.relative_multiplier == _bivariate_rf(
@@ -118,7 +130,7 @@ def test_shift_operator_action_matches_independent_binomial_values():
     assert _rf_value(result.relative_multiplier, 5, 2) == Fraction(3, 2)
 
 
-def test_multiple_operator_terms_sum_their_exact_shift_actions():
+def test_multiple_operator_terms_sum_their_exact_shift_actions() -> None:
     term = _binomial_term()
     result = proper_hypergeometric_operator_action(_operator(0, 1), term)
     assert result.relative_multiplier == _bivariate_rf(
@@ -132,7 +144,7 @@ def test_multiple_operator_terms_sum_their_exact_shift_actions():
     ) == _direct_binomial(5, 2) + _direct_binomial(6, 2)
 
 
-def test_left_coefficient_remains_unshifted_in_ore_action():
+def test_left_coefficient_remains_unshifted_in_ore_action() -> None:
     n_coefficient = RationalFunction(
         variables=("n",),
         numerator=SparseRationalPolynomial(
@@ -162,7 +174,7 @@ def test_left_coefficient_remains_unshifted_in_ore_action():
     ) == 5 * _direct_binomial(6, 2)
 
 
-def test_zero_operator_and_zero_term_have_canonical_zero_multiplier():
+def test_zero_operator_and_zero_term_have_canonical_zero_multiplier() -> None:
     zero_operator = ShiftOreOperator(terms=())
     result = proper_hypergeometric_operator_action(zero_operator, _binomial_term())
     assert result.relative_multiplier.numerator.terms == ()
@@ -172,7 +184,7 @@ def test_zero_operator_and_zero_term_have_canonical_zero_multiplier():
     assert result.relative_multiplier.numerator.terms == ()
 
 
-def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected():
+def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected() -> None:
     result = proper_hypergeometric_operator_action(_operator(9), _binomial_term())
     assert _rf_value(result.relative_multiplier, 20, 4) * _direct_binomial(
         20, 4
@@ -186,7 +198,7 @@ def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected():
     )
 
 
-def test_sparse_univariate_shift_product_uses_its_actual_axis_support():
+def test_sparse_univariate_shift_product_uses_its_actual_axis_support() -> None:
     term = ProperHypergeometricTerm(
         polynomial=_polynomial([((0, 0), 1)]),
         factorial_factors=(
@@ -199,7 +211,7 @@ def test_sparse_univariate_shift_product_uses_its_actual_axis_support():
     assert _rf_value(result.relative_multiplier, 3, 7) == 4**12 * 5**12
 
 
-def test_tenth_shift_of_twelfth_factorial_power_fits_admitted_bounds():
+def test_tenth_shift_of_twelfth_factorial_power_fits_admitted_bounds() -> None:
     term = ProperHypergeometricTerm(
         polynomial=_polynomial([((0, 0), 1)]),
         factorial_factors=(
@@ -219,7 +231,7 @@ def test_tenth_shift_of_twelfth_factorial_power_fits_admitted_bounds():
     )
 
 
-def test_n_action_does_not_require_admission_of_the_k_quotient():
+def test_n_action_does_not_require_admission_of_the_k_quotient() -> None:
     term = ProperHypergeometricTerm(
         polynomial=_polynomial([((0, 0), 1)]),
         factorial_factors=(
@@ -232,9 +244,11 @@ def test_n_action_does_not_require_admission_of_the_k_quotient():
     assert _rf_value(result.relative_multiplier, 3, 2) == 1
 
 
-def test_native_boundary_rejects_noncanonical_term_values_with_owner_error():
+def test_native_boundary_rejects_noncanonical_term_values_with_owner_error() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        proper_hypergeometric_operator_action(_operator(0), None)
+        proper_hypergeometric_operator_action(
+            _operator(0), cast(ProperHypergeometricTerm, None)
+        )
     assert (
         exc_info.value.errors()[0]["type"] == "ore_algebra.proper_hypergeometric_term"
     )

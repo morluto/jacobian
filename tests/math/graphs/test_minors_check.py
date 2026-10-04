@@ -164,7 +164,7 @@ class TestDefiningInvariant:
         witnesses = (_witness(["x", "y"], ["b", "c"]),)
         result = check_minor_model(PATH4, EDGE, branch_sets, witnesses)
         assert result.status == "VALID_MINOR_MODEL"
-        adjacency = {v: set() for v in PATH4.vertices}
+        adjacency: dict[str, set[str]] = {v: set() for v in PATH4.vertices}
         for left, right in PATH4.edges:
             adjacency[left].add(right)
             adjacency[right].add(left)

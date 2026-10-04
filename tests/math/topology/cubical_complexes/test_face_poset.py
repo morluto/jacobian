@@ -6,8 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.combinatorics.posets.core._models import MAX_POSET_ELEMENTS
 from jacobian.math.topology.cubical_complexes._models import (
-    MAX_POSET_ELEMENTS,
     CubicalCell,
     CubicalComplexRequest,
 )

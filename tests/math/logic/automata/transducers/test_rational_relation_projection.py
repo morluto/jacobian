@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -41,7 +42,7 @@ def _relation() -> RationalTransducer:
 
 
 def _projected_path_words(
-    relation: RationalTransducer, *, tape: str
+    relation: RationalTransducer, *, tape: Literal["input", "output"]
 ) -> set[tuple[int, ...]]:
     """Independent acyclic path enumerator used as a finite exact oracle."""
     edge_rows: dict[int, list[RationalEdge]] = {}
@@ -70,7 +71,9 @@ def _words(alphabet_size: int, max_length: int) -> list[tuple[int, ...]]:
 
 
 @pytest.mark.parametrize("tape", ["input", "output"])
-def test_projection_matches_independent_accepting_path_oracle(tape: str) -> None:
+def test_projection_matches_independent_accepting_path_oracle(
+    tape: Literal["input", "output"],
+) -> None:
     relation = _relation()
     result = project_rational_relation(relation, tape)
     expected = _projected_path_words(relation, tape=tape)
@@ -124,7 +127,7 @@ def test_rational_alphabet_identity_is_bounded_for_reusable_projection() -> None
 
 
 def test_large_projection_is_rejected_before_transition_construction(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     relation = RationalTransducer(
         input_alphabet_size=1,
@@ -143,7 +146,7 @@ def test_large_projection_is_rejected_before_transition_construction(
         ),
     )
 
-    def unexpected_transition(*args, **kwargs):
+    def unexpected_transition(*args: object, **kwargs: object) -> None:
         raise AssertionError("projection allocated an NFA transition before admission")
 
     monkeypatch.setattr(

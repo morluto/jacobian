@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 from jacobian.math.topology.simplicial_sets._tools import TOOLS
 from jacobian.math.topology.simplicial_sets.image import (
     simplicial_map_image,
@@ -17,11 +18,15 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 
-def _map(source, target, rows):
+def _map(
+    source: FiniteTruncatedSimplicialSet,
+    target: FiniteTruncatedSimplicialSet,
+    rows: tuple[tuple[int, ...], ...],
+) -> TruncatedSimplicialMap:
     return TruncatedSimplicialMap(source=source, target=target, maps=rows)
 
 
-def test_image_factorization_collapses_simplex_and_composes_to_input():
+def test_image_factorization_collapses_simplex_and_composes_to_input() -> None:
     source = standard_simplex(1, 2)
     target = standard_simplex(1, 2)
     collapse = _map(source, target, ((0, 0), (0, 0, 0), (0, 0, 0, 0)))
@@ -48,13 +53,13 @@ def test_image_factorization_collapses_simplex_and_composes_to_input():
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_image_operation_is_published_in_the_owner_manifest():
+def test_image_operation_is_published_in_the_owner_manifest() -> None:
     assert "topology.simplicial_set.map.image.compute" in {
         tool.operation_id for tool in TOOLS
     }
 
 
-def test_identity_map_has_full_image_and_identity_factors():
+def test_identity_map_has_full_image_and_identity_factors() -> None:
     source = standard_simplex(1, 2)
     identity = identity_simplicial_map(source)
 
@@ -65,7 +70,7 @@ def test_identity_map_has_full_image_and_identity_factors():
     assert result.inclusion == identity
 
 
-def test_image_preserves_the_initial_all_empty_prefix():
+def test_image_preserves_the_initial_all_empty_prefix() -> None:
     source_result = from_tables(1, ((), ()), (((), ()),), (((),),))
     assert source_result.simplicial_set is not None
     empty_map = _map(source_result.simplicial_set, standard_simplex(0, 1), ((), ()))
@@ -77,7 +82,7 @@ def test_image_preserves_the_initial_all_empty_prefix():
     assert result.inclusion.maps == ((), ())
 
 
-def test_image_rechecks_caller_supplied_carrier_identities():
+def test_image_rechecks_caller_supplied_carrier_identities() -> None:
     source = standard_simplex(1, 1)
     bad_target = source.model_copy(
         update={"face_maps": (((1, 1, 1), source.face_maps[0][1]),)}
@@ -91,7 +96,7 @@ def test_image_rechecks_caller_supplied_carrier_identities():
     assert error.value.errors()[0]["type"] == "simplicial_map.image_carrier_invalid"
 
 
-def test_image_rejects_a_non_natural_map():
+def test_image_rejects_a_non_natural_map() -> None:
     source = standard_simplex(1, 1)
     bad = _map(source, source, ((0, 1), (1, 1, 2)))
 

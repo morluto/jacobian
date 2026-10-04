@@ -19,6 +19,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_table,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 
 @pytest.mark.parametrize(
@@ -34,7 +35,9 @@ from jacobian.math.number_theory.characters.operations import (
         (5, (1,), 5),
     ],
 )
-def test_known_conductors(modulus: int, coordinates: tuple[int, ...], expected: int):
+def test_known_conductors(
+    modulus: int, coordinates: tuple[int, ...], expected: int
+) -> None:
     group = character_group(modulus)
     character = dirichlet_character(group, coordinates)
 
@@ -71,9 +74,11 @@ def test_primitive_ancestor_survives_serialization_and_remains_composable() -> N
     )
 
 
-def _factors_through_by_value_table(character, divisor: int) -> bool:
+def _factors_through_by_value_table(
+    character: DirichletCharacter, divisor: int
+) -> bool:
     """Independent oracle: character values agree on every reduction fiber."""
-    values = {}
+    values: dict[int, int] = {}
     for residue, row in zip(
         character.group.unit_residues,
         character.group.unit_coordinates,
@@ -100,7 +105,9 @@ def _factors_through_by_value_table(character, divisor: int) -> bool:
 
 
 @pytest.mark.parametrize("modulus", range(1, 25))
-def test_conductor_matches_independent_minimal_reduction_fiber_oracle(modulus: int):
+def test_conductor_matches_independent_minimal_reduction_fiber_oracle(
+    modulus: int,
+) -> None:
     group = character_group(modulus)
     for serial in range(group.character_count):
         remaining = serial
@@ -119,10 +126,13 @@ def test_conductor_matches_independent_minimal_reduction_fiber_oracle(modulus: i
             and _factors_through_by_value_table(character, divisor)
         ]
         assert actual == min(fitting_divisors)
-        primitive = result.primitive_character
-        assert primitive.conductor == actual
-        assert dirichlet_character_conductor(primitive.character).conductor == actual
-        primitive = primitive.character
+        primitive_character = result.primitive_character
+        assert primitive_character.conductor == actual
+        assert (
+            dirichlet_character_conductor(primitive_character.character).conductor
+            == actual
+        )
+        primitive = primitive_character.character
         source_table = dirichlet_character_table(character)
         primitive_table = dirichlet_character_table(primitive)
         primitive_values = dict(

@@ -259,9 +259,9 @@ def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
     with pytest.raises(ValidationError) as exc_info:
         MahlerMeasureRequest(polynomial=polynomial)
     assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_degree_bound"
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_error:
         mahler_measure(polynomial)
-    assert exc_info.value.errors()[0]["type"] == "polynomial.mahler_degree_bound"
+    assert domain_error.value.errors()[0]["type"] == "polynomial.mahler_degree_bound"
 
 
 def test_mahler_measure_rejects_empty_native_coefficients() -> None:

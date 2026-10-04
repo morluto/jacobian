@@ -50,8 +50,10 @@ class _RecordingRaises:
         self._key = _site_key()
         if _original_raises is None:
             raise RuntimeError("match recorder is not configured")
-        self._ctx = _original_raises(expected, *args, **kwargs)  # type: ignore[call-overload]
-        self.excinfo = None
+        self._ctx: pytest.RaisesExc[BaseException] = _original_raises(
+            expected, *args, **kwargs
+        )  # type: ignore[call-overload]
+        self.excinfo: pytest.ExceptionInfo[BaseException] | None = None
 
     def __enter__(self) -> object:
         self.excinfo = self._ctx.__enter__()

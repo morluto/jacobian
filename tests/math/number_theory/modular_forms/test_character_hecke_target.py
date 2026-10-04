@@ -7,7 +7,14 @@ from fractions import Fraction
 import pytest
 from cypari import pari
 from pydantic import TypeAdapter
+from tests.math.number_theory.modular_forms._typing import (
+    basis_id as typed_basis_id,
+)
+from tests.math.number_theory.modular_forms._typing import (
+    cyclotomic,
+)
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -58,7 +65,7 @@ def _element(value: object) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=tuple(
-            {"num": int(numerator), "den": int(denominator)}
+            CanonicalRational(num=int(numerator), den=int(denominator))
             for numerator, denominator in coordinates
         ),
     )
@@ -67,13 +74,13 @@ def _element(value: object) -> RationalCyclotomicElement:
 def _form() -> ModularFormCoordinates:
     return ModularFormCoordinates(
         space=_space(),
-        basis_id=CHARACTER_RREF_BASIS_ID,
+        basis_id=typed_basis_id(CHARACTER_RREF_BASIS_ID),
         coordinates=(
             RationalCyclotomicElement(
                 field=_FIELD,
                 coefficients_ascending=(
-                    {"num": 1, "den": 1},
-                    {"num": 0, "den": 1},
+                    CanonicalRational(num=1, den=1),
+                    CanonicalRational(num=0, den=1),
                 ),
             ),
         ),
@@ -135,8 +142,8 @@ def test_character_hecke_scales_nonunit_coordinate_once() -> None:
     unit_result = modular_character_coordinates_hecke(_form(), 5)
     result = modular_character_coordinates_hecke(form, 5)
 
-    unit = unit_result.coordinates[0].coefficients_ascending
-    doubled = result.coordinates[0].coefficients_ascending
+    unit = cyclotomic(unit_result.coordinates[0]).coefficients_ascending
+    doubled = cyclotomic(result.coordinates[0]).coefficients_ascending
     assert tuple(value.num for value in doubled) == tuple(
         2 * value.num for value in unit
     )
@@ -149,15 +156,15 @@ def test_character_hecke_admits_large_coordinate_without_double_charge() -> None
     coordinate = RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": 10**69, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=10**69, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
     form = _form().model_copy(update={"coordinates": (coordinate,)})
     result = modular_character_coordinates_hecke(form, 5)
 
-    unit = modular_character_coordinates_hecke(_form(), 5).coordinates[0]
-    assert result.coordinates[0].coefficients_ascending == tuple(
+    unit = cyclotomic(modular_character_coordinates_hecke(_form(), 5).coordinates[0])
+    assert cyclotomic(result.coordinates[0]).coefficients_ascending == tuple(
         type(value)(num=10**69 * value.num, den=value.den)
         for value in unit.coefficients_ascending
     )

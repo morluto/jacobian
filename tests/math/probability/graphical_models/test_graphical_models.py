@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 from tests.error_assertions import error_code
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -174,7 +174,7 @@ class TestFactorValuesAndOperations:
         from jacobian.math.probability.graphical_models import operations as module
 
         rescans = 0
-        original = module.require_bounded_rational
+        original = require_bounded_rational
 
         def counted(value: CanonicalRational, *, max_digits: int, label: str) -> None:
             nonlocal rescans

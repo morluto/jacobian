@@ -80,6 +80,7 @@ def test_finite_uniformizer_has_independent_q_adic_order_one(
     coefficients: tuple[int, ...],
 ) -> None:
     result = function_field_place_uniformizer(_place(coefficients))
+    assert result.place.prime_polynomial is not None
     q = result.place.prime_polynomial.coefficients
     rational = result.uniformizer.coordinates[0]
     assert _independent_order(rational.numerator.coefficients, q, 5) == 1

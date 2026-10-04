@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from itertools import product
 from math import gcd
+from typing import Literal, NoReturn
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import cyclotomic
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -17,6 +20,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms import character_basis as basis_module
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
@@ -28,12 +32,14 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 _FIELD = RationalCyclotomicField(order=6)
-_GENERIC_BASIS = "gamma0-cyclotomic-character-sturm-rref-v1"
+_GENERIC_BASIS: Literal["gamma0-cyclotomic-character-sturm-rref-v1"] = (
+    "gamma0-cyclotomic-character-sturm-rref-v1"
+)
 
 
 # Columns are U_p images of canonical basis vectors; rows are target
 # coordinates in ascending cyclotomic power-basis order.
-def _inflated_character(coordinate: int, level: int):
+def _inflated_character(coordinate: int, level: int) -> DirichletCharacter:
     source = dirichlet_character(character_group(13), (coordinate,))
     group = character_group(level)
     for candidate_coordinates in product(
@@ -64,8 +70,8 @@ def _unit(field: RationalCyclotomicField) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=(
-            {"num": 1, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
 
@@ -74,8 +80,8 @@ def _zero(field: RationalCyclotomicField) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=(
-            {"num": 0, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
 
@@ -115,8 +121,8 @@ def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> 
     large_scalar = RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": 9_999_999, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=9_999_999, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
     form = form.model_copy(update={"coordinates": (large_scalar, _zero(_FIELD))})
@@ -128,8 +134,8 @@ def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> 
         RationalCyclotomicElement(
             field=_FIELD,
             coefficients_ascending=(
-                {"num": 0, "den": 1},
-                {"num": -19_999_998, "den": 1},
+                CanonicalRational(num=0, den=1),
+                CanonicalRational(num=-19_999_998, den=1),
             ),
         ),
     )
@@ -144,15 +150,15 @@ def test_u_prime_result_height_allows_distinct_component_denominators() -> None:
                 RationalCyclotomicElement(
                     field=_FIELD,
                     coefficients_ascending=(
-                        {"num": 1, "den": 10_007},
-                        {"num": 1, "den": 10_009},
+                        CanonicalRational(num=1, den=10_007),
+                        CanonicalRational(num=1, den=10_009),
                     ),
                 ),
                 RationalCyclotomicElement(
                     field=_FIELD,
                     coefficients_ascending=(
-                        {"num": 1, "den": 10_037},
-                        {"num": 1, "den": 10_039},
+                        CanonicalRational(num=1, den=10_037),
+                        CanonicalRational(num=1, den=10_039),
                     ),
                 ),
             )
@@ -165,7 +171,7 @@ def test_u_prime_result_height_allows_distinct_component_denominators() -> None:
         max(
             len(str(coefficient.den))
             for value in result.coordinates
-            for coefficient in value.coefficients_ascending
+            for coefficient in cyclotomic(value).coefficients_ascending
         )
         > 15
     )
@@ -173,20 +179,20 @@ def test_u_prime_result_height_allows_distinct_component_denominators() -> None:
 
 @pytest.mark.parametrize("digits", [42, 43, 255])
 def test_u_prime_output_bound_is_admitted_before_backend_expansion(
-    monkeypatch, digits: int
+    monkeypatch: pytest.MonkeyPatch, digits: int
 ) -> None:
     space = _space(2, 26)
     form = _coordinates(space, 0)
     oversized = RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": int("9" * digits), "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=int("9" * digits), den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
     form = form.model_copy(update={"coordinates": (oversized, _zero(_FIELD))})
 
-    def backend_must_not_run(*_args, **_kwargs):
+    def backend_must_not_run(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("backend started before output growth was admitted")
 
     monkeypatch.setattr(basis_module, "pari_character_basis", backend_must_not_run)

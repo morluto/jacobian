@@ -37,7 +37,7 @@ def test_mixed_composite_modulus_fibers_match_direct_exhaustive_oracle() -> None
         modulus=6,
         axis=("x", "y"),
         diagonal_residues=(2, 5),
-        cross_terms=({"left": 0, "right": 1, "coefficient": 3},),
+        cross_terms=(ModularQuadraticCrossTerm(left=0, right=1, coefficient=3),),
     )
     for target_value in range(6):
         target = ModularInteger(modulus=6, residue=target_value)
@@ -139,7 +139,7 @@ def test_worst_case_output_size_is_admitted_before_enumeration() -> None:
 def test_digit_work_is_admitted_before_enumeration() -> None:
     axis = tuple(f"x{i}" for i in range(16))
     cross_terms = tuple(
-        {"left": left, "right": right, "coefficient": 1}
+        ModularQuadraticCrossTerm(left=left, right=right, coefficient=1)
         for left in range(16)
         for right in range(left + 1, 16)
     )
@@ -163,7 +163,7 @@ def test_request_parent_and_result_json_round_trip() -> None:
         modulus=3,
         axis=("x", "y"),
         diagonal_residues=(1, 1),
-        cross_terms=({"left": 0, "right": 1, "coefficient": 1},),
+        cross_terms=(ModularQuadraticCrossTerm(left=0, right=1, coefficient=1),),
     )
     with pytest.raises(ValidationError) as exc_info:
         ModularQuadraticFiberRequest(

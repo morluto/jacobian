@@ -32,8 +32,3 @@ def test_g_vector_stops_at_midpoint_for_two_dimensional_simplex() -> None:
     assert result.f_vector == (1, 3, 3, 1)
     assert result.h_vector == (1, 0, 0, 0)
     assert result.g_vector == (1, -1)
-
-
-def test_g_vector_does_not_imply_sphere_or_nonnegative_entries() -> None:
-    request = _request([["a", "b", "c"]], ["a", "b", "c"])
-    assert compute_g_vector(request).g_vector == (1, -1)

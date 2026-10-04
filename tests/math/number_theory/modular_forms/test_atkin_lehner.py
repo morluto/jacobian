@@ -1,5 +1,6 @@
 import json
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 
@@ -21,7 +22,20 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 
 def _form(
-    level: int, weight: int, basis_id: str, values: tuple[int, ...]
+    level: int,
+    weight: int,
+    basis_id: Literal[
+        "level-one-e4-e6-monomials-v1",
+        "gamma0-two-weight-2-4-monomials-v1",
+        "gamma0-three-weight-2-4-6-hypersurface-v1",
+        "gamma0-four-weight-2-generators-v1",
+        "gamma0-four-chi4-weight-one-v1",
+        "gamma0-four-chi4-weight-three-v1",
+        "gamma0-rational-gamma0-sturm-rref-v1",
+        "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
+    ],
+    values: tuple[int, ...],
 ) -> ModularFormCoordinates:
     return ModularFormCoordinates(
         space=ModularFormSpace(level=level, weight=weight, kind="M"),

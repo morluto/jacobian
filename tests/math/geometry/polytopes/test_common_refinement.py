@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -28,18 +29,18 @@ def poly(points: tuple[tuple[int, int], ...], prefix: str) -> RationalVPolytope:
         vertices=tuple(
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{i}",
-                coordinates=tuple({"num": x, "den": 1} for x in point),
+                coordinates=tuple(CanonicalRational(num=x, den=1) for x in point),
             )
             for i, point in enumerate(points)
         ),
     )
 
 
-def complex_of(*cells: RationalVPolytope):
+def complex_of(*cells: RationalVPolytope) -> PolytopalComplexClosureResult:
     return polytopal_complex_closure(tuple(cells))
 
 
-def _shoelace(points) -> Fraction:
+def _shoelace(points: Sequence[ComplexPoint]) -> Fraction:
     """Independent exact polygon-area oracle, not the polytope volume kernel."""
     ordered = sorted(
         (
@@ -52,33 +53,36 @@ def _shoelace(points) -> Fraction:
     )
 
     # A monotone-chain hull is sufficient for the convex overlay cells.
-    def cross(o, a, b):
+    def cross(
+        o: tuple[Fraction, ...],
+        a: tuple[Fraction, ...],
+        b: tuple[Fraction, ...],
+    ) -> Fraction:
         return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 
-    lower = []
+    lower: list[tuple[Fraction, ...]] = []
     for point in ordered:
         while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
             lower.pop()
         lower.append(point)
-    upper = []
+    upper: list[tuple[Fraction, ...]] = []
     for point in reversed(ordered):
         while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
             upper.pop()
         upper.append(point)
     hull = lower[:-1] + upper[:-1]
-    return (
-        abs(
-            sum(
-                hull[i][0] * hull[(i + 1) % len(hull)][1]
-                - hull[(i + 1) % len(hull)][0] * hull[i][1]
-                for i in range(len(hull))
-            )
-        )
-        / 2
+    signed_area = sum(
+        (
+            hull[i][0] * hull[(i + 1) % len(hull)][1]
+            - hull[(i + 1) % len(hull)][0] * hull[i][1]
+            for i in range(len(hull))
+        ),
+        Fraction(0),
     )
+    return abs(signed_area) / 2
 
 
-def test_common_refinement_produces_face_closed_overlay_and_pair_provenance():
+def test_common_refinement_produces_face_closed_overlay_and_pair_provenance() -> None:
     left = complex_of(
         poly(((0, 0), (1, 0), (0, 1)), "a"),
         poly(((1, 0), (1, 1), (0, 1)), "b"),
@@ -97,7 +101,9 @@ def test_common_refinement_produces_face_closed_overlay_and_pair_provenance():
     assert result.refinement.f_vector == (1, 4, 5, 2)
 
 
-def test_common_refinement_independent_oracle_for_diagonal_and_vertical_splits():
+def test_common_refinement_independent_oracle_for_diagonal_and_vertical_splits() -> (
+    None
+):
     left = complex_of(
         poly(((0, 0), (1, 0), (1, 1)), "a"),
         poly(((0, 0), (1, 1), (0, 1)), "b"),
@@ -122,7 +128,7 @@ def test_common_refinement_independent_oracle_for_diagonal_and_vertical_splits()
     )
 
 
-def test_common_refinement_rejects_different_supports():
+def test_common_refinement_rejects_different_supports() -> None:
     left = complex_of(poly(((0, 0), (1, 0), (1, 1), (0, 1)), "a"))
     right = complex_of(poly(((0, 0), (2, 0), (2, 1), (0, 1)), "b"))
 
@@ -134,7 +140,7 @@ def test_common_refinement_rejects_different_supports():
     )
 
 
-def test_common_refinement_revalidates_both_complexes_before_reading_fields():
+def test_common_refinement_revalidates_both_complexes_before_reading_fields() -> None:
     malformed = PolytopalComplexClosureResult.model_construct()
     with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_common_refinement(malformed, malformed)
@@ -143,7 +149,7 @@ def test_common_refinement_revalidates_both_complexes_before_reading_fields():
     )
 
 
-def test_common_refinement_rejects_unmeasured_lower_dimensional_components():
+def test_common_refinement_rejects_unmeasured_lower_dimensional_components() -> None:
     square = poly(((0, 0), (1, 0), (1, 1), (0, 1)), "square")
     left = complex_of(square)
     isolated_point = MaximalCellRecord.model_construct(
@@ -173,7 +179,9 @@ def test_common_refinement_rejects_unmeasured_lower_dimensional_components():
     )
 
 
-def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width():
+def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width() -> (
+    None
+):
     square = complex_of(poly(((0, 0), (1, 0), (1, 1), (0, 1)), "left"))
     right = complex_of(poly(((0, 0), (1, 0), (1, 1), (0, 1)), "right"))
     cell = square.maximal_cells[0]

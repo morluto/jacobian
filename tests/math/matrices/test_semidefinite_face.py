@@ -255,9 +255,9 @@ def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:
         reduce_exposed_face(
             RationalSemidefiniteSystem(order=0, matrices=(), rhs=()), ()
         )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_error:
         reduce_exposed_face(_system((_matrix([[1]]),), (0,)), ())
-    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
+    assert domain_error.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 def test_raw_request_preflight_rejects_over_budget_cells() -> None:

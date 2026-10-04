@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import cast
 
 import pytest
 from tests.error_assertions import error_code
@@ -121,11 +122,14 @@ def test_image_and_boundary_witnesses_match_exhaustive_gf2_oracle() -> None:
 
 
 def test_filtered_homology_tool_is_published_with_exact_result_type() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id
-        == "homological.filtered_chain_complex.homology_filtration.compute"
+    tool = cast(
+        MathTool[FilteredChainComplexRequest, FilteredHomologyResult],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id
+            == "homological.filtered_chain_complex.homology_filtration.compute"
+        ),
     )
     assert isinstance(tool, MathTool)
     assert tool.result_type is FilteredHomologyResult

@@ -1,4 +1,6 @@
+from collections.abc import Mapping
 from itertools import permutations
+from typing import NoReturn
 
 import pytest
 from pydantic import ValidationError
@@ -10,6 +12,7 @@ from jacobian.catalog.models import (
 from jacobian.math.gauge import (
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
+    FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
@@ -21,21 +24,26 @@ from jacobian.math.gauge import (
 )
 from jacobian.math.gauge._models import FiniteGroupGaugeHolonomyRequest
 from jacobian.math.groups._table_models import (
+    FiniteGroupTable,
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
 )
 from jacobian.math.groups._tools import construct_finite_group_table
 
+type Permutation = tuple[int, ...]
 
-def finite_group_gauge_holonomy(request):
+
+def finite_group_gauge_holonomy(
+    request: FiniteGroupGaugeHolonomyRequest,
+) -> FiniteGroupGaugeHolonomyResult:
     """Exercise a decoded wire envelope through the request-free kernel."""
     return native_finite_group_gauge_holonomy(request.field, request.path)
 
 
-def _s3():
+def _s3() -> tuple[FiniteGroupTable, dict[Permutation, int]]:
     elements = tuple(permutations(range(3)))
 
-    def compose(first, second):
+    def compose(first: Permutation, second: Permutation) -> Permutation:
         return tuple(second[first[i]] for i in range(3))
 
     index = {element: i for i, element in enumerate(elements)}
@@ -46,7 +54,11 @@ def _s3():
     ).group, index
 
 
-def _field(group, index, labels=((1, 2, 0), (1, 0, 2))):
+def _field(
+    group: FiniteGroupTable,
+    index: Mapping[Permutation, int],
+    labels: tuple[Permutation, ...] = ((1, 2, 0), (1, 0, 2)),
+) -> FiniteGroupGaugeField:
     lattice = GaugeLattice(
         vertices=("a", "b", "c"),
         edges=(
@@ -67,10 +79,10 @@ def _field(group, index, labels=((1, 2, 0), (1, 0, 2))):
     )
 
 
-def _s4_group():
+def _s4_group() -> FiniteGroupTable:
     elements = tuple(permutations(range(4)))
 
-    def compose(first, second):
+    def compose(first: Permutation, second: Permutation) -> Permutation:
         return tuple(second[first[i]] for i in range(4))
 
     index = {element: i for i, element in enumerate(elements)}
@@ -80,7 +92,7 @@ def _s4_group():
     ).group
 
 
-def _loop_field(group, edge_count):
+def _loop_field(group: FiniteGroupTable, edge_count: int) -> FiniteGroupGaugeField:
     ids = tuple(f"edge-{i:03}" for i in range(edge_count))
     lattice = GaugeLattice(
         vertices=("v",),
@@ -99,7 +111,7 @@ def _loop_field(group, edge_count):
     )
 
 
-def test_noncommutative_path_order_and_serialization():
+def test_noncommutative_path_order_and_serialization() -> None:
     group, index = _s3()
     field = _field(group, index)
     path = OrientedGaugePath(
@@ -124,7 +136,7 @@ def test_noncommutative_path_order_and_serialization():
     assert finite_group_gauge_holonomy(decoded).holonomy == result.holonomy
 
 
-def test_backtracking_is_identity_and_reverse_path_inverts_product():
+def test_backtracking_is_identity_and_reverse_path_inverts_product() -> None:
     group, index = _s3()
     field = _field(group, index)
     backtrack = OrientedGaugePath(
@@ -158,7 +170,7 @@ def test_backtracking_is_identity_and_reverse_path_inverts_product():
     assert reverse_value == group.inverse[forward_value]
 
 
-def test_malformed_constructed_group_is_rejected_structurally():
+def test_malformed_constructed_group_is_rejected_structurally() -> None:
     group, _ = _s3()
     malformed_group = type(group).model_construct(identity=0, inverse=group.inverse)
     field = _field(group, _s3()[1])
@@ -172,7 +184,7 @@ def test_malformed_constructed_group_is_rejected_structurally():
         finite_group_gauge_holonomy(request)
 
 
-def test_bypass_constructed_nested_carriers_are_rejected_structurally():
+def test_bypass_constructed_nested_carriers_are_rejected_structurally() -> None:
     group, index = _s3()
     field = _field(group, index)
     path = OrientedGaugePath(steps=(), basepoint="a")
@@ -228,7 +240,7 @@ def test_bypass_constructed_nested_carriers_are_rejected_structurally():
         )
 
 
-def test_bypass_constructed_path_steps_are_rejected_structurally():
+def test_bypass_constructed_path_steps_are_rejected_structurally() -> None:
     group, index = _s3()
     field = _field(group, index)
     malformed_path = OrientedGaugePath.model_construct(
@@ -243,7 +255,7 @@ def test_bypass_constructed_path_steps_are_rejected_structurally():
         )
 
 
-def test_noncanonical_edge_label_is_rejected():
+def test_noncanonical_edge_label_is_rejected() -> None:
     group, index = _s3()
     field = _field(group, index)
     malformed_field = FiniteGroupGaugeField.model_construct(
@@ -261,7 +273,7 @@ def test_noncanonical_edge_label_is_rejected():
         finite_group_gauge_holonomy(request)
 
 
-def test_mismatched_nonempty_path_basepoint_is_rejected():
+def test_mismatched_nonempty_path_basepoint_is_rejected() -> None:
     group, index = _s3()
     field = _field(group, index)
     path = OrientedGaugePath(
@@ -279,7 +291,7 @@ def test_mismatched_nonempty_path_basepoint_is_rejected():
     )
 
 
-def test_edge_parent_substitution_is_rejected():
+def test_edge_parent_substitution_is_rejected() -> None:
     group, index = _s3()
     other = construct_finite_group_table(
         FiniteGroupTableRequest(
@@ -308,7 +320,7 @@ def test_edge_parent_substitution_is_rejected():
         )
 
 
-def test_output_expansion_is_admitted_before_contribution_construction():
+def test_output_expansion_is_admitted_before_contribution_construction() -> None:
     group = _s4_group()
     field = _loop_field(group, 1)
     path = OrientedGaugePath.model_construct(
@@ -322,8 +334,8 @@ def test_output_expansion_is_admitted_before_contribution_construction():
 
 
 def test_aggregate_parent_table_output_is_admitted_before_result_construction(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     group = _s4_group()
     field = _loop_field(group, 128)
     path = OrientedGaugePath.model_construct(
@@ -331,7 +343,7 @@ def test_aggregate_parent_table_output_is_admitted_before_result_construction(
         basepoint=None,
     )
 
-    def output_construction_is_too_late(*args, **kwargs):
+    def output_construction_is_too_late(*args: object, **kwargs: object) -> NoReturn:
         pytest.fail("output admission must precede ledger and result construction")
 
     monkeypatch.setattr(
@@ -354,7 +366,7 @@ def test_aggregate_parent_table_output_is_admitted_before_result_construction(
         )
 
 
-def test_smaller_s4_output_boundary_is_accepted():
+def test_smaller_s4_output_boundary_is_accepted() -> None:
     group = _s4_group()
     field = _loop_field(group, 1)
     path = OrientedGaugePath.model_construct(

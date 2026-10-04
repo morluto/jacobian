@@ -154,13 +154,13 @@ def test_rejects_nondeterministic_input_and_mismatched_signature() -> None:
         ),
         final_states=(0,),
     )
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(ValidationError) as validation_error:
         TreeAutomatonBooleanProductRequest(
             left=cast(CompleteDeterministicBottomUpTreeAutomaton, nondeterministic),
             right=left,
             connective="intersection",
         )
-    assert exc_info.value.errors()[0]["type"] == "model_type"
+    assert validation_error.value.errors()[0]["type"] == "model_type"
     other_signature = CompleteDeterministicBottomUpTreeAutomaton(
         state_count=1,
         arity=(0,),
@@ -169,9 +169,9 @@ def test_rejects_nondeterministic_input_and_mismatched_signature() -> None:
         ),
         final_states=(0,),
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_error:
         boolean_product_tree_automata(left, other_signature, "intersection")
-    assert exc_info.value.errors()[0]["type"] == "tree_automata.product_signature"
+    assert domain_error.value.errors()[0]["type"] == "tree_automata.product_signature"
 
 
 def test_pair_state_product_is_admitted_before_expansion() -> None:

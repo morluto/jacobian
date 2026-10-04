@@ -5,6 +5,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -18,15 +19,19 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 )
 
 
-def _form(diagonal: tuple[int, ...], crosses: tuple[tuple[int, int, int], ...] = ()):
+def _form(
+    diagonal: tuple[int, ...], crosses: tuple[tuple[int, int, int], ...] = ()
+) -> RationalQuadraticForm:
     return RationalQuadraticForm(
         axis=tuple(f"x{i}" for i in range(len(diagonal))),
-        diagonal_coefficients=tuple({"num": value, "den": 1} for value in diagonal),
+        diagonal_coefficients=tuple(
+            CanonicalRational.from_integer_ratio(value, 1) for value in diagonal
+        ),
         cross_terms=tuple(
             QuadraticCrossTerm(
                 left=left,
                 right=right,
-                coefficient={"num": value, "den": 1},
+                coefficient=CanonicalRational.from_integer_ratio(value, 1),
             )
             for left, right, value in crosses
         ),
@@ -70,7 +75,7 @@ def test_theta_prefix_admits_zero_dimensional_positive_definite_form() -> None:
 
 def test_theta_prefix_rejects_nonintegral_and_indefinite_forms() -> None:
     nonintegral = RationalQuadraticForm(
-        axis=("x",), diagonal_coefficients=({"num": 1, "den": 2},)
+        axis=("x",), diagonal_coefficients=(CanonicalRational.from_integer_ratio(1, 2),)
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
         theta_series_prefix(nonintegral, 1)

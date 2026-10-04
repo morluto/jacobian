@@ -94,15 +94,17 @@ def test_topology_axioms_are_admitted_by_operations() -> None:
         exc_info.value.errors()[0]["type"]
         == "finite_topology.not_closed_under_intersections"
     )
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(ValidationError) as invalid_order:
         FiniteTopology(point_count=2, open_sets=((), (1, 0)))
     assert (
-        exc_info.value.errors()[0]["type"] == "finite_topology.open_set_not_canonical"
+        invalid_order.value.errors()[0]["type"]
+        == "finite_topology.open_set_not_canonical"
     )
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(ValidationError) as duplicate_sets:
         FiniteTopology(point_count=1, open_sets=((), (0,), (0,)))
     assert (
-        exc_info.value.errors()[0]["type"] == "finite_topology.open_sets_not_distinct"
+        duplicate_sets.value.errors()[0]["type"]
+        == "finite_topology.open_sets_not_distinct"
     )
 
 

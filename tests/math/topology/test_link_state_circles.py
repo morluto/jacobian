@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -124,7 +125,8 @@ def test_state_circles_match_independent_raw_dart_oracle_and_bracket(
     diagram: OrientedLinkDiagram,
 ) -> None:
     bracket_states = link_bracket(diagram).states
-    for choices in product(("A", "B"), repeat=len(diagram.crossings)):
+    for raw_choices in product(("A", "B"), repeat=len(diagram.crossings)):
+        choices = cast(tuple[Literal["A", "B"], ...], raw_choices)
         result = link_state_circles(
             LinkDiagramSmoothingState(diagram=diagram, choices=choices)
         )

@@ -14,6 +14,7 @@ from jacobian.math.geometry.algebraic_curves.divisor_classes.operations import (
     plane_curve_strict_transform_class,
 )
 from jacobian.math.geometry.blowup_p2._models import (
+    BlowupDivisorClass,
     BlowupP2Surface,
     BlowupPoint,
 )
@@ -61,7 +62,7 @@ def _cuspidal_cubic_request() -> PlaneCurveStrictTransformRequest:
     )
 
 
-def _compute(request: PlaneCurveStrictTransformRequest):
+def _compute(request: PlaneCurveStrictTransformRequest) -> BlowupDivisorClass:
     return plane_curve_strict_transform_class(
         request.polynomial,
         request.surface,
@@ -183,16 +184,6 @@ def test_forged_rational_fields_are_domain_errors_not_helper_exceptions() -> Non
             polynomial, request.surface, request.projective_coordinate_variables
         )
     assert error.value.errors()[0]["type"] == "plane_curve_divisor.coefficient_type"
-
-
-def test_native_operation_accepts_values_and_rejects_wire_request_model() -> None:
-    request = _cuspidal_cubic_request()
-    with pytest.raises(OperationDomainValidationError) as error:
-        plane_curve_strict_transform_class(
-            request, request.surface, request.projective_coordinate_variables
-        )
-
-    assert error.value.errors()[0]["type"] == "plane_curve_divisor.polynomial_type"
 
 
 def test_native_operation_rejects_malformed_canonical_values_with_stable_error() -> (

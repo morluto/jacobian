@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields.values import FiniteLinearMap
 from jacobian.math.quantum._models import (
     CheckSpaceValue,
     PhaseFreeQubitPauli,
@@ -49,7 +50,7 @@ def _pairing(left: int, right: int, n: int) -> int:
     return ((left_x & right_z).bit_count() + (left_z & right_x).bit_count()) % 2
 
 
-def _apply_map(linear_map, vector: tuple[int, ...]) -> tuple[int, ...]:
+def _apply_map(linear_map: FiniteLinearMap, vector: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(
         sum(entry * coordinate for entry, coordinate in zip(row, vector, strict=True))
         % 2
@@ -142,9 +143,9 @@ def test_quotient_maps_and_form_match_exhaustive_pauli_oracle(
     quotient_vectors = tuple(range(1 << len(quotient_basis)))
     for left_coordinates in quotient_vectors:
         left = 0
-        for index, row in enumerate(quotient_basis):
+        for index, quotient_vector in enumerate(quotient_basis):
             if (left_coordinates >> index) & 1:
-                left ^= row
+                left ^= quotient_vector
         assert _pairing(left, left, n) == 0
         if left_coordinates:
             assert any(
@@ -161,9 +162,9 @@ def test_quotient_maps_and_form_match_exhaustive_pauli_oracle(
             )
         for right_coordinates in quotient_vectors:
             right = 0
-            for index, row in enumerate(quotient_basis):
+            for index, quotient_vector in enumerate(quotient_basis):
                 if (right_coordinates >> index) & 1:
-                    right ^= row
+                    right ^= quotient_vector
             assert all(
                 _pairing(left ^ stabilizer_element, right ^ other_stabilizer, n)
                 == _pairing(left, right, n)

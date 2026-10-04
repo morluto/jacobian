@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Literal, NoReturn
 
 import pytest
 
@@ -20,9 +21,14 @@ from jacobian.math.polynomials.tropical.values import (
     TropicalVector,
 )
 
+TropicalConvention = Literal["MIN_PLUS", "MAX_PLUS"]
 
-def _poly(convention: str, terms: tuple[tuple[tuple[int, ...], int], ...]):
-    semiring = TropicalSemiring(convention=convention, base="QQ")  # type: ignore[arg-type]
+
+def _poly(
+    convention: TropicalConvention,
+    terms: tuple[tuple[tuple[int, ...], int], ...],
+) -> TropicalPolynomial:
+    semiring = TropicalSemiring(convention=convention, base="QQ")
     return TropicalPolynomial(
         semiring=semiring,
         variables=("x", "y"),
@@ -40,8 +46,8 @@ def _poly(convention: str, terms: tuple[tuple[tuple[int, ...], int], ...]):
     )
 
 
-def _point(poly, x: int | None, y: int | None) -> TropicalVector:
-    infinity = (
+def _point(poly: TropicalPolynomial, x: int | None, y: int | None) -> TropicalVector:
+    infinity: Literal["POSITIVE_INFINITY", "NEGATIVE_INFINITY"] = (
         "POSITIVE_INFINITY"
         if poly.semiring.convention == "MIN_PLUS"
         else "NEGATIVE_INFINITY"
@@ -64,14 +70,18 @@ def _point(poly, x: int | None, y: int | None) -> TropicalVector:
     )
 
 
-def _oracle(poly, point):
+def _oracle(
+    poly: TropicalPolynomial, point: TropicalVector
+) -> tuple[Fraction | None, tuple[int, ...]]:
     candidates: list[tuple[int, Fraction]] = []
     for index, term in enumerate(poly.terms):
+        assert term.coefficient.value is not None
         value = Fraction(term.coefficient.value.num, term.coefficient.value.den)
         for exponent, coordinate in zip(term.exponents, point.entries, strict=True):
             if exponent and coordinate.kind != "FINITE":
                 break
             if exponent:
+                assert coordinate.value is not None
                 value += exponent * Fraction(coordinate.value.num, coordinate.value.den)
         else:
             candidates.append((index, value))
@@ -111,8 +121,10 @@ def _oracle(poly, point):
     ],
 )
 def test_active_term_indices_match_independent_fraction_oracle(
-    convention, terms, coords
-):
+    convention: TropicalConvention,
+    terms: tuple[tuple[tuple[int, ...], int], ...],
+    coords: tuple[int, int],
+) -> None:
     polynomial = _poly(convention, terms)
     point = _point(polynomial, *coords)
     expected_value, expected_indices = _oracle(polynomial, point)
@@ -125,15 +137,17 @@ def test_active_term_indices_match_independent_fraction_oracle(
     assert tuple(row.term for row in result.active_terms) == tuple(
         polynomial.terms[index] for index in expected_indices
     )
-    assert tuple(row.value.value.as_fraction() for row in result.active_terms) == (
-        (expected_value,) * len(expected_indices)
-    )
+    active_values: list[Fraction] = []
+    for row in result.active_terms:
+        assert row.value.value is not None
+        active_values.append(row.value.value.as_fraction())
+    assert tuple(active_values) == ((expected_value,) * len(expected_indices))
     if expected_value is not None:
         assert result.value.value is not None
         assert result.value.value.as_fraction() == expected_value
 
 
-def test_active_terms_skip_unfinite_monomials_and_handle_zero_polynomial():
+def test_active_terms_skip_unfinite_monomials_and_handle_zero_polynomial() -> None:
     polynomial = _poly("MIN_PLUS", (((0, 0), 1), ((0, 1), -1), ((1, 0), 0)))
     point = _point(polynomial, 4, None)
     result = tropical_polynomial_active_terms(polynomial, point)
@@ -147,7 +161,9 @@ def test_active_terms_skip_unfinite_monomials_and_handle_zero_polynomial():
     assert empty_result.active_terms == ()
 
 
-def test_active_term_operation_is_published_and_serialization_keeps_source_indices():
+def test_active_term_operation_is_published_and_serialization_keeps_source_indices() -> (
+    None
+):
     tool = next(
         tool
         for tool in TOOLS
@@ -163,7 +179,9 @@ def test_active_term_operation_is_published_and_serialization_keeps_source_indic
     assert restored.polynomial == request.polynomial
 
 
-def test_active_term_evaluation_growth_is_rejected_before_expansion(monkeypatch):
+def test_active_term_evaluation_growth_is_rejected_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     polynomial = _poly("MIN_PLUS", (((100, 0), 0),))
     huge = 10**8_190
     point = TropicalVector(
@@ -183,7 +201,7 @@ def test_active_term_evaluation_growth_is_rejected_before_expansion(monkeypatch)
         ),
     )
 
-    def arithmetic_must_not_start(*_args, **_kwargs):
+    def arithmetic_must_not_start(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("preflight must precede monomial expansion")
 
     monkeypatch.setattr(
@@ -194,7 +212,9 @@ def test_active_term_evaluation_growth_is_rejected_before_expansion(monkeypatch)
     assert error.value.errors()[0]["type"] == "tropical.active_term_scalar_growth"
 
 
-def test_active_term_result_size_is_admitted_before_expansion(monkeypatch):
+def test_active_term_result_size_is_admitted_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     semiring = TropicalSemiring(convention="MIN_PLUS", base="QQ")
     coefficient = TropicalScalar(
         semiring=semiring,
@@ -221,7 +241,7 @@ def test_active_term_result_size_is_admitted_before_expansion(monkeypatch):
         ),
     )
 
-    def arithmetic_must_not_start(*_args, **_kwargs):
+    def arithmetic_must_not_start(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("output admission must precede monomial expansion")
 
     # The witness is admitted by retained-entry count, so lowering the cell

@@ -215,7 +215,8 @@ def test_catalog_example_is_a_direct_composable_polynomial_value() -> None:
         if item.operation_id
         == "free_algebra.polynomial.reverse_antiautomorphism.compute"
     )
-    request = tool.request_type.model_validate_json(
+    assert tool.request_type is FreeAlgebraPolynomial
+    request = FreeAlgebraPolynomial.model_validate_json(
         encode_strict_json(tool.examples[0].input), strict=True
     )
     result = tool.run(request)

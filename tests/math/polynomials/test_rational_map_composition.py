@@ -3,6 +3,7 @@
 from fractions import Fraction
 from itertools import product
 from time import monotonic
+from typing import Any, NoReturn
 
 import pytest
 import sympy
@@ -15,6 +16,11 @@ from jacobian._execution import (
 )
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    RationalFunctionRecognitionResult,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
 from jacobian.math.polynomials.rational_functions import _bounds as rational_bounds
 from jacobian.math.polynomials.rational_functions.composition import (
@@ -32,6 +38,9 @@ from jacobian.math.polynomials.rational_functions.gradient import _gcd_process
 from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
     KernelBatchInputLimitError,
     normalize_admitted_fractions,
+)
+from jacobian.math.polynomials.rational_functions.gradient._kernel import (
+    _normalize_fraction as gradient_normalize_fraction,
 )
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
@@ -464,20 +473,22 @@ def test_catalog_composition_batches_source_recognition_and_normalization(
     )
     recognition_calls: list[int] = []
     normalization_calls: list[int] = []
-    recognize = composition_ops.recognize_canonical_rational_functions
+    recognize = recognize_canonical_rational_functions
     normalize = normalize_admitted_fractions
 
     def record_recognition(
-        candidates: tuple[object, ...], *, deadline: float
-    ) -> object:
+        candidates: tuple[RationalFunctionRecognitionCandidate, ...],
+        *,
+        deadline: float,
+    ) -> RationalFunctionRecognitionResult:
         recognition_calls.append(len(candidates))
-        return recognize(candidates, deadline=deadline)  # type: ignore[arg-type]
+        return recognize(candidates, deadline=deadline)
 
     def record_normalization(
-        pairs: tuple[tuple[object, object], ...], variables: tuple[str, ...]
-    ) -> object:
+        pairs: tuple[tuple[Any, Any], ...], variables: tuple[str, ...]
+    ) -> tuple[RationalFunction, ...]:
         normalization_calls.append(len(pairs))
-        return normalize(pairs, variables)  # type: ignore[arg-type]
+        return normalize(pairs, variables)
 
     monkeypatch.setattr(
         composition_ops,
@@ -514,10 +525,10 @@ def test_composition_normalization_batches_respect_row_limit_and_output_order(
     normalize = normalize_admitted_fractions
 
     def record_normalization(
-        pairs: tuple[tuple[object, object], ...], variables: tuple[str, ...]
-    ) -> object:
+        pairs: tuple[tuple[Any, Any], ...], variables: tuple[str, ...]
+    ) -> tuple[RationalFunction, ...]:
         batch_sizes.append(len(pairs))
-        return normalize(pairs, variables)  # type: ignore[arg-type]
+        return normalize(pairs, variables)
 
     monkeypatch.setattr(
         composition_ops, "normalize_admitted_fractions", record_normalization
@@ -558,15 +569,20 @@ def test_oversize_normalization_batch_falls_back_without_changing_result(
     y = symbols("y")
     outer = _map(("y",), ("z",), (_rf(y + 1, (y,)),))
     fallback_calls = 0
-    original = composition_ops._normalize_fraction
+    original = gradient_normalize_fraction
 
-    def reject_batch(*_args: object, **_kwargs: object) -> object:
+    def reject_batch(*_args: object, **_kwargs: object) -> NoReturn:
         raise KernelBatchInputLimitError("test aggregate payload threshold")
 
-    def count_fallback(*args: object, **kwargs: object) -> object:
+    def count_fallback(
+        numerator: Any,
+        denominator: Any,
+        variables: tuple[str, ...],
+        factor_records: tuple[list[Any], ...] = (),
+    ) -> Any:
         nonlocal fallback_calls
         fallback_calls += 1
-        return original(*args, **kwargs)  # type: ignore[arg-type]
+        return original(numerator, denominator, variables, factor_records)
 
     monkeypatch.setattr(composition_ops, "normalize_admitted_fractions", reject_batch)
     monkeypatch.setattr(composition_ops, "_normalize_fraction", count_fallback)

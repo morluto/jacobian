@@ -12,6 +12,7 @@ from jacobian.math.geometry.polytopes import (
     RationalAffineHalfspace,
     RationalHPolyhedron,
     RationalPolyhedronSpace,
+    RationalPolyhedronVPresentation,
     Vertex,
     halfspaces_to_v_presentation,
     polyhedron_conversion,
@@ -33,7 +34,9 @@ def _halfspace(normal: tuple[int, ...], bound: int) -> RationalAffineHalfspace:
     )
 
 
-def _convert(axes: tuple[str, ...], *rows: RationalAffineHalfspace):
+def _convert(
+    axes: tuple[str, ...], *rows: RationalAffineHalfspace
+) -> RationalPolyhedronVPresentation:
     return halfspaces_to_v_presentation(
         RationalHPolyhedron(space=_space(*axes), inequalities=rows)
     )

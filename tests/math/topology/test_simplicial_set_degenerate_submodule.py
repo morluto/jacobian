@@ -1,9 +1,14 @@
+from fractions import Fraction
+from typing import Any
+
 import pytest
 from sympy import Matrix, zeros
+from sympy.matrices import MatrixBase
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.values import CoefficientRing
 from jacobian.math.topology.simplicial_sets import chains as chains_module
+from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
     DegenerateSubmoduleRequest,
     degenerate_submodule,
@@ -12,7 +17,9 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 
-def _matrix(rows: tuple[tuple[int, ...], ...], row_count: int, column_count: int):
+def _matrix(
+    rows: tuple[tuple[int | Fraction, ...], ...], row_count: int, column_count: int
+) -> MatrixBase:
     return Matrix(
         row_count,
         column_count,
@@ -20,7 +27,9 @@ def _matrix(rows: tuple[tuple[int, ...], ...], row_count: int, column_count: int
     )
 
 
-def _independent_degeneracy_matrix(source, degree: int):
+def _independent_degeneracy_matrix(
+    source: FiniteTruncatedSimplicialSet, degree: int
+) -> MatrixBase:
     target_rank = len(source.sets[degree])
     columns = [
         target
@@ -34,7 +43,9 @@ def _independent_degeneracy_matrix(source, degree: int):
     )
 
 
-def _independent_boundary(source, degree: int, prime: int | None = None):
+def _independent_boundary(
+    source: FiniteTruncatedSimplicialSet, degree: int, prime: int | None = None
+) -> MatrixBase:
     rows = len(source.sets[degree - 1])
     columns = len(source.sets[degree])
 
@@ -59,7 +70,7 @@ def _independent_boundary(source, degree: int, prime: int | None = None):
 )
 def test_degenerate_submodule_matches_independent_exact_span_and_chain_oracle(
     dimension: int, max_degree: int
-):
+) -> None:
     source = standard_simplex(dimension, max_degree)
     result = degenerate_submodule(DegenerateSubmoduleRequest(simplicial_set=source))
 
@@ -110,7 +121,7 @@ def test_degenerate_submodule_matches_independent_exact_span_and_chain_oracle(
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_delta_one_has_expected_degenerate_basis_and_restricted_boundaries():
+def test_delta_one_has_expected_degenerate_basis_and_restricted_boundaries() -> None:
     result = degenerate_submodule(
         DegenerateSubmoduleRequest(simplicial_set=standard_simplex(1, 2))
     )
@@ -132,7 +143,7 @@ def test_delta_one_has_expected_degenerate_basis_and_restricted_boundaries():
 )
 def test_degenerate_submodule_retains_requested_scalar_context(
     coefficient_ring: CoefficientRing, prime: int | None
-):
+) -> None:
     result = degenerate_submodule(
         DegenerateSubmoduleRequest(
             simplicial_set=standard_simplex(1, 2),
@@ -147,7 +158,7 @@ def test_degenerate_submodule_retains_requested_scalar_context(
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_degenerate_submodule_handles_empty_carrier_and_zero_submodule():
+def test_degenerate_submodule_handles_empty_carrier_and_zero_submodule() -> None:
     checked = from_tables(0, ((),), (), ())
     assert checked.simplicial_set is not None
     empty = checked.simplicial_set
@@ -160,7 +171,7 @@ def test_degenerate_submodule_handles_empty_carrier_and_zero_submodule():
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_degenerate_submodule_wire_round_trip_is_stable_json():
+def test_degenerate_submodule_wire_round_trip_is_stable_json() -> None:
     result = degenerate_submodule(
         DegenerateSubmoduleRequest(simplicial_set=standard_simplex(1, 2))
     )
@@ -171,17 +182,17 @@ def test_degenerate_submodule_wire_round_trip_is_stable_json():
 
 def test_degenerate_submodule_checks_source_once_and_constructs_without_replay(
     monkeypatch: pytest.MonkeyPatch,
-):
+) -> None:
     source = standard_simplex(1, 2)
-    original_from_tables = chains_module.from_tables
+    original_from_tables = chains_module.__dict__["from_tables"]
     validations = 0
 
-    def count_source_checks(*args, **kwargs):
+    def count_source_checks(*args: Any, **kwargs: Any) -> Any:
         nonlocal validations
         validations += 1
         return original_from_tables(*args, **kwargs)
 
-    def reject_public_chain_reentry(*args, **kwargs):
+    def reject_public_chain_reentry(*args: Any, **kwargs: Any) -> None:
         pytest.fail("degenerate construction re-entered public chain admission")
 
     monkeypatch.setattr(chains_module, "from_tables", count_source_checks)
@@ -197,20 +208,20 @@ def test_degenerate_submodule_checks_source_once_and_constructs_without_replay(
 
 def test_degenerate_submodule_admits_derived_output_before_chain_matrices(
     monkeypatch: pytest.MonkeyPatch,
-):
+) -> None:
     source = standard_simplex(1, 2)
     sizes = tuple(len(level) for level in source.sets)
     ambient_bound = chains_module._estimate_output_cells(source, sizes)
-    original_from_tables = chains_module.from_tables
+    original_from_tables = chains_module.__dict__["from_tables"]
     validations = 0
     matrix_construction_started = False
 
-    def count_source_checks(*args, **kwargs):
+    def count_source_checks(*args: Any, **kwargs: Any) -> Any:
         nonlocal validations
         validations += 1
         return original_from_tables(*args, **kwargs)
 
-    def reject_chain_matrix_construction(*args, **kwargs):
+    def reject_chain_matrix_construction(*args: Any, **kwargs: Any) -> None:
         nonlocal matrix_construction_started
         matrix_construction_started = True
         pytest.fail("chain matrices were built before derived output admission")

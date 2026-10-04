@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 from jacobian.math.topology.discrete_morse._models import MatchingPair
 from jacobian.math.topology.discrete_morse._tools import TOOLS
 from jacobian.math.topology.discrete_morse.operations import (
@@ -12,7 +13,9 @@ from jacobian.math.topology.discrete_morse.operations import (
 from jacobian.math.topology.operations import canonicalize
 
 
-def _complex(vertices, facets):
+def _complex(
+    vertices: tuple[str, ...], facets: tuple[Simplex, ...]
+) -> FiniteSimplicialComplex:
     return canonicalize(tuple(vertices), tuple(tuple(face) for face in facets)).complex
 
 

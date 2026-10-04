@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Callable
 from fractions import Fraction
 from itertools import product
 from math import gcd, prod
@@ -248,7 +249,9 @@ def test_identity_power_preserves_mixed_large_denominator_source() -> None:
 
 
 @pytest.mark.parametrize("operation", [convolution_power, convolution_peak])
-def test_identity_operations_reject_an_unnormalized_distribution(operation) -> None:
+def test_identity_operations_reject_an_unnormalized_distribution(
+    operation: Callable[..., object],
+) -> None:
     source = _distribution(
         (
             (Fraction(0), Fraction(1, 2)),

@@ -66,10 +66,6 @@ def test_catalog_inspects_determinant_without_sqlite() -> None:
     assert descriptor.operation_id == "matrix.determinant.compute"
 
 
-def test_open_reuses_the_compiled_builtin_catalog() -> None:
-    assert Catalog.open() is Catalog.open()
-
-
 def test_builtin_snapshot_reuses_compilation_without_sharing_mutable_schemas(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -26,7 +26,9 @@ def _span(rows: tuple[tuple[int, ...], ...]) -> set[tuple[int, ...]]:
     }
 
 
-def _oracle(rows: tuple[tuple[int, ...], ...], n: int):
+def _oracle(
+    rows: tuple[tuple[int, ...], ...], n: int
+) -> tuple[int, set[tuple[int, ...]]]:
     stabilizers = _span(rows)
     logicals = []
     for local in product((0, 1, 2, 3), repeat=n):
@@ -53,7 +55,9 @@ def _oracle(rows: tuple[tuple[int, ...], ...], n: int):
         (3, ((1, 1, 0, 1, 1, 0), (0, 0, 1, 0, 0, 1))),
     ),
 )
-def test_general_distance_matches_independent_pauli_oracle(n, checks) -> None:
+def test_general_distance_matches_independent_pauli_oracle(
+    n: int, checks: tuple[tuple[int, ...], ...]
+) -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(n)))
     rows = tuple(
         PhaseFreeQubitPauli(register=register, x_bits=row[:n], z_bits=row[n:])
@@ -82,7 +86,8 @@ def test_stabilizer_distance_k_zero_has_no_distance() -> None:
         CheckSpaceValue(register=register, basis=(check,))
     )
     assert result.logical_qubits == 0
-    assert result.distance is result.representative is None
+    assert result.distance is None
+    assert result.representative is None
 
 
 def test_stabilizer_distance_rejects_search_beyond_ten_qubits() -> None:

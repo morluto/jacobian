@@ -67,7 +67,9 @@ def test_reduces_maximum_dependent_generator_family() -> None:
         ((0, 1, 0), (0, 1, 2)),
     ),
 )
-def test_rejects_nonstabilizer_generator_families(generators) -> None:
+def test_rejects_nonstabilizer_generator_families(
+    generators: tuple[tuple[int, int, int], ...],
+) -> None:
     register = QubitRegister(qubit_ids=("q",))
     values = tuple(_pauli(register, (x,), (z,), phase) for x, z, phase in generators)
     with pytest.raises(OperationDomainValidationError):

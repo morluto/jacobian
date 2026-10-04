@@ -1,6 +1,7 @@
 """Exact same-space coordinate U_p checks for general Gamma0 levels."""
 
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 
@@ -20,7 +21,9 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormSpace,
 )
 
-_PARI_BASIS_ID = "gamma0-rational-gamma0-sturm-rref-v1"
+_PARI_BASIS_ID: Literal["gamma0-rational-gamma0-sturm-rref-v1"] = (
+    "gamma0-rational-gamma0-sturm-rref-v1"
+)
 _TOOL = next(
     tool for tool in TOOLS if tool.operation_id == "modular_form.u_operator.apply"
 )

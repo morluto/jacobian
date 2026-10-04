@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
@@ -16,6 +18,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     PositiveAffineSemigroup,
     evaluate_factorization,
 )
+from jacobian.math.affine_semigroups.semigroup_models import AffineFactorizationRequest
 from jacobian.math.affine_semigroups.semigroup_tools import TOOLS
 
 
@@ -50,10 +53,13 @@ def test_factorization_operation_returns_exact_parent_bound_element() -> None:
 
 def test_factorization_rejects_wrong_axis_negative_or_oversized_coefficients() -> None:
     semigroup = _semigroup()
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "affine_semigroup.factorization.evaluate"
+    tool = cast(
+        MathTool[AffineFactorizationRequest, AffineFactorization],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "affine_semigroup.factorization.evaluate"
+        ),
     )
     with pytest.raises(OperationDomainValidationError):
         tool.run(tool.request_type(semigroup=semigroup, coordinates=(1, 2)))
@@ -97,10 +103,13 @@ def test_public_tool_preserves_factorization_output_admission_error() -> None:
         ),
         grading=(CanonicalRational(num=1, den=1),),
     )
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "affine_semigroup.factorization.evaluate"
+    tool = cast(
+        MathTool[AffineFactorizationRequest, AffineFactorization],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "affine_semigroup.factorization.evaluate"
+        ),
     )
     request = tool.request_type(semigroup=semigroup, coordinates=(0,))
     with pytest.raises(OperationResourceAdmissionError):
@@ -126,10 +135,13 @@ def test_deserialized_factorization_preserves_structure_without_matrix_replay() 
 
 
 def test_public_operation_example_dispatches_and_round_trips() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "affine_semigroup.factorization.evaluate"
+    tool = cast(
+        MathTool[AffineFactorizationRequest, AffineFactorization],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "affine_semigroup.factorization.evaluate"
+        ),
     )
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)

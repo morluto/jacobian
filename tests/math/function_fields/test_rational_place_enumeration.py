@@ -3,13 +3,16 @@ from itertools import product
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.function_fields._models import PrimeFieldPolynomial
+from jacobian.math.function_fields._models import (
+    FiniteFunctionField,
+    PrimeFieldPolynomial,
+)
 from jacobian.math.function_fields.operations import (
     function_field_rational_places_degree_bounded,
 )
 
 
-def _field(prime: int):
+def _field(prime: int) -> FiniteFunctionField:
     one = PrimeFieldPolynomial(characteristic=prime, coefficients=(1,))
     from jacobian.math.function_fields._models import (
         FiniteFunctionField,

@@ -18,6 +18,7 @@ from jacobian.math.combinatorics.matroids.intersection import (
     replay_common_basis_result,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import rank as pf_rank
 
 
 def _matroid(
@@ -91,12 +92,12 @@ def test_serialized_claim_decodes_without_replaying_minmax_witness(
     triangle = _matroid(((1, 0, 1), (0, 1, 1)), labels)
     result = matroid_common_basis(triangle, triangle)
     calls = 0
-    original_rank = intersection.pf_rank
+    original_rank = pf_rank
 
-    def count_rank(*args: object, **kwargs: object) -> int:
+    def count_rank(matrix: PrimeFieldMatrix) -> int:
         nonlocal calls
         calls += 1
-        return original_rank(*args, **kwargs)
+        return original_rank(matrix)
 
     monkeypatch.setattr(intersection, "pf_rank", count_rank)
     assert (

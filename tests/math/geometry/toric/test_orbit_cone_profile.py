@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from tests.math.geometry.toric._fixtures import (
     A2_CONES,
@@ -20,6 +22,7 @@ from tests.math.geometry.toric._fixtures import (
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.toric._kernel import RecognizedFan
 from jacobian.math.geometry.toric._models import (
     OrbitConeProfileRequest,
     OrbitConeProfileResult,
@@ -213,12 +216,18 @@ def test_profile_recognizes_the_serialized_claim_exactly_once(
     from jacobian.math.geometry.toric import operations
 
     calls = 0
-    original = operations.recognize_fan
+    original: Callable[
+        [tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...], int], RecognizedFan
+    ] = vars(operations)["recognize_fan"]
 
-    def counted(*args: object, **kwargs: object) -> object:
+    def counted(
+        rays: tuple[tuple[int, ...], ...],
+        cones: tuple[tuple[int, ...], ...],
+        lattice_rank: int,
+    ) -> RecognizedFan:
         nonlocal calls
         calls += 1
-        return original(*args, **kwargs)
+        return original(rays, cones, lattice_rank)
 
     monkeypatch.setattr(operations, "recognize_fan", counted)
     result = compute_orbit_cone_profile(p2_fan())

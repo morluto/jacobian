@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
 
 import pytest
@@ -11,6 +12,7 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.free_algebras._models import (
     FreeAlgebraIdeal,
     FreeAlgebraPolynomial,
+    FreeAlgebraQuotientProfileRequest,
     FreeAlgebraTerm,
     canonical_word_key,
 )
@@ -32,7 +34,7 @@ def _poly(
         alphabet=alphabet,
         terms=tuple(
             FreeAlgebraTerm(
-                coefficient=CanonicalRational.from_fraction(coefficient),
+                coefficient=CanonicalRational.from_fraction(Fraction(coefficient)),
                 word=word,
             )
             for word, coefficient in ordered
@@ -47,7 +49,9 @@ def _ideal(
     return FreeAlgebraIdeal(alphabet=alphabet, generators=generators, side="two-sided")
 
 
-def _words_of_degree(alphabet: tuple[str, ...], degree: int):
+def _words_of_degree(
+    alphabet: tuple[str, ...], degree: int
+) -> tuple[tuple[str, ...], ...]:
     return tuple(product(alphabet, repeat=degree))
 
 
@@ -116,6 +120,9 @@ def test_profile_operation_is_published() -> None:
     assert len(operation.examples) == 1
     alphabet = ("x", "y")
     commutator = _poly(alphabet, {("x", "y"): 1, ("y", "x"): -1})
-    request = operation.request_type(ideal=_ideal(alphabet, (commutator,)), degree=3)
+    assert operation.request_type is FreeAlgebraQuotientProfileRequest
+    request = FreeAlgebraQuotientProfileRequest(
+        ideal=_ideal(alphabet, (commutator,)), degree=3
+    )
     result = operation.run(request)
     assert result.hilbert_function == (1, 2, 3, 4)

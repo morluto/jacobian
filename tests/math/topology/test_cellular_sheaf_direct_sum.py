@@ -6,6 +6,7 @@ import json
 from fractions import Fraction
 from importlib import import_module
 from itertools import product
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -27,12 +28,29 @@ from jacobian.math.topology.cellular_sheaves._models import CoverRestrictionMatr
 from jacobian.math.topology.cellular_sheaves._tools import TOOLS as SHEAF_TOOLS
 from jacobian.math.topology.cellular_sheaves.direct_sum import SheafDirectSumRequest
 
+if TYPE_CHECKING:
+    from jacobian.math.topology.cellular_sheaves import FiniteCellularSheaf
+
 
 def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _constant_interval(*, field=SheafField.PRIME_FIELD, prime=2):
+def _integer(value: CanonicalRational | int) -> int:
+    if isinstance(value, CanonicalRational):
+        assert value.den == 1
+        return value.num
+    return value
+
+
+def _canonical_rational(value: CanonicalRational | int) -> CanonicalRational:
+    assert isinstance(value, CanonicalRational)
+    return value
+
+
+def _constant_interval(
+    *, field: SheafField = SheafField.PRIME_FIELD, prime: int = 2
+) -> FiniteCellularSheaf:
     complex_ = canonical_complex(("a", "b"), (("a", "b"),))
     cells = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
     sheaf = from_cover_maps(
@@ -76,7 +94,7 @@ def test_direct_sum_block_maps_and_injections_match_independent_gf2_oracle() -> 
     generated = {
         tuple(
             sum(
-                coeff[i] * section.basis_coordinates[i][j]
+                coeff[i] * _integer(section.basis_coordinates[i][j])
                 for i in range(section.dimension)
             )
             % 2
@@ -124,7 +142,7 @@ def test_direct_sum_admits_derived_coefficients_by_output_digit_work() -> None:
     result = direct_sum(source, source).direct_sum
     assert (
         max(
-            len(str(value.num))
+            len(str(_canonical_rational(value).num))
             for restriction in result.derived_restrictions
             for row in restriction.entries
             for value in row
@@ -173,7 +191,9 @@ def test_direct_sum_doubles_a_stalk_past_public_rank_bound_before_expansion() ->
     )
 
 
-def test_direct_sum_counts_each_shared_complex_map_once(monkeypatch) -> None:
+def test_direct_sum_counts_each_shared_complex_map_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     direct_sum_module = import_module(
         "jacobian.math.topology.cellular_sheaves.direct_sum"
     )

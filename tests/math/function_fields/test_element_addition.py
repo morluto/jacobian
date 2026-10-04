@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from jacobian.catalog.models import (
@@ -152,7 +154,7 @@ def test_growth_admission_precedes_coordinate_addition(
     left = _element(field, (_rational(7, degree_twelve, left_denominator),))
     right = _element(field, (_rational(7, (1,), right_denominator),))
 
-    def unexpected_addition(*_args, **_kwargs):
+    def unexpected_addition(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("admission must run before rational-function addition")
 
     monkeypatch.setattr(operations, "rf_add", unexpected_addition)
@@ -174,7 +176,7 @@ def test_work_and_output_admission_precede_coordinate_addition(
     left = _element(field, (_rational(7, (1, 1)),))
     right = _element(field, (_rational(7, (2, 1)),))
 
-    def unexpected_addition(*_args, **_kwargs):
+    def unexpected_addition(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("admission must run before rational-function addition")
 
     monkeypatch.setattr(operations, "rf_add", unexpected_addition)

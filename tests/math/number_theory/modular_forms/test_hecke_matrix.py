@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -35,7 +36,7 @@ def test_hecke_matrix_rows_columns_and_matrix_vector_agree_with_coordinates() ->
     assert matrix.index == 3
     assert matrix.row_labels == matrix.column_labels == ("A2^2", "E4")
     entries = tuple(
-        tuple(value.as_fraction() for value in row) for row in matrix.entries
+        tuple(rational(value).as_fraction() for value in row) for row in matrix.entries
     )
     assert entries == ((Fraction(28), Fraction(0)), (Fraction(0), Fraction(28)))
 
@@ -45,13 +46,15 @@ def test_hecke_matrix_rows_columns_and_matrix_vector_agree_with_coordinates() ->
             sum(entries[row][column] * coordinates[column] for column in range(2))
             for row in range(2)
         )
-        assert matrix_image == tuple(value.as_fraction() for value in image.coordinates)
+        assert matrix_image == tuple(
+            rational(value).as_fraction() for value in image.coordinates
+        )
 
 
 def test_t1_matrix_is_identity_and_direct_q_formula_matches_column_action() -> None:
     matrix = modular_form_hecke_matrix(_space(), 1)
     entries = tuple(
-        tuple(value.as_fraction() for value in row) for row in matrix.entries
+        tuple(rational(value).as_fraction() for value in row) for row in matrix.entries
     )
     assert entries == ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
 
@@ -62,7 +65,7 @@ def test_t1_matrix_is_identity_and_direct_q_formula_matches_column_action() -> N
     direct_q = e4[3]
     assert (direct_constant, direct_q) == (Fraction(28), Fraction(6720))
     t3_entries = tuple(
-        tuple(value.as_fraction() for value in row)
+        tuple(rational(value).as_fraction() for value in row)
         for row in modular_form_hecke_matrix(_space(), 3).entries
     )
     assert tuple(

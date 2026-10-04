@@ -50,7 +50,9 @@ def _direct_coxeter_matrix(
         (((2, 0, 0), (0, 2, -1), (0, -1, 2)), (1, 2, 2, 1)),  # A1 x A2
     ],
 )
-def test_known_coxeter_polynomials_and_direct_determinant(cartan, coefficients):
+def test_known_coxeter_polynomials_and_direct_determinant(
+    cartan: tuple[tuple[int, ...], ...], coefficients: tuple[int, ...]
+) -> None:
     polynomial = coxeter_polynomial(cartan)
     assert polynomial.coefficients == coefficients
 
@@ -70,7 +72,7 @@ def test_known_coxeter_polynomials_and_direct_determinant(cartan, coefficients):
         assert evaluated == _determinant(characteristic_matrix)
 
 
-def test_catalog_example_returns_the_canonical_integer_polynomial():
+def test_catalog_example_returns_the_canonical_integer_polynomial() -> None:
     operation = next(
         t for t in TOOLS if t.operation_id == "root_system.coxeter_polynomial.compute"
     )
@@ -84,7 +86,9 @@ def test_catalog_example_returns_the_canonical_integer_polynomial():
     assert result.coefficients == (1, 1, 1)
 
 
-def test_coxeter_polynomial_admission_reports_resource_limits(monkeypatch):
+def test_coxeter_polynomial_admission_reports_resource_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from jacobian.math.groups.root_systems import operations
 
     monkeypatch.setattr(operations, "MAX_COXETER_POLYNOMIAL_WORK", 1)

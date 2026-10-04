@@ -258,10 +258,10 @@ def test_graph_labels_must_equal_configuration_labels_before_execution(
         exc_info.value.errors()[0]["type"]
         == "geometry.framework.graph_vertices_must_match_point_labels"
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as native_error:
         planar_rigidity_profile(source, bad_graph)
     assert (
-        exc_info.value.errors()[0]["type"]
+        native_error.value.errors()[0]["type"]
         == "geometry.framework.graph_vertices_must_match_point_labels"
     )
 
@@ -281,10 +281,10 @@ def test_configuration_must_be_planar() -> None:
         exc_info.value.errors()[0]["type"]
         == "geometry.framework.configuration_must_be_planar"
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as native_error:
         planar_rigidity_profile(source, source_graph)
     assert (
-        exc_info.value.errors()[0]["type"]
+        native_error.value.errors()[0]["type"]
         == "geometry.framework.configuration_must_be_planar"
     )
 
@@ -534,14 +534,14 @@ def test_coordinate_work_accepts_and_rejects_the_exact_edge_boundary() -> None:
         MAX_FRAMEWORK_COORDINATE_WORK
     )
 
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as native_error:
         planar_rigidity_profile(source, rejected_graph)
     assert (
-        exc_info.value.errors()[0]["type"]
+        native_error.value.errors()[0]["type"]
         == "geometry.framework.coordinate_work_exceeds_bound"
     )
 
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(ValidationError) as request_error:
         PlanarRigidityProfileRequest.model_validate_json(
             json.dumps(
                 {
@@ -551,7 +551,7 @@ def test_coordinate_work_accepts_and_rejects_the_exact_edge_boundary() -> None:
             )
         )
     assert (
-        exc_info.value.errors()[0]["type"]
+        request_error.value.errors()[0]["type"]
         == "geometry.framework.coordinate_work_exceeds_bound"
     )
 

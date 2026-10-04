@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
@@ -32,14 +35,14 @@ from jacobian.math.finite_fields._tools import TOOLS
 OPERATION_ID = "finite_field.jacobian_syzygy.check"
 
 
-def _tool():
+def _tool() -> MathTool[Any, Any]:
     return next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
 
 
-def _poly(
+def _poly[ExponentTuple: tuple[int, ...]](
     presentation: FiniteFieldPresentation,
     axis: Axis,
-    terms: dict[tuple[int, ...], int],
+    terms: Mapping[ExponentTuple, int],
 ) -> AlgebraicPolynomial:
     canonical = tuple(
         AlgebraicMonomial._from_kernel(
@@ -253,7 +256,7 @@ def test_defining_invariant_replays_through_independent_reduction() -> None:
     )
     assert result.status == "VERIFIED"
 
-    def to_sympy(polynomial: AlgebraicPolynomial) -> object:
+    def to_sympy(polynomial: AlgebraicPolynomial) -> Any:
         generators = sympy.symbols(list(axis.labels))
         prime = presentation.characteristic
         expression = sympy.S.Zero

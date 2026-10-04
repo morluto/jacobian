@@ -16,9 +16,10 @@ from jacobian.math.polynomials.derivations._weight_operations import (
     diagonal_weight_action,
     gm_invariants_through_degree,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
-def _monomial_exponents(poly) -> tuple[tuple[int, ...], ...]:
+def _monomial_exponents(poly: RationalPolynomial) -> tuple[tuple[int, ...], ...]:
     assert all(
         term.coefficient.as_fraction() == Fraction(1) for term in poly.polynomial.terms
     )

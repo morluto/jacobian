@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -19,15 +20,17 @@ from jacobian.math.polynomials.tropical.values import (
 
 
 def _matrix(
-    convention: str,
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
     values: tuple[tuple[Fraction | None, ...], ...],
     *,
-    base: str = "QQ",
+    base: Literal["QQ", "ZZ"] = "QQ",
     row_axis: tuple[str, ...] = ("r0", "r1"),
     column_axis: tuple[str, ...] = ("c0", "c1", "c2"),
 ) -> TropicalMatrix:
-    semiring = TropicalSemiring(convention=convention, base=base)  # type: ignore[arg-type]
-    infinity = "POSITIVE_INFINITY" if convention == "MIN_PLUS" else "NEGATIVE_INFINITY"
+    semiring = TropicalSemiring(convention=convention, base=base)
+    infinity: Literal["POSITIVE_INFINITY", "NEGATIVE_INFINITY"] = (
+        "POSITIVE_INFINITY" if convention == "MIN_PLUS" else "NEGATIVE_INFINITY"
+    )
     return TropicalMatrix(
         semiring=semiring,
         row_axis=row_axis,
@@ -51,7 +54,9 @@ def _matrix(
 
 
 def _oracle_entry(
-    convention: str, left: Fraction | None, right: Fraction | None
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
+    left: Fraction | None,
+    right: Fraction | None,
 ) -> Fraction | None:
     if left is None:
         return right
@@ -61,7 +66,9 @@ def _oracle_entry(
 
 
 @pytest.mark.parametrize("convention", ["MIN_PLUS", "MAX_PLUS"])
-def test_matrix_add_matches_independent_entrywise_oracle(convention: str) -> None:
+def test_matrix_add_matches_independent_entrywise_oracle(
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
+) -> None:
     left_values = (
         (Fraction(1, 2), None, Fraction(-3, 2)),
         (Fraction(4), Fraction(7, 3), Fraction(9, 2)),
@@ -84,7 +91,9 @@ def test_matrix_add_matches_independent_entrywise_oracle(convention: str) -> Non
     )
     observed = tuple(
         tuple(
-            entry.value.as_fraction() if entry.kind == "FINITE" else None
+            entry.value.as_fraction()
+            if entry.kind == "FINITE" and entry.value is not None
+            else None
             for entry in row
         )
         for row in actual.entries
@@ -318,4 +327,5 @@ def test_matrix_add_output_bound_counts_only_selected_values() -> None:
 
     result = tropical_matrix_add(left, zero)
 
+    assert result.entries[0][0].value is not None
     assert result.entries[0][0].value.as_fraction() == 0

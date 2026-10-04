@@ -1,5 +1,7 @@
 """Exact Cartan semisimplicity decisions for finite-dimensional QQ algebras."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -80,10 +82,12 @@ def test_subalgebra_admits_all_coefficients_before_materializing_constants(
     constructed = 0
     original = StructureConstant.model_construct
 
-    def track_construction(*args: object, **kwargs: object) -> StructureConstant:
+    def track_construction(
+        _fields_set: set[str] | None = None, **values: Any
+    ) -> StructureConstant:
         nonlocal constructed
         constructed += 1
-        return original(*args, **kwargs)
+        return original(_fields_set, **values)
 
     monkeypatch.setattr(StructureConstant, "model_construct", track_construction)
     with pytest.raises(OperationResourceAdmissionError):

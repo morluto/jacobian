@@ -1,4 +1,5 @@
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -41,7 +42,13 @@ def _shifted_frame_request() -> ModularFormBasisFrameRequest:
     )
 
 
-def _coordinate_form(space: ModularFormSpace, basis_id: str, values: tuple[int, ...]):
+def _coordinate_form(
+    space: ModularFormSpace,
+    basis_id: Literal[
+        "level-one-e4-e6-monomials-v1", "gamma0-two-weight-2-4-monomials-v1"
+    ],
+    values: tuple[int, ...],
+) -> ModularFormCoordinates:
     return ModularFormCoordinates(
         space=space,
         basis_id=basis_id,

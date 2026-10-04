@@ -97,7 +97,9 @@ def test_empty_form_restricts_to_empty_form() -> None:
     ("selected_axis", "message"),
     [(("x", "x"), "must be unique"), (("unknown",), "belong to the source axis")],
 )
-def test_request_rejects_repeated_or_foreign_labels(selected_axis, message) -> None:
+def test_request_rejects_repeated_or_foreign_labels(
+    selected_axis: tuple[str, ...], message: str
+) -> None:
     with pytest.raises(ValueError, match=message):
         QuadraticFormRestrictionRequest(form=_form(), selected_axis=selected_axis)
 

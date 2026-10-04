@@ -5,16 +5,19 @@ from __future__ import annotations
 import json
 import random
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     HomologyConvention,
+    Simplex,
 )
 from jacobian.math.topology._simplicial_kernel import homology
 from jacobian.math.topology.discrete_morse import (
@@ -36,7 +39,7 @@ GRADIENT_OPERATION_ID = "topology.discrete_morse.gradient_paths.compute"
 COMPLEX_OPERATION_ID = "topology.discrete_morse.complex.compute"
 
 
-def _tool(operation_id: str):
+def _tool(operation_id: str) -> MathTool[Any, Any]:
     return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
@@ -130,9 +133,11 @@ TORUS_PAIRS = _pairs(
 )
 
 
-def _all_covers(complex_: FiniteSimplicialComplex) -> list[tuple[tuple, tuple]]:
+def _all_covers(
+    complex_: FiniteSimplicialComplex,
+) -> list[tuple[Simplex, Simplex]]:
     cells = tuple(tuple(group.faces) for group in complex_.faces_by_dimension)
-    covers: list[tuple[tuple, tuple]] = []
+    covers: list[tuple[Simplex, Simplex]] = []
     for dimension in range(len(cells) - 1):
         lower = set(cells[dimension])
         for coface in cells[dimension + 1]:
@@ -152,7 +157,7 @@ def _acyclic_matchings(
         rng = random.Random(seed)
         shuffled = list(covers)
         rng.shuffle(shuffled)
-        used: set[tuple] = set()
+        used: set[Simplex] = set()
         pairs: list[MatchingPair] = []
         for face, coface in shuffled:
             if face in used or coface in used:
@@ -215,7 +220,7 @@ class TestGradientPathsKnownAnswer:
 class TestGradientPathReplay:
     def _matched_and_upper(
         self, pairs: tuple[MatchingPair, ...]
-    ) -> tuple[set[tuple[tuple, tuple]], dict[tuple, tuple]]:
+    ) -> tuple[set[tuple[Simplex, Simplex]], dict[Simplex, Simplex]]:
         matched = {(pair.face, pair.coface) for pair in pairs}
         upper = {pair.coface: pair.face for pair in pairs}
         return matched, upper
@@ -244,7 +249,7 @@ class TestGradientPathReplay:
 
 def _all_critical(
     complex_: FiniteSimplicialComplex, pairs: tuple[MatchingPair, ...]
-) -> tuple[tuple, ...]:
+) -> tuple[Simplex, ...]:
     result = construct_matching(complex_, pairs)
     assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
     assert result.critical_profile is not None
@@ -377,12 +382,12 @@ class TestBoundarySquareZero:
         self, complex_: FiniteSimplicialComplex, pairs: tuple[MatchingPair, ...]
     ) -> None:
         result = compute_morse_complex(complex_, pairs)
-        rows: dict[tuple, set[tuple]] = {}
+        rows: dict[Simplex, set[Simplex]] = {}
         for entry in result.boundary_entries:
             if entry.coefficient:
                 rows.setdefault(entry.source, set()).add(entry.target)
         for targets in rows.values():
-            accumulated: set[tuple] = set()
+            accumulated: set[Simplex] = set()
             for target in targets:
                 accumulated ^= rows.get(target, set())
             assert accumulated == set()
@@ -544,8 +549,10 @@ class TestNativeVsCatalogParity:
                 tuple(tuple(facet) for facet in request.complex.facets),
             ).complex
             if operation_id == GRADIENT_OPERATION_ID:
-                expected = compute_gradient_paths(
-                    complex_, request.pairs, request.start, request.target
+                expected: GradientPathsResult | MorseComplexResult = (
+                    compute_gradient_paths(
+                        complex_, request.pairs, request.start, request.target
+                    )
                 )
             else:
                 expected = compute_morse_complex(complex_, request.pairs)

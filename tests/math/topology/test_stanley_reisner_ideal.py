@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.math.polynomials.ideals import monomial_ideal_graded_betti_table
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology._simplicial_kernel import canonicalize
 from jacobian.math.topology._structural import (
     StanleyReisnerIdealRequest,
@@ -11,7 +12,9 @@ from jacobian.math.topology._structural import (
 )
 
 
-def _complex(vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]):
+def _complex(
+    vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]
+) -> FiniteSimplicialComplex:
     return canonicalize(vertices, facets).complex
 
 

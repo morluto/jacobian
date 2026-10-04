@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import product
 from math import gcd
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -243,7 +243,7 @@ def test_conductor_thirteen_order_three_character_basis(
     monkeypatch: pytest.MonkeyPatch,
     level: int,
     coordinate: int,
-    kind: str,
+    kind: Literal["M", "S"],
     dimension: int,
     precision: int,
 ) -> None:
@@ -290,6 +290,7 @@ def test_conductor_thirteen_order_three_character_basis(
         )
         for element in basis.elements
     )
+    assert isinstance(space.coefficient_domain, RationalCyclotomicField)
     assert character_basis_module._rref_character_prefix(
         vectors, space.coefficient_domain, precision
     ) == tuple(element.expansion.coefficients for element in basis.elements)

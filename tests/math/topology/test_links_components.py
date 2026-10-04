@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import cast
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -110,7 +110,10 @@ class TestKnownAnswer:
             BraidWord(
                 strand_count=3,
                 letters=tuple(
-                    BraidLetter(generator=generator, exponent=exponent)
+                    BraidLetter(
+                        generator=generator,
+                        exponent=cast(Literal[-1, 1], exponent),
+                    )
                     for generator, exponent in ((1, 1), (2, -1), (1, 1), (2, -1))
                 ),
             )

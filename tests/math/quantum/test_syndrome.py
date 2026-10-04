@@ -13,7 +13,9 @@ from jacobian.math.quantum import (
 )
 
 
-def _pauli(register: QubitRegister, x: tuple[int, ...], z: tuple[int, ...]):
+def _pauli(
+    register: QubitRegister, x: tuple[int, ...], z: tuple[int, ...]
+) -> PhaseFreeQubitPauli:
     return PhaseFreeQubitPauli(register=register, x_bits=x, z_bits=z)
 
 

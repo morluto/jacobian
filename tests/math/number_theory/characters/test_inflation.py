@@ -23,7 +23,7 @@ from jacobian.math.number_theory.characters.operations import (
 )
 
 
-def test_inflation_matches_reduction_on_units_and_is_zero_on_target_nonunits():
+def test_inflation_matches_reduction_on_units_and_is_zero_on_target_nonunits() -> None:
     source = dirichlet_character(character_group(3), (1,))
 
     result = dirichlet_character_inflate(source, 15)
@@ -48,7 +48,7 @@ def test_inflation_matches_reduction_on_units_and_is_zero_on_target_nonunits():
             assert target_value is None
 
 
-def test_inflation_is_identity_at_same_modulus_and_handles_modulus_one():
+def test_inflation_is_identity_at_same_modulus_and_handles_modulus_one() -> None:
     source = dirichlet_character(character_group(5), (1,))
     identity = dirichlet_character_inflate(source, 5)
     assert identity.target == source
@@ -64,7 +64,7 @@ def test_inflation_is_identity_at_same_modulus_and_handles_modulus_one():
     assert dirichlet_character_value(inflated.target, 2).value is None
 
 
-def test_inflation_accepts_the_maximum_target_group_with_bounded_map():
+def test_inflation_accepts_the_maximum_target_group_with_bounded_map() -> None:
     trivial_modulus_one = dirichlet_character(character_group(1), ())
 
     result = dirichlet_character_inflate(trivial_modulus_one, 2048)
@@ -73,7 +73,7 @@ def test_inflation_accepts_the_maximum_target_group_with_bounded_map():
     assert len(result.target_unit_residues) == result.target.group.character_count
 
 
-def test_inflation_rejects_a_target_not_divisible_by_source_modulus():
+def test_inflation_rejects_a_target_not_divisible_by_source_modulus() -> None:
     source = dirichlet_character(character_group(3), (1,))
 
     with pytest.raises(OperationDomainValidationError) as error:
@@ -87,7 +87,7 @@ def test_inflation_rejects_a_target_not_divisible_by_source_modulus():
         dirichlet_character_inflate(dirichlet_character(character_group(1), ()), 2049)
 
 
-def test_inflation_request_and_catalog_contract_are_published():
+def test_inflation_request_and_catalog_contract_are_published() -> None:
     with pytest.raises(ValidationError):
         DirichletCharacterInflationRequest(
             character=dirichlet_character(character_group(3), (1,)),

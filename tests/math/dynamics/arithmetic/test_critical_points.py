@@ -29,9 +29,10 @@ from jacobian.math.dynamics.arithmetic._tools import (
     verify_critical_points,
 )
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
-def _p(*coefficients: int) -> object:
+def _p(*coefficients: int) -> RationalPolynomial:
     return polynomial_from_coefficients(coefficients)
 
 
@@ -39,7 +40,7 @@ def _profile(result: CriticalPointsResult) -> tuple[tuple[int, int], ...]:
     return tuple((factor.degree, factor.multiplicity) for factor in result.factors)
 
 
-def _conjugate(coefficients: tuple[int, ...], a: int, b: int):
+def _conjugate(coefficients: tuple[int, ...], a: int, b: int) -> RationalPolynomial:
     x = sympy.Symbol("x")
     expression = sum(
         coefficient * x**index for index, coefficient in enumerate(coefficients)

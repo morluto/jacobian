@@ -3,6 +3,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields._field_embedding import (
     SimpleNumberFieldEmbeddingRequest,
@@ -23,7 +24,9 @@ def _element(
 ) -> SimpleNumberFieldElement:
     return SimpleNumberFieldElement(
         presentation=field,
-        coefficients_ascending=[{"num": value, "den": 1} for value in coefficients],
+        coefficients_ascending=tuple(
+            CanonicalRational(num=value, den=1) for value in coefficients
+        ),
     )
 
 
@@ -94,7 +97,10 @@ def test_transport_preserves_rational_coordinates() -> None:
     target = _field(1, 0, 0, 0, -2)
     half_alpha = SimpleNumberFieldElement(
         presentation=source,
-        coefficients_ascending=[{"num": 0, "den": 1}, {"num": 1, "den": 2}],
+        coefficients_ascending=(
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=1, den=2),
+        ),
     )
     result = apply_simple_number_field_embedding(
         SimpleNumberFieldEmbeddingRequest(

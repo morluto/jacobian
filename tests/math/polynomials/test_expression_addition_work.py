@@ -8,9 +8,10 @@ estimate charged each operand's support once and omitted those repeated copies.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
 from math import factorial, prod
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -35,7 +36,7 @@ def _variables(count: int) -> tuple[str, ...]:
     return tuple(f"x{index}" for index in range(count))
 
 
-def _power_of_sum(variables: tuple[str, ...], exponent: int):
+def _power_of_sum(variables: tuple[str, ...], exponent: int) -> PolynomialPower:
     return PolynomialPower(
         base=PolynomialAdd(
             operands=tuple(
@@ -60,12 +61,14 @@ def test_addition_charges_accumulated_clone_work() -> None:
     """
     variables = _variables(4)
     variable_set = frozenset(variables)
-    expression = _power_of_sum(variables, 12)
+    expression: PolynomialPower | PolynomialAdd = _power_of_sum(variables, 12)
     for _ in range(4):
         expression = PolynomialAdd(
             operands=(expression, *(_literal_one() for _ in range(16)))
         )
-    child_metrics = [_metrics(child) for child in expression.operands]
+    child_metrics = [
+        _metrics(child) for child in cast(PolynomialAdd, expression).operands
+    ]
     accumulated_terms = 0
     accumulated_degree = 0
     accumulated_support = 0
@@ -86,7 +89,9 @@ def test_addition_charges_accumulated_clone_work() -> None:
     assert _metrics(expression).work == expected
 
 
-def _request(expression: dict[str, Any], variables: tuple[str, ...]):
+def _request(
+    expression: dict[str, Any], variables: tuple[str, ...]
+) -> PolynomialExpressionNormalizeRequest:
     return PolynomialExpressionNormalizeRequest.model_validate(
         {
             "coefficient_domain": "ZZ",
@@ -132,14 +137,14 @@ def test_nested_scalar_additions_stay_exactly_decidable() -> None:
     expected = [
         (
             exponents,
-            factorial(12) // prod(factorial(power) for power in exponents),
+            Fraction(factorial(12) // prod(factorial(power) for power in exponents)),
         )
         for exponents in sorted(
             (row for row in product(range(13), repeat=4) if sum(row) == 12),
             reverse=True,
         )
     ]
-    expected.append(((0, 0, 0, 0), 64))
+    expected.append(((0, 0, 0, 0), Fraction(64)))
     assert tuple(
         (term.exponents, term.coefficient.as_fraction())
         for term in result.polynomial.polynomial.terms

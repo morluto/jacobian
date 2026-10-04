@@ -1,6 +1,7 @@
 """Exact finite-dimensional spans for a supplied polynomial Ga action."""
 
 from fractions import Fraction
+from typing import Any, NoReturn
 
 import pytest
 
@@ -35,7 +36,7 @@ def _poly(variable: str, exponent: int | None) -> RationalPolynomial:
     )
 
 
-def _translation_action():
+def _translation_action() -> PolynomialGaAction:
     x = _poly("x", 1)
     return ga_action_from_derivation(
         PolynomialDerivation(variables=("x",), images=(_poly("x", 0),)),
@@ -138,13 +139,15 @@ def test_serialized_action_claim_must_satisfy_additive_law() -> None:
     )
 
 
-def test_retained_action_cells_are_included_before_substitution(monkeypatch) -> None:
+def test_retained_action_cells_are_included_before_substitution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     action = _translation_action()
     # The envelope counts retained entries, so a basis term and the retained
     # action both contribute; this bound is below what they add together.
     monkeypatch.setattr(_stable_kernels, "MAX_GA_ACTION_OUTPUT_CELLS", 4)
 
-    def expansion_must_not_start(*_args, **_kwargs):
+    def expansion_must_not_start(*_args: Any, **_kwargs: Any) -> NoReturn:
         raise AssertionError("substitution ran before combined output admission")
 
     monkeypatch.setattr(_stable_kernels, "_substitute_basis", expansion_must_not_start)

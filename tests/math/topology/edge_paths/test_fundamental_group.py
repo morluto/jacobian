@@ -48,20 +48,12 @@ def _torus() -> tuple[tuple[str, ...], tuple[tuple[str, str, str], ...]]:
     facets: set[tuple[str, str, str]] = set()
     for i in range(3):
         for j in range(3):
-            facets.add(
-                tuple(sorted((vertex(i, j), vertex(i + 1, j), vertex(i, j + 1))))
+            first_triangle = sorted((vertex(i, j), vertex(i + 1, j), vertex(i, j + 1)))
+            facets.add((first_triangle[0], first_triangle[1], first_triangle[2]))
+            second_triangle = sorted(
+                (vertex(i + 1, j), vertex(i + 1, j + 1), vertex(i, j + 1))
             )
-            facets.add(
-                tuple(
-                    sorted(
-                        (
-                            vertex(i + 1, j),
-                            vertex(i + 1, j + 1),
-                            vertex(i, j + 1),
-                        )
-                    )
-                )
-            )
+            facets.add((second_triangle[0], second_triangle[1], second_triangle[2]))
     return vertices, tuple(sorted(facets))
 
 
@@ -99,6 +91,7 @@ def _abelianization_of_integral_h1(
     group = next(
         group for group in result.homology.homology_groups if group.degree == 1
     )
+    assert group.kind == "FINITELY_GENERATED_ABELIAN_GROUP"
     return group.free_rank, tuple(
         int(factor) for factor in group.torsion_invariant_factors
     )

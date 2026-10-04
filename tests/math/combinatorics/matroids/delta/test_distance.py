@@ -1,5 +1,6 @@
 """Exact subset-to-feasibility distance with independent set oracle."""
 
+from collections.abc import Iterator
 from itertools import combinations
 
 import pytest
@@ -10,7 +11,7 @@ from jacobian.math.combinatorics.matroids.delta._tools import TOOLS
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
 
 
-def _subsets(size: int):
+def _subsets(size: int) -> Iterator[tuple[int, ...]]:
     return (
         subset
         for cardinality in range(size + 1)
@@ -54,14 +55,16 @@ def test_distance_catalog_example_runs_through_declared_operation() -> None:
     )
 
 
-def test_distance_rejects_oversized_source_before_exchange_replay(monkeypatch) -> None:
+def test_distance_rejects_oversized_source_before_exchange_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import jacobian.math.combinatorics.matroids.delta.operations as operations
 
     delta = FiniteDeltaMatroid(
         ground=tuple(f"element-{index}" for index in range(500)), feasible=((),)
     )
 
-    def forbidden(_system):
+    def forbidden(_system: FiniteDeltaMatroid) -> None:
         pytest.fail("exchange kernel ran before source envelope admission")
 
     monkeypatch.setattr(operations, "_require_delta_matroid_axiom", forbidden)

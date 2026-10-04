@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Literal, NoReturn
 
 import pytest
 from tests.error_assertions import error_code
@@ -21,9 +22,9 @@ def _polynomial(
     variables: tuple[str, ...],
     exponents: tuple[tuple[int, ...], ...],
     coefficients: tuple[Fraction | int, ...],
-    convention: str = "MIN_PLUS",
+    convention: Literal["MIN_PLUS", "MAX_PLUS"] = "MIN_PLUS",
 ) -> TropicalPolynomial:
-    semiring = TropicalSemiring(convention=convention, base="QQ")  # type: ignore[arg-type]
+    semiring = TropicalSemiring(convention=convention, base="QQ")
     return TropicalPolynomial(
         semiring=semiring,
         variables=variables,
@@ -79,6 +80,7 @@ def _inequality_oracle(poly: TropicalPolynomial) -> tuple[int, ...]:
     attained = []
     maximize = poly.semiring.convention == "MAX_PLUS"
     for index, term in enumerate(poly.terms):
+        assert term.coefficient.value is not None
         term_rows = []
         for other_index, other in enumerate(poly.terms):
             if index == other_index:
@@ -89,6 +91,8 @@ def _inequality_oracle(poly: TropicalPolynomial) -> tuple[int, ...]:
                 Fraction(sign * (other.exponents[axis] - term.exponents[axis]))
                 for axis in range(len(poly.variables))
             )
+            assert other.coefficient.value is not None
+            assert term.coefficient.value is not None
             bound = -sign * (
                 other.coefficient.value.as_fraction()
                 - term.coefficient.value.as_fraction()
@@ -105,25 +109,30 @@ def _assert_face_incidence(
     for face in result.finite_faces:
         normal = tuple(value.as_fraction() for value in face.normal)
         offset = face.offset.as_fraction()
-        incident = tuple(
-            index
-            for index, term in enumerate(poly.terms)
-            if sum(
-                normal[axis] * exponent
-                for axis, exponent in enumerate(
-                    (*term.exponents, term.coefficient.value.as_fraction())
-                )
+        incident_indices: list[int] = []
+        for index, term in enumerate(poly.terms):
+            coefficient = term.coefficient.value
+            assert coefficient is not None
+            coordinates: tuple[int | Fraction, ...] = (
+                *term.exponents,
+                coefficient.as_fraction(),
             )
-            == offset
-        )
+            value = Fraction(0)
+            for axis, exponent in enumerate(coordinates):
+                value += normal[axis] * exponent
+            if value == offset:
+                incident_indices.append(index)
+        incident = tuple(incident_indices)
         assert incident == face.source_term_indices
-    for face in result.face_incidence:
-        for parent_index in face.maximal_finite_face_indices:
+    for incidence_face in result.face_incidence:
+        for parent_index in incidence_face.maximal_finite_face_indices:
             parent_terms = result.finite_faces[parent_index].source_term_indices
-            assert set(face.source_term_indices).issubset(parent_terms)
+            assert set(incidence_face.source_term_indices).issubset(parent_terms)
 
 
-def _incidence_signature(result: TropicalPolynomialEssentialPart):
+def _incidence_signature(
+    result: TropicalPolynomialEssentialPart,
+) -> tuple[tuple[int, tuple[int, ...], tuple[int, ...]], ...]:
     return tuple(
         (
             face.dimension,
@@ -136,7 +145,7 @@ def _incidence_signature(result: TropicalPolynomialEssentialPart):
 
 @pytest.mark.parametrize("convention", ["MIN_PLUS", "MAX_PLUS"])
 def test_square_center_tie_is_retained_and_all_face_incidence_is_source_bound(
-    convention: str,
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
 ) -> None:
     poly = _polynomial(
         ("x", "y"),
@@ -182,7 +191,7 @@ def test_square_center_tie_is_retained_and_all_face_incidence_is_source_bound(
     ],
 )
 def test_rank_deficient_lift_uses_relative_facets_and_exact_inequality_oracle(
-    convention: str,
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
     coefficients: tuple[int, ...],
     active: tuple[int, ...],
     normal_sign: int,
@@ -273,7 +282,7 @@ def test_sixty_four_term_lift_rejected_before_hull_by_candidate_pair_admission(
         (0,) * 64,
     )
 
-    def unexpected_hull(*_args, **_kwargs):
+    def unexpected_hull(*_args: object, **_kwargs: object) -> NoReturn:
         pytest.fail("the DD hull backend must not run after preflight rejection")
 
     monkeypatch.setattr(
@@ -296,7 +305,7 @@ def test_face_work_is_rejected_before_hull_expansion(
     )
     poly = _polynomial(("x", "y", "z", "w"), exponents, (0,) * len(exponents))
 
-    def unexpected_hull(*_args, **_kwargs):
+    def unexpected_hull(*_args: object, **_kwargs: object) -> NoReturn:
         pytest.fail("the hull backend must not run after face-work rejection")
 
     monkeypatch.setattr(

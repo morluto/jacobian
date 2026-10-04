@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs._labels import _graph_label_characters
 from jacobian.math.graphs.morphisms._models import (
     MAX_CYCLE_SEARCH_PATHS,
     MAX_SUBGRAPH_CANDIDATE_CHECKS,
@@ -41,12 +42,6 @@ __all__ = [
 
 MAX_MORPHISM_RETAINED_LABEL_CHARACTERS = 10_000_000
 _WITNESS_PRESOLVE_WORK = 1_024
-
-
-def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
-    return sum(len(vertex) for vertex in graph.vertices) + sum(
-        len(left) + len(right) for left, right in graph.edges
-    )
 
 
 def _reject_retained_labels(location: tuple[str, ...]) -> None:

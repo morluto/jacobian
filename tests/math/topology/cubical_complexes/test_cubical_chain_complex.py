@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -40,7 +42,7 @@ def _tool_result(
         for tool in TOOLS
         if tool.operation_id == "topology.cubical_complex.chain_complex.compute"
     )
-    return tool.run(request)
+    return cast(CubicalChainComplexResult, tool.run(request))
 
 
 class TestKnownAnswers:
@@ -136,7 +138,9 @@ class TestDefiningInvariants:
         assert result.value.basis_sizes == (4, 4)
         groups = homology_groups(result.value).homology_groups
         assert all(isinstance(group, IntegralHomologyGroupValue) for group in groups)
-        assert [group.free_rank for group in groups] == [1, 1]
+        assert [
+            cast(IntegralHomologyGroupValue, group).free_rank for group in groups
+        ] == [1, 1]
 
     def test_serialization_round_trip(self) -> None:
         result = chain_complex(_SQUARE)

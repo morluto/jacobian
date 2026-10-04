@@ -654,7 +654,6 @@ def test_inverse_word_trace_admits_the_same_words_as_the_forward_path() -> None:
     255 events and no bump steps at all, and a 500-letter pair was refused too.
     """
     from jacobian.math.combinatorics.algebraic._rsk import (
-        FiniteWord,
         _admit_inverse_trace,
     )
     from jacobian.math.combinatorics.algebraic._rsk import (

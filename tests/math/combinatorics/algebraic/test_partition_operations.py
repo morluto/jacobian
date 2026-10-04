@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import math
-from typing import NoReturn
+from collections.abc import Callable, Iterator
+from typing import NoReturn, cast
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -158,7 +159,7 @@ def test_ssyt_count_rejects_a_non_carrier_partition() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
     with pytest.raises(OperationDomainValidationError) as error:
-        native.semistandard_young_tableaux_count((1, 2), 3)
+        native.semistandard_young_tableaux_count(cast(IntegerPartition, (1, 2)), 3)
     assert error.value.errors()[0]["type"] == (
         "algebraic_combinatorics.partition_carrier"
     )
@@ -175,7 +176,9 @@ def test_ssyt_count_rejects_an_oversized_constructed_partition() -> None:
 @pytest.mark.parametrize(
     "operation", [native.hook_lengths, native.standard_young_tableaux_count]
 )
-def test_hook_operations_admit_partition_before_computation(operation) -> None:
+def test_hook_operations_admit_partition_before_computation(
+    operation: Callable[..., object],
+) -> None:
     """Direct hook kernels reject forged carriers before column expansion."""
     forged = IntegerPartition.model_construct(parts=(10**9,))
     with pytest.raises(OperationResourceAdmissionError) as error:
@@ -186,10 +189,12 @@ def test_hook_operations_admit_partition_before_computation(operation) -> None:
 @pytest.mark.parametrize(
     "operation", [native.hook_lengths, native.standard_young_tableaux_count]
 )
-def test_hook_operations_reject_a_non_partition_carrier(operation) -> None:
+def test_hook_operations_reject_a_non_partition_carrier(
+    operation: Callable[..., object],
+) -> None:
     """Direct hook kernels report a typed error for wrong native carriers."""
     with pytest.raises(OperationDomainValidationError) as error:
-        operation(None)  # type: ignore[arg-type]
+        operation(None)
     assert (
         error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_carrier"
     )
@@ -212,7 +217,9 @@ def test_partition_dominance_rejects_a_non_carrier_argument() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
     with pytest.raises(OperationDomainValidationError):
-        native.partition_dominance((1,), IntegerPartition(parts=(1,)))
+        native.partition_dominance(
+            cast(IntegerPartition, (1,)), IntegerPartition(parts=(1,))
+        )
 
 
 def test_hook_content_large_exact_integers_roundtrip_strict_json() -> None:
@@ -622,7 +629,7 @@ def test_tableau_checkers_reject_invalid_native_alphabets() -> None:
     partition = IntegerPartition(parts=(1,))
     for alphabet in (0, True, 1.0):
         with pytest.raises(OperationDomainValidationError) as error:
-            native.semistandard_young_tableaux_count(partition, alphabet)  # type: ignore[arg-type]
+            native.semistandard_young_tableaux_count(partition, cast(int, alphabet))
         assert error.value.errors()[0]["type"] == (
             "algebraic_combinatorics.hook_content_alphabet"
         )
@@ -630,7 +637,7 @@ def test_tableau_checkers_reject_invalid_native_alphabets() -> None:
 
 def test_tableau_checkers_revalidate_constructed_carriers() -> None:
     """Boolean entries cannot masquerade as tableaux and report membership."""
-    for constructed, checker in (
+    for constructed, _checker in (
         (
             StandardYoungTableau.model_construct(rows=((True,),)),
             native.check_standard_tableau,
@@ -641,7 +648,10 @@ def test_tableau_checkers_revalidate_constructed_carriers() -> None:
         ),
     ):
         with pytest.raises(OperationDomainValidationError) as error:
-            checker(constructed)
+            if isinstance(constructed, StandardYoungTableau):
+                native.check_standard_tableau(constructed)
+            else:
+                native.check_semistandard_tableau(constructed)
         assert error.value.errors()[0]["type"] == (
             "algebraic_combinatorics.tableau_carrier"
         )
@@ -738,7 +748,7 @@ def test_ssyt_count_rejects_oversized_parts_before_scanning() -> None:
         def __len__(self) -> int:
             return MAX_PARTITION_PARTS + 1
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             raise AssertionError("an oversized carrier must not be scanned")
 
     forged = IntegerPartition.model_construct(parts=LyingParts((1,)))

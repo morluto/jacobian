@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import Literal, cast
 
 import pytest
 
@@ -18,10 +19,17 @@ _I = ((1, 0), (0, 1))
 _X = ((0, 1), (1, 0))
 _Y = ((0, -1j), (1j, 0))
 _Z = ((1, 0), (0, -1))
-_LOCAL = {"I": _I, "X": _X, "Y": _Y, "Z": _Z}
+_LOCAL: dict[str, tuple[tuple[complex, ...], ...]] = {
+    "I": _I,
+    "X": _X,
+    "Y": _Y,
+    "Z": _Z,
+}
+Matrix = tuple[tuple[complex, ...], ...]
+PauliLabel = Literal["I", "X", "Y", "Z"]
 
 
-def _multiply(left, right):
+def _multiply(left: Matrix, right: Matrix) -> Matrix:
     return tuple(
         tuple(
             sum(left[i][k] * right[k][j] for k in range(len(right)))
@@ -31,7 +39,7 @@ def _multiply(left, right):
     )
 
 
-def _tensor(left, right):
+def _tensor(left: Matrix, right: Matrix) -> Matrix:
     return tuple(
         tuple(
             left[i][j] * right[k][ell]
@@ -43,15 +51,15 @@ def _tensor(left, right):
     )
 
 
-def _operator(labels: tuple[str, ...], phase: int):
-    matrix = ((1 + 0j,),)
+def _operator(labels: tuple[PauliLabel, ...], phase: int) -> Matrix:
+    matrix: Matrix = ((1 + 0j,),)
     for label in labels:
         matrix = _tensor(matrix, _LOCAL[label])
     return tuple(tuple((1j**phase) * entry for entry in row) for row in matrix)
 
 
-def _stored_operator(pauli: ExactQubitPauli):
-    base = ((1 + 0j,),)
+def _stored_operator(pauli: ExactQubitPauli) -> Matrix:
+    base: Matrix = ((1 + 0j,),)
     for x, z in zip(pauli.phase_free.x_bits, pauli.phase_free.z_bits, strict=True):
         local = _multiply(_X if x else _I, _Z if z else _I)
         base = _tensor(base, local)
@@ -62,21 +70,22 @@ def _stored_operator(pauli: ExactQubitPauli):
 def test_label_round_trips_match_independent_dense_operator(width: int) -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(width)))
     for labels in product(("I", "X", "Y", "Z"), repeat=width):
+        typed_labels = cast(tuple[PauliLabel, ...], labels)
         for scalar_phase in range(4):
-            converted = pauli_from_labels(register, labels, scalar_phase)
+            converted = pauli_from_labels(register, typed_labels, scalar_phase)
             y_count = labels.count("Y")
             expected_x = tuple(int(label in ("X", "Y")) for label in labels)
             expected_z = tuple(int(label in ("Z", "Y")) for label in labels)
             assert converted.phase_free.x_bits == expected_x
             assert converted.phase_free.z_bits == expected_z
             assert converted.phase == (scalar_phase + y_count) % 4
-            assert _stored_operator(converted) == _operator(labels, scalar_phase)
+            assert _stored_operator(converted) == _operator(typed_labels, scalar_phase)
 
             decoded = pauli_to_labels(converted)
             assert decoded.labels == labels
             assert decoded.phase == scalar_phase
             assert _operator(decoded.labels, decoded.phase) == _operator(
-                labels, scalar_phase
+                typed_labels, scalar_phase
             )
 
 

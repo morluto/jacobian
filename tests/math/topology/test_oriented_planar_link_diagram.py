@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
@@ -68,11 +70,11 @@ def test_braid_closures_encode_oriented_planar_trefoil_hopf_and_figure_eight() -
     assert [
         (term.coefficient.as_fraction(), term.exponents[0])
         for term in trefoil_alexander.terms
-    ] == [(1, 2), (-1, 1), (1, 0)]
+    ] == [(Fraction(1), 2), (Fraction(-1), 1), (Fraction(1), 0)]
     assert [
         (term.coefficient.as_fraction(), term.exponents[0])
         for term in figure_eight_alexander.terms
-    ] == [(1, 2), (-3, 1), (1, 0)]
+    ] == [(Fraction(1), 2), (Fraction(-3), 1), (Fraction(1), 0)]
     hopf_linking = link_linking_matrix(hopf).matrix
     assert hopf_linking[0][1].as_fraction() == 1
 
@@ -186,7 +188,12 @@ def test_diagram_bound_accepts_64_crossings_and_rejects_65_before_validation() -
     crossings = tuple(
         LinkCrossing(
             crossing_id=f"c{index:03d}",
-            half_edges=tuple(f"c{index:03d}:h{dart}" for dart in range(4)),
+            half_edges=(
+                f"c{index:03d}:h0",
+                f"c{index:03d}:h1",
+                f"c{index:03d}:h2",
+                f"c{index:03d}:h3",
+            ),
             over_pair=(0, 2),
             under_pair=(1, 3),
             sign=-1,

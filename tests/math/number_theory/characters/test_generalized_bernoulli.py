@@ -11,6 +11,7 @@ from jacobian.math.number_theory.characters import _tools
 from jacobian.math.number_theory.characters._models import (
     DirichletCharacterGeneralizedBernoulliPrefixRequest,
     DirichletCharacterGeneralizedBernoulliRequest,
+    DirichletCharacterGeneralizedBernoulliResult,
 )
 from jacobian.math.number_theory.characters.operations import (
     character_group,
@@ -25,7 +26,9 @@ def _bernoulli_numbers(index: int) -> tuple[Fraction, ...]:
 
     values = [Fraction(1)]
     for n in range(1, index + 1):
-        values.append(-sum(math.comb(n + 1, j) * values[j] for j in range(n)) / (n + 1))
+        values.append(
+            Fraction(-sum(math.comb(n + 1, j) * values[j] for j in range(n)), n + 1)
+        )
     return tuple(values)
 
 
@@ -41,7 +44,7 @@ def _direct_formula(
     total = [Fraction(0), Fraction(0)]
     for integer in range(1, modulus + 1):
         char_value = character_values.get(integer % modulus, (Fraction(0), Fraction(0)))
-        if char_value == (0, 0):
+        if char_value == (Fraction(0), Fraction(0)):
             continue
         x = Fraction(integer, modulus)
         polynomial_value = sum(
@@ -55,7 +58,9 @@ def _direct_formula(
     return total[0], total[1]
 
 
-def _result_coefficients(result) -> tuple[Fraction, ...]:
+def _result_coefficients(
+    result: DirichletCharacterGeneralizedBernoulliResult,
+) -> tuple[Fraction, ...]:
     return tuple(Fraction(c.num, c.den) for c in result.value.coefficients_ascending)
 
 

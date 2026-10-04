@@ -12,7 +12,7 @@ from jacobian.math.number_theory.characters.values import (
 )
 
 
-def test_character_kernels_are_complete_subgroups_with_exact_indices():
+def test_character_kernels_are_complete_subgroups_with_exact_indices() -> None:
     for modulus in (1, 3, 5, 8, 12, 15):
         group = character_group(modulus)
         for coordinates in dirichlet_character_group_enumerate(group).coordinates:
@@ -33,7 +33,7 @@ def test_character_kernels_are_complete_subgroups_with_exact_indices():
             )
 
 
-def test_kernel_value_rejects_missing_or_extra_residues():
+def test_kernel_value_rejects_missing_or_extra_residues() -> None:
     group = character_group(5)
     character = DirichletCharacter(group=group, coordinates=(2,))
     kernel = dirichlet_character_kernel(character)

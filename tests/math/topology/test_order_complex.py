@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.posets.core._models import (
+    FinitePoset,
     PresentationPair,
     ReflexivePairPolicy,
     RelationInterpretation,
@@ -22,7 +23,9 @@ from jacobian.math.topology.release import (
 )
 
 
-def _poset(elements: tuple[str, ...], covers: tuple[tuple[str, str], ...]):
+def _poset(
+    elements: tuple[str, ...], covers: tuple[tuple[str, str], ...]
+) -> FinitePoset:
     return materialize_finite_poset(
         elements,
         tuple(PresentationPair(lower=lower, upper=upper) for lower, upper in covers),

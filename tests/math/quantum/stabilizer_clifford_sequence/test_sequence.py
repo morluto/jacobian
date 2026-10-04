@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import pytest
 
 from jacobian.catalog.models import (
@@ -62,7 +64,7 @@ def _matmul(left: Matrix, right: Matrix) -> Matrix:
     )
 
 
-def _sum(values) -> Gaussian:
+def _sum(values: Iterable[Gaussian]) -> Gaussian:
     result = ZERO
     for value in values:
         result = _add(result, value)
@@ -137,8 +139,8 @@ def _generated_group(generators: tuple[Matrix, ...]) -> frozenset[Matrix]:
 
 def _pauli(
     register: QubitRegister,
-    x: tuple[int, int],
-    z: tuple[int, int],
+    x: tuple[int, ...],
+    z: tuple[int, ...],
     phase: int = 0,
 ) -> ExactQubitPauli:
     return ExactQubitPauli(
@@ -147,13 +149,13 @@ def _pauli(
     )
 
 
-def test_sequence_action_matches_independent_exact_matrix_conjugation():
+def test_sequence_action_matches_independent_exact_matrix_conjugation() -> None:
     register = QubitRegister(qubit_ids=("q0", "q1"))
     source_generators = (
         _pauli(register, (0, 0), (1, 0)),
         _pauli(register, (0, 1), (0, 0)),
     )
-    group = ExactStabilizerGroup(qubit_register=register, generators=source_generators)
+    group = ExactStabilizerGroup(register=register, generators=source_generators)
     sequence = StabilizerCliffordSequence(
         register=register,
         gates=(
@@ -194,7 +196,7 @@ def test_sequence_action_matches_independent_exact_matrix_conjugation():
     assert ExactStabilizerGroup.model_validate_json(result.model_dump_json()) == result
 
 
-def test_sequence_composition_has_empty_identity_and_application_order():
+def test_sequence_composition_has_empty_identity_and_application_order() -> None:
     register = QubitRegister(qubit_ids=("q0", "q1"))
     empty = StabilizerCliffordSequence(register=register, gates=())
     left = StabilizerCliffordSequence(
@@ -223,10 +225,10 @@ def test_sequence_composition_has_empty_identity_and_application_order():
     assert left_associated == right_associated
 
 
-def test_composed_action_matches_sequential_group_action():
+def test_composed_action_matches_sequential_group_action() -> None:
     register = QubitRegister(qubit_ids=("q0", "q1"))
     source = ExactStabilizerGroup(
-        qubit_register=register,
+        register=register,
         generators=(
             _pauli(register, (0, 0), (1, 0)),
             _pauli(register, (0, 1), (0, 0)),
@@ -249,12 +251,12 @@ def test_composed_action_matches_sequential_group_action():
     ) == (_generated_group(tuple(_pauli_matrix(row) for row in after_both.generators)))
 
 
-def test_redundant_rows_are_canonicalized_before_result_size_admission():
+def test_redundant_rows_are_canonicalized_before_result_size_admission() -> None:
     register = QubitRegister(
         qubit_ids=tuple("q" * 62 + f"{index:02}" for index in range(32))
     )
     generator = _pauli(register, (1,) + (0,) * 31, (0,) * 32)
-    group = ExactStabilizerGroup(qubit_register=register, generators=(generator,) * 4)
+    group = ExactStabilizerGroup(register=register, generators=(generator,) * 4)
     sequence = StabilizerCliffordSequence(register=register, gates=())
 
     result = apply_stabilizer_clifford_sequence(group, sequence)
@@ -263,11 +265,11 @@ def test_redundant_rows_are_canonicalized_before_result_size_admission():
     assert ExactStabilizerGroup.model_validate_json(result.model_dump_json()) == result
 
 
-def test_empty_group_with_many_gates_does_not_charge_register_bytes_per_gate():
+def test_empty_group_with_many_gates_does_not_charge_register_bytes_per_gate() -> None:
     register = QubitRegister(
         qubit_ids=tuple("q" * 62 + f"{index:02}" for index in range(32))
     )
-    group = ExactStabilizerGroup(qubit_register=register, generators=())
+    group = ExactStabilizerGroup(register=register, generators=())
     sequence = StabilizerCliffordSequence(
         register=register,
         gates=(CliffordGate(gate="H", qubits=(register.qubit_ids[0],)),) * 30,
@@ -284,9 +286,11 @@ def test_empty_group_with_many_gates_does_not_charge_register_bytes_per_gate():
         StabilizerCliffordSequence.model_construct(qubit_register=None, gates=()),
     ],
 )
-def test_malformed_native_sequence_fields_raise_domain_error(sequence):
+def test_malformed_native_sequence_fields_raise_domain_error(
+    sequence: StabilizerCliffordSequence,
+) -> None:
     register = QubitRegister(qubit_ids=("q0",))
-    group = ExactStabilizerGroup(qubit_register=register, generators=())
+    group = ExactStabilizerGroup(register=register, generators=())
     with pytest.raises(OperationDomainValidationError) as error:
         apply_stabilizer_clifford_sequence(group, sequence)
     assert error.value.errors()[0]["type"] == (
@@ -294,10 +298,10 @@ def test_malformed_native_sequence_fields_raise_domain_error(sequence):
     )
 
 
-def test_empty_sequence_is_identity_on_a_stabilizer_group():
+def test_empty_sequence_is_identity_on_a_stabilizer_group() -> None:
     register = QubitRegister(qubit_ids=("q0", "q1"))
     group = ExactStabilizerGroup(
-        qubit_register=register,
+        register=register,
         generators=(
             _pauli(register, (0, 0), (1, 0)),
             _pauli(register, (0, 1), (0, 0)),
@@ -310,7 +314,7 @@ def test_empty_sequence_is_identity_on_a_stabilizer_group():
     )
 
 
-def test_composition_rejects_sequence_longer_than_admitted_bound():
+def test_composition_rejects_sequence_longer_than_admitted_bound() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     h = CliffordGate(gate="H", qubits=("q0",))
     left = StabilizerCliffordSequence(register=register, gates=(h,) * 65)
@@ -319,7 +323,7 @@ def test_composition_rejects_sequence_longer_than_admitted_bound():
         compose_stabilizer_clifford_sequences(left, right)
 
 
-def test_owner_local_manifest_publishes_both_sequence_operations():
+def test_owner_local_manifest_publishes_both_sequence_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "quantum.stabilizer.clifford_sequence.compose.compute",
         "quantum.stabilizer.clifford_sequence.apply.compute",

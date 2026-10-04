@@ -7,7 +7,11 @@ import time
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    RequestCancellationSignal,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -433,11 +437,12 @@ def test_native_arguments_are_validated_before_worker_serialization() -> None:
     )
 
 
-def test_worker_decoder_rejects_source_unbound_distance(monkeypatch) -> None:
+def test_worker_decoder_rejects_source_unbound_distance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A structurally valid forged row cannot replace the worker result."""
     import json
 
-    from jacobian.canonical import encode_strict_json
     from jacobian.math.polynomials.root_critical import operations
 
     polynomial = _polynomial((3, 1), (0, -1))
@@ -452,11 +457,21 @@ def test_worker_decoder_rejects_source_unbound_distance(monkeypatch) -> None:
         "upper": {"num": "7", "den": "1"},
         "interval_type": "OPEN",
     }
-    forged_output = encode_strict_json({"ok": True, "profile": json.dumps(payload)})
+    forged_output = {"ok": True, "profile": json.dumps(payload)}
+
+    def forged_worker(
+        _polynomial: RationalPolynomial,
+        *,
+        max_pair_rows: object,
+        remaining_seconds: float,
+        cancellation_signal: RequestCancellationSignal | None,
+    ) -> dict[str, object]:
+        return forged_output
+
     monkeypatch.setattr(
         operations,
         "run_profile_worker_process",
-        lambda *args, **kwargs: forged_output,
+        forged_worker,
     )
     with pytest.raises(
         (OperationDomainValidationError, RuntimeError), match="distance"

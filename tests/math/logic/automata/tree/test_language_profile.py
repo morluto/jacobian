@@ -18,7 +18,7 @@ from jacobian.math.logic.automata.tree.values import (
 )
 
 
-def test_language_profile_returns_minimum_witness_per_reachable_final():
+def test_language_profile_returns_minimum_witness_per_reachable_final() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=3,
         arity=(0, 1),
@@ -44,7 +44,7 @@ def test_language_profile_returns_minimum_witness_per_reachable_final():
     assert profile.empty is False
 
 
-def test_language_profile_identifies_empty_language_without_tree_enumeration():
+def test_language_profile_identifies_empty_language_without_tree_enumeration() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=2,
         arity=(0,),
@@ -63,7 +63,7 @@ def test_language_profile_identifies_empty_language_without_tree_enumeration():
     assert profile.empty is True
 
 
-def test_deserialized_profile_rejects_witness_outside_ranked_alphabet():
+def test_deserialized_profile_rejects_witness_outside_ranked_alphabet() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=1,
         arity=(0,),
@@ -84,7 +84,7 @@ def test_deserialized_profile_rejects_witness_outside_ranked_alphabet():
     )
 
 
-def test_deserialized_profile_rejects_witness_arity_mismatch():
+def test_deserialized_profile_rejects_witness_arity_mismatch() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=2,
         arity=(0, 1),
@@ -106,7 +106,7 @@ def test_deserialized_profile_rejects_witness_arity_mismatch():
     )
 
 
-def test_deserialized_profile_rejects_missing_witness_for_reachable_final():
+def test_deserialized_profile_rejects_missing_witness_for_reachable_final() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=2,
         arity=(0, 1),
@@ -125,7 +125,7 @@ def test_deserialized_profile_rejects_missing_witness_for_reachable_final():
     assert error.value.errors()[0]["type"] == "tree_automata.language_profile_witnesses"
 
 
-def test_deserialized_profile_rejects_false_empty_flag():
+def test_deserialized_profile_rejects_false_empty_flag() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=1,
         arity=(0,),
@@ -143,7 +143,7 @@ def test_deserialized_profile_rejects_false_empty_flag():
     assert error.value.errors()[0]["type"] == "tree_automata.language_profile_empty"
 
 
-def test_nondeterministic_runs_do_not_change_language_profile_or_tree_count():
+def test_nondeterministic_runs_do_not_change_language_profile_or_tree_count() -> None:
     machine = BottomUpTreeAutomaton(
         state_count=3,
         arity=(0, 1),

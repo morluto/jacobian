@@ -1,8 +1,10 @@
 """Exact multiplication of forms with reconstructed target-space parents."""
 
 from fractions import Fraction
+from typing import Literal
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import BasisId
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -19,11 +21,16 @@ from jacobian.math.number_theory.modular_forms.basis import (
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
+    ModularQExpansion,
 )
 
 
 def _form(
-    level: int, weight: int, kind: str, basis_id: str, *coordinates: int
+    level: int,
+    weight: int,
+    kind: Literal["M", "S"],
+    basis_id: BasisId,
+    *coordinates: int,
 ) -> ModularFormCoordinates:
     return ModularFormCoordinates(
         space=ModularFormSpace(level=level, weight=weight, kind=kind),
@@ -32,7 +39,7 @@ def _form(
     )
 
 
-def _fractions(expansion) -> tuple[Fraction, ...]:
+def _fractions(expansion: ModularQExpansion) -> tuple[Fraction, ...]:
     return tuple(value.as_fraction() for value in expansion.q_expansion.coefficients)
 
 

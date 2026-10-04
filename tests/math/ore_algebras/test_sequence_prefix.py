@@ -1,6 +1,7 @@
 """Exact finite action of shift Ore operators on rational sequence prefixes."""
 
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 
@@ -14,13 +15,14 @@ from jacobian.math.ore_algebras._models import ShiftOreOperator
 from jacobian.math.ore_algebras.operations import (
     shift_operator_apply_to_sequence_prefix,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
 
 def _rf(
-    numerator: tuple[tuple[Fraction | int, int], ...], denominator=((1, 0),)
-) -> dict:
-    def _part(terms):
+    numerator: tuple[tuple[Fraction | int, int], ...],
+    denominator: tuple[tuple[int, int], ...] = ((1, 0),),
+) -> dict[str, object]:
+    def _part(terms: tuple[tuple[Fraction | int, int], ...]) -> dict[str, object]:
         return {
             "terms": [
                 {
@@ -44,7 +46,7 @@ def _rf(
     }
 
 
-def _operator(terms: tuple[tuple[int, dict], ...]) -> ShiftOreOperator:
+def _operator(terms: tuple[tuple[int, dict[str, object]], ...]) -> ShiftOreOperator:
     return ShiftOreOperator.model_validate(
         {
             "variable": "n",
@@ -56,7 +58,9 @@ def _operator(terms: tuple[tuple[int, dict], ...]) -> ShiftOreOperator:
     )
 
 
-def _independent_poly_eval(polynomial, index: int) -> Fraction:
+def _independent_poly_eval(
+    polynomial: SparseRationalPolynomial, index: int
+) -> Fraction:
     # Deliberately use the public coefficient payload and direct powers rather
     # than the Ore kernel's private polynomial/evaluation helpers.
     return sum(
@@ -75,6 +79,14 @@ def _independent_rf_eval(function: RationalFunction, index: int) -> Fraction:
     )
 
 
+def _sequence(values: tuple[int, ...]) -> FiniteRationalSequence:
+    return FiniteRationalSequence(
+        values=tuple(
+            CanonicalRational.from_fraction(Fraction(value)) for value in values
+        )
+    )
+
+
 def test_fibonacci_operator_residual_matches_direct_recurrence_oracle() -> None:
     op = _operator(
         (
@@ -83,7 +95,7 @@ def test_fibonacci_operator_residual_matches_direct_recurrence_oracle() -> None:
             (2, _rf(((1, 0),))),
         )
     )
-    source = FiniteRationalSequence(values=(0, 1, 1, 2, 3, 5, 8))
+    source = _sequence((0, 1, 1, 2, 3, 5, 8))
 
     result = shift_operator_apply_to_sequence_prefix(op, 10, source)
 
@@ -116,7 +128,7 @@ def test_variable_coefficient_residual_uses_direct_rational_evaluation() -> None
             (1, _rf(((1, 0), (1, 1)))),
         )
     )
-    source = FiniteRationalSequence(values=(2, 5, -1, 7, 9))
+    source = _sequence((2, 5, -1, 7, 9))
     result = shift_operator_apply_to_sequence_prefix(op, -2, source)
 
     for offset, row in enumerate(result.residuals):
@@ -160,9 +172,7 @@ def test_coefficient_pole_excludes_whole_index_and_tail_is_explicit() -> None:
             (1, _rf(((1, 0),))),
         )
     )
-    result = shift_operator_apply_to_sequence_prefix(
-        op, 0, FiniteRationalSequence(values=(3, 4, 5, 6))
-    )
+    result = shift_operator_apply_to_sequence_prefix(op, 0, _sequence((3, 4, 5, 6)))
 
     assert [row.index for row in result.residuals] == [0, 2]
     assert [(item.index, item.exponents) for item in result.coefficient_poles] == [
@@ -173,16 +183,18 @@ def test_coefficient_pole_excludes_whole_index_and_tail_is_explicit() -> None:
 
 def test_zero_operator_covers_each_stored_index_without_boundary_loss() -> None:
     result = shift_operator_apply_to_sequence_prefix(
-        _operator(()), 4, FiniteRationalSequence(values=(2, 3, 5))
+        _operator(()), 4, _sequence((2, 3, 5))
     )
     assert [row.index for row in result.residuals] == [4, 5, 6]
     assert [row.residual.as_fraction() for row in result.residuals] == [0, 0, 0]
     assert result.right_boundary_indices == ()
 
 
-def test_empty_operator_prefix_charges_each_residual_row_once(monkeypatch) -> None:
+def test_empty_operator_prefix_charges_each_residual_row_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_OUTPUT_WEIGHT", 8_000)
-    source = FiniteRationalSequence(values=(0,) * 10)
+    source = _sequence((0,) * 10)
 
     result = shift_operator_apply_to_sequence_prefix(_operator(()), 0, source)
 
@@ -190,10 +202,12 @@ def test_empty_operator_prefix_charges_each_residual_row_once(monkeypatch) -> No
     assert all(row.residual.as_fraction() == 0 for row in result.residuals)
 
 
-def test_work_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
+def test_work_admission_precedes_coefficient_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_EVALUATION_CELLS", 0)
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("coefficient evaluation must follow admission")
 
     monkeypatch.setattr(operations, "_evaluate_rational_polynomial_at", fail)
@@ -201,32 +215,32 @@ def test_work_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
         shift_operator_apply_to_sequence_prefix(
             _operator(((0, _rf(((1, 1),))),)),
             0,
-            FiniteRationalSequence(values=(1, 2)),
+            _sequence((1, 2)),
         )
     assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_prefix_work"
 
 
 def test_start_index_is_explicit_and_bounded() -> None:
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        shift_operator_apply_to_sequence_prefix(
-            _operator(()), 100_001, FiniteRationalSequence(values=(1,))
-        )
+        shift_operator_apply_to_sequence_prefix(_operator(()), 100_001, _sequence((1,)))
     assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_prefix_index"
 
 
 def test_prefix_edge_admits_last_stored_index() -> None:
     result = shift_operator_apply_to_sequence_prefix(
-        _operator(()), 100_000, FiniteRationalSequence(values=(1,))
+        _operator(()), 100_000, _sequence((1,))
     )
 
     assert [row.index for row in result.residuals] == [100_000]
     assert result.right_boundary_indices == ()
 
 
-def test_output_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
+def test_output_admission_precedes_coefficient_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_OUTPUT_WEIGHT", 0)
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("coefficient evaluation must follow output admission")
 
     monkeypatch.setattr(operations, "_evaluate_rational_polynomial_at", fail)
@@ -234,6 +248,6 @@ def test_output_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
         shift_operator_apply_to_sequence_prefix(
             _operator(((0, _rf(((1, 0),))),)),
             0,
-            FiniteRationalSequence(values=(1,)),
+            _sequence((1,)),
         )
     assert exc_info.value.errors()[0]["type"] == "ore_algebra.shift_prefix_output"

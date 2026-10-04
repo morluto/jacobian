@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from fractions import Fraction
 
 import pytest
@@ -17,6 +18,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PieceAssignment,
     PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialResult,
+    PolytopalComplexClosureResult,
 )
 from jacobian.math.geometry.polytopes.complexes._spline import (
     piecewise_polynomial_evaluate,
@@ -39,14 +41,14 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
         vertices=tuple(
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{i}",
-                coordinates=({"num": point, "den": 1},),
+                coordinates=(CanonicalRational(num=point, den=1),),
             )
             for i, point in enumerate((left, right))
         ),
     )
 
 
-def _poly(coefficients: dict[tuple[int, ...], Fraction | int]) -> RationalPolynomial:
+def _poly(coefficients: Mapping[tuple[int, ...], Fraction | int]) -> RationalPolynomial:
     return RationalPolynomial(
         variables=("x",),
         polynomial=SparseRationalPolynomial(
@@ -62,11 +64,14 @@ def _poly(coefficients: dict[tuple[int, ...], Fraction | int]) -> RationalPolyno
     )
 
 
-def _complex():
+def _complex() -> PolytopalComplexClosureResult:
     return polytopal_complex_closure((_interval(0, 1, "a"), _interval(1, 2, "b")))
 
 
-def _function(complex_value, coefficients):
+def _function(
+    complex_value: PolytopalComplexClosureResult,
+    coefficients: Mapping[tuple[int, ...], Fraction | int],
+) -> PiecewisePolynomialResult:
     pieces = tuple(
         PieceAssignment(cell_id=cell.cell_id, polynomial=_poly(coefficients))
         for cell in complex_value.maximal_cells
@@ -74,14 +79,16 @@ def _function(complex_value, coefficients):
     return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
 
 
-def _coefficient_map(polynomial: RationalPolynomial):
+def _coefficient_map(
+    polynomial: RationalPolynomial,
+) -> dict[tuple[int, ...], Fraction]:
     return {
         term.exponents: term.coefficient.as_fraction()
         for term in polynomial.polynomial.terms
     }
 
 
-def test_piecewise_product_is_exact_and_compatible_on_shared_face():
+def test_piecewise_product_is_exact_and_compatible_on_shared_face() -> None:
     complex_value = _complex()
     left = _function(complex_value, {(1,): Fraction(1, 2), (0,): 1})
     right = _function(complex_value, {(1,): 1, (0,): 1})
@@ -110,7 +117,7 @@ def test_piecewise_product_is_exact_and_compatible_on_shared_face():
     assert evaluation.value.as_fraction() == 3
 
 
-def test_piecewise_product_rejects_forged_compatible_claim():
+def test_piecewise_product_rejects_forged_compatible_claim() -> None:
     complex_value = _complex()
     forged = PiecewisePolynomialResult.model_construct(
         complex=complex_value,
@@ -138,7 +145,7 @@ def test_piecewise_product_rejects_forged_compatible_claim():
     )
 
 
-def test_piecewise_product_preflights_aggregate_convolution_work():
+def test_piecewise_product_preflights_aggregate_convolution_work() -> None:
     complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
     terms = tuple(
         RationalPolynomialTerm(
@@ -163,7 +170,7 @@ def test_piecewise_product_preflights_aggregate_convolution_work():
     assert exc_info.value.errors()[0]["type"] == "polytopal_complex.multiplication_work"
 
 
-def test_native_multiplication_rejects_a_forged_request_with_a_typed_error():
+def test_native_multiplication_rejects_a_forged_request_with_a_typed_error() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_multiply(
             PiecewisePolynomialMultiplicationRequest.model_construct()

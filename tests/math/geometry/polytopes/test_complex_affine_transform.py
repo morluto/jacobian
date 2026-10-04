@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -13,6 +14,7 @@ from jacobian.math.geometry.polytopes._models import (
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
+    ComplexPoint,
     PolytopalComplexClosureResult,
 )
 from jacobian.math.geometry.polytopes.complexes.operations import (
@@ -29,20 +31,22 @@ def _poly(points: tuple[tuple[int, int], ...], prefix: str) -> RationalVPolytope
         vertices=tuple(
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{index}",
-                coordinates=tuple({"num": x, "den": 1} for x in point),
+                coordinates=tuple(CanonicalRational(num=x, den=1) for x in point),
             )
             for index, point in enumerate(points)
         ),
     )
 
 
-def _fraction_point(point) -> tuple[Fraction, ...]:
+def _fraction_point(point: ComplexPoint) -> tuple[Fraction, ...]:
     return tuple(
         Fraction(*coordinate.as_integer_ratio()) for coordinate in point.coordinates
     )
 
 
-def _bound_map(matrix, translation):
+def _bound_map(
+    matrix: Sequence[Sequence[int]], translation: Sequence[int]
+) -> tuple[tuple[tuple[CanonicalRational, ...], ...], tuple[CanonicalRational, ...]]:
     return (
         tuple(
             tuple(CanonicalRational(num=value, den=1) for value in row)
@@ -52,7 +56,7 @@ def _bound_map(matrix, translation):
     )
 
 
-def test_unimodular_shear_transports_square_triangulation_and_incidence():
+def test_unimodular_shear_transports_square_triangulation_and_incidence() -> None:
     source = polytopal_complex_closure(
         (
             _poly(((0, 0), (1, 0), (1, 1)), "a"),
@@ -113,7 +117,7 @@ def test_unimodular_shear_transports_square_triangulation_and_incidence():
         )
 
 
-def test_affine_transform_requires_nonsingular_matrix():
+def test_affine_transform_requires_nonsingular_matrix() -> None:
     source = polytopal_complex_closure((_poly(((0, 0), (1, 0), (0, 1)), "t"),))
     with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_affine_transform(
@@ -125,7 +129,7 @@ def test_affine_transform_requires_nonsingular_matrix():
     )
 
 
-def test_affine_transform_revalidates_complex_before_preflight():
+def test_affine_transform_revalidates_complex_before_preflight() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_affine_transform(
             PolytopalComplexClosureResult.model_construct(),
@@ -134,7 +138,7 @@ def test_affine_transform_revalidates_complex_before_preflight():
     assert exc_info.value.errors()[0]["type"] == "polytopal_complex.complex_malformed"
 
 
-def test_affine_transform_admits_matrix_height_before_geometry_work():
+def test_affine_transform_admits_matrix_height_before_geometry_work() -> None:
     source = polytopal_complex_closure((_poly(((0, 0), (1, 0), (0, 1)), "t"),))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polytopal_complex_affine_transform(
@@ -146,7 +150,9 @@ def test_affine_transform_admits_matrix_height_before_geometry_work():
     )
 
 
-def test_affine_transform_admits_result_coordinate_growth_before_target_closure():
+def test_affine_transform_admits_result_coordinate_growth_before_target_closure() -> (
+    None
+):
     base = 10**31
     source = polytopal_complex_closure(
         (_poly(((base, 0), (base + 1, 0), (base, 1)), "large"),)

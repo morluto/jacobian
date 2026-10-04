@@ -75,7 +75,13 @@ def _square_pyramid() -> RationalVPolytope:
 
 def _f_vector(result: PolytopeFaceLatticeResult) -> tuple[int, int, int, int, int]:
     counts = Counter(face.dimension for face in result.faces)
-    return tuple(counts[index] for index in (-1, 0, 1, 2, 3))
+    return (
+        counts[-1],
+        counts[0],
+        counts[1],
+        counts[2],
+        counts[3],
+    )
 
 
 def test_tetrahedron_has_complete_canonical_face_lattice() -> None:

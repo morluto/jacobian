@@ -1,8 +1,10 @@
 """Bounded additive algebra for polynomial-coefficient shift operators."""
 
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -159,10 +161,10 @@ def test_rational_function_operator_coefficients_are_outside_addition_subring() 
         == "ore_algebra.shift_polynomial_coefficients"
     )
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValueError) as request_error:
         ShiftOperatorAddRequest(left=operator, right=_op(()))
     assert (
-        exc_info.value.errors()[0]["type"]
+        error_code(request_error.value)
         == "ore_algebra.polynomial_operator_coefficients"
     )
 
@@ -269,7 +271,9 @@ def test_normalization_lcm_growth_is_rejected_within_fixed_intermediate_cap() ->
     )
 
 
-def test_addition_digit_admission_rejects_before_rational_sum(monkeypatch) -> None:
+def test_addition_digit_admission_rejects_before_rational_sum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from jacobian.math.ore_algebras import operations
 
     large_a = Fraction(10**64 - 3, 10**64 - 1)
@@ -277,7 +281,7 @@ def test_addition_digit_admission_rejects_before_rational_sum(monkeypatch) -> No
     left = _op(((0, _rf(((large_a, 0),))),))
     right = _op(((0, _rf(((large_b, 0),))),))
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("rational addition must follow result-height admission")
 
     monkeypatch.setattr(operations, "_poly_add", fail)

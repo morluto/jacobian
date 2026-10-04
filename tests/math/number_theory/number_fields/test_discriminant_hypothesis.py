@@ -32,7 +32,7 @@ _COEFFICIENTS = st.integers(min_value=-6, max_value=6)
 
 
 @st.composite
-def monic_defining_polynomials(draw) -> tuple[int, ...]:
+def monic_defining_polynomials(draw: st.DrawFn) -> tuple[int, ...]:
     degree = draw(st.integers(min_value=2, max_value=3))
     return (1, *(draw(_COEFFICIENTS) for _ in range(degree)))
 

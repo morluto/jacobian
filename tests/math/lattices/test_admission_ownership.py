@@ -4,6 +4,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices import IntegerLattice, compute_saturation
+from jacobian.math.lattices._lattice_ops import integer_rank
 from jacobian.math.matrices.values import IntegerMatrix
 
 
@@ -15,7 +16,7 @@ def test_saturation_checks_authored_rank_once(
     from jacobian.math.lattices import operations
 
     calls = 0
-    original = operations.integer_rank
+    original = integer_rank
 
     def observe(matrix: list[list[int]]) -> int:
         nonlocal calls

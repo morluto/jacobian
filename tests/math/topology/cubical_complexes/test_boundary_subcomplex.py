@@ -3,6 +3,7 @@
 import json
 from collections import Counter
 from itertools import product
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -21,11 +22,11 @@ from jacobian.math.topology.cubical_complexes._models import (
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
 
 
-def _cell(*intervals):
+def _cell(*intervals: tuple[int, int]) -> CubicalCell:
     return CubicalCell(intervals=intervals)
 
 
-def test_square_boundary_has_four_exposed_edges_and_complete_vertex_closure():
+def test_square_boundary_has_four_exposed_edges_and_complete_vertex_closure() -> None:
     square = _cell((0, 1), (0, 1))
     result = operations.boundary_subcomplex((square,))
 
@@ -40,7 +41,7 @@ def test_square_boundary_has_four_exposed_edges_and_complete_vertex_closure():
     assert result.boundary.ambient_dimension == result.complex.ambient_dimension == 2
 
 
-def test_adjacent_squares_exclude_the_shared_interior_edge():
+def test_adjacent_squares_exclude_the_shared_interior_edge() -> None:
     left = _cell((0, 1), (0, 1))
     right = _cell((1, 2), (0, 1))
     shared = _cell((1, 1), (0, 1))
@@ -51,7 +52,7 @@ def test_adjacent_squares_exclude_the_shared_interior_edge():
     assert shared not in result.boundary.cells
 
 
-def test_closed_cubical_surface_has_an_empty_boundary_value():
+def test_closed_cubical_surface_has_an_empty_boundary_value() -> None:
     cube_faces = (
         _cell((0, 0), (0, 1), (0, 1)),
         _cell((1, 1), (0, 1), (0, 1)),
@@ -70,7 +71,7 @@ def test_closed_cubical_surface_has_an_empty_boundary_value():
     )
 
 
-def test_impure_zero_dimensional_and_mixed_axis_sources_are_rejected():
+def test_impure_zero_dimensional_and_mixed_axis_sources_are_rejected() -> None:
     square = _cell((0, 1), (0, 1))
     with pytest.raises(OperationDomainValidationError) as impure:
         operations.boundary_subcomplex((square, _cell((10, 10), (10, 10))))
@@ -104,8 +105,10 @@ def test_impure_zero_dimensional_and_mixed_axis_sources_are_rejected():
     )
 
 
-def test_coordinate_and_face_output_admission_precede_expansion(monkeypatch):
-    def fail_if_expanded(*_args, **_kwargs):
+def test_coordinate_and_face_output_admission_precede_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_expanded(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("cell expansion ran before admission")
 
     monkeypatch.setattr(operations, "_canonical_complex", fail_if_expanded)
@@ -125,19 +128,21 @@ def test_coordinate_and_face_output_admission_precede_expansion(monkeypatch):
     )
 
 
-def test_forged_cells_are_revalidated_before_sort_dimension_or_digit_work():
+def test_forged_cells_are_revalidated_before_sort_dimension_or_digit_work() -> None:
     malformed_length = CubicalCell.model_construct(intervals=((0, 2),))
     malformed_coordinate = CubicalCell.model_construct(intervals=(("x", "y"),))
     for forged in (malformed_length, malformed_coordinate, object()):
         with pytest.raises(OperationDomainValidationError) as error:
-            operations.boundary_subcomplex((forged,))
+            operations.boundary_subcomplex((cast(CubicalCell, forged),))
         assert error.value.errors()[0]["type"] == (
             "cubical_complex.boundary_subcomplex_invalid_cell"
         )
 
 
-def test_huge_endpoint_bit_length_is_rejected_before_cell_model_validation(monkeypatch):
-    def fail_if_validated(*_args, **_kwargs):
+def test_huge_endpoint_bit_length_is_rejected_before_cell_model_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_validated(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("large endpoint reached CubicalCell validation")
 
     monkeypatch.setattr(CubicalCell, "model_validate", fail_if_validated)
@@ -150,7 +155,7 @@ def test_huge_endpoint_bit_length_is_rejected_before_cell_model_validation(monke
     )
 
 
-def test_non_pure_check_uses_exact_face_closure_and_roundtrips_result():
+def test_non_pure_check_uses_exact_face_closure_and_roundtrips_result() -> None:
     square = _cell((0, 1), (0, 1))
     result = operations.boundary_subcomplex((square,))
     assert result.complex.cells == operations.face_closure((square,)).complex.cells
@@ -160,7 +165,7 @@ def test_non_pure_check_uses_exact_face_closure_and_roundtrips_result():
     )
 
 
-def test_all_square_subfamilies_match_an_independent_incidence_oracle():
+def test_all_square_subfamilies_match_an_independent_incidence_oracle() -> None:
     squares = tuple(
         _cell((column, column + 1), (row, row + 1))
         for row in range(2)
@@ -170,7 +175,7 @@ def test_all_square_subfamilies_match_an_independent_incidence_oracle():
         source = tuple(
             square for index, square in enumerate(squares) if mask & (1 << index)
         )
-        incidence = Counter()
+        incidence: Counter[tuple[tuple[int, int], ...]] = Counter()
         for square in source:
             intervals = square.intervals
             for axis in range(2):
@@ -179,7 +184,7 @@ def test_all_square_subfamilies_match_an_independent_incidence_oracle():
                     face[axis] = (endpoint, endpoint)
                     incidence[tuple(face)] += 1
         facets = {face for face, count in incidence.items() if count == 1}
-        expected_boundary = set()
+        expected_boundary: set[tuple[tuple[int, int], ...]] = set()
         for facet in facets:
             choices = tuple(
                 ((lower, upper), (lower, lower), (upper, upper))
@@ -191,7 +196,7 @@ def test_all_square_subfamilies_match_an_independent_incidence_oracle():
         assert {cell.intervals for cell in result.boundary.cells} == expected_boundary
 
 
-def test_forged_serialized_result_must_retain_exact_facets_and_boundary():
+def test_forged_serialized_result_must_retain_exact_facets_and_boundary() -> None:
     square = _cell((0, 1), (0, 1))
     result = operations.boundary_subcomplex((square,))
     payload = result.model_dump(mode="json")
@@ -211,8 +216,10 @@ def test_forged_serialized_result_must_retain_exact_facets_and_boundary():
     )
 
 
-def test_result_checker_admits_candidate_work_before_face_expansion(monkeypatch):
-    def fail_if_expanded(*_args, **_kwargs):
+def test_result_checker_admits_candidate_work_before_face_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_expanded(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("candidate closure ran before result admission")
 
     monkeypatch.setattr(
@@ -235,7 +242,7 @@ def test_result_checker_admits_candidate_work_before_face_expansion(monkeypatch)
     )
 
 
-def test_tool_is_published_with_a_real_square_example():
+def test_tool_is_published_with_a_real_square_example() -> None:
     tool = next(
         tool
         for tool in TOOLS

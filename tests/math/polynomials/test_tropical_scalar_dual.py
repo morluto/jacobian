@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Literal
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -15,8 +16,12 @@ from jacobian.math.polynomials.tropical._tools import TOOLS, compute_scalar_dual
 from jacobian.math.polynomials.tropical.operations import tropical_scalar_dual
 
 
-def _finite(convention: str, base: str, value: Fraction) -> TropicalScalar:
-    semiring = TropicalSemiring(convention=convention, base=base)  # type: ignore[arg-type]
+def _finite(
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
+    base: Literal["QQ", "ZZ"],
+    value: Fraction,
+) -> TropicalScalar:
+    semiring = TropicalSemiring(convention=convention, base=base)
     return TropicalScalar(
         semiring=semiring,
         kind="FINITE",
@@ -24,14 +29,26 @@ def _finite(convention: str, base: str, value: Fraction) -> TropicalScalar:
     )
 
 
-def _infinity(convention: str, base: str) -> TropicalScalar:
-    semiring = TropicalSemiring(convention=convention, base=base)  # type: ignore[arg-type]
-    kind = "POSITIVE_INFINITY" if convention == "MIN_PLUS" else "NEGATIVE_INFINITY"
-    return TropicalScalar(semiring=semiring, kind=kind)  # type: ignore[arg-type]
+def _infinity(
+    convention: Literal["MIN_PLUS", "MAX_PLUS"], base: Literal["QQ", "ZZ"]
+) -> TropicalScalar:
+    semiring = TropicalSemiring(convention=convention, base=base)
+    kind: Literal["POSITIVE_INFINITY", "NEGATIVE_INFINITY"] = (
+        "POSITIVE_INFINITY" if convention == "MIN_PLUS" else "NEGATIVE_INFINITY"
+    )
+    return TropicalScalar(semiring=semiring, kind=kind)
 
 
 def test_dual_negates_finite_values_and_is_an_involution() -> None:
-    cases = (
+    cases: tuple[
+        tuple[
+            Literal["MIN_PLUS", "MAX_PLUS"],
+            Literal["QQ", "ZZ"],
+            Fraction,
+            Literal["MIN_PLUS", "MAX_PLUS"],
+        ],
+        ...,
+    ] = (
         ("MIN_PLUS", "QQ", Fraction(7, 12), "MAX_PLUS"),
         ("MAX_PLUS", "ZZ", Fraction(-9), "MIN_PLUS"),
         ("MIN_PLUS", "ZZ", Fraction(0), "MAX_PLUS"),
@@ -42,7 +59,7 @@ def test_dual_negates_finite_values_and_is_an_involution() -> None:
         assert mapped.source_semiring == source.semiring
         assert mapped.target_semiring == TropicalSemiring(
             convention=target_convention,
-            base=base,  # type: ignore[arg-type]
+            base=base,
         )
         assert mapped.result.value == CanonicalRational.from_fraction(-value)
 
@@ -51,17 +68,26 @@ def test_dual_negates_finite_values_and_is_an_involution() -> None:
 
 
 def test_dual_swaps_only_the_licensed_additive_infinity() -> None:
-    for convention, opposite, source_kind, target_kind in (
+    infinity_cases: tuple[
+        tuple[
+            Literal["MIN_PLUS", "MAX_PLUS"],
+            Literal["MIN_PLUS", "MAX_PLUS"],
+            Literal["POSITIVE_INFINITY", "NEGATIVE_INFINITY"],
+            Literal["POSITIVE_INFINITY", "NEGATIVE_INFINITY"],
+        ],
+        ...,
+    ] = (
         ("MIN_PLUS", "MAX_PLUS", "POSITIVE_INFINITY", "NEGATIVE_INFINITY"),
         ("MAX_PLUS", "MIN_PLUS", "NEGATIVE_INFINITY", "POSITIVE_INFINITY"),
-    ):
+    )
+    for convention, opposite, source_kind, target_kind in infinity_cases:
         source = _infinity(convention, "QQ")
         result = compute_scalar_dual(ScalarDualRequest(scalar=source))
         assert source.kind == source_kind
         assert result.result.kind == target_kind
         assert result.target_semiring == TropicalSemiring(
             convention=opposite,
-            base="QQ",  # type: ignore[arg-type]
+            base="QQ",
         )
         assert (
             compute_scalar_dual(ScalarDualRequest(scalar=result.result)).result

@@ -22,10 +22,13 @@ from jacobian.math.number_theory.modular_forms.transforms import sturm_bound
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
+    ModularQExpansion,
 )
 
 
-def _space(weight: int = 3, character_coordinates: tuple[int, ...] = (1,)):
+def _space(
+    weight: int = 3, character_coordinates: tuple[int, ...] = (1,)
+) -> ModularFormSpace:
     return ModularFormSpace(
         level=4,
         weight=weight,
@@ -35,7 +38,7 @@ def _space(weight: int = 3, character_coordinates: tuple[int, ...] = (1,)):
     )
 
 
-def _integers(expansion):
+def _integers(expansion: ModularQExpansion) -> list[Fraction]:
     return [
         Fraction(coefficient.num, coefficient.den)
         for coefficient in expansion.q_expansion.coefficients
@@ -60,7 +63,7 @@ def _six_square_counts(precision: int) -> list[int]:
     return counts
 
 
-def test_weight_three_space_dimension_basis_and_theta_six_identity():
+def test_weight_three_space_dimension_basis_and_theta_six_identity() -> None:
     space = _space()
     result = space_dimension(space)
     assert (result.dimension, result.eisenstein_dimension, result.cusp_dimension) == (
@@ -85,7 +88,7 @@ def test_weight_three_space_dimension_basis_and_theta_six_identity():
     assert theta_six == [1, 12, 60, 160, 252, 312, 544, 960, 1020, 876, 1560, 2400]
 
 
-def test_weight_three_coordinates_round_trip_and_expand():
+def test_weight_three_coordinates_round_trip_and_expand() -> None:
     space = _space()
     form = ModularFormCoordinates(
         space=space,
@@ -115,7 +118,7 @@ def test_weight_three_coordinates_round_trip_and_expand():
     assert form.coordinates != other.coordinates
 
 
-def test_weight_three_sturm_bound_retains_character_parent():
+def test_weight_three_sturm_bound_retains_character_parent() -> None:
     space = _space()
     bound = sturm_bound(space)
     assert bound.space == space
@@ -123,7 +126,7 @@ def test_weight_three_sturm_bound_retains_character_parent():
     assert bound.bound == 1
 
 
-def test_weight_three_character_target_binding_and_early_precision_bound():
+def test_weight_three_character_target_binding_and_early_precision_bound() -> None:
     wrong_character = _space(character_coordinates=(0,))
     with pytest.raises(OperationDomainValidationError):
         modular_form_basis_q_expansions(wrong_character, 8)

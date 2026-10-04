@@ -23,7 +23,9 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 
 
 def _form(
-    axis: tuple[str, ...], diagonal: tuple[int, ...], cross=()
+    axis: tuple[str, ...],
+    diagonal: tuple[int, ...],
+    cross: tuple[QuadraticCrossTerm, ...] = (),
 ) -> RationalQuadraticForm:
     return RationalQuadraticForm(
         axis=axis,

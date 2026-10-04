@@ -58,6 +58,13 @@ def _place(x: int, y: int) -> HyperellipticAffinePlace:
     )
 
 
+def _finite_value(
+    valuation: FunctionFieldFiniteValuation | FunctionFieldPositiveInfinityValuation,
+) -> int:
+    assert isinstance(valuation, FunctionFieldFiniteValuation)
+    return valuation.value
+
+
 def _element(
     c0: tuple[int, ...], c1: tuple[int, ...] = (0,)
 ) -> FiniteFunctionFieldElement:
@@ -74,7 +81,11 @@ def _element(
         ((2, 1), ((4,), (1,)), 1),  # y-1 has a simple zero at this point.
     ],
 )
-def test_affine_valuation_at_branch_and_unramified_points(point, coordinates, expected):
+def test_affine_valuation_at_branch_and_unramified_points(
+    point: tuple[int, int],
+    coordinates: tuple[tuple[int, ...], tuple[int, ...]],
+    expected: int,
+) -> None:
     result = function_field_hyperelliptic_affine_valuation(
         _place(*point), _element(*coordinates)
     )
@@ -86,7 +97,9 @@ def test_affine_valuation_at_branch_and_unramified_points(point, coordinates, ex
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_affine_valuation_canonicalizes_equivalent_shared_parent_presentations():
+def test_affine_valuation_canonicalizes_equivalent_shared_parent_presentations() -> (
+    None
+):
     canonical = _field()
     scaled_field = canonical.model_copy(
         update={
@@ -104,33 +117,37 @@ def test_affine_valuation_canonicalizes_equivalent_shared_parent_presentations()
 
     assert result.place.field == canonical
     assert result.element.field == canonical
-    assert result.valuation.value == 1
+    assert _finite_value(result.valuation) == 1
 
 
-def test_affine_valuation_is_additive_on_products_and_handles_poles():
+def test_affine_valuation_is_additive_on_products_and_handles_poles() -> None:
     place = _place(0, 0)
     y = _element((0,), (1,))
     x = _element((0, 1))
     product = function_field_element_multiply(y, y).product
-    product_order = function_field_hyperelliptic_affine_valuation(
-        place, product
-    ).valuation.value
-    assert product_order == 2
-    assert (
-        product_order
-        == 2 * function_field_hyperelliptic_affine_valuation(place, y).valuation.value
+    product_order = _finite_value(
+        function_field_hyperelliptic_affine_valuation(place, product).valuation
     )
-    assert function_field_hyperelliptic_affine_valuation(place, x).valuation.value == 2
+    assert product_order == 2
+    assert product_order == 2 * _finite_value(
+        function_field_hyperelliptic_affine_valuation(place, y).valuation
+    )
+    assert (
+        _finite_value(function_field_hyperelliptic_affine_valuation(place, x).valuation)
+        == 2
+    )
     inverse_x = FiniteFunctionFieldElement(
         field=_field(), coordinates=(_rational((1,), (0, 1)), _rf((0,)))
     )
     assert (
-        function_field_hyperelliptic_affine_valuation(place, inverse_x).valuation.value
+        _finite_value(
+            function_field_hyperelliptic_affine_valuation(place, inverse_x).valuation
+        )
         == -2
     )
 
 
-def test_zero_element_returns_structural_positive_infinity_without_null():
+def test_zero_element_returns_structural_positive_infinity_without_null() -> None:
     result = function_field_hyperelliptic_affine_valuation(
         _place(0, 0), _element((0,), (0,))
     )
@@ -142,7 +159,7 @@ def test_zero_element_returns_structural_positive_infinity_without_null():
     assert "null" not in result.model_dump_json()
 
 
-def test_unramified_local_series_finds_higher_order_cancellation():
+def test_unramified_local_series_finds_higher_order_cancellation() -> None:
     # At (0,1) on y^2=1+x^3, f'(0)=0 while the point is still unramified
     # for x. The relation 2(y-1)+(y-1)^2=x^3 gives v(y-1)=3.
     field = FiniteFunctionField(
@@ -175,14 +192,16 @@ def test_unramified_local_series_finds_higher_order_cancellation():
     )
 
     assert (
-        function_field_hyperelliptic_affine_valuation(
-            place, y_minus_one
-        ).valuation.value
+        _finite_value(
+            function_field_hyperelliptic_affine_valuation(place, y_minus_one).valuation
+        )
         == 3
     )
 
 
-def test_affine_place_serialization_retains_parent_uniformizer_and_residue_field():
+def test_affine_place_serialization_retains_parent_uniformizer_and_residue_field() -> (
+    None
+):
     place = _place(0, 0)
     restored = HyperellipticAffinePlace.model_validate_json(place.model_dump_json())
     assert restored == place
@@ -190,7 +209,7 @@ def test_affine_place_serialization_retains_parent_uniformizer_and_residue_field
     assert restored.residue_field.modulus_coefficients == (0, 1)
 
 
-def test_affine_valuation_rejects_nonpoint_and_nonhyperelliptic_parents():
+def test_affine_valuation_rejects_nonpoint_and_nonhyperelliptic_parents() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         function_field_hyperelliptic_affine_valuation(_place(2, 2), _element((0, 1)))
     assert error.value.errors()[0]["type"] == "function_field.affine_point_not_on_curve"
@@ -215,7 +234,9 @@ def test_affine_valuation_rejects_nonpoint_and_nonhyperelliptic_parents():
     )
 
 
-def test_rational_place_valuation_returns_structural_infinity_for_zero_element():
+def test_rational_place_valuation_returns_structural_infinity_for_zero_element() -> (
+    None
+):
     rational_field = FiniteFunctionField(
         characteristic=5, defining_polynomial=(_rf((1,)),)
     )

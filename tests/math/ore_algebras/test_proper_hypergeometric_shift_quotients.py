@@ -226,7 +226,7 @@ def test_zero_term_has_no_generic_shift_quotients() -> None:
     assert exc_info.value.errors()[0]["type"] == "ore_algebra.hypergeometric_zero_term"
 
 
-def test_large_affine_offsets_are_admitted_before_symbolic_expansion():
+def test_large_affine_offsets_are_admitted_before_symbolic_expansion() -> None:
     term = ProperHypergeometricTerm(
         polynomial=polynomial([((0, 0), 1)]),
         factorial_factors=(

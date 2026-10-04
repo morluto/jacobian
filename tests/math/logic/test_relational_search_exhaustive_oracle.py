@@ -1,5 +1,6 @@
 """Independent small-universe oracle for homomorphism count and search."""
 
+from collections.abc import Iterator
 from itertools import product
 
 from jacobian.math.logic.relational_structures.operations import (
@@ -27,7 +28,9 @@ def _structures(size: int) -> tuple[FiniteRelationalStructure, ...]:
     )
 
 
-def _oracle_maps(source: FiniteRelationalStructure, target: FiniteRelationalStructure):
+def _oracle_maps(
+    source: FiniteRelationalStructure, target: FiniteRelationalStructure
+) -> Iterator[tuple[int, ...]]:
     maps = product(range(target.carrier_size), repeat=source.carrier_size)
     for candidate in maps:
         if all(
@@ -37,7 +40,7 @@ def _oracle_maps(source: FiniteRelationalStructure, target: FiniteRelationalStru
             yield candidate
 
 
-def test_all_binary_relations_on_carriers_up_to_two_match_independent_oracle():
+def test_all_binary_relations_on_carriers_up_to_two_match_independent_oracle() -> None:
     structures = tuple(s for size in range(3) for s in _structures(size))
     for source in structures:
         for target in structures:

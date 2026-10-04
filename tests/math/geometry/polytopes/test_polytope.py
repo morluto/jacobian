@@ -1067,9 +1067,10 @@ class TestTriangulationWideDenominatorBound:
                 )
             )
         result = _volume_via_vertices(tuple(vertices))
-        exact_vertices = tuple(
-            tuple(
-                Fraction(coordinate.num, coordinate.den) for coordinate in v.coordinates
+        exact_vertices: tuple[tuple[Fraction, Fraction], ...] = tuple(
+            (
+                Fraction(v.coordinates[0].num, v.coordinates[0].den),
+                Fraction(v.coordinates[1].num, v.coordinates[1].den),
             )
             for v in vertices
         )
@@ -1098,10 +1099,13 @@ class TestTriangulationWideDenominatorBound:
         expected_area = (
             abs(
                 sum(
-                    x * next_y - next_x * y
-                    for (x, y), (next_x, next_y) in zip(
-                        hull, (*hull[1:], hull[0]), strict=True
-                    )
+                    (
+                        x * next_y - next_x * y
+                        for (x, y), (next_x, next_y) in zip(
+                            hull, (*hull[1:], hull[0]), strict=True
+                        )
+                    ),
+                    Fraction(),
                 )
             )
             / 2

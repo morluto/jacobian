@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology._models import (
     FacesInDimension,
     FiniteSimplicialComplex,
+    Simplex,
     SimplicialComplexRequest,
 )
 from jacobian.math.topology.discrete_morse._models import (
@@ -26,7 +27,9 @@ from jacobian.math.topology.discrete_morse.operations import (
 from jacobian.math.topology.operations import canonicalize
 
 
-def _complex(vertices, facets):
+def _complex(
+    vertices: tuple[str, ...], facets: tuple[Simplex, ...]
+) -> FiniteSimplicialComplex:
     return canonicalize(tuple(vertices), tuple(tuple(face) for face in facets)).complex
 
 
@@ -182,7 +185,7 @@ def test_tool_request_candidate_bound_runs_before_complex_canonicalization(
         pairs=(),
     )
 
-    def fail_on_canonicalize(*args, **kwargs):
+    def fail_on_canonicalize(*args: object, **kwargs: object) -> None:
         pytest.fail("complex canonicalization ran before candidate admission")
 
     monkeypatch.setattr(tools, "canonicalize", fail_on_canonicalize)

@@ -18,6 +18,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidWeightedIntersectionOptimizationRequest,
     MatroidWeightedIntersectionOptimizationResult,
     MatroidWeightedIntersectionRankCertificateRequest,
+    MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
     MaximumWeightBasisRequest,
     MaximumWeightIndependentSetRequest,
@@ -34,18 +35,9 @@ from jacobian.math.combinatorics.matroids.intersection import (
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
-def weighted_intersection_certificate(*arguments):
-    if len(arguments) == 1:
-        request = arguments[0]
-    else:
-        request = MatroidWeightedIntersectionCertificateRequest(
-            first=arguments[0],
-            second=arguments[1],
-            weight_function=arguments[2],
-            common_independent=arguments[3],
-            first_split=arguments[4],
-            second_split=arguments[5],
-        )
+def weighted_intersection_certificate(
+    request: MatroidWeightedIntersectionCertificateRequest,
+) -> MatroidWeightedIntersectionResult:
     return _weighted_intersection_certificate(
         request.first,
         request.second,

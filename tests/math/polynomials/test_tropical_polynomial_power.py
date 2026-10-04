@@ -18,6 +18,11 @@ from jacobian.math.polynomials.tropical.values import (
 )
 
 
+def _finite_value(term: TropicalPolynomialTerm) -> CanonicalRational:
+    assert term.coefficient.value is not None
+    return term.coefficient.value
+
+
 def _polynomial(convention: str, exponents: tuple[int, ...]) -> TropicalPolynomial:
     semiring = TropicalSemiring(convention=convention, base="ZZ")  # type: ignore[arg-type]
     return TropicalPolynomial(
@@ -44,7 +49,7 @@ def test_formal_cube_has_exact_binomial_support_and_evaluates_compatibly(
     polynomial = _polynomial(convention, (0, 1))
     result = tropical_polynomial_power(polynomial, 3)
     assert tuple(term.exponents for term in result.terms) == ((0,), (1,), (2,), (3,))
-    assert tuple(term.coefficient.value.num for term in result.terms) == (0, 0, 0, 0)
+    assert tuple(_finite_value(term).num for term in result.terms) == (0, 0, 0, 0)
 
     point_value = 2
     point = TropicalVector(
@@ -91,7 +96,7 @@ def test_power_preflights_exponent_and_intermediate_term_growth() -> None:
     )
 
 
-def test_power_preflights_dimension_weighted_convolution_work():
+def test_power_preflights_dimension_weighted_convolution_work() -> None:
     semiring = TropicalSemiring(convention="MIN_PLUS", base="ZZ")
     variables = tuple(f"x{index}" for index in range(128))
     coefficient = TropicalScalar(

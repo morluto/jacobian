@@ -22,6 +22,7 @@ from jacobian.math.finite_fields.values import (
     ProjectivePoint,
 )
 from jacobian.math.groups.actions._models import FinitePermutationAction
+from jacobian.math.groups.finite_matrix._factorization import _factor_distinct
 from jacobian.math.groups.finite_matrix._models import (
     MAX_EXTENSION_FIELD_LINEAR_GROUP_GENERATORS,
     MAX_LINEAR_GROUP_DIMENSION,
@@ -80,21 +81,6 @@ def _encoded_element(
         (value // prime**power) % prime for power in range(presentation.degree)
     )
     return context(list(coordinates))
-
-
-def _factor_distinct(value: int) -> tuple[int, ...]:
-    factors: list[int] = []
-    divisor = 2
-    remaining = value
-    while divisor * divisor <= remaining:
-        if remaining % divisor == 0:
-            factors.append(divisor)
-            while remaining % divisor == 0:
-                remaining //= divisor
-        divisor += 1 if divisor == 2 else 2
-    if remaining > 1:
-        factors.append(remaining)
-    return tuple(factors)
 
 
 def _primitive_element(context: Any, presentation: FiniteFieldPresentation) -> Any:

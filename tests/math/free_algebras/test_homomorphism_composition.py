@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 from tests.error_assertions import error_code
@@ -22,6 +24,7 @@ from jacobian.math.free_algebras._tools import TOOLS
 from jacobian.math.free_algebras.operations import compose_polynomial_homomorphisms
 
 OPERATION_ID = "free_algebra.homomorphism.compose.compute"
+Matrix = tuple[tuple[Fraction, ...], ...]
 
 
 def _polynomial(
@@ -144,13 +147,13 @@ def test_wrong_intermediate_alphabet_and_order_are_rejected() -> None:
     )
 
 
-def _matrix_add(left, right):
+def _matrix_add(left: Matrix, right: Matrix) -> Matrix:
     return tuple(
         tuple(left[row][col] + right[row][col] for col in range(2)) for row in range(2)
     )
 
 
-def _matrix_multiply(left, right):
+def _matrix_multiply(left: Matrix, right: Matrix) -> Matrix:
     return tuple(
         tuple(
             sum((left[row][k] * right[k][col] for k in range(2)), Fraction(0))
@@ -160,11 +163,13 @@ def _matrix_multiply(left, right):
     )
 
 
-def _evaluate(polynomial: FreeAlgebraPolynomial, matrices):
-    identity = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
-    result = ((Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)))
+def _evaluate(
+    polynomial: FreeAlgebraPolynomial, matrices: Mapping[str, Matrix]
+) -> Matrix:
+    identity: Matrix = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+    result: Matrix = ((Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)))
     for term in polynomial.terms:
-        value = identity
+        value: Matrix = identity
         for letter in term.word:
             value = _matrix_multiply(value, matrices[letter])
         value = tuple(
@@ -194,7 +199,7 @@ def test_composition_agrees_with_independent_matrix_evaluation() -> None:
 
 
 def test_aggregate_growth_is_preflighted_before_any_image_expansion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tuple(f"x{i}" for i in range(26))
     middle = ("a", "b", "c")
@@ -207,7 +212,7 @@ def test_aggregate_growth_is_preflighted_before_any_image_expansion(
     )
     calls = 0
 
-    def unexpected_expansion(*args, **kwargs):
+    def unexpected_expansion(*args: object, **kwargs: object) -> NoReturn:
         nonlocal calls
         calls += 1
         raise AssertionError("expansion started before aggregate admission")
@@ -225,6 +230,7 @@ def test_aggregate_growth_is_preflighted_before_any_image_expansion(
 
 def test_composition_request_json_and_catalog_result_round_trip() -> None:
     tool = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+    assert tool.request_type is FreeAlgebraPolynomialHomomorphismCompositionRequest
     request = FreeAlgebraPolynomialHomomorphismCompositionRequest.model_validate_json(
         encode_strict_json(tool.examples[0].input), strict=True
     )

@@ -126,8 +126,12 @@ def test_degenerate_cone_is_rejected_at_native_and_catalog_boundaries() -> None:
         for item in TOOLS
         if item.operation_id == "affine_semigroup.holes_through_degree.compute"
     )
+    run = cast(
+        Callable[[AffineSemigroupHolesRequest], AffineSemigroupHoleProfile],
+        tool.run,
+    )
     with pytest.raises(OperationDomainValidationError):
-        tool.run(request)
+        run(request)
 
 
 def test_candidate_box_is_admitted_before_lattice_point_enumeration(

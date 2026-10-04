@@ -175,10 +175,10 @@ def test_rejects_graph_labels_outside_hypergraph_carrier() -> None:
         exc_info.value.errors()[0]["type"]
         == "graph.maximal_clique_hypergraph.label_length"
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_exc_info:
         construct_maximal_clique_hypergraph(graph)
     assert (
-        exc_info.value.errors()[0]["type"]
+        domain_exc_info.value.errors()[0]["type"]
         == "graph.maximal_clique_hypergraph.label_length"
     )
 

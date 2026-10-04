@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.root_systems._models import (
+    CartanMatrix,
     WeylDimensionRequest,
     WeylDimensionResult,
 )
@@ -121,4 +122,11 @@ def test_result_roundtrip_and_catalog_declaration() -> None:
     ]
     assert len(declarations) == 1
     tool = declarations[0]
-    assert tool.run(WeylDimensionRequest(matrix=G2, highest_weight=(1, 0))) == result
+    assert (
+        tool.run(
+            WeylDimensionRequest(
+                matrix=CartanMatrix.model_validate(G2), highest_weight=(1, 0)
+            )
+        )
+        == result
+    )

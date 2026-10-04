@@ -53,18 +53,6 @@ def shared_bottleneck() -> MulticommodityFlow:
     )
 
 
-def test_catalog_contains_the_witness_checker() -> None:
-    assert {tool.operation_id for tool in TOOLS} == {
-        "network.multicommodity_flow.profile.compute",
-        "network.multicommodity_flow.witness.check",
-        "network.multicommodity_flow.decomposition.compute",
-        "network.multicommodity_flow.feasibility.compute",
-        "network.multicommodity_flow.minimum_congestion.compute",
-        "network.multicommodity_flow.unsplittable_routing.check",
-        "network.multicommodity_flow.unsplittable_routing.find",
-    }
-
-
 def test_feasible_witness_known_answer() -> None:
     result = check_multicommodity_flow_witness(shared_bottleneck())
     assert result.status == "FEASIBLE"

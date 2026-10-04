@@ -13,7 +13,7 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 
-def test_signed_character_power_matches_repeated_group_multiplication():
+def test_signed_character_power_matches_repeated_group_multiplication() -> None:
     for modulus in (1, 3, 5, 8, 12, 15):
         group = character_group(modulus)
         for coordinates in dirichlet_character_group_enumerate(group).coordinates:
@@ -32,7 +32,7 @@ def test_signed_character_power_matches_repeated_group_multiplication():
                 assert dirichlet_character_power(character, exponent) == result
 
 
-def test_character_power_rejects_excessive_exponent_digits_before_scaling():
+def test_character_power_rejects_excessive_exponent_digits_before_scaling() -> None:
     character = DirichletCharacter(group=character_group(5), coordinates=(1,))
 
     with pytest.raises(OperationResourceAdmissionError) as error:

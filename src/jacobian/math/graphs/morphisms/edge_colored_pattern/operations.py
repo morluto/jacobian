@@ -16,7 +16,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.graphs.morphisms.operations import _graph_label_characters
+from jacobian.math.graphs._labels import _graph_label_characters
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 from ._models import EdgeColoredPatternResult, require_edge_colors

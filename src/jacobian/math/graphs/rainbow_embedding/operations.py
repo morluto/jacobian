@@ -7,6 +7,7 @@ from itertools import permutations
 from math import perm
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs._labels import _graph_label_characters
 from jacobian.math.graphs.rainbow_embedding._models import (
     MAX_HOST_VERTICES,
     MAX_PATTERN_VERTICES,
@@ -28,12 +29,6 @@ MAX_RAINBOW_RETAINED_LABEL_CHARACTERS = 20_000_000
 class _RainbowAdmissionPlan:
     candidate_count: int
     rainbow_possible: bool
-
-
-def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
-    return sum(len(vertex) for vertex in graph.vertices) + sum(
-        len(left) + len(right) for left, right in graph.edges
-    )
 
 
 def _admit_rainbow_embedding_profile(

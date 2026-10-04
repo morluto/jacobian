@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.actions._models import FinitePermutationAction
+from jacobian.math.groups.finite_matrix._factorization import _factor_distinct
 from jacobian.math.groups.finite_matrix._models import (
     MAX_LINEAR_GROUP_DIMENSION,
     MAX_LINEAR_GROUP_GENERATOR_CELLS,
@@ -116,21 +117,6 @@ def _elementary(
         ),
         columns=dimension,
     )
-
-
-def _factor_distinct(value: int) -> tuple[int, ...]:
-    factors: list[int] = []
-    divisor = 2
-    remaining = value
-    while divisor * divisor <= remaining:
-        if remaining % divisor == 0:
-            factors.append(divisor)
-            while remaining % divisor == 0:
-                remaining //= divisor
-        divisor += 1 if divisor == 2 else 2
-    if remaining > 1:
-        factors.append(remaining)
-    return tuple(factors)
 
 
 def _least_primitive_root(prime: int) -> int:

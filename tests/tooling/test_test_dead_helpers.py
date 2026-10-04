@@ -732,6 +732,73 @@ def test_dynamic_fixture_alias_is_kept_live_conservatively(tmp_path: Path) -> No
     assert _reported(tmp_path, "test_fixture_dynamic_alias.py", body) == set()
 
 
+def test_fixture_method_dependencies_keep_module_fixtures_live(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def inner():
+        return 1
+
+    class TestCase:
+        @pytest.fixture
+        def outer(self, inner):
+            return inner
+
+        def test_value(self, outer):
+            assert outer == 1
+    """
+    assert _reported(tmp_path, "test_fixture_method.py", body) == set()
+
+
+def test_module_callable_alias_is_collected_as_a_test(tmp_path: Path) -> None:
+    body = """\
+    def check():
+        pass
+
+    test_alias = check
+    """
+    assert _reported(tmp_path, "test_callable_test_alias.py", body) == set()
+
+
+def test_constant_parametrize_argnames_do_not_request_fixtures(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    ARG = "item"
+
+    @pytest.fixture
+    def item():
+        return 1
+
+    @pytest.mark.parametrize(ARG, [2])
+    def test_item(item):
+        assert item == 2
+    """
+    assert _reported(tmp_path, "test_constant_parametrize.py", body) == {"item"}
+
+
+def test_class_try_handler_preserves_module_helper_fallback(tmp_path: Path) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class TestCase:
+        try:
+            raise ValueError
+            helper = 2
+        except ValueError:
+            pass
+        value = helper()
+
+        def test_value(self):
+            assert self.value == 1
+    """
+    assert _reported(tmp_path, "test_class_try_fallback.py", body) == set()
+
+
 def test_class_body_bindings_apply_in_execution_order(tmp_path: Path) -> None:
     body = """\
     def helper() -> int:

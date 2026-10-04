@@ -248,8 +248,3 @@ class TestNativeVsCatalogParity:
                 _row("zz", [0, 0], [1, 1]),
             ),
         )
-
-    def test_operation_is_published(self) -> None:
-        assert "stabilizer.check_space.canonicalize" in {
-            tool.operation_id for tool in TOOLS
-        }

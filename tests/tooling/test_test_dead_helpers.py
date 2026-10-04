@@ -799,6 +799,88 @@ def test_class_try_handler_preserves_module_helper_fallback(tmp_path: Path) -> N
     assert _reported(tmp_path, "test_class_try_fallback.py", body) == set()
 
 
+def test_pytest_function_and_class_prefixes_are_not_interchanged(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    class test_support:
+        pass
+
+    def TestHelper():
+        pass
+    """
+    assert _reported(tmp_path, "test_collection_prefixes.py", body) == {
+        "test_support",
+        "TestHelper",
+    }
+
+
+def test_unittest_testcase_class_is_collected_by_pytest(tmp_path: Path) -> None:
+    body = """\
+    import unittest
+
+    class Example(unittest.TestCase):
+        def test_it(self):
+            self.assertTrue(True)
+    """
+    assert _reported(tmp_path, "test_unittest_case.py", body) == set()
+
+
+def test_fixture_lookup_resolves_module_string_constants(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    NAME = "item"
+
+    @pytest.fixture
+    def item():
+        return 1
+
+    def test_lookup(request):
+        assert request.getfixturevalue(NAME) == 1
+    """
+    assert _reported(tmp_path, "test_fixture_lookup_constant.py", body) == set()
+
+
+def test_class_fixture_marker_depends_on_uncollected_helper_class(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    import pytest
+
+    @pytest.fixture
+    def item():
+        return 1
+
+    @pytest.mark.usefixtures("item")
+    class Support:
+        pass
+    """
+    assert _reported(tmp_path, "test_helper_class_marker.py", body) == {
+        "Support",
+        "item",
+    }
+
+
+def test_unmatched_class_match_preserves_module_helper_fallback(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def helper():
+        return 1
+
+    class TestCase:
+        match 1:
+            case 2:
+                helper = 2
+        value = helper()
+
+        def test_value(self):
+            assert self.value == 1
+    """
+    assert _reported(tmp_path, "test_class_match_fallback.py", body) == set()
+
+
 def test_class_body_bindings_apply_in_execution_order(tmp_path: Path) -> None:
     body = """\
     def helper() -> int:

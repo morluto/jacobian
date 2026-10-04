@@ -188,8 +188,12 @@ def test_tensor_serialization_and_axis_mismatch() -> None:
     assert (
         RationalCoordinateTensor.model_validate_json(result.model_dump_json()) == result
     )
-    with pytest.raises(OperationDomainValidationError, match="same coordinate axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         covariant_derivative(polar_metric(), tensor([r**2], (), axis=("theta", "r")))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.axis_mismatch"
+    )
 
 
 def test_rank_four_output_is_rejected_before_backend_execution(
@@ -238,8 +242,12 @@ def test_determinant_guards_are_capped_before_backend_expansion() -> None:
             axis=axis,
         )
     )
-    with pytest.raises(OperationResourceAdmissionError, match="determinant locus"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(metric, tensor([1], (), axis=axis))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.determinant_locus"
+    )
 
 
 def test_shared_output_denominators_do_not_double_count_locus_guards() -> None:
@@ -296,8 +304,12 @@ def test_an_extra_distinct_output_denominator_still_exceeds_the_guard_cap() -> N
         components=(rational_function_from_sympy(1 / (x + y), axis),),
         retained_nonzero_denominators=inherited,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(identity, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.locus"
+    )
 
 
 def test_axis_specific_cancelled_denominators_are_counted_separately() -> None:
@@ -322,8 +334,12 @@ def test_axis_specific_cancelled_denominators_are_counted_separately() -> None:
         components=(rational_function_from_sympy(1 / (x**2 * y), axis),),
         retained_nonzero_denominators=inherited,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(identity, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.locus"
+    )
 
 
 def test_axis_specific_cancelled_denominators_admit_at_the_exact_cap() -> None:
@@ -391,8 +407,12 @@ def test_non_monomial_axis_cancellations_are_counted_separately() -> None:
         components=(rational_function_from_sympy(1 / ((x + 1) * (y + 1)), axis),),
         retained_nonzero_denominators=inherited,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(identity, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.locus"
+    )
 
 
 def test_non_monomial_axis_cancellations_admit_at_the_exact_cap() -> None:
@@ -485,8 +505,12 @@ def test_cancelled_factor_of_a_generated_determinant_is_counted_separately() -> 
         components=tuple(rational_function_from_sympy(value, axis) for value in (1, 0)),
         retained_nonzero_denominators=inherited,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(source_metric, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.locus"
+    )
 
 
 def test_cancelled_factor_of_a_generated_determinant_admits_at_the_exact_cap() -> None:
@@ -610,8 +634,12 @@ def test_repeated_binomial_axis_cancellations_are_counted_separately() -> None:
         components=(rational_function_from_sympy(1 / ((x + 1) ** 2 * (y + 1)), axis),),
         retained_nonzero_denominators=inherited,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(identity, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.locus"
+    )
 
 
 def test_two_term_denominator_axis_cancellations_are_counted_separately() -> None:
@@ -636,8 +664,12 @@ def test_two_term_denominator_axis_cancellations_are_counted_separately() -> Non
         components=(rational_function_from_sympy(1 / (x**2 + x * y), axis),),
         retained_nonzero_denominators=inherited,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         covariant_derivative(identity, source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.covariant_derivative.locus"
+    )
 
 
 def test_structurally_zero_metric_uses_the_covariant_derivative_domain_code() -> None:
@@ -711,8 +743,12 @@ def test_output_denominator_shared_with_inherited_locus_is_allocated_once(
         retained_nonzero_denominators=inherited,
     )
     if extra_terms:
-        with pytest.raises(OperationResourceAdmissionError, match="allocation bounds"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             covariant_derivative(metric, source)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "differential_geometry.covariant_derivative.output"
+        )
         return
     result = covariant_derivative(metric, source)
     assert result.retained_nonzero_denominators == inherited

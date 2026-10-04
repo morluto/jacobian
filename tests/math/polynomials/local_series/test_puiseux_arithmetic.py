@@ -92,10 +92,11 @@ def test_puiseux_residue_returns_zero_below_the_known_lower_bound() -> None:
 def test_puiseux_residue_rejects_windows_that_do_not_determine_minus_one() -> None:
     source = window((), lower=Fraction(-2), precision=Fraction(-1))
 
-    with pytest.raises(
-        OperationDomainValidationError, match="must contain exponent -1"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         residue_puiseux(source)
+    assert (
+        exc_info.value.errors()[0]["type"] == "local_series.puiseux_residue_precision"
+    )
 
 
 def test_native_admission_rejects_incomplete_and_malformed_windows() -> None:
@@ -291,8 +292,9 @@ def test_inverse_of_monomial_stays_sparse_at_large_known_precision() -> None:
 def test_inverse_does_not_treat_empty_finite_prefix_as_noninvertible_series() -> None:
     source = window((), lower=Fraction(0), precision=Fraction(2))
 
-    with pytest.raises(OperationDomainValidationError, match="unknown nonzero tail"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         inverse_puiseux(source)
+    assert exc_info.value.errors()[0]["type"] == "puiseux_inverse_undetermined"
 
 
 def test_inverse_preflights_recurrence_coefficient_growth() -> None:
@@ -330,10 +332,9 @@ def test_zero_factor_uses_known_zero_prefix_for_product_precision() -> None:
 def test_incompatible_local_parents_are_rejected() -> None:
     left = window(((Fraction(1, 2), 1),))
     right = window(((Fraction(1, 2), 1),), center=Fraction(1))
-    with pytest.raises(
-        OperationDomainValidationError, match="share variable and center"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         add_puiseux(left, right)
+    assert exc_info.value.errors()[0]["type"] == "puiseux_parent_mismatch"
 
 
 def test_forged_window_rejects_variable_outside_polynomial_identifier_grammar() -> None:
@@ -347,10 +348,9 @@ def test_forged_window_rejects_variable_outside_polynomial_identifier_grammar() 
         terms=valid.terms,
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="polynomial identifier grammar"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         add_puiseux(forged, forged)
+    assert exc_info.value.errors()[0]["type"] == "local_series.puiseux_variable"
 
 
 def test_product_rejects_coefficient_growth_before_convolution() -> None:
@@ -387,8 +387,9 @@ def test_product_result_envelope_is_capped_at_the_transport_ceiling() -> None:
     left = _scaled_window(1, 10**1_499, 4_000)
     right = _scaled_window(4_000, 10**1_499, 4_000)
 
-    with pytest.raises(OperationResourceAdmissionError, match="digit envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         multiply_puiseux(left, right)
+    assert exc_info.value.errors()[0]["type"] == "puiseux_result_envelope"
 
     # The same shape one envelope-step below the ceiling stays admitted.
     admitted = multiply_puiseux(left, _scaled_window(3_000, 10**1_499, 4_000))
@@ -425,8 +426,9 @@ def test_add_result_envelope_accepts_sparse_terms_and_rejects_above_term_bound()
         tuple((Fraction(2 * i + 1), 1) for i in range(2_500)),
         precision=Fraction(6_000),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="retained-term bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         add_puiseux(left_huge, right_huge)
+    assert exc_info.value.errors()[0]["type"] == "puiseux_terms"
 
 
 def test_single_near_limit_rational_is_copied_by_add_and_product_by_one() -> None:

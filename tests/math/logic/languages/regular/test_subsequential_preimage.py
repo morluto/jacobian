@@ -3,6 +3,7 @@
 import itertools
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -109,17 +110,33 @@ def test_parent_round_trip_complement_and_equivalence() -> None:
 def test_cross_domain_preimage_requires_same_explicit_alphabet_parent() -> None:
     dfa, transducer = carriers()
     mismatch = dfa.model_copy(update={"alphabet": FiniteAlphabet(symbols=("a", "c"))})
-    with pytest.raises(ValueError, match="contexts must be identical"):
+    with pytest.raises(ValueError) as exc_info:
         SubsequentialPreimageRequest(dfa=mismatch, transducer=transducer)
+    assert (
+        error_code(exc_info.value)
+        == "regular_language.preimage_alphabet_context_mismatch"
+    )
     unparented = dfa.model_copy(update={"alphabet": None})
-    with pytest.raises(ValueError, match="explicit DFA"):
+    with pytest.raises(ValueError) as exc_info:
         SubsequentialPreimageRequest(dfa=unparented, transducer=transducer)
-    with pytest.raises(OperationDomainValidationError, match="matching explicit"):
+    assert (
+        error_code(exc_info.value)
+        == "regular_language.preimage_alphabet_context_missing"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dfa_subsequential_preimage(mismatch, transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.preimage.alphabet_mismatch"
+    )
 
     different_identity = dfa.model_copy(update={"alphabet_id": "another-letters"})
-    with pytest.raises(ValueError, match="identities must be identical"):
+    with pytest.raises(ValueError) as exc_info:
         SubsequentialPreimageRequest(dfa=different_identity, transducer=transducer)
+    assert (
+        error_code(exc_info.value)
+        == "regular_language.preimage_alphabet_identity_mismatch"
+    )
 
 
 def test_preimage_accepts_tiny_reachable_product_with_large_unreachable_carriers(
@@ -200,12 +217,18 @@ def test_preimage_revalidates_model_constructed_carriers() -> None:
             "transitions": (*transducer.transitions, transducer.transitions[0]),
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="canonical DFA"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dfa_subsequential_preimage(malformed_dfa, transducer)
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical subsequential transducer"
-    ):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.preimage.invalid_dfa_carrier"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         dfa_subsequential_preimage(dfa, malformed_transducer)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.preimage.invalid_transducer_carrier"
+    )
 
 
 def test_equivalence_rejects_equal_sized_but_different_parents() -> None:
@@ -213,5 +236,6 @@ def test_equivalence_rejects_equal_sized_but_different_parents() -> None:
     other = dfa.model_copy(
         update={"alphabet_id": "other", "transitions": dfa.transitions}
     )
-    with pytest.raises(ValueError, match="matching alphabet sizes and parents"):
+    with pytest.raises(ValueError) as exc_info:
         EquivalenceRequest(left=dfa, right=other)
+    assert error_code(exc_info.value) == "regular_language.alphabet_mismatch"

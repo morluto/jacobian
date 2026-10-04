@@ -312,16 +312,24 @@ def test_aggregate_bound_rejection() -> None:
     verts9 = [f"v{i}" for i in range(9)]
     edges9 = [(verts9[i], verts9[j]) for i in range(9) for j in range(i + 1, 9)]
     g9 = _graph(verts9, edges9)
-    with pytest.raises(OperationDomainValidationError, match="at most 8 vertices"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_induced_edge_deletion_profile(g9, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.induced_edge_deletion.vertex_count_exceeds_bound"
+    )
     # Solver-call / ledger bound: a Z3-backed dense request with a huge conflict
     # budget exceeds the semantic aggregate ledger.  r=2 is deliberately not
     # charged because its exact cut kernel is independent of Z3.
     verts8 = [f"v{i}" for i in range(8)]
     edges8 = [(verts8[i], verts8[j]) for i in range(8) for j in range(i + 1, 8)]
     g8 = _graph(verts8, edges8)
-    with pytest.raises(OperationDomainValidationError, match="ledger"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_induced_edge_deletion_profile(g8, 3, solver_conflicts=1_000_000)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.induced_edge_deletion.ledger_exceeds_bound"
+    )
 
 
 def test_bipartite_profiles_do_not_charge_or_call_z3(
@@ -457,10 +465,11 @@ def test_result_rejects_a_profile_missing_one_vertex_subset() -> None:
     payload["rows"] = payload["rows"][:-1]
     from pydantic import ValidationError
 
-    with pytest.raises(
-        ValidationError, match=r"rows must cover all 2\^n vertex subsets"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         InducedEdgeDeletionProfileResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.rows_must_cover_all_vertex_subsets"
+    )
 
 
 class _FalseyEvent(threading.Event):

@@ -2,6 +2,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -179,8 +180,9 @@ def test_orbit_rejects_element_from_isomorphic_but_distinct_parent() -> None:
     first = splitting_field(_poly((-2, 0, 1))).field
     second = splitting_field(_poly((-8, 0, 1))).field
 
-    with pytest.raises(ValueError, match="element must belong"):
+    with pytest.raises(ValueError) as exc_info:
         ElementEmbeddingOrbitRequest(field=first, element=_element(second, 0, 1))
+    assert error_code(exc_info.value) == "galois_theory.element_orbit_parent"
 
 
 def test_operation_is_published_with_a_valid_example() -> None:

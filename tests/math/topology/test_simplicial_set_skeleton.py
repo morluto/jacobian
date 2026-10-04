@@ -121,8 +121,12 @@ def test_empty_simplicial_set_has_empty_skeleton_and_inclusion() -> None:
 
 def test_skeleton_rejects_unseen_degree_and_invalid_source_tables() -> None:
     source = standard_simplex(1, 1)
-    with pytest.raises(OperationDomainValidationError, match="visible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         simplicial_set_skeleton(source, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simplicial_set.skeleton_degree_out_of_bounds"
+    )
 
     corrupted = FiniteTruncatedSimplicialSet._from_kernel(
         max_degree=source.max_degree,
@@ -132,8 +136,11 @@ def test_skeleton_rejects_unseen_degree_and_invalid_source_tables() -> None:
         total_simplices=source.total_simplices,
         checked_identities=source.checked_identities,
     )
-    with pytest.raises(OperationDomainValidationError, match="visible simplicial"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         simplicial_set_skeleton(corrupted, 0)
+    assert (
+        exc_info.value.errors()[0]["type"] == "simplicial_set.skeleton_source_invalid"
+    )
 
 
 def test_request_rejects_boolean_degree() -> None:

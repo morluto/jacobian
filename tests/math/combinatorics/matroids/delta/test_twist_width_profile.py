@@ -61,8 +61,11 @@ def test_profile_state_bound_rejects_before_exchange_work() -> None:
         feasible=((),),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="state or work envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         twist_width_profile(value)
+    assert (
+        exc_info.value.errors()[0]["type"] == "delta_matroid.twist_width_profile_work"
+    )
 
 
 def test_profile_accepts_exact_state_limit() -> None:

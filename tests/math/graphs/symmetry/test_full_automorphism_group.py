@@ -6,6 +6,7 @@ from threading import Event
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -83,8 +84,12 @@ def test_empty_source_generators_require_the_nested_identity() -> None:
     )
     payload = result.model_dump()
     payload["group"]["generators"] = [(1, 0, 2)]
-    with pytest.raises(Exception, match="identity"):
+    with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
+    assert (
+        error_code(exc_info.value)
+        == "graph.automorphism.trivial_group_requires_identity"
+    )
 
 
 def test_empty_source_generators_must_report_order_one() -> None:
@@ -99,8 +104,12 @@ def test_empty_source_generators_must_report_order_one() -> None:
     payload = result.model_dump()
     payload["automorphism_count"] = 2
     payload["generated_group_order"] = 2
-    with pytest.raises(Exception, match="order 1"):
+    with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
+    assert (
+        error_code(exc_info.value)
+        == "graph.automorphism.empty_generators_have_order_one"
+    )
 
 
 def test_identity_source_generators_are_rejected() -> None:
@@ -117,8 +126,12 @@ def test_identity_source_generators_are_rejected() -> None:
     identity = [(vertex, vertex) for vertex in vertices]
     payload["generators"] = [{"generator_id": "g0", "mapping": identity}]
     payload["group"]["generators"] = [list(range(len(vertices)))]
-    with pytest.raises(Exception, match="nonidentity"):
+    with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
+    assert (
+        error_code(exc_info.value)
+        == "graph.automorphism.source_generators_must_be_nonidentity"
+    )
 
 
 def test_full_group_orbits_require_sorted_representatives() -> None:
@@ -134,8 +147,12 @@ def test_full_group_orbits_require_sorted_representatives() -> None:
     payload["vertex_orbits"] = list(reversed(payload["vertex_orbits"]))
     for index, orbit in enumerate(payload["vertex_orbits"]):
         orbit["orbit_index"] = index
-    with pytest.raises(Exception, match="canonical partition"):
+    with pytest.raises(Exception) as exc_info:
         FullGraphAutomorphismResult.model_validate(payload)
+    assert (
+        error_code(exc_info.value)
+        == "graph.automorphism.vertex_orbits_must_partition_axis"
+    )
 
 
 def test_complete_graph_aligns_declared_colors_with_sorted_action_axis() -> None:

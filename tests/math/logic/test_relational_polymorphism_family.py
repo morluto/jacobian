@@ -147,5 +147,9 @@ def test_candidate_and_work_refusals_precede_function_space_iteration(
         ),
         relation_tables=(full_binary, full_binary),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="family enumeration"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_polymorphisms(too_much_work, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "relational.polymorphism.family_work_bound"
+    )

@@ -114,8 +114,11 @@ def test_rebuilds_forged_compatibility_and_public_tool_roundtrips():
         compatibility=(),
         status="COMPATIBLE",
     )
-    with pytest.raises(OperationDomainValidationError, match="not continuous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_global_profile(forged)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytopal_complex.global_profile_input"
+    )
 
     single = polytopal_complex_closure((_interval(0, 1, "s"),))
     function = _function(single, {single.maximal_cells[0].cell_id: _poly({0: 1})})

@@ -5,6 +5,8 @@ from fractions import Fraction
 from itertools import combinations
 from math import comb
 
+from tests.error_assertions import error_code
+
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.additive.rational_fixed_arity.operations import (
@@ -96,8 +98,9 @@ def test_native_admission_rejects_combination_explosion() -> None:
     import pytest
 
     values = tuple(_cr(i + 1) for i in range(50))
-    with pytest.raises(ValueError, match="enumeration exceeds"):
+    with pytest.raises(ValueError) as exc_info:
         compute_rational_fixed_arity_sum_profile(values, 10)
+    assert error_code(exc_info.value) == "rational_fixed_arity.work_bound"
 
 
 def test_native_admission_rejects_rational_growth() -> None:
@@ -109,8 +112,9 @@ def test_native_admission_rejects_rational_growth() -> None:
         CanonicalRational(num=1, den=parse_canonical_integer("1" + "0" * digits)),
         CanonicalRational(num=1, den=parse_canonical_integer("1" + "0" * digits + "1")),
     )
-    with pytest.raises(ValueError, match="rational digit bound"):
+    with pytest.raises(ValueError) as exc_info:
         compute_rational_fixed_arity_sum_profile(values, 2)
+    assert error_code(exc_info.value) == "rational_fixed_arity.rational_growth"
 
 
 def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
@@ -125,8 +129,9 @@ def test_native_admission_rejects_negative_arity() -> None:
     """Negative arity is a typed domain rejection rather than a host error."""
     import pytest
 
-    with pytest.raises(ValueError, match="arity must be nonnegative"):
+    with pytest.raises(ValueError) as exc_info:
         compute_rational_fixed_arity_sum_profile((_cr(1),), -1)
+    assert error_code(exc_info.value) == "rational_fixed_arity.arity_domain"
 
 
 def test_large_source_and_empty_out_of_range_arity_use_result_sensitive_admission() -> (

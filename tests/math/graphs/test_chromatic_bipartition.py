@@ -253,8 +253,12 @@ def test_complete_search_bound_still_rejects_a_dense_twenty_vertex_graph() -> No
     vertices = tuple(f"v{i}" for i in range(20))
     source = graph(vertices, (("v0", "v1"),))
     request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
-    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         find_chromatic_bipartition(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition_exact_work_exceeds"
+    )
 
 
 def test_unit_threshold_dense_thirty_two_vertex_graph_is_admitted_as_work() -> None:
@@ -265,8 +269,12 @@ def test_unit_threshold_dense_thirty_two_vertex_graph_is_admitted_as_work() -> N
         for right in range(left + 1, 32)
     )
     request = ChromaticBipartitionRequest(graph=graph(vertices, edges), s=1, t=1)
-    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         find_chromatic_bipartition(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition_exact_work_exceeds"
+    )
 
 
 def test_unit_threshold_triangle_plus_isolates_is_exact_without_backend_overflow() -> (
@@ -328,8 +336,12 @@ def test_unit_threshold_charges_the_first_usable_worker_phases() -> None:
     previously undercharged estimate admitted it.
     """
     source = _isolated_apex_bipartite_graph(isolate_count=23)
-    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         find_chromatic_bipartition(ChromaticBipartitionRequest(graph=source, s=1, t=1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition_exact_work_exceeds"
+    )
 
 
 def test_unit_threshold_still_returns_the_split_below_the_work_bound() -> None:
@@ -368,8 +380,12 @@ def test_unit_threshold_nonbipartite_core_above_backend_order_is_refused() -> No
         for right in range(left + 1, 34)
     )
     request = ChromaticBipartitionRequest(graph=graph(vertices, edges), s=1, t=1)
-    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         find_chromatic_bipartition(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition_exact_work_exceeds"
+    )
 
 
 def _completed(
@@ -555,7 +571,7 @@ def test_split_sides_must_follow_the_source_vertex_axis() -> None:
         ("b", "a", "d", "c"),
         (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
     )
-    with pytest.raises(ValidationError, match="source vertex axis"):
+    with pytest.raises(ValidationError) as exc_info:
         ChromaticBipartitionResult(
             graph=source,
             s=2,
@@ -567,13 +583,21 @@ def test_split_sides_must_follow_the_source_vertex_axis() -> None:
             chromatic_b=2,
             checked_partitions=3,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition_sides_not_canonical"
+    )
 
 
 def test_operation_rejects_a_result_axis_above_its_admitted_envelope() -> None:
     vertices = tuple(f"v{i}" for i in range(257))
     request = ChromaticBipartitionRequest(graph=graph(vertices, ()), s=1, t=1)
-    with pytest.raises(OperationResourceAdmissionError, match="at most 256"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         find_chromatic_bipartition(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition.vertex_axis_bound"
+    )
 
 
 def test_edgeless_graph_above_the_witness_cap_is_exact_no_split() -> None:
@@ -609,8 +633,12 @@ def test_operation_rejects_excessive_retained_source_labels() -> None:
         for right in vertices[index + 1 :]
     )
     request = ChromaticBipartitionRequest(graph=graph(vertices, edges), s=2, t=2)
-    with pytest.raises(OperationResourceAdmissionError, match="label"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         find_chromatic_bipartition(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.chromatic_bipartition.retained_labels_exceed_bound"
+    )
 
 
 def test_long_nfc_labels_on_k2_return_split_through_the_worker() -> None:

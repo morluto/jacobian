@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationBackendError,
@@ -389,35 +390,39 @@ def test_smt_solver_uses_the_inline_smtlib_query() -> None:
 
 
 def test_smt_request_rejects_a_logic_name_hidden_in_a_comment() -> None:
-    with pytest.raises(ValueError, match="declare the requested logic"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=("; (set-logic QF_LIA)\n(set-logic QF_UF)\n(check-sat)\n"),
         )
+    assert error_code(exc_info.value) == "logic.smtlib_logic_declaration"
 
 
 def test_smt_request_rejects_state_changes_after_check_sat() -> None:
-    with pytest.raises(ValueError, match="end with its check-sat command"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib="(set-logic QF_LIA)\n(check-sat)\n(assert false)\n",
         )
+    assert error_code(exc_info.value) == "logic.smtlib_check_sat_position"
 
 
 def test_smt_request_rejects_multiple_check_sat_commands() -> None:
-    with pytest.raises(ValueError, match="exactly one check-sat"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib="(set-logic QF_LIA)\n(check-sat)\n(check-sat)\n",
         )
+    assert error_code(exc_info.value) == "logic.smtlib_check_sat_count"
 
 
 def test_smt_request_rejects_non_ascii_input() -> None:
-    with pytest.raises(ValueError, match="must be ASCII"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n\xe9\n(check-sat\n",
         )
+    assert error_code(exc_info.value) == "logic.smtlib_ascii"
 
 
 def _left_nested_additions(levels: int) -> str:
@@ -448,7 +453,7 @@ def _pigeonhole_smtlib(pigeons: int, holes: int) -> str:
 
 
 def test_smt_request_rejects_nesting_beyond_the_term_depth_budget() -> None:
-    with pytest.raises(ValueError, match="maximum term depth"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -458,6 +463,7 @@ def test_smt_request_rejects_nesting_beyond_the_term_depth_budget() -> None:
                 "(check-sat)\n"
             ),
         )
+    assert error_code(exc_info.value) == "logic.smtlib_depth_budget"
 
 
 def test_smt_request_admits_nesting_at_the_term_depth_boundary_and_still_solves() -> (
@@ -481,8 +487,9 @@ def test_smt_request_admits_nesting_at_the_term_depth_boundary_and_still_solves(
 
 def test_smt_request_rejects_more_than_the_compound_term_budget() -> None:
     block = "(" * 400 + ")" * 400
-    with pytest.raises(ValueError, match="compound terms"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(logic=SmtLogic.QF_UF, smtlib=block * 100)
+    assert error_code(exc_info.value) == "logic.smtlib_term_budget"
 
 
 def test_smt_request_admits_a_large_shallow_formula_and_still_solves() -> None:
@@ -503,7 +510,7 @@ def test_smt_request_admits_a_large_shallow_formula_and_still_solves() -> None:
 
 
 def test_smt_request_rejects_a_numeral_wider_than_the_digit_budget() -> None:
-    with pytest.raises(ValueError, match="numeral wider"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -513,7 +520,8 @@ def test_smt_request_rejects_a_numeral_wider_than_the_digit_budget() -> None:
                 "(check-sat)\n"
             ),
         )
-    with pytest.raises(ValueError, match="numeral wider"):
+    assert error_code(exc_info.value) == "logic.smtlib_numeral_budget"
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -523,6 +531,7 @@ def test_smt_request_rejects_a_numeral_wider_than_the_digit_budget() -> None:
                 "(check-sat)\n"
             ),
         )
+    assert error_code(exc_info.value) == "logic.smtlib_numeral_budget"
 
 
 def test_smt_request_admits_a_numeral_at_the_digit_boundary_and_still_solves() -> None:
@@ -596,7 +605,7 @@ def test_smt_request_admits_digits_inside_simple_symbols_and_still_solves() -> N
 
 def test_smt_request_rejects_a_decimal_wider_than_the_digit_budget() -> None:
     for numeral in ("9" * 4_097 + ".5", "0." + "9" * 4_097):
-        with pytest.raises(ValueError, match="numeral wider"):
+        with pytest.raises(ValueError) as exc_info:
             SmtSolveRequest(
                 logic=SmtLogic.QF_LRA,
                 smtlib=(
@@ -606,6 +615,7 @@ def test_smt_request_rejects_a_decimal_wider_than_the_digit_budget() -> None:
                     "(check-sat)\n"
                 ),
             )
+        assert error_code(exc_info.value) == "logic.smtlib_numeral_budget"
 
 
 def test_smt_request_admits_a_decimal_at_the_digit_boundary_and_still_solves() -> None:
@@ -638,7 +648,7 @@ def test_smtlib_structure_weights_indexed_bit_vector_values_not_bv_symbols() -> 
 def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget() -> (
     None
 ):
-    with pytest.raises(ValueError, match="numeral wider"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -648,6 +658,7 @@ def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget
                 "(check-sat)\n"
             ),
         )
+    assert error_code(exc_info.value) == "logic.smtlib_numeral_budget"
 
 
 @pytest.mark.parametrize(
@@ -715,11 +726,12 @@ def test_smt_request_schema_publishes_the_structural_limits() -> None:
 
 def test_smt_request_rejects_more_than_the_declaration_budget() -> None:
     declarations = "\n".join(f"(declare-const v{index} Int)" for index in range(4_097))
-    with pytest.raises(ValueError, match="declares more than"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=f"(set-logic QF_LIA)\n{declarations}\n(check-sat)",
         )
+    assert error_code(exc_info.value) == "logic.smtlib_declaration_budget"
 
 
 def test_smt_request_admits_at_the_declaration_boundary_and_still_solves() -> None:
@@ -747,7 +759,7 @@ def test_structural_rejection_precedes_z3_parsing(
         raise AssertionError("Z3 parsed a request that admission had to reject")
 
     monkeypatch.setattr(z3, "parse_smt2_string", refuse)
-    with pytest.raises(ValueError, match="numeral wider"):
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
@@ -757,6 +769,7 @@ def test_structural_rejection_precedes_z3_parsing(
                 "(check-sat)\n"
             ),
         )
+    assert error_code(exc_info.value) == "logic.smtlib_numeral_budget"
 
 
 def test_smt_solver_passes_time_work_and_memory_budgets_to_z3(
@@ -1556,12 +1569,14 @@ def test_result_models_bind_exhausted_budgets_to_unknown_outcomes() -> None:
         logic=SmtLogic.QF_LIA,
         smtlib="(set-logic QF_LIA)\n(check-sat)",
     )
-    with pytest.raises(ValueError, match="exhausted budget"):
+    with pytest.raises(ValueError) as exc_info:
         SatSolveResult(
             source=sat_source, outcome="SAT", assignment=(True,), exhausted="time"
         )
-    with pytest.raises(ValueError, match="exhausted budget"):
+    assert error_code(exc_info.value) == "logic.unknown_exhaustion"
+    with pytest.raises(ValueError) as exc_info:
         SmtSolveResult(source=smt_source, outcome="UNSAT", exhausted="memory")
+    assert error_code(exc_info.value) == "logic.unknown_exhaustion"
 
 
 def test_unsupported_smt_command_identifies_source_field() -> None:

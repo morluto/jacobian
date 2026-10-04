@@ -139,8 +139,9 @@ def test_edge_cap_is_rejected_before_incidence_matrix_expansion(
         raise AssertionError("matrix construction ran before edge admission")
 
     monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
-    with pytest.raises(OperationResourceAdmissionError, match="at most 256"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graphic_matroid(graph)
+    assert exc_info.value.errors()[0]["type"] == "matroid.graphic.edge_bound"
 
 
 def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
@@ -158,10 +159,9 @@ def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
         raise AssertionError("matrix construction ran before axis admission")
 
     monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="codepoint allocation bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graphic_matroid(graph)
+    assert exc_info.value.errors()[0]["type"] == "matroid.graphic.retained_axis_bound"
 
 
 def test_retained_axis_at_the_codepoint_boundary_is_admitted() -> None:

@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -66,8 +67,9 @@ def test_quiver_result_parsing_checks_axes_without_proving_adjacency() -> None:
         == 7
     )
     payload["adjacency_matrix"] = IntegerMatrix(entries=((7,),)).model_dump(mode="json")
-    with pytest.raises(ValidationError, match="both quiver vertex axes"):
+    with pytest.raises(ValidationError) as exc_info:
         AdjacencyMatricesResult.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "quiver.adjacency_axes"
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -96,8 +98,9 @@ def test_adjacency_result_rejects_matrix_shape_forgery() -> None:
     result = adjacency_matrices(FiniteQuiver(vertex_count=2, arrows=((0, 1),)))
     payload = result.model_dump(mode="json")
     payload["adjacency_matrix"]["row_count"] = 1
-    with pytest.raises(ValueError, match="shape"):
+    with pytest.raises(ValueError) as exc_info:
         AdjacencyMatricesResult.model_validate_json(json.dumps(payload))
+    assert error_code(exc_info.value) == "matrix.shape_mismatch"
 
 
 def test_vertex_profiles_kronecker() -> None:
@@ -251,7 +254,9 @@ def test_native_path_length_is_admitted_before_computation(length: int) -> None:
         )
     with pytest.raises(ValueError, match="integer from 0 through 32"):
         fixed_length_paths_envelope(vertex_count=1, arrow_count=2, length=length)
-    with pytest.raises(
-        OperationDomainValidationError, match="integer from 0 through 32"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         fixed_length_paths(FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 2), length)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quiver.fixed_length_paths_exceeds_envelope"
+    )

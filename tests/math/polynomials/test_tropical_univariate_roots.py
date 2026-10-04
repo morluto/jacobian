@@ -159,14 +159,16 @@ def test_nonunivariate_polynomial_is_rejected() -> None:
             ),
         ),
     )
-    with pytest.raises(OperationDomainValidationError, match="univariate"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_univariate_roots(UnivariateRootsRequest(polynomial=multivariate))
+    assert exc_info.value.errors()[0]["type"] == "tropical.univariate_required"
 
 
 def test_pairwise_work_is_admitted_before_crossover_arithmetic() -> None:
     poly = _poly(tuple((exponent, exponent * exponent) for exponent in range(363)))
-    with pytest.raises(OperationResourceAdmissionError, match="crossover work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_univariate_roots(UnivariateRootsRequest(polynomial=poly))
+    assert exc_info.value.errors()[0]["type"] == "tropical.root_crossover_work"
 
 
 def test_result_cell_estimate_is_admitted_before_crossover_arithmetic(
@@ -178,5 +180,6 @@ def test_result_cell_estimate_is_admitted_before_crossover_arithmetic(
     monkeypatch.setattr(
         tropical_operations, "MAX_TROPICAL_ROOT_RESULT_CELLS", 4, raising=False
     )
-    with pytest.raises(OperationResourceAdmissionError, match="result cell"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_univariate_roots(UnivariateRootsRequest(polynomial=poly))
+    assert exc_info.value.errors()[0]["type"] == "tropical.root_result_cells"

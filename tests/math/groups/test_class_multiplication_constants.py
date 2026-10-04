@@ -103,10 +103,14 @@ def test_actual_group_order_bound_precedes_conjugacy_expansion() -> None:
         classes=(((0, 1, 2, 3, 4, 5, 6),),),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="order at most 256"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         class_multiplication_constants(
             ClassMultiplicationConstantsRequest(partition=forged_small_partition)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "groups.characters.class_algebra_group_order_exceeds_envelope"
+    )
 
 
 def test_maximum_tensor_shape_is_admitted_without_serialized_size_gate() -> None:

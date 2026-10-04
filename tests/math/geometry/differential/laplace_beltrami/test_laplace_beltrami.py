@@ -79,8 +79,12 @@ def test_inherited_guards_are_counted_in_the_returned_family() -> None:
             retained_nonzero_denominators=guards,
         )
     )
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bounds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         laplace_beltrami(metric, rational_function_from_sympy(1, axis))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.laplace_beltrami.output"
+    )
 
 
 def test_shared_one_term_inherited_locus_remains_admitted() -> None:

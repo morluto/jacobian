@@ -123,8 +123,12 @@ def test_forged_action_matrix_is_rejected() -> None:
             )
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="not the action matrix"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ga_fixed_subspace(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_fixed_subspace.unverified_subrepresentation"
+    )
 
 
 def test_kernel_work_is_admitted_before_exact_elimination(monkeypatch) -> None:
@@ -139,8 +143,11 @@ def test_kernel_work_is_admitted_before_exact_elimination(monkeypatch) -> None:
     monkeypatch.setattr(
         _stable_kernels, "_rational_kernel_basis", elimination_must_not_start
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_fixed_subspace(stable)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_ga_fixed_subspace.kernel_work"
+    )
 
 
 def test_hadamard_bound_rejects_exact_matrix_before_kernel_elimination() -> None:
@@ -187,8 +194,12 @@ def test_hadamard_bound_rejects_exact_matrix_before_kernel_elimination() -> None
     row = [Fraction(1, denominator) for denominator in denominators]
     matrix = [row.copy() for _ in primes]
 
-    with pytest.raises(OperationResourceAdmissionError, match="Hadamard bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _stable_kernels._admit_and_integerize_kernel_matrix(matrix)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_fixed_subspace.minor_growth"
+    )
 
 
 def test_aggregate_polynomial_support_is_admitted_before_expansion(monkeypatch) -> None:
@@ -209,8 +220,12 @@ def test_aggregate_polynomial_support_is_admitted_before_expansion(monkeypatch) 
     monkeypatch.setattr(
         _stable_kernels, "_fixed_polynomial_basis", expansion_must_not_start
     )
-    with pytest.raises(OperationResourceAdmissionError, match="aggregate support"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_fixed_subspace(stable)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_fixed_subspace.output_terms"
+    )
 
 
 def test_malformed_typed_subrepresentation_is_revalidated() -> None:
@@ -224,8 +239,12 @@ def test_malformed_typed_subrepresentation_is_revalidated() -> None:
         basis=stable.basis,
         action_matrix=((("not a polynomial",),), ()),
     )
-    with pytest.raises(OperationDomainValidationError, match="canonical finite"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ga_fixed_subspace(malformed)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_fixed_subspace.request_shape"
+    )
 
 
 def test_oversized_claimed_matrix_is_rejected_before_reconstruction(
@@ -257,8 +276,12 @@ def test_oversized_claimed_matrix_is_rejected_before_reconstruction(
     monkeypatch.setattr(
         _stable_kernels, "ga_stable_subrepresentation", reconstruction_must_not_start
     )
-    with pytest.raises(OperationResourceAdmissionError, match="input envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_fixed_subspace(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_fixed_subspace.matrix_coefficient_growth"
+    )
 
 
 def test_oversized_claimed_matrix_degree_is_rejected_before_reconstruction(
@@ -290,8 +313,12 @@ def test_oversized_claimed_matrix_degree_is_rejected_before_reconstruction(
     monkeypatch.setattr(
         _stable_kernels, "ga_stable_subrepresentation", reconstruction_must_not_start
     )
-    with pytest.raises(OperationResourceAdmissionError, match="action envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_fixed_subspace(forged)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_fixed_subspace.matrix_degree_growth"
+    )
 
 
 def test_result_cell_admission_counts_retained_entries(monkeypatch) -> None:
@@ -318,8 +345,12 @@ def test_result_cell_envelope_rejects_before_construction(monkeypatch) -> None:
     # Below the retained-entry envelope the request is refused before any
     # representative is constructed.
     monkeypatch.setattr(_stable_kernels, "MAX_GA_ACTION_OUTPUT_CELLS", 1)
-    with pytest.raises(OperationResourceAdmissionError, match="output budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_fixed_subspace(stable)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_subrepresentation.output_bytes"
+    )
 
     # Well above it the same request succeeds.
     monkeypatch.setattr(_stable_kernels, "MAX_GA_ACTION_OUTPUT_CELLS", 10**9)

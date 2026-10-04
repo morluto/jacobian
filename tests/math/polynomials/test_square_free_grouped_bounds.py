@@ -111,8 +111,11 @@ def test_excessive_grouped_support_refuses_before_backend(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(_square_free_kernel, "grouped_factors", observed)
-    with pytest.raises(OperationResourceAdmissionError, match=r"grouped.*support"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_square_free_decomposition(family(17))
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.square_free_grouped_support"
+    )
     assert calls == []
     claim = PolynomialSquareFreeDecompositionResult(
         polynomial=family(17),
@@ -254,8 +257,9 @@ def test_normalization_overflow_is_operational_before_compact_backend(
     monkeypatch.setattr(_sympy, "polynomial_square_free_decomposition", observed)
     huge = 10**20000 + 1
     source = polynomial({(65,): Fraction(1, huge), (0,): huge}, ("x",))
-    with pytest.raises(OperationResourceAdmissionError, match="normalization"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_square_free_decomposition(source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.square_free_result_height"
     assert calls == []
 
 
@@ -323,8 +327,9 @@ def test_generic_reconstruction_charges_source_scale_height(
     )
     assert polynomial_square_free_decomposition(source).reconstructed == source
     monkeypatch.setattr(bounds, "MAX_SQUARE_FREE_SCRATCH_BITS", clearing.envelope.bits)
-    with pytest.raises(OperationResourceAdmissionError, match="scratch_height"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_square_free_decomposition(source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.square_free_scratch_height"
 
 
 def test_axis_clearing_and_retained_scales_are_aggregated(
@@ -338,8 +343,12 @@ def test_axis_clearing_and_retained_scales_are_aggregated(
     single = bounds.clearing_envelope({(64,): Fraction(1, huge)})
     assert single.storage < 1 << 20
     monkeypatch.setattr(bounds, "MAX_SQUARE_FREE_STORAGE_BITS", 1 << 20)
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient_storage"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_square_free_decomposition(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.square_free_coefficient_storage"
+    )
 
 
 def test_exact_compact_canonical_component_boundary_is_admitted() -> None:
@@ -380,8 +389,9 @@ def test_oversized_native_axes_stop_before_term_validation() -> None:
             "polynomial": SparseRationalPolynomial.model_construct(terms=None),
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="named axes"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_square_free_decomposition(source)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.square_free_source"
 
 
 @pytest.mark.parametrize(

@@ -165,9 +165,10 @@ def test_toric_request_schema_publishes_its_representable_input_bounds() -> None
 
 
 def test_domain_limits_and_polynomial_axis_are_explicit() -> None:
-    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         toric_ideal(_configuration((1, -1)))
-    with pytest.raises(OperationDomainValidationError, match="one-row"):
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.toric_nonnegative"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         toric_ideal(
             AffineConfiguration(
                 row_labels=("degree", "weight"),
@@ -175,8 +176,10 @@ def test_domain_limits_and_polynomial_axis_are_explicit() -> None:
                 entries=((1, 2), (3, 4)),
             )
         )
-    with pytest.raises(OperationDomainValidationError, match="polynomial variable"):
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.toric_shape"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         toric_ideal(_configuration((1, 2), ("x", "not-a-variable")))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.toric_variable_axis"
     with pytest.raises(ValidationError):
         IntegerConfigurationToricIdealRequest.model_validate(
             {
@@ -223,10 +226,9 @@ def test_candidate_work_envelope_rejects_before_graver_enumeration(
         )
 
     monkeypatch.setattr(graver_module, "_enumerate_graver_vectors", fail_if_called)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="kernel-aware Graver presolve"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         toric_ideal(_configuration((1, 2, 10_000)))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.graver_work"
 
 
 def test_generator_bound_admits_on_the_exact_enumerated_basis_size(
@@ -234,9 +236,10 @@ def test_generator_bound_admits_on_the_exact_enumerated_basis_size(
 ) -> None:
     monkeypatch.setattr(graver_module, "MAX_TORIC_IDEAL_GENERATORS", 4)
     # [1 2 3] has exactly five Graver generators, so it is refused...
-    with pytest.raises(
-        OperationResourceAdmissionError, match="more than 4 ideal generators"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         toric_ideal(_configuration((1, 2, 3)))
+    assert (
+        exc_info.value.errors()[0]["type"] == "affine_semigroup.toric_generator_bound"
+    )
     # ...while a four-generator presentation stays admitted at the limit.
     assert len(toric_ideal(_configuration((1, 1, 2))).generators) == 4

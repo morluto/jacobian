@@ -271,7 +271,7 @@ def test_raw_result_rejects_map_shape_before_nested_matrix_decoding() -> None:
 
 
 def test_system_bounds_nested_dimensions_and_digits_before_smith_work() -> None:
-    with pytest.raises(ValidationError, match="at most 16"):
+    with pytest.raises(ValidationError) as exc_info:
         HomogeneousMonomialSystem.model_validate(
             {
                 "exponent_matrix": {
@@ -283,7 +283,11 @@ def test_system_bounds_nested_dimensions_and_digits_before_smith_work() -> None:
                 "coordinate_axis": [f"x{i}" for i in range(17)],
             }
         )
-    with pytest.raises(ValidationError, match="32 decimal digits"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_torus.monomial_system_dimension_bound"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         HomogeneousMonomialSystem.model_validate(
             {
                 "exponent_matrix": {
@@ -295,6 +299,10 @@ def test_system_bounds_nested_dimensions_and_digits_before_smith_work() -> None:
                 "coordinate_axis": ["x"],
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_torus.monomial_system_exponent_bound"
+    )
 
 
 def test_public_operation_example_crosses_the_json_request_boundary() -> None:

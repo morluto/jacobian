@@ -43,5 +43,6 @@ def test_character_order_result_rejects_a_false_divisor_of_the_exponent():
     group = character_group(3)
     character = DirichletCharacter(group=group, coordinates=(1,))
 
-    with pytest.raises(ValidationError, match="order induced by its dual coordinates"):
+    with pytest.raises(ValidationError) as exc_info:
         DirichletCharacterOrderResult(character=character, order=1)
+    assert exc_info.value.errors()[0]["type"] == "dirichlet_character.order_mismatch"

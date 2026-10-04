@@ -13,6 +13,7 @@ from random import Random
 from typing import Any
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.matrices._operation_models import MatrixInverseResult
@@ -256,8 +257,9 @@ def test_inverse_rejects_dense_output_work_before_backend() -> None:
     tall = 10**99
     source = [[tall] * order for _ in range(order)]
 
-    with pytest.raises(ValueError, match="exact output budget"):
+    with pytest.raises(ValueError) as exc_info:
         _run_inverse(source)
+    assert error_code(exc_info.value) == "matrix.budget_exceeded"
 
 
 def _entry_axis_limit(schema: dict[str, Any], field: str) -> int:
@@ -325,8 +327,9 @@ def test_integer_requests_keep_operation_specific_envelopes() -> None:
     )
     assert HermiteNormalFormRequest(matrix=matrix).matrix is matrix
 
-    with pytest.raises(OperationDomainValidationError, match="32"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
+    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
     hermite = compute_hermite_normal_form(
         HermiteNormalFormRequest.model_construct(matrix=matrix)
     )

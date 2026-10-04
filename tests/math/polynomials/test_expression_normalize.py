@@ -565,11 +565,12 @@ def test_overlapping_rational_addends_include_common_denominator_scaling() -> No
             for prime in primes
         ],
     }
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="representation envelope",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         normalize_polynomial_expression(_request("QQ", expression, variables=variables))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.expression.result_representation_bound"
+    )
 
 
 def test_disjoint_monomial_denominators_are_not_globally_cleared() -> None:
@@ -753,8 +754,9 @@ def test_powered_univariate_disjoint_sum_accounts_for_colliding_dens() -> None:
         "base": {"kind": "ADD", "operands": addends},
         "exponent": 2,
     }
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient-height"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         normalize_polynomial_expression(_request("QQ", expression))
+    assert exc_info.value.errors()[0]["type"] == "polynomial.expression.expansion_bound"
 
 
 def test_constant_product_skips_exact_fractions_past_the_envelope(

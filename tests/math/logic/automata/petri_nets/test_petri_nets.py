@@ -8,6 +8,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -263,12 +264,15 @@ def test_native_operations_reject_mismatched_markings() -> None:
     net = _simple_net()
     marking = Marking(tokens=(1,))
 
-    with pytest.raises(ValueError, match="marking length"):
+    with pytest.raises(ValueError) as exc_info:
         petri_nets.enabled_transitions(net, marking)
-    with pytest.raises(ValueError, match="marking length"):
+    assert error_code(exc_info.value) == "petri_net.marking_axis"
+    with pytest.raises(ValueError) as exc_info:
         petri_nets.fire_transition(net, marking, 0)
-    with pytest.raises(ValueError, match="marking length"):
+    assert error_code(exc_info.value) == "petri_net.marking_axis"
+    with pytest.raises(ValueError) as exc_info:
         petri_nets.reachability_graph(net, marking)
+    assert error_code(exc_info.value) == "petri_net.marking_axis"
 
 
 def test_serialized_claims_retain_sources_and_reject_forgery() -> None:
@@ -614,10 +618,12 @@ class TestSiphonTrapAdapter:
 def test_petri_values_enforce_advertised_arc_and_marking_bounds() -> None:
     assert PetriNet(place_count=1, transition_count=1, pre=((1000,),), post=((1000,),))
     assert Marking(tokens=(1000,))
-    with pytest.raises(ValidationError, match="pre weights must not exceed"):
+    with pytest.raises(ValidationError) as exc_info:
         PetriNet(place_count=1, transition_count=1, pre=((1001,),), post=((0,),))
-    with pytest.raises(ValidationError, match="marking tokens must not exceed"):
+    assert exc_info.value.errors()[0]["type"] == "petri_net.pre_weight_bound"
+    with pytest.raises(ValidationError) as exc_info:
         Marking(tokens=(1001,))
+    assert exc_info.value.errors()[0]["type"] == "petri_net.marking_token_bound"
 
 
 def test_siphon_trap_ignores_transitions_with_empty_incidence() -> None:

@@ -7,6 +7,7 @@ negative control is this file run against unmodified `main`.
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -151,7 +152,7 @@ def test_infinity_valuation_result_rejects_mismatched_parents() -> None:
     quintic = _field((0, 1, 0, 0, 0, 4))
     element = _element(quintic, (0, 1))
 
-    with pytest.raises(ValueError, match="function_field"):
+    with pytest.raises(ValueError) as exc_info:
         HyperellipticInfinityPlaceValuationResult.model_validate(
             {
                 "place": _typed_infinity(cubic).model_dump(),
@@ -161,6 +162,10 @@ def test_infinity_valuation_result_rejects_mismatched_parents() -> None:
                 ).model_dump(),
             }
         )
+    assert (
+        error_code(exc_info.value)
+        == "function_field.infinity_valuation_parent_mismatch"
+    )
 
 
 def test_infinity_valuation_result_accepts_matching_parents() -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -203,14 +204,16 @@ def test_evaluation_rejects_signature_mismatch_and_admits_output_before_expansio
         free_variables=(0,),
         atoms=({"kind": "relation", "symbol_id": "R", "variables": (0,)},),
     )
-    with pytest.raises(OperationDomainValidationError, match="name a symbol"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_pp_formula(structure, unknown)
+    assert exc_info.value.errors()[0]["type"] == "relational.pp.unknown_symbol"
 
     broad_relation = PrimitivePositiveFormula(
         variable_count=3, free_variables=(0, 1, 2), atoms=()
     )
-    with pytest.raises(OperationResourceAdmissionError, match="defined relation"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         evaluate_pp_formula(structure, broad_relation)
+    assert exc_info.value.errors()[0]["type"] == "relational.pp.output_bound"
 
 
 def test_equality_output_bound_uses_identified_coordinate_count() -> None:
@@ -231,8 +234,9 @@ def test_defined_value_rejects_formula_incompatible_with_retained_structure() ->
         free_variables=(0,),
         atoms=({"kind": "relation", "symbol_id": "R", "variables": (0,)},),
     )
-    with pytest.raises(ValueError, match="names no symbol"):
+    with pytest.raises(ValueError) as exc_info:
         PPDefinedRelation(structure=structure, formula=formula, tuples=((0,),))
+    assert error_code(exc_info.value) == "relational.structure.pp.unknown_symbol"
 
 
 def test_evaluation_admits_coordinate_work_separately_from_atom_checks() -> None:
@@ -262,5 +266,6 @@ def test_evaluation_admits_coordinate_work_separately_from_atom_checks() -> None
             )
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="coordinate steps"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         evaluate_pp_formula(structure, formula)
+    assert exc_info.value.errors()[0]["type"] == "relational.pp.coordinate_work_bound"

@@ -681,8 +681,9 @@ def test_group_like_verifier_preserves_tensor_admission_failure() -> None:
 
     coalgebra = _direct_sum_group_like_coalgebra(17)
     element = GroupLikeElement(coefficients=(1,) + (0,) * 16)
-    with pytest.raises(OperationResourceAdmissionError, match="structure constants"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_group_like_element(coalgebra, element)
+    assert exc_info.value.errors()[0]["type"] == "coalgebra.tensor_budget_exceeded"
 
 
 def _structure(

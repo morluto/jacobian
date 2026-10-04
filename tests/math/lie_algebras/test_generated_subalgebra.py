@@ -69,12 +69,16 @@ def test_request_rejects_vectors_on_a_different_axis() -> None:
     )
     from jacobian.math.lie_algebras._models import LieGeneratedSubalgebraRequest
 
-    with pytest.raises(ValidationError, match="generators must use"):
+    with pytest.raises(ValidationError) as exc_info:
         LieGeneratedSubalgebraRequest(algebra=HEISENBERG, generators=[alien])
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lie_algebra.generated_subalgebra_generator_basis"
+    )
 
 
 def test_subalgebra_model_rejects_forged_ambient_axis() -> None:
-    with pytest.raises(ValidationError, match="source algebra's ordered basis"):
+    with pytest.raises(ValidationError) as exc_info:
         LieSubalgebra.model_validate(
             {
                 "algebra": HEISENBERG.model_dump(),
@@ -87,6 +91,7 @@ def test_subalgebra_model_rejects_forged_ambient_axis() -> None:
                 },
             }
         )
+    assert exc_info.value.errors()[0]["type"] == "lie_algebra.subalgebra_source_axis"
 
 
 def test_large_input_height_is_rejected_by_iterated_growth_preflight() -> None:
@@ -206,10 +211,12 @@ def test_operation_rejects_generators_on_a_different_axis() -> None:
     alien = LieAlgebraElement.model_validate(
         {"basis": ["u", "v", "w"], "coordinates": [{"num": 1, "den": 1}] * 3}
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="generators must use"
-    ) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         lie_generated_subalgebra(HEISENBERG, [alien])
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lie_algebra.generated_subalgebra_generator_basis"
+    )
     assert (
         exc_info.value.errors()[0]["type"]
         == "lie_algebra.generated_subalgebra_generator_basis"

@@ -219,10 +219,11 @@ def test_false_face_closure_is_rejected_at_native_admission() -> None:
     payload["f_vector"] = (3, 2, 1)
     payload["closure_size"] = 6
     malformed = FiniteSimplicialComplex.model_validate(payload)
-    with pytest.raises(OperationDomainValidationError, match="face closure"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _operation("topology.simplicial_complex.chain_complex.compute").run(
             ChainComplexRequest(complex=malformed)
         )
+    assert exc_info.value.errors()[0]["type"] == "topology.request_not_admitted"
 
 
 def test_canonical_complex_composes_as_the_authoritative_object() -> None:

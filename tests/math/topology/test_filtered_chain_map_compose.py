@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes import filtered_extensions
@@ -144,8 +145,12 @@ def test_composition_rejects_a_mismatched_middle_filtration() -> None:
             full,
         ),
     )
-    with pytest.raises(ValueError, match="middle filtrations"):
+    with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_compose(*_composition(first, second))
+    assert (
+        error_code(exc_info.value)
+        == "filtered_chain_map.composition_middle_filtration_mismatch"
+    )
 
 
 def test_middle_filtrations_may_use_different_spanning_vectors() -> None:
@@ -211,16 +216,17 @@ def test_identity_composition_accepts_maximum_bounded_coefficient() -> None:
 
 def test_composition_admits_exact_coefficient_growth_before_multiplication() -> None:
     large_scalar = 10**3000
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="composed coefficient may exceed",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _native_compose(
             FilteredChainMapCompositionRequest(
                 first=filtered_map(_map(large_scalar)),
                 second=filtered_map(_map(large_scalar)),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "filtered_chain_map.composition_coefficient_exceeded"
+    )
 
 
 def test_composition_operation_exposes_the_native_contract() -> None:
@@ -259,8 +265,11 @@ def test_composition_rejects_malformed_component_axes_before_indexing() -> None:
             )
         }
     )
-    with pytest.raises(ValueError, match="target complex of the first map"):
+    with pytest.raises(ValueError) as exc_info:
         _native_compose(malformed)
+    assert (
+        error_code(exc_info.value) == "filtered_chain_map.composition_middle_mismatch"
+    )
 
 
 def test_composition_rejects_non_result_components_at_native_boundary() -> None:
@@ -345,10 +354,14 @@ def test_composition_preflights_semantic_work_before_exact_admission() -> None:
         filtration_preserving=True,
         is_chain_map=True,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="semantic admission"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _native_compose(
             FilteredChainMapCompositionRequest(first=component, second=component)
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "filtered_chain_map.composition_work_exceeded"
+    )
 
 
 def test_composition_rejects_oversized_map_shape_before_parsing_entries(
@@ -437,10 +450,9 @@ def test_composition_rejects_rational_coefficient_in_finite_field_map() -> None:
             )
         ),
     )
-    with pytest.raises(
-        ValueError, match="finite-field map entries must be canonical residues"
-    ):
+    with pytest.raises(ValueError) as exc_info:
         _native_compose(request)
+    assert error_code(exc_info.value) == "filtered_chain_map.entry_invalid"
 
 
 @pytest.mark.parametrize("entry", [3, -1])
@@ -459,7 +471,7 @@ def test_filtered_map_rejects_noncanonical_finite_field_residues(entry: int) -> 
     # rejected with the model-layer residue error before any grammar parsing.
     from pydantic import ValidationError as _ValidationError
 
-    with pytest.raises(_ValidationError, match="must be an integer residue"):
+    with pytest.raises(_ValidationError) as exc_info:
         filtered_map(
             FilteredChainMapRequest.model_construct(
                 chain_map=ChainMapValue.model_construct(
@@ -471,6 +483,10 @@ def test_filtered_map_rejects_noncanonical_finite_field_residues(entry: int) -> 
                 target_filtration=filtration,
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "chain_complex.prime_field_residue_invalid"
+    )
 
 
 def test_composition_output_admission_counts_only_integer_digits() -> None:

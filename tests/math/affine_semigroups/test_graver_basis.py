@@ -91,10 +91,9 @@ def test_small_matrices_against_independent_finite_conformal_check():
 def test_exact_work_envelope_rejects_before_enumeration():
     # The kernel-aware presolve charges the same work envelope before any
     # candidate pair is enumerated, so it is the boundary that rejects.
-    with pytest.raises(
-        OperationResourceAdmissionError, match="Graver presolve exceeds its work"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graver_basis(_matrix((100, 99, 98, 97, 96)))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.graver_work"
 
 
 def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix():
@@ -153,12 +152,11 @@ def test_full_column_rank_configuration_has_empty_graver_basis():
 
 
 def test_multirow_kernel_with_nullity_above_one_is_rejected_without_search():
-    with pytest.raises(
-        OperationResourceAdmissionError, match="nullity-at-most-one exact Graver slices"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graver_basis(
             IntegerMatrix.model_validate({"entries": [[1, 0, 1, 0], [0, 1, 0, 1]]})
         )
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.graver_nullity"
 
 
 def test_forged_native_matrix_is_refused_before_enumeration(
@@ -171,14 +169,12 @@ def test_forged_native_matrix_is_refused_before_enumeration(
     forged = IntegerMatrix.model_construct(
         domain="ZZ", row_count=1, column_count=2, entries=((1,),)
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="configuration is malformed"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         graver_basis(forged)
-    with pytest.raises(
-        OperationDomainValidationError, match="configuration is malformed"
-    ):
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.graver_configuration"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         markov_basis(forged)
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.graver_configuration"
 
 
 def test_admitted_result_retains_a_roundtrippable_configuration() -> None:

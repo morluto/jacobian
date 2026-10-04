@@ -204,16 +204,21 @@ def test_candidate_box_is_admitted_before_enumeration(
         "_iter_parallelogram_lattice_points",
         lambda *_args: pytest.fail("parallelogram enumerated before admission"),
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="parallelogram lattice point count"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         fundamental_holes(_semigroup(((3, 0), (5, 0), (0, 1))))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_semigroup.fundamental_hole_candidates"
+    )
 
 
 def test_degenerate_cone_is_rejected_by_native_and_catalog_boundaries() -> None:
     semigroup = _semigroup(((1, 0), (2, 0)))
-    with pytest.raises(OperationDomainValidationError, match="full-rank"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         fundamental_holes(semigroup)
+    assert (
+        exc_info.value.errors()[0]["type"] == "affine_semigroup.fundamental_holes_rank"
+    )
 
     tool = next(
         item
@@ -228,8 +233,11 @@ def test_degenerate_cone_is_rejected_by_native_and_catalog_boundaries() -> None:
         ],
         tool.run,
     )
-    with pytest.raises(OperationDomainValidationError, match="full-rank"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         run(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "affine_semigroup.fundamental_holes_rank"
+    )
 
 
 def test_catalog_example_and_json_round_trip() -> None:

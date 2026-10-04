@@ -469,15 +469,23 @@ def test_result_k_field() -> None:
 
 
 def test_native_constructor_rejects_oversized_vertex_carrier() -> None:
-    with pytest.raises(OperationDomainValidationError, match="interval size"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_arithmetic_progression_hypergraph(
             0, MAX_INTERVAL_SIZE, MAX_INTERVAL_SIZE + 2
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.arithmetic_progression.interval_too_large"
+    )
 
 
 @pytest.mark.parametrize("value", [True, 1.5])
 def test_native_constructor_rejects_non_strict_integer_parameters(
     value: object,
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match="strict integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_arithmetic_progression_hypergraph(value, 10, 3)  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.arithmetic_progression.invalid_integer"
+    )

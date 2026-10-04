@@ -212,8 +212,9 @@ class TestClosure:
     def test_closure_work_boundary_rejects_first_out_of_range_request(self) -> None:
         matroid = _matroid(2, [(0,) * 250 for _ in range(141)], 250)
 
-        with pytest.raises(OperationDomainValidationError, match="work bound"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             matroid_closure(matroid, tuple(range(40)))
+        assert exc_info.value.errors()[0]["type"] == "matroid.closure.work_bound"
         assert (
             operations._rank_work(141, 40) + 210 * operations._rank_work(141, 41)
             == 50_000_010

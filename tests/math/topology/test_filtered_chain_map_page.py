@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -230,8 +231,9 @@ def test_page_map_rejects_malformed_native_page_before_arithmetic() -> None:
     request = FilteredChainMapPageRequest(map=_map(1), page=1).model_copy(
         update={"page": "1"}
     )
-    with pytest.raises(ValueError, match="spectral page must be an integer"):
+    with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_page(request.map, request.page)
+    assert error_code(exc_info.value) == "filtered_chain_map.page_invalid"
 
 
 def test_page_map_rejects_a_false_chain_map_claim() -> None:
@@ -243,8 +245,9 @@ def test_page_map_rejects_a_false_chain_map_claim() -> None:
             )
         }
     )
-    with pytest.raises(ValueError, match="requires a chain map"):
+    with pytest.raises(ValueError) as exc_info:
         filtered_chain_map_page(authored, 1)
+    assert error_code(exc_info.value) == "filtered_chain_map.not_chain_map"
 
 
 def test_page_map_admits_sparse_large_coefficients_by_entry() -> None:
@@ -281,5 +284,6 @@ def test_page_map_admits_sparse_large_coefficients_by_entry() -> None:
 @pytest.mark.parametrize("nested_map", [{"source": None}, None])
 def test_page_map_rejects_forged_nested_map_at_native_boundary(nested_map) -> None:
     request = FilteredChainMapPageRequest.model_construct(map=nested_map, page=1)
-    with pytest.raises(OperationDomainValidationError, match="canonical filtered"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         filtered_chain_map_page(request.map, request.page)
+    assert exc_info.value.errors()[0]["type"] == "filtered_chain_map.page_map_invalid"

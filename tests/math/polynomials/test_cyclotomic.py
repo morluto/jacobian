@@ -64,8 +64,9 @@ def test_native_api_exports_typed_cyclotomic_operation() -> None:
 
 
 def test_direct_native_boundary_rejects_untyped_payload() -> None:
-    with pytest.raises(OperationDomainValidationError, match="integer index"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         cyclotomic({"index": 3})  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "polynomial.cyclotomic.index_type"
 
 
 def test_result_validation_checks_shape_without_backend_recomputation() -> None:
@@ -80,13 +81,14 @@ def test_result_validation_checks_shape_without_backend_recomputation() -> None:
         patch.setattr(sympy, "cyclotomic_poly", fail)
         patch.setattr(sympy, "factorint", fail)
         assert CyclotomicResult.model_validate_json(payload) == result
-    with pytest.raises(ValidationError, match="totient"):
+    with pytest.raises(ValidationError) as exc_info:
         CyclotomicResult(
             source_index=12,
             totient=3,
             polynomial=result.polynomial,
         )
-    with pytest.raises(ValidationError, match="constant"):
+    assert exc_info.value.errors()[0]["type"] == "polynomial.cyclotomic.degree_shape"
+    with pytest.raises(ValidationError) as exc_info:
         CyclotomicResult(
             source_index=12,
             totient=4,
@@ -94,6 +96,7 @@ def test_result_validation_checks_shape_without_backend_recomputation() -> None:
                 update={"coefficients": (1, 0, -1, 0, 0)}
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "polynomial.cyclotomic.constant_shape"
 
 
 def test_backend_failure_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,8 +168,12 @@ def test_factorization_work_is_admitted_before_backend_factorint(
     import sympy
 
     monkeypatch.setattr(sympy, "factorint", fail_factorint)
-    with pytest.raises(OperationResourceAdmissionError, match="factorization"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cyclotomic(30)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.cyclotomic.factorization_work_bound"
+    )
 
 
 def test_expired_request_is_rejected_before_factorization() -> None:
@@ -286,8 +293,12 @@ def test_construction_work_is_admitted_before_backend_expansion(
         raise AssertionError("construction must not start before work admission")
 
     monkeypatch.setattr(module, "_twice_odd_cyclotomic", fail_construction)
-    with pytest.raises(OperationResourceAdmissionError, match="construction"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cyclotomic(30)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.cyclotomic.construction_work_bound"
+    )
 
 
 def test_reductions_reuse_the_admitted_factor_map(

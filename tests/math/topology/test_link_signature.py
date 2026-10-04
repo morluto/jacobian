@@ -98,8 +98,9 @@ def test_type_ii_correction_is_source_bound_and_changes_figure_eight_signature()
 
     payload = result.model_dump(mode="python")
     payload["correction_term"] = 0
-    with pytest.raises(ValidationError, match="correction term must sum"):
+    with pytest.raises(ValidationError) as exc_info:
         LinkSignatureResult.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "link_diagram.signature_correction_sum"
 
 
 def test_signature_requires_its_bounded_goeritz_projection() -> None:
@@ -112,8 +113,9 @@ def test_signature_requires_its_bounded_goeritz_projection() -> None:
     assert len(at_bound.correction_contributions) == 32
 
     over_bound = _braid(2, (1,) * 33)
-    with pytest.raises(OperationResourceAdmissionError, match="at most 32 crossings"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         link_signature(over_bound)
+    assert exc_info.value.errors()[0]["type"] == "link_diagram.signature_crossing_bound"
 
 
 def test_reidemeister_one_curl_uses_zero_dimensional_goeritz_inertia() -> None:

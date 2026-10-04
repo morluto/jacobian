@@ -124,7 +124,7 @@ def test_complete_input_is_preserved_without_adding_a_state() -> None:
 
 
 def test_deterministic_carrier_rejects_ambiguous_transition_keys() -> None:
-    with pytest.raises(ValidationError, match="at most one target"):
+    with pytest.raises(ValidationError) as exc_info:
         DeterministicBottomUpTreeAutomaton(
             state_count=2,
             arity=(0,),
@@ -134,19 +134,23 @@ def test_deterministic_carrier_rejects_ambiguous_transition_keys() -> None:
             ),
             final_states=(0,),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "tree_automata.transitions_not_deterministic"
+    )
 
 
 def test_completion_rejects_sink_or_output_that_exceeds_bounds() -> None:
     no_room_for_sink = DeterministicBottomUpTreeAutomaton(
         state_count=64, arity=(0,), transitions=(), final_states=()
     )
-    with pytest.raises(OperationResourceAdmissionError, match="one sink state"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         complete_deterministic_tree_automaton(no_room_for_sink)
+    assert exc_info.value.errors()[0]["type"] == "tree_automata.completion_state_bound"
 
     expanded_table_too_large = DeterministicBottomUpTreeAutomaton(
         state_count=16, arity=(3,), transitions=(), final_states=()
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="completed transition table"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         complete_deterministic_tree_automaton(expanded_table_too_large)
+    assert exc_info.value.errors()[0]["type"] == "tree_automata.completion_output_bound"

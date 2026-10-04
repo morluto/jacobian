@@ -97,8 +97,11 @@ def test_profile_round_trip_validates_maps_and_rejects_forged_bijection() -> Non
     )
     forged = profile.model_dump(mode="python")
     forged["vertex_maps"] = ((0, 0), (0, 1), (0, 1))
-    with pytest.raises(ValidationError, match="vertex permutation"):
+    with pytest.raises(ValidationError) as exc_info:
         VertexDeckIsomorphismProfile.model_validate(forged)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.vertex_iso_profile_map_shape"
+    )
 
 
 def test_native_operation_admits_and_checks_family_before_canonicalization(
@@ -112,10 +115,11 @@ def test_native_operation_admits_and_checks_family_before_canonicalization(
         "_canonical_card_form",
         lambda *_: pytest.fail("canonicalization must follow family validation"),
     )
-    with pytest.raises(
-        OperationDomainValidationError, match="one card per source vertex"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.vertex_iso_profile_card_count"
+    )
 
 
 @pytest.mark.parametrize("field", ["edge_appearances", "vertex_appearances"])
@@ -125,8 +129,9 @@ def test_native_operation_rejects_boolean_appearance_counts(field: str) -> None:
     counts[0] = True
     forged = family.model_copy(update={field: tuple(counts)})
     request = VertexDeckIsomorphismProfileRequest.model_construct(deck=forged)
-    with pytest.raises(OperationDomainValidationError, match="appearance ledgers"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_isomorphism_profile(request.deck)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.vertex_iso_profile_ledger"
 
 
 @pytest.mark.parametrize("field", ["retained_edge_count", "deleted_edge_count"])
@@ -135,10 +140,12 @@ def test_native_operation_rejects_boolean_card_edge_counts(field: str) -> None:
     forged_card = family.cards[0].model_copy(update={field: True})
     forged = family.model_copy(update={"cards": (forged_card, *family.cards[1:])})
     request = VertexDeckIsomorphismProfileRequest.model_construct(deck=forged)
-    with pytest.raises(
-        OperationDomainValidationError, match="bound source vertex deletion"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.vertex_iso_profile_family_relation"
+    )
 
 
 def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
@@ -159,8 +166,11 @@ def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work - 1
     )
-    with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         vertex_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.vertex_iso_profile_work_bound"
+    )
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work
     )
@@ -169,10 +179,12 @@ def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
         "MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS",
         exact_output - 1,
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="materialization-cell bound"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         vertex_deck_isomorphism_profile(request.deck)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.vertex_iso_profile_output_bound"
+    )
 
 
 def test_serialized_profile_admits_representative_validation_before_canonicalizing(
@@ -198,8 +210,12 @@ def test_serialized_profile_admits_representative_validation_before_canonicalizi
     monkeypatch.setattr(
         deck_models, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work - 1
     )
-    with pytest.raises(ValidationError, match="shared validation work bound"):
+    with pytest.raises(ValidationError) as exc_info:
         VertexDeckIsomorphismProfile.model_validate_json(data)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.vertex_iso_profile_validation_work_bound"
+    )
     assert calls == 0
 
 
@@ -213,5 +229,6 @@ def test_native_request_tuple_preflight_occurs_before_nested_parsing() -> None:
             "cards": "malformed but over the admitted order",
         }
     }
-    with pytest.raises(ValidationError, match="supports at most 10 source vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         VertexDeckIsomorphismProfileRequest.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.vertex_iso_profile_bound"

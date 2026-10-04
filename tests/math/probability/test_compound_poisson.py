@@ -607,8 +607,12 @@ def test_unrelated_tall_denominators_still_hit_the_normalization_bound() -> None
             for index, prime in enumerate(primes)
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="normalization exceeds"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 0)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.compound_poisson.input_height_bound"
+    )
 
 
 def test_cancellation_across_denominator_kernel_buckets_is_admitted() -> None:

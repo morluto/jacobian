@@ -220,5 +220,6 @@ def test_surrogate_point_label_is_rejected_before_distances() -> None:
             )
         }
     )
-    with pytest.raises(OperationDomainValidationError, match="UTF-8"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_distance_edge_coloring(forged)
+    assert exc_info.value.errors()[0]["type"] == "distance_edge_coloring.label_encoding"

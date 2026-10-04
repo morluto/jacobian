@@ -141,5 +141,9 @@ def test_chain_map_value_binds_labels_shapes_and_exact_coefficients() -> None:
     map_value = induced_normalized_chain_map(_identity_map(simplex))
     payload = json.loads(map_value.model_dump_json())
     payload["source_basis_labels"][0] = []
-    with pytest.raises(ValidationError, match="basis labels"):
+    with pytest.raises(ValidationError) as exc_info:
         ChainMapValue.model_validate_json(json.dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "chain_complex.chain_map_label_axes_mismatch"
+    )

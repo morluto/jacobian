@@ -74,7 +74,7 @@ class TestIncidenceMatrix:
         assert result.block_ids == ("b1", "b2")
 
     def test_matrix_shape_is_bound_to_label_axes(self) -> None:
-        with pytest.raises(ValidationError, match="dimensions"):
+        with pytest.raises(ValidationError) as exc_info:
             IncidenceMatrixResult.model_validate_json(
                 json.dumps(
                     {
@@ -89,6 +89,10 @@ class TestIncidenceMatrix:
                     }
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "incidence_structure.incidence_matrix_shape"
+        )
 
     def test_duplicate_points_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -418,8 +422,11 @@ class TestDerivedResidual:
 
     def test_derived_at_nonexistent_point(self) -> None:
         request = DerivedResidualRequest(incidence=STRUCTURE, point="pX")
-        with pytest.raises(OperationDomainValidationError, match="declared point"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _derived_residual(request)
+        assert (
+            exc_info.value.errors()[0]["type"] == "incidence.derived_point_undeclared"
+        )
 
 
 class TestLeviGraph:

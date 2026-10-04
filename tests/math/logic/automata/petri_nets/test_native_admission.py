@@ -36,7 +36,9 @@ def test_nontrivial_siphon_trap_enumeration_refusal_remains_typed() -> None:
         ),
     )
     claim = SiphonTrapResult(net=net, siphons=(), traps=())
-    with pytest.raises(OperationResourceAdmissionError, match="places"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_siphon_trap(claim)
-    with pytest.raises(OperationResourceAdmissionError, match="places"):
+    assert exc_info.value.errors()[0]["type"] == "petri_net.siphon_trap_place_bound"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_siphon_trap(SiphonTrapRequest(net=net))
+    assert exc_info.value.errors()[0]["type"] == "petri_net.siphon_trap_place_bound"

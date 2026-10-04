@@ -1,6 +1,7 @@
 """Rank-zero lattices retain the ambient integer coordinate space."""
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices import (
@@ -97,10 +98,12 @@ def test_zero_sublattice_inclusion_retains_parent_rank() -> None:
     assert result.invariant_factors == ()
     assert type(result).model_validate_json(result.model_dump_json()) == result
     bad_embedding = IntegerMatrix(entries=(), row_count=0, column_count=0)
-    with pytest.raises(ValueError, match="embedding columns"):
+    with pytest.raises(ValueError) as exc_info:
         SublatticeIndexRequest(sublattice=zero, parent=parent, embedding=bad_embedding)
-    with pytest.raises(OperationDomainValidationError, match="embedding dimensions"):
+    assert error_code(exc_info.value) == "lattice.embedding_columns_mismatch"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_sublattice_index(zero, parent, bad_embedding)
+    assert exc_info.value.errors()[0]["type"] == "lattice.sublattice_embedding_mismatch"
     trivial = compute_sublattice_index(zero, zero, bad_embedding)
     assert trivial.index == 1
     assert trivial.free_rank == 0

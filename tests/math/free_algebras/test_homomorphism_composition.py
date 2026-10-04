@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -131,10 +132,16 @@ def test_wrong_intermediate_alphabet_and_order_are_rejected() -> None:
     f = _map(("x",), ("u", "v"), ({("u",): 1},))
     g = _map(("v", "u"), ("a",), ({("a",): 1}, {("a",): 1}))
 
-    with pytest.raises(ValueError, match="f target alphabet must equal g source"):
+    with pytest.raises(ValueError) as exc_info:
         FreeAlgebraPolynomialHomomorphismCompositionRequest(f=f, g=g)
-    with pytest.raises(ValueError, match="f target alphabet must equal g source"):
+    assert (
+        error_code(exc_info.value) == "free_algebra.homomorphism_composition_alphabet"
+    )
+    with pytest.raises(ValueError) as exc_info:
         compose_polynomial_homomorphisms(f, g)
+    assert (
+        error_code(exc_info.value) == "free_algebra.homomorphism_composition_alphabet"
+    )
 
 
 def _matrix_add(left, right):
@@ -208,8 +215,11 @@ def test_aggregate_growth_is_preflighted_before_any_image_expansion(
     monkeypatch.setattr(
         operations, "_expand_polynomial_substitution", unexpected_expansion
     )
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compose_polynomial_homomorphisms(f, g)
+    assert (
+        exc_info.value.errors()[0]["type"] == "free_algebra.substitution_output_cells"
+    )
     assert calls == 0
 
 

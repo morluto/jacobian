@@ -270,8 +270,12 @@ def test_homomorphism_check_rejects_unbounded_retained_labels() -> None:
     label = "a" * (MAX_MORPHISM_RETAINED_LABEL_CHARACTERS // 6 + 1)
     vertex_map = _vertex_map((label,), (), ("b",), (), ((label, "b"),))
 
-    with pytest.raises(OperationDomainValidationError, match="label-character"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         homomorphism_check(vertex_map)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.morphism.retained_labels_exceed_bound"
+    )
 
 
 def _canonical_graph(
@@ -361,8 +365,9 @@ class TestFixedLengthCycle:
         monkeypatch.setattr(
             "jacobian.math.graphs.morphisms.operations.MAX_CYCLE_SEARCH_PATHS", 1
         )
-        with pytest.raises(OperationDomainValidationError, match="path work budget"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             fixed_length_cycle(graph, 3)
+        assert exc_info.value.errors()[0]["type"] == "graph.cycle.search_bound"
 
     def test_large_bipartite_odd_cycle_is_rejected_before_complete_search(
         self,
@@ -372,13 +377,15 @@ class TestFixedLengthCycle:
         left = [f"a{index:02d}" for index in range(32)]
         right = [f"b{index:02d}" for index in range(32)]
         graph = self._g(left + right, [[u, v] for u in left for v in right])
-        with pytest.raises(OperationDomainValidationError, match="path work budget"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             fixed_length_cycle(graph, 63)
+        assert exc_info.value.errors()[0]["type"] == "graph.cycle.search_bound"
         claim = FixedLengthCycleResult(
             graph=graph, decision="DOES_NOT_EXIST", length=63, cycle=()
         )
-        with pytest.raises(OperationResourceAdmissionError, match="path work budget"):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             verify_fixed_length_cycle(claim)
+        assert exc_info.value.errors()[0]["type"] == "graph.cycle.search_bound"
 
     def test_cycle_checks_parent_deadline_after_final_candidate(
         self, monkeypatch: pytest.MonkeyPatch
@@ -628,10 +635,9 @@ class TestSubgraphPatternFind:
             "jacobian.math.graphs.morphisms.operations.MAX_SUBGRAPH_CANDIDATE_CHECKS",
             1,
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="candidate work budget"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             subgraph_pattern_find(pattern, host)
+        assert exc_info.value.errors()[0]["type"] == "graph.subgraph.search_bound"
 
     def test_large_partite_clique_obstruction_is_rejected_before_complete_search(
         self,
@@ -653,17 +659,15 @@ class TestSubgraphPatternFind:
             for right in right_part
         ]
         host = self._g(host_labels, host_edges)
-        with pytest.raises(
-            OperationDomainValidationError, match="candidate work budget"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             subgraph_pattern_find(pattern, host)
+        assert exc_info.value.errors()[0]["type"] == "graph.subgraph.search_bound"
         claim = SubgraphPatternFindResult(
             pattern=pattern, host=host, decision="DOES_NOT_EXIST", vertex_map=()
         )
-        with pytest.raises(
-            OperationResourceAdmissionError, match="candidate work budget"
-        ):
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
             verify_subgraph_pattern_find(claim)
+        assert exc_info.value.errors()[0]["type"] == "graph.subgraph.search_bound"
 
     def test_embedding_checks_parent_deadline_after_final_candidate(
         self, monkeypatch: pytest.MonkeyPatch
@@ -744,8 +748,12 @@ class TestSubgraphPatternFind:
         labels = [huge] + [f"w{i}" for i in range(19)]
         g = self._g(labels, [])
         request = FixedLengthCycleRequest(graph=g, length=3)
-        with pytest.raises(OperationDomainValidationError, match="label-character"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _compute_fixed_length_cycle(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.morphism.retained_labels_exceed_bound"
+        )
         forged = FixedLengthCycleResult(
             graph=g, decision="DOES_NOT_EXIST", length=3, cycle=()
         )

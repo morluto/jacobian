@@ -53,13 +53,15 @@ def test_two_point_fixture() -> None:
 def test_points_must_lie_in_unit_cube(coordinate: Fraction) -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
-    with pytest.raises(OperationDomainValidationError, match="lie in"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         squared_l2_star_discrepancy(rational_matrix_from_fractions(((coordinate,),)))
+    assert exc_info.value.errors()[0]["type"] == "geometry.discrepancy_unit_cube"
 
 
 def test_excessive_pair_work_is_rejected() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
     points = rational_matrix_from_fractions(((Fraction(0),),) * 1000)
-    with pytest.raises(OperationDomainValidationError, match="1000000"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         squared_l2_star_discrepancy(points)
+    assert exc_info.value.errors()[0]["type"] == "geometry.discrepancy_work"

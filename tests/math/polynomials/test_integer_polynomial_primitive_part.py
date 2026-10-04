@@ -155,10 +155,13 @@ def test_content_profile_preflights_duplicated_coefficient_output(
         "jacobian.math.polynomials._elementary_kernel.MAX_PRIMITIVE_PART_RESULT_DIGITS",
         20,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         integer_polynomial_primitive_part(
             IntegerPolynomial(coefficients=(10**12, 10**12 + 1))
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.content_profile_result_digits"
+    )
 
 
 def test_content_accepts_carrier_length_beyond_mahler_degree() -> None:
@@ -173,23 +176,24 @@ def test_content_rejects_forged_carriers_beyond_integer_envelope() -> None:
     oversized = IntegerPolynomial.model_construct(
         coefficients=(1,) * (MAX_POLYNOMIAL_TERMS + 1)
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="integer-polynomial carrier"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         integer_polynomial_primitive_part(oversized)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.primitive_part_term_bound"
     too_wide = IntegerPolynomial.model_construct(
         coefficients=(10**MAX_CANONICAL_INTEGER_DIGITS,)
     )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="canonical integer representation"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         integer_polynomial_primitive_part(too_wide)
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.primitive_part_integer_digits"
+    )
 
 
 def test_content_profile_rejects_leading_zero_native_coefficients() -> None:
     forged = IntegerPolynomial.model_construct(coefficients=(0, 1))
-    with pytest.raises(OperationDomainValidationError, match="leading zeros"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         integer_polynomial_primitive_part(forged)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.primitive_part_shape"
 
 
 def test_nonzero_content_result_round_trips_through_strict_json() -> None:

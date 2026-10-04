@@ -175,8 +175,12 @@ def test_trace_result_deserialization_rejects_impossible_terminal_row() -> None:
     event["added_row"] = 1
     event["added_column"] = 0
     event["bump_path"] = ({"row": 0, "column": 0, "bumped_entry": 2},)
-    with pytest.raises(ValidationError, match="rsk_trace_prefix_shape"):
+    with pytest.raises(ValidationError) as exc_info:
         RSKWordTraceResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_trace_prefix_shape"
+    )
 
 
 def test_trace_result_deserialization_rejects_inconsistent_entry_chain() -> None:
@@ -185,8 +189,12 @@ def test_trace_result_deserialization_rejects_inconsistent_entry_chain() -> None
     )
     payload = result.model_dump(mode="python")
     payload["insertion_events"][0]["added_entry"] = 1
-    with pytest.raises(ValidationError, match="rsk_trace_entry_chain"):
+    with pytest.raises(ValidationError) as exc_info:
         RSKWordTraceResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_trace_entry_chain"
+    )
 
 
 def test_trace_result_deserialization_rejects_missing_source_positions() -> None:
@@ -195,5 +203,9 @@ def test_trace_result_deserialization_rejects_missing_source_positions() -> None
     )
     payload = result.model_dump(mode="python")
     payload["insertion_events"] = payload["insertion_events"][:1]
-    with pytest.raises(ValidationError, match="rsk_trace_event_positions"):
+    with pytest.raises(ValidationError) as exc_info:
         RSKWordTraceResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_trace_event_positions"
+    )

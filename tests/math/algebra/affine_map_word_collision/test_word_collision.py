@@ -152,8 +152,12 @@ def test_word_order_matches_documented_composition() -> None:
 
 def test_native_admission_rejects_excessive_word_enumeration() -> None:
     generators = tuple((Fraction(1), Fraction(index)) for index in range(20))
-    with pytest.raises(OperationDomainValidationError, match="composition work limit"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_word_collision_profile(generators, 5)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "affine_map.composition_work_exceeds_bound"
+    )
 
 
 def test_duplicate_maps_can_exceed_legacy_word_count() -> None:
@@ -204,8 +208,9 @@ def test_identity_after_constant_reset_preserves_bound() -> None:
 
 def test_native_admission_rejects_rational_growth_before_enumeration() -> None:
     huge = 10**32_767
-    with pytest.raises(OperationDomainValidationError, match="rational digit limit"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_word_collision_profile(((Fraction(huge), Fraction(0)),), 2)
+    assert exc_info.value.errors()[0]["type"] == "affine_map.rational_growth_exceeded"
 
 
 def test_zero_slope_at_canonical_intercept_boundary_is_admitted() -> None:

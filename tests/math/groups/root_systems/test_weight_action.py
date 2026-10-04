@@ -83,10 +83,11 @@ def test_identity_reflection_composition_and_inverse_are_exact():
 def test_same_rank_but_different_cartan_parent_is_rejected():
     element = weyl_element_from_word(_A2, (0,))
     weight = weight_lattice_vector(_B2, (1, 0))
-    with pytest.raises(
-        OperationDomainValidationError, match="same ordered Cartan datum"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_element_act_on_weight(element, weight)
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_system.weyl_weight_parent_mismatch"
+    )
 
 
 def test_caller_constructed_invalid_weyl_element_is_re_admitted():

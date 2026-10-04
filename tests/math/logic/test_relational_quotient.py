@@ -77,16 +77,19 @@ def test_partial_relation_fiber_is_not_a_congruence() -> None:
         signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
         relation_tables=(((0, 1),),),
     )
-    with pytest.raises(OperationDomainValidationError, match="partial source fiber"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         quotient_structure(source, (0, 0))
+    assert exc_info.value.errors()[0]["type"] == "relational.quotient.not_saturated"
 
 
 def test_partition_axis_and_exact_integer_labels_are_required() -> None:
     source = FiniteRelationalStructure(carrier_size=1)
-    with pytest.raises(OperationDomainValidationError, match="one label per source"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         quotient_structure(source, ())
-    with pytest.raises(OperationDomainValidationError, match="exact integer"):
+    assert exc_info.value.errors()[0]["type"] == "relational.quotient.partition_axis"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         quotient_structure(source, (True,))
+    assert exc_info.value.errors()[0]["type"] == "relational.quotient.partition_label"
 
 
 def test_empty_carrier_has_empty_quotient_map() -> None:

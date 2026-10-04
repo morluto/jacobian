@@ -100,8 +100,9 @@ def test_derived_area_must_fit_the_canonical_rational_carrier() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="derived triangle area"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_triangle_area_profile(config)
+    assert exc_info.value.errors()[0]["type"] == "geometry.triangle_area_result_bound"
 
 
 def test_all_coordinate_denominator_factors_are_bounded() -> None:
@@ -126,8 +127,9 @@ def test_all_coordinate_denominator_factors_are_bounded() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="derived triangle area"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_triangle_area_profile(config)
+    assert exc_info.value.errors()[0]["type"] == "geometry.triangle_area_result_bound"
 
 
 @pytest.mark.parametrize("dimension", [1, 3])
@@ -140,5 +142,9 @@ def test_nonplanar_configuration_is_rejected(dimension: int) -> None:
         ]
     )
 
-    with pytest.raises(OperationDomainValidationError, match="exactly two"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_triangle_area_profile(config)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.triangle_area_planar_configuration"
+    )

@@ -5,6 +5,7 @@ from time import monotonic
 
 import pytest
 from sympy import cancel, symbols
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
@@ -104,8 +105,12 @@ def test_zero_constant_serialization_and_axis_validation() -> None:
         == metric.tensor
     )
     assert type(result).model_validate_json(result.model_dump_json()) == result
-    with pytest.raises(OperationDomainValidationError, match="same coordinate axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         laplace_beltrami(metric, _scalar(x, ("y", "x")))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.laplace_beltrami.axis_mismatch"
+    )
 
 
 def test_shared_deadline_is_honored() -> None:
@@ -121,10 +126,12 @@ def test_shared_deadline_is_honored() -> None:
 def test_identically_singular_metric_rejects_before_cancellation() -> None:
     x = symbols("x")
     metric = _metric((1, x, x, x**2), ("x", "y"))
-    with pytest.raises(
-        OperationDomainValidationError, match="identically zero"
-    ) as rejected:
+    with pytest.raises(OperationDomainValidationError) as rejected:
         laplace_beltrami(metric, _scalar(x, ("x", "y")))
+    assert (
+        rejected.value.errors()[0]["type"]
+        == "differential_geometry.laplace_beltrami.singular_metric"
+    )
     assert rejected.value.errors()[0]["type"].endswith(
         "laplace_beltrami.singular_metric"
     )
@@ -132,10 +139,12 @@ def test_identically_singular_metric_rejects_before_cancellation() -> None:
 
 def test_structurally_zero_metric_uses_the_laplace_domain_code() -> None:
     metric = _metric((0,), ("x",))
-    with pytest.raises(
-        OperationDomainValidationError, match="identically zero"
-    ) as rejected:
+    with pytest.raises(OperationDomainValidationError) as rejected:
         laplace_beltrami(metric, _scalar(1, ("x",)))
+    assert (
+        rejected.value.errors()[0]["type"]
+        == "differential_geometry.laplace_beltrami.singular_metric"
+    )
     assert rejected.value.errors()[0]["type"].endswith(
         "laplace_beltrami.singular_metric"
     )
@@ -177,8 +186,12 @@ def test_powered_binomial_result_denominator_is_reserved() -> None:
             retained_nonzero_denominators=guards,
         )
     )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         laplace_beltrami(metric, _scalar(1 / (x + 1), axis))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "differential_geometry.laplace_beltrami.locus"
+    )
 
 
 def test_nonreduced_scalar_is_a_domain_error_before_admission() -> None:
@@ -265,8 +278,12 @@ def test_recognition_work_is_rejected_before_the_gcd_worker(
             "recognition worker must follow work admission"
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work") as rejected:
+    with pytest.raises(OperationResourceAdmissionError) as rejected:
         laplace_beltrami(metric, scalar)
+    assert (
+        rejected.value.errors()[0]["type"]
+        == "differential_geometry.laplace_beltrami.work"
+    )
     error = rejected.value.errors()[0]
     assert error["type"].endswith(".work")
     assert error["loc"] == ("scalar",)
@@ -289,10 +306,11 @@ def test_result_locus_guard_budget_is_bounded() -> None:
     one = _scalar(1, axis)
     guards = tuple(_scalar(x + offset, axis).numerator for offset in range(1, 770))
 
-    with pytest.raises(ValueError, match="at most 768"):
+    with pytest.raises(ValueError) as exc_info:
         RationalLaplaceBeltramiResult(
             metric=metric,
             scalar=one,
             value=one,
             retained_nonzero_denominators=guards,
         )
+    assert error_code(exc_info.value) == "too_long"

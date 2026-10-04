@@ -115,8 +115,11 @@ def test_fourier_matrix_rejects_excess_work_before_matrix_construction(monkeypat
         "_from_kernel",
         classmethod(unexpected_construction),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         dirichlet_character_fourier_matrix(group)
+    assert (
+        exc_info.value.errors()[0]["type"] == "dirichlet_character.fourier.work_bound"
+    )
 
 
 def test_fourier_matrix_catalog_contract():

@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import FriableCountResult, count_friable
@@ -147,25 +148,37 @@ def test_native_source_digit_bound_covers_canonical_integer_values() -> None:
 
 
 def test_request_rejects_negative_and_noncanonical_sources() -> None:
-    with pytest.raises(OperationDomainValidationError, match="must be nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_friable_count(FriableCountRequest(x=-1, y=2))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.friable_count_sources_must_be_nonnegative"
+    )
     with pytest.raises(ValidationError):
         FriableCountRequest.model_validate_json('{"x":"01","y":"2"}')
 
 
 def test_request_rejects_unbounded_generated_prime_cutoff() -> None:
-    with pytest.raises(ValueError, match="exceeds the admitted prime cutoff"):
+    with pytest.raises(ValueError) as exc_info:
         compute_friable_count(
             FriableCountRequest(
                 x=MAX_FRIABLE_MATERIALIZED_X + 1,
                 y=MAX_FRIABLE_GENERATED_CUTOFF + 1,
             )
         )
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.generated_friable_counting_exceeds_the_admitted_prime_cutoff"
+    )
 
 
 def test_request_rejects_generated_search_above_node_budget() -> None:
-    with pytest.raises(ValueError, match="exceeds the search-node budget"):
+    with pytest.raises(ValueError) as exc_info:
         compute_friable_count(FriableCountRequest(x=_MAX_FRIABLE_SOURCE_ABS // 10, y=5))
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.generated_friable_counting_exceeds_the_search_node_budget"
+    )
 
 
 def test_result_validation_is_structural() -> None:

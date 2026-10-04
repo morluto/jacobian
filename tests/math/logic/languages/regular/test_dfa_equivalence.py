@@ -4,6 +4,7 @@ import itertools
 from typing import cast
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -83,11 +84,16 @@ def test_shortest_lexicographically_least_word_and_replayable_traces() -> None:
 def test_alphabet_mismatch_is_a_domain_error() -> None:
     binary = dfa(((0, 0, 0), (0, 1, 0)), (), alphabet_size=2)
     unary = dfa(((0, 0, 0),), (), alphabet_size=1)
-    with pytest.raises(ValueError, match="matching alphabet sizes and parents"):
+    with pytest.raises(ValueError) as exc_info:
         compute_equivalence(EquivalenceRequest(left=binary, right=unary))
+    assert error_code(exc_info.value) == "regular_language.alphabet_mismatch"
     other_parent = binary.model_copy(update={"alphabet_id": "other", "alphabet": None})
-    with pytest.raises(OperationDomainValidationError, match="same ordered alphabet"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         operations.dfa_equivalence(binary, other_parent)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.equivalence.alphabet_mismatch"
+    )
 
 
 def test_empty_alphabet_has_only_the_empty_word() -> None:
@@ -152,10 +158,17 @@ def test_native_guard_rejects_partial_and_untyped_dfas() -> None:
         initial_state=0,
         accepting_states=(),
     )
-    with pytest.raises(OperationDomainValidationError, match="one transition"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         operations.dfa_equivalence(partial, valid)
-    with pytest.raises(OperationDomainValidationError, match="canonical DFA"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "regular_language.equivalence.partial_dfa"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         operations.dfa_equivalence(cast(DFA, {"not": "a DFA"}), valid)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.equivalence.left_not_dfa"
+    )
 
 
 def test_native_guard_rejects_incompletely_constructed_values() -> None:
@@ -196,14 +209,18 @@ def test_equivalence_admits_before_product_bfs(monkeypatch: pytest.MonkeyPatch) 
     )
     right = left
     monkeypatch.setattr(operations, "MAX_DFA_EQUIVALENCE_PRODUCT_STATES", 1)
-    with pytest.raises(OperationResourceAdmissionError, match="product_states"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         operations.dfa_equivalence(left, right)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.equivalence.product_states_bound"
+    )
 
 
 def test_result_shape_checks_are_structural_and_do_not_replay() -> None:
     left = dfa(((0, 0, 0), (0, 1, 0)), ())
     right = left
-    with pytest.raises(ValueError, match="symbol outside"):
+    with pytest.raises(ValueError) as exc_info:
         EquivalenceResult(
             left=left,
             right=right,
@@ -212,7 +229,11 @@ def test_result_shape_checks_are_structural_and_do_not_replay() -> None:
             left_state_trace=(0, 0),
             right_state_trace=(0, 0),
         )
-    with pytest.raises(ValueError, match="start at each initial"):
+    assert (
+        error_code(exc_info.value)
+        == "regular_language.counterexample_symbol_out_of_range"
+    )
+    with pytest.raises(ValueError) as exc_info:
         EquivalenceResult(
             left=left,
             right=right,
@@ -221,3 +242,4 @@ def test_result_shape_checks_are_structural_and_do_not_replay() -> None:
             left_state_trace=(1, 0),
             right_state_trace=(0, 0),
         )
+    assert error_code(exc_info.value) == "regular_language.counterexample_trace_state"

@@ -167,10 +167,12 @@ def test_genuine_active_growth_is_rejected_before_backend(
         pytest.fail("resultant output admission must precede the backend")
 
     monkeypatch.setattr(operations, "_sylvester_resultant_value", unexpected_backend)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="resultant output support bound"
-    ) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         operations.multivariate_resultant(left, right, "x")
+    assert (
+        error.value.errors()[0]["type"]
+        == "polynomial.multivariate_resultant.support_budget"
+    )
     assert (
         error.value.errors()[0]["type"]
         == "polynomial.multivariate_resultant.support_budget"

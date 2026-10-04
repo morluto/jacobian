@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -109,8 +110,9 @@ def test_rational_arithmetic_work_is_admitted_separately() -> None:
         CanonicalRational(num=1, den=10**16_400 + (3 if i % 2 == 0 else 7))
         for i in range(20)
     )
-    with pytest.raises(ValueError, match="rational growth exceeds"):
+    with pytest.raises(ValueError) as exc_info:
         compute_maximum_weight_antichain(poset, weights)
+    assert error_code(exc_info.value) == "weighted_antichain.result_growth_exceeded"
 
 
 def test_chain_growth_uses_width_not_carrier_size() -> None:
@@ -182,7 +184,8 @@ def test_equal_maxima_choose_lexicographically_least_antichain() -> None:
 
 
 def test_weight_axis_must_match_the_poset() -> None:
-    with pytest.raises(
-        OperationDomainValidationError, match="one entry per poset element"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_maximum_weight_antichain(_chain_poset(["a", "b"]), (_cr(1),))
+    assert (
+        exc_info.value.errors()[0]["type"] == "weighted_antichain.weight_count_mismatch"
+    )

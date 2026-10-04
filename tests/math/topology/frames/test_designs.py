@@ -90,12 +90,13 @@ def test_octahedron_is_not_4_design() -> None:
 
 
 def test_weights_must_normalize() -> None:
-    with pytest.raises(OperationDomainValidationError, match="sum to one"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         spherical_design_verify(
             _octahedron(),
             tuple(R.from_fraction(Fraction(1, 3)) for _ in range(6)),
             1,
         )
+    assert exc_info.value.errors()[0]["type"] == "frames.design_weight_normalization"
 
 
 def test_qubit_basis_is_projective_1_design() -> None:

@@ -280,22 +280,34 @@ def test_quadratic_intermediate_residual_growth_is_rejected() -> None:
 
 def test_quadratic_triangular_work_is_rejected_before_expansion() -> None:
     source = _polynomial(((1, (1_024, 0)),))
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         rational_discrete_antiderivative(
             source,
             "k",
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.discrete_antiderivative.work_bound"
+    )
 
 
 def test_request_type_and_selected_axis_are_domain_errors() -> None:
-    with pytest.raises(OperationDomainValidationError, match="RationalPolynomial"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_discrete_antiderivative(object(), "k")  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.discrete_antiderivative.polynomial_type"
+    )
     source = _polynomial(((1, (1, 0)),))
-    with pytest.raises(OperationDomainValidationError, match="selected variable"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_discrete_antiderivative(
             source,
             "z",
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.discrete_antiderivative.variable_axis"
+    )
 
 
 @pytest.mark.parametrize(

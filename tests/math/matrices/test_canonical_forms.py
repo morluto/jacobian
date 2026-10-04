@@ -320,7 +320,7 @@ def test_matrix_polynomial_remainder_result_rejects_empty_source() -> None:
     zero = RationalPolynomial(
         variables=("t",), polynomial=SparseRationalPolynomial(terms=())
     )
-    with pytest.raises(ValidationError, match="source matrix must be nonempty"):
+    with pytest.raises(ValidationError) as exc_info:
         MatrixPolynomialRemainderResult(
             source_matrix=RationalMatrix(entries=()),
             polynomial=zero,
@@ -328,6 +328,7 @@ def test_matrix_polynomial_remainder_result_rejects_empty_source() -> None:
             quotient=zero,
             remainder=zero,
         )
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 def test_trusted_canonical_form_producers_run_each_kernel_once(

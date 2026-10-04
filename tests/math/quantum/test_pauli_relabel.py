@@ -135,12 +135,16 @@ def test_relabeling_rejects_a_non_bijection() -> None:
         phase_free=PhaseFreeQubitPauli(register=source, x_bits=(1, 0), z_bits=(0, 1)),
         phase=0,
     )
-    with pytest.raises(ValidationError, match="bijection"):
+    with pytest.raises(ValidationError) as exc_info:
         QubitRegisterRelabeling(
             source_register=source,
             target_register=QubitRegister(qubit_ids=("c", "d")),
             target_ids_in_source_order=("c", "c"),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "quantum.pauli.relabel.mapping_not_bijection"
+    )
 
     wrong_source = QubitRegisterRelabeling(
         source_register=QubitRegister(qubit_ids=("other-0", "other-1")),

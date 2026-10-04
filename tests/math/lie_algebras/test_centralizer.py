@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -146,8 +147,9 @@ def test_result_composes_as_a_subspace_with_the_quotient_operation() -> None:
 
 def test_element_basis_must_match_source() -> None:
     alien = _element(("u", "v", "w"), (1, 0, 0))
-    with pytest.raises(ValueError, match="centralizer elements must use"):
+    with pytest.raises(ValueError) as exc_info:
         lie_subalgebra_centralizer(HEISENBERG, (alien,))
+    assert error_code(exc_info.value) == "lie_algebra.centralizer_element_basis"
 
 
 def test_above_family_size_bound_is_rejected() -> None:

@@ -159,12 +159,17 @@ def test_first_order_lclm_rejects_nonpolynomial_coefficients_and_wrong_order() -
         }
     )
     first_order = _operator((0, [(0, -1)]), (1, [(0, 1)]))
-    with pytest.raises(OperationDomainValidationError, match="polynomial coefficients"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_first_order_lclm(rational, first_order)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.first_order_lclm_polynomial_domain"
+    )
 
     second_order = _operator((0, [(0, 1)]), (2, [(0, 1)]))
-    with pytest.raises(OperationDomainValidationError, match="first-order"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         differential_first_order_lclm(second_order, second_order)
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.first_order_lclm_request"
 
 
 def test_catalog_example_returns_its_declared_lclm_value() -> None:

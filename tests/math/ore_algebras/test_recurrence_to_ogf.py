@@ -136,11 +136,15 @@ def test_polynomial_recurrence_keeps_nonzero_initial_boundary_exactly() -> None:
 
 
 def test_boundary_forcing_growth_is_rejected_before_encoding() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_recurrence_to_ogf_equation(
             _recurrence((1, [(0, 10**63)])),
             {"values": [10**99]},
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.recurrence_ogf_coefficient_digits"
+    )
 
 
 def test_large_boundary_products_cancel_before_coefficient_admission() -> None:
@@ -302,12 +306,11 @@ def test_ogf_does_not_add_growth_after_exact_slot_accounting() -> None:
 
 
 def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -> None:
-    with pytest.raises(
-        OperationDomainValidationError, match="initial_coefficients must provide"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_recurrence_to_ogf_equation(
             _recurrence((0, [(0, -1)]), (2, [(0, 1)])), {"values": [1]}
         )
+    assert exc_info.value.errors()[0]["type"] == "ore_algebra.ogf_initial_coefficients"
 
     rational = _rf([(0, 1)])
     rational["denominator"] = {
@@ -316,22 +319,26 @@ def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -
             {"coefficient": {"num": 1, "den": 1}, "exponents": [0]},
         ]
     }
-    with pytest.raises(
-        OperationDomainValidationError, match="requires coefficients in QQ\\[n\\]"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_recurrence_to_ogf_equation(
             {"variable": "n", "terms": [{"exponent": 0, "coefficient": rational}]},
             {"values": []},
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.recurrence_ogf_polynomial_domain"
+    )
 
 
 def test_ogf_transform_rejects_unsupported_differential_order_preflight() -> None:
-    with pytest.raises(
-        OperationResourceAdmissionError, match="differential-operator order"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polynomial_recurrence_to_ogf_equation(
             _recurrence((0, [(17, 1)])), {"values": []}
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "ore_algebra.recurrence_ogf_differential_order"
+    )
 
 
 def test_largest_admitted_shift_is_bounded_after_forcing_support() -> None:

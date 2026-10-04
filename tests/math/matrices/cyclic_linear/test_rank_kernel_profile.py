@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -538,18 +539,20 @@ def test_cyclotomic_parent_is_bound_to_exact_component_order() -> None:
     assert isinstance(component, dict)
     component["order"] = 2
 
-    with pytest.raises(ValueError, match=r"Phi_order|declared field"):
+    with pytest.raises(ValueError) as exc_info:
         CyclicRationalRankKernelProfile.model_validate_json(
             json.dumps(payload), strict=True
         )
+    assert error_code(exc_info.value) == "matrix.cyclic.cyclotomic_field"
 
     extra_polynomial_payload = result.components[1].field.model_dump(mode="json")
     extra_polynomial_payload["coefficients_descending"] = ["1", "0", "1"]
-    with pytest.raises(ValueError, match="Extra inputs"):
+    with pytest.raises(ValueError) as exc_info:
         RationalCyclotomicField.model_validate(
             extra_polynomial_payload,
             strict=True,
         )
+    assert error_code(exc_info.value) == "extra_forbidden"
 
 
 def test_crt_idempotents_select_exactly_their_components() -> None:
@@ -688,12 +691,15 @@ def test_published_profile_adapter_uses_the_mathematical_admission() -> None:
 
 
 def test_symbol_requires_canonical_support_and_bounded_rationals() -> None:
-    with pytest.raises(ValueError, match=r"row-major|canonical"):
+    with pytest.raises(ValueError) as exc_info:
         _symbol(period=3, entries=((0, 0, 1, 1), (0, 0, 0, 1)))
-    with pytest.raises(ValueError, match="zero"):
+    assert error_code(exc_info.value) == "matrix.cyclic.support_order"
+    with pytest.raises(ValueError) as exc_info:
         _symbol(period=3, entries=((0, 0, 0, 0),))
-    with pytest.raises(ValueError, match="64 decimal digits"):
+    assert error_code(exc_info.value) == "matrix.cyclic.zero_coefficient"
+    with pytest.raises(ValueError) as exc_info:
         _symbol(period=3, entries=((0, 0, 0, 10**64),))
+    assert error_code(exc_info.value) == "matrix.cyclic.coefficient_bound"
 
 
 def test_symbol_schema_projects_the_sign_aware_64_digit_rational_bound() -> None:
@@ -804,10 +810,9 @@ def test_dense_hadamard_axis_exceeds_the_field_work_envelope() -> None:
         ),
     )
 
-    with pytest.raises(
-        CyclicRankKernelAdmissionError, match="scalar-bit work"
-    ) as error:
+    with pytest.raises(CyclicRankKernelAdmissionError) as error:
         cyclic_rational_rank_kernel_profile(source)
+    assert error.value.errors()[0]["type"] == "matrix.cyclic.field_work_bound"
     assert error.value.errors()[0]["loc"] == ("symbol",)
 
 

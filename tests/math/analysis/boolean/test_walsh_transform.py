@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.boolean._models import (
@@ -134,25 +135,35 @@ def test_walsh_transform_agrees_with_direct_character_sum(
 
 def test_walsh_transform_rejects_non_power_of_two_length() -> None:
     request = BooleanTruthTableRequest(truth_table=(0, 1, 1))
-    with pytest.raises(OperationDomainValidationError, match="power of two"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _walsh_hadamard_transform(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "boolean.fourier.walsh_transform.power_of_two"
+    )
 
 
 def test_walsh_transform_rejects_empty_truth_table() -> None:
-    with pytest.raises(ValueError, match="at least 1 item"):
+    with pytest.raises(ValueError) as exc_info:
         BooleanTruthTableRequest.model_validate({"truth_table": []})
+    assert error_code(exc_info.value) == "too_short"
 
 
 def test_walsh_transform_rejects_non_boolean_entries() -> None:
-    with pytest.raises(ValueError, match="0 or 1"):
+    with pytest.raises(ValueError) as exc_info:
         BooleanTruthTableRequest.model_validate({"truth_table": [0, 1, 1, 2]})
+    assert error_code(exc_info.value) == "literal_error"
 
 
 def test_walsh_transform_kernel_rejects_non_binary_values() -> None:
     from jacobian.math.analysis.boolean import walsh_hadamard_transform
 
-    with pytest.raises(OperationDomainValidationError, match="0 or 1"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         walsh_hadamard_transform([0, 1, 1, 2])
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "boolean.fourier.walsh_transform.boolean_entries"
+    )
 
 
 def test_walsh_result_round_trip_composes_with_its_native_verifier() -> None:

@@ -176,8 +176,9 @@ def test_expansion_work_is_admitted_before_cartesian_expansion() -> None:
         images=(_polynomial(target, {("a",): 1, ("b",): 1}),),
     )
     source = _polynomial(("x",), {("x",) * 16: 1})
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         substitute_polynomial(substitution, source)
+    assert exc_info.value.errors()[0]["type"] == "free_algebra.substitution_work_budget"
 
 
 def test_catalog_declaration_example_declares_a_usable_substitution() -> None:

@@ -98,8 +98,12 @@ def test_pari_frame_admits_both_basis_jobs_before_launching_either(
     monkeypatch.setattr(
         basis_module, "pari_gamma0_rational_basis", backend_must_not_run
     )
-    with pytest.raises(OperationResourceAdmissionError, match="shared work envelope"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         modular_form_hecke_matrix_in_frame(frame, 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "modular_form.framed_hecke_aggregate_work_bound"
+    )
 
 
 def test_zero_dimensional_cusp_space_has_empty_framed_hecke_matrix() -> None:

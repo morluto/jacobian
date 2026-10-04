@@ -59,15 +59,23 @@ def test_order_two_vertex_deck_does_not_determine_realizing_edge_count() -> None
     empty = _vertex_deck(_graph(2, 0))
     one_edge = _vertex_deck(_graph(2, 1))
     assert empty == one_edge
-    with pytest.raises(OperationDomainValidationError, match="do not determine"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         anonymous_vertex_deck_edge_count(empty)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.anonymous_edge_count_order_two"
+    )
 
 
 def test_nondivisible_card_edge_total_is_rejected() -> None:
     cards = (_graph(3, 1), _graph(3, 0), _graph(3, 0), _graph(3, 0))
     deck = anonymous_graph_card_multiset(card_order=3, cards=cards)
-    with pytest.raises(OperationDomainValidationError, match="not divisible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         anonymous_vertex_deck_edge_count(deck)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.anonymous_edge_count_nondivisible"
+    )
 
 
 def test_result_round_trip_preserves_typed_input_deck_and_quotient() -> None:
@@ -147,10 +155,12 @@ def test_native_admission_rejects_missing_constructed_graph_fields(
     item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
     deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
 
-    with pytest.raises(
-        OperationDomainValidationError, match="bounded graph representatives"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         anonymous_vertex_deck_edge_count(deck)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.anonymous_edge_count_class_shape"
+    )
 
 
 def test_native_admission_rejects_oversized_edge_tuple_before_edge_scan() -> None:
@@ -159,5 +169,9 @@ def test_native_admission_rejects_oversized_edge_tuple_before_edge_scan() -> Non
     )
     item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
     deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
-    with pytest.raises(OperationDomainValidationError, match="more edges"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         anonymous_vertex_deck_edge_count(deck)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.anonymous_edge_count_representative"
+    )

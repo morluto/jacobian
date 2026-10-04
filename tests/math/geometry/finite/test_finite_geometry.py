@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 from sympy import isprime
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -74,8 +75,11 @@ def test_projective_point_canonicalize_scales_to_one() -> None:
 
 
 def test_projective_point_canonicalize_rejects_zero() -> None:
-    with pytest.raises(OperationDomainValidationError, match="zero vector"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         projective_point_canonicalize(_space(5, ("x", "y")), (0, 0))
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_geometry.projective_vector_zero"
+    )
 
 
 def test_projective_point_equal_same_point() -> None:
@@ -382,14 +386,16 @@ def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
 
 
 def test_enumerate_admission_rejects_oversized_axis_labels() -> None:
-    with pytest.raises(ValueError, match="4096"):
+    with pytest.raises(ValueError) as exc_info:
         projective_space_enumerate(_space(2, ("x", "y" * (9 * 1024 * 1024))))
+    assert error_code(exc_info.value) == "string_too_long"
 
 
 def test_enumerate_admission_bounds_axis_label_characters() -> None:
     label = "x" + "\u0344" * (2_600_000)
-    with pytest.raises(ValueError, match="4096"):
+    with pytest.raises(ValueError) as exc_info:
         projective_space_enumerate(_space(2, ("x", label)))
+    assert error_code(exc_info.value) == "string_too_long"
 
 
 def test_sequence_normalization_is_an_explicit_claim() -> None:
@@ -427,8 +433,9 @@ def test_request_rejects_nonprime_field() -> None:
     request = ProjectivePointCanonicalizeRequest(
         space=_space(4, ("x", "y")), vector=(1, 2)
     )
-    with pytest.raises(OperationDomainValidationError, match="must be prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         projective_point_canonicalize(request.space, request.vector)
+    assert exc_info.value.errors()[0]["type"] == "finite_geometry.field_order_not_prime"
 
 
 def test_canonical_values_compose_and_reject_different_parents() -> None:
@@ -473,8 +480,9 @@ def test_result_models_remain_structural_only() -> None:
 def test_subspace_rref_is_an_explicit_claim() -> None:
     malformed = LinearSubspace(space=_space(3, ("x", "y")), basis=((1, 1), (1, 1)))
     assert verify_linear_subspace(malformed) is False
-    with pytest.raises(OperationDomainValidationError, match="reduced row"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         subspace_membership(malformed, (0, 0))
+    assert exc_info.value.errors()[0]["type"] == "finite_geometry.basis_not_rref"
 
 
 @pytest.mark.parametrize("axis", [(), ("x", "y")])
@@ -507,8 +515,11 @@ def test_zero_dimensional_projective_space_has_empty_bound_sequence() -> None:
     assert tuple(decoded.sequence.points) == ()
     assert verify_projective_point_sequence(decoded.sequence)
     assert grassmannian_count(3, 0, 0).count == 1
-    with pytest.raises(OperationDomainValidationError, match="zero vector"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         projective_point_canonicalize(space, ())
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_geometry.projective_vector_zero"
+    )
 
 
 @pytest.mark.parametrize(
@@ -523,5 +534,9 @@ def test_native_grassmannian_parameters_are_bounded(
 
 
 def test_native_subspace_compute_bounds_generator_count() -> None:
-    with pytest.raises(OperationDomainValidationError, match="generator count"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         subspace_compute(_space(2, ("x",)), ((1,),) * 33)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_geometry.span_generator_count_exceeds_bound"
+    )

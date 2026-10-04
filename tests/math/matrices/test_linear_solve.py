@@ -7,6 +7,7 @@ import json
 import pytest
 import sympy
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices._operation_models import (
@@ -107,8 +108,9 @@ def test_singular_inverse_rejected_by_the_exact_kernel() -> None:
     request = NonsingularIntegerMatrixRequest.model_validate(
         {"matrix": {"entries": [[1, 2], [2, 4]]}}
     )
-    with pytest.raises(ValueError, match="singular"):
+    with pytest.raises(ValueError) as exc_info:
         compute_inverse(request)
+    assert error_code(exc_info.value) == "matrix.singular_matrix"
 
 
 def test_results_retain_their_source_system() -> None:

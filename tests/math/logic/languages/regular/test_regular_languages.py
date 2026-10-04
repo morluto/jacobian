@@ -5,6 +5,7 @@ from itertools import product
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.regular._models import (
@@ -349,8 +350,9 @@ def test_count_uses_flint_powering_above_the_previous_length_ceiling() -> None:
 
 
 def test_count_rejects_projected_result_digits_before_powering() -> None:
-    with pytest.raises(OperationDomainValidationError, match="result digit bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         count_accepted_words(_dfa_full_alphabet_accepting(), 22_000)
+    assert exc_info.value.errors()[0]["type"] == "regular_language.count_result_bound"
 
 
 def test_count_admits_value_just_below_result_digit_bound() -> None:
@@ -401,13 +403,18 @@ def test_count_toggle_dfa_parity_is_exact() -> None:
 def test_count_rejects_toggle_dfa_intermediate_explosion() -> None:
     """Odd max-length toggle counts are 0, but FLINT off-diagonals are 2**n."""
 
-    with pytest.raises(OperationDomainValidationError, match="intermediate"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         count_accepted_words(_dfa_binary_toggle(), MAX_COUNT_WORD_LENGTH)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.count_intermediate_bound"
+    )
 
 
 def test_count_rejects_large_state_powering_work() -> None:
-    with pytest.raises(OperationDomainValidationError, match="matrix powering"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         count_accepted_words(_dfa_rotating_binary((0,)), 10_000)
+    assert exc_info.value.errors()[0]["type"] == "regular_language.count_work_bound"
 
 
 def test_count_admits_large_state_powering_within_work_bound() -> None:
@@ -517,10 +524,11 @@ def test_contract_rejects_invalid_accepting_states() -> None:
 
 def test_contract_rejects_out_of_range_word_symbol() -> None:
     dfa = _dfa_ends_in_1()
-    with pytest.raises(ValueError, match="word symbols"):
+    with pytest.raises(ValueError) as exc_info:
         compute_run(
             RunRequest(dfa=dfa, word=(5,))
         )  # symbol 5 is out of range for alphabet_size=2
+    assert error_code(exc_info.value) == "regular_language.word_symbol_out_of_range"
 
 
 def test_contract_rejects_non_total_dfa() -> None:

@@ -174,16 +174,28 @@ def test_graph_selection_does_not_require_serializing_unselected_large_distances
 
 
 def test_mixed_and_non_square_free_fields_reject() -> None:
-    with pytest.raises(ValidationError, match="radicand"):
+    with pytest.raises(ValidationError) as exc_info:
         configuration(((value(0), value(0, d=2)),))
+    assert exc_info.value.errors()[0]["type"] == "geometry.quadratic_parent_mismatch"
     invalid = configuration(((value(0, d=4), value(0, d=4)),), 4)
-    with pytest.raises(OperationDomainValidationError, match="square-free"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         distance_profile(invalid)
+    assert (
+        exc_info.value.errors()[0]["type"] == "real_quadratic.radicand_not_square_free"
+    )
     source = configuration(((value(0), value(0)),))
-    with pytest.raises(OperationDomainValidationError, match="same quadratic field"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         distance_graph(source, value(1, d=2))
-    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.quadratic_distance.target_parent_mismatch"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         distance_graph(source, value(-1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.squared_distance_target_nonnegative"
+    )
     heavy = configuration(
         tuple(
             (
@@ -193,8 +205,12 @@ def test_mixed_and_non_square_free_fields_reject() -> None:
             for i in range(64)
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         distance_graph(heavy, value(-1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.squared_distance_target_nonnegative"
+    )
 
 
 def test_existing_operation_ids_accept_quadratic_sources_and_retain_types() -> None:

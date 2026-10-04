@@ -35,11 +35,12 @@ def test_membership_rejects_symbols_outside_parented_alphabet() -> None:
         initial_state=0,
         accepting_states=(),
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="word symbols must be in the NFA alphabet",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         nfa_membership(nfa, (1,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "regular_language.nfa_membership.invalid_word"
+    )
 
 
 def test_membership_rejects_partially_constructed_nfa() -> None:

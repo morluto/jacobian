@@ -180,7 +180,7 @@ def test_repeated_state_labels_are_charged_in_the_ledger_bound() -> None:
     """A 12-vertex powerset repeats each long label in 2,048 rows."""
     label_prefix = "\U0001f600" * 100_000
     vertices = tuple(sorted(f"{label_prefix}{index}" for index in range(12)))
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_site_connection_probability(
             _source(
                 vertices,
@@ -189,6 +189,10 @@ def test_repeated_state_labels_are_charged_in_the_ledger_bound() -> None:
                 (vertices[0], vertices[1]),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.site_reliability.output_bound"
+    )
 
 
 def test_successful_state_mass_equals_reported_total() -> None:
@@ -306,8 +310,12 @@ def test_site_vertex_bound_is_owned_by_operation_admission() -> None:
         (Fraction(1, 2),) * len(vertices),
         ("v0", "v1"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="vertex bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_site_connection_probability(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.site_reliability.vertex_bound"
+    )
 
 
 def test_site_ledger_allocation_is_admitted_before_enumeration(
@@ -320,8 +328,12 @@ def test_site_ledger_allocation_is_admitted_before_enumeration(
         (Fraction(1, 2), Fraction(1, 2)),
         ("a", "b"),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_site_connection_probability(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.site_reliability.output_bound"
+    )
 
 
 def test_site_ledger_charges_every_retained_source_label(
@@ -344,8 +356,12 @@ def test_site_ledger_charges_every_retained_source_label(
         ),
         terminals=(left, right),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         compute_site_connection_probability(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.site_reliability.output_bound"
+    )
 
 
 def test_matches_independent_brute_force() -> None:

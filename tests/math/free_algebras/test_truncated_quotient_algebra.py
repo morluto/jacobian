@@ -178,8 +178,12 @@ def test_decoded_carrier_shape_is_not_a_semantic_certificate() -> None:
 def test_nonhomogeneous_ideal_is_rejected() -> None:
     alphabet = ("x",)
     nonhomogeneous = _polynomial(alphabet, {(): 1, ("x",): 1})
-    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         truncated_quotient_algebra(_ideal(alphabet, (nonhomogeneous,)), 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.gs_requires_homogeneous_generators"
+    )
 
 
 def test_output_cell_bound_precedes_multiplication_table_construction(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -220,17 +221,19 @@ def test_result_validation_checks_affine_relations_and_parent_dimensions() -> No
         *result.affine_equalities[0][:-1],
         CanonicalRational.from_fraction(Fraction(1)),
     )
-    with pytest.raises(ValueError, match="affine equalities"):
+    with pytest.raises(ValueError) as exc_info:
         TropicalPolynomialEssentialPart.model_validate(
             result.model_dump(mode="python") | {"affine_equalities": (bad_row,)}
         )
+    assert error_code(exc_info.value) == "tropical.essential_part_affine_equalities"
 
     child = result.face_incidence[0].model_copy(update={"dimension": 2})
-    with pytest.raises(ValueError, match="parent faces"):
+    with pytest.raises(ValueError) as exc_info:
         TropicalPolynomialEssentialPart.model_validate(
             result.model_dump(mode="python")
             | {"face_incidence": (child, *result.face_incidence[1:])}
         )
+    assert error_code(exc_info.value) == "tropical.essential_part_face_incidence"
 
 
 def test_affine_height_relation_makes_all_terms_tie_somewhere() -> None:
@@ -277,8 +280,9 @@ def test_sixty_four_term_lift_rejected_before_hull_by_candidate_pair_admission(
         "jacobian.math.polynomials.tropical.essential_part.points_to_facets",
         unexpected_hull,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="candidate pairs"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         tropical_polynomial_essential_part(poly)
+    assert exc_info.value.errors()[0]["type"] == "tropical.essential_part_hull_bound"
 
 
 def test_face_work_is_rejected_before_hull_expansion(
@@ -299,8 +303,9 @@ def test_face_work_is_rejected_before_hull_expansion(
         "jacobian.math.polynomials.tropical.essential_part.points_to_facets",
         unexpected_hull,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="face-work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         tropical_polynomial_essential_part(poly)
+    assert exc_info.value.errors()[0]["type"] == "tropical.essential_part_work_bound"
 
 
 def test_face_incidence_records_a_face_shared_by_two_maximal_finite_faces() -> None:

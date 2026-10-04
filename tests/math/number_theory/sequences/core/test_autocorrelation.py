@@ -9,6 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
@@ -32,7 +33,6 @@ from jacobian.math.number_theory.sequences.core._models import (
     SequenceOrderShapeResult,
 )
 from jacobian.math.number_theory.sequences.core.operations import (
-    MAX_ORDER_SHAPE_RESULT_ALLOCATIONS,
     aperiodic_autocorrelation,
     cyclic_autocorrelation,
     sequence_order_shape,
@@ -243,8 +243,9 @@ def test_order_shape_applies_the_work_bound_before_scanning_for_peaks(
         raise AssertionError("the peak scan must not run past the work bound")
 
     monkeypatch.setattr(ops, "_order_shape_peaks", forbidden)
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         sequence_order_shape(source)
+    assert exc_info.value.errors()[0]["type"] == "sequences.order_shape.work_bound"
 
 
 def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:
@@ -252,16 +253,18 @@ def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:
         "domain": "rational",
         "values": [0] * (MAX_SEQUENCE_LENGTH + 1),
     }
-    with pytest.raises(Exception, match="length"):
+    with pytest.raises(Exception) as exc_info:
         FiniteRationalSequence.model_validate(payload)
+    assert error_code(exc_info.value) == "sequences.sequence_length_exceeded"
 
 
 def test_rational_sequence_rejects_oversized_integer_strings_before_parse() -> None:
     digits = "1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)
-    with pytest.raises(Exception, match="digit"):
+    with pytest.raises(Exception) as exc_info:
         FiniteRationalSequence.model_validate_json(
             '{"domain":"rational","values":["' + digits + '"]}'
         )
+    assert error_code(exc_info.value) == "sequences.integer_digits_exceeded"
 
 
 def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:
@@ -444,21 +447,23 @@ def test_constant_sequence_peak_scan_is_linear() -> None:
 
 def test_order_shape_rejects_complete_profile_output_explosion() -> None:
     source = rational_sequence((1,) * 100_000)
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match=str(MAX_ORDER_SHAPE_RESULT_ALLOCATIONS),
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         sequence_order_shape(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "sequences.order_shape.result_allocation_bound"
+    )
 
 
 def test_order_shape_admits_complete_rational_result_representation() -> None:
     source_value = CanonicalRational(num=1_234_567, den=7_654_321)
     source = FiniteRationalSequence(values=(source_value,) * 80_000)
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="result representation",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         sequence_order_shape(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "sequences.order_shape.result_representation_too_large"
+    )
 
 
 def test_rational_coefficients_retain_exact_domain_and_source() -> None:
@@ -525,7 +530,7 @@ def test_rational_wire_entries_accept_full_width_integer_strings() -> None:
 def test_result_rejects_noncanonical_lag_axis_without_recomputing_coefficients() -> (
     None
 ):
-    with pytest.raises(ValidationError, match="invalid_lag_axis"):
+    with pytest.raises(ValidationError) as exc_info:
         AutocorrelationResult(
             convention="cyclic",
             source=FiniteIntegerSequence(values=(1, 2)),
@@ -534,6 +539,7 @@ def test_result_rejects_noncanonical_lag_axis_without_recomputing_coefficients()
                 AutocorrelationCell(lag=2, value=5),
             ),
         )
+    assert exc_info.value.errors()[0]["type"] == "sequences.invalid_lag_axis"
 
 
 def test_rational_wire_entries_normalize_integer_strings() -> None:
@@ -600,11 +606,12 @@ def test_rational_autocorrelation_admission_counts_both_output_components() -> N
         values=(CanonicalRational.from_integer_ratio(numerator, denominator),) * 126
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="autocorrelation output exceeds the exact representation bound",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         aperiodic_autocorrelation(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "sequences.autocorrelation.result_representation_too_large"
+    )
 
 
 def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
@@ -612,8 +619,9 @@ def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     source = FiniteRationalSequence(
         values=(CanonicalRational(num=1, den=denominator),) * 153
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         cyclic_autocorrelation(source)
+    assert exc_info.value.errors()[0]["type"] == "sequences.autocorrelation.work_bound"
 
 
 def test_mixed_denominator_widths_are_preflighted_without_scaled_copies() -> None:
@@ -631,8 +639,9 @@ def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
         "domain": "rational",
         "values": ["1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)],
     }
-    with pytest.raises(ValidationError, match="digit"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteRationalSequence.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "sequences.integer_digits_exceeded"
 
 
 def test_order_shape_observes_request_cancellation() -> None:

@@ -269,8 +269,9 @@ def test_objective_request_models_enforce_twelve_digit_limit() -> None:
         request_type.model_validate_json(json.dumps(accepted))
 
         rejected = {**fields, "weight_function": weight(10**12)}
-        with pytest.raises(ValidationError, match="objective weights"):
+        with pytest.raises(ValidationError) as exc_info:
             request_type.model_validate_json(json.dumps(rejected))
+        assert exc_info.value.errors()[0]["type"] == "matroid.weights.objective_digits"
 
     # The broader carrier supports 13 to 15 digit generated split values.
     MatroidWeightFunction(ground_axis=labels, values=(10**12,))

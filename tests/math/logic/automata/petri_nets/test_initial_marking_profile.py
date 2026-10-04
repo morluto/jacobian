@@ -6,6 +6,7 @@ import json
 from itertools import product
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.math.logic.automata.petri_nets import (
     Marking,
@@ -109,14 +110,16 @@ def test_profile_retains_source_and_round_trips() -> None:
 def test_profile_rejects_mismatched_parent_and_place_axis() -> None:
     net = PetriNet(place_count=1, transition_count=0, pre=((),), post=((),))
     other = PetriNet(place_count=1, transition_count=1, pre=((0,),), post=((0,),))
-    with pytest.raises(ValueError, match="different Petri net place axis"):
+    with pytest.raises(ValueError) as exc_info:
         place_set_initial_marking_profile(
             net, PetriPlaceSubset(), Marking(tokens=(0,), net=other)
         )
-    with pytest.raises(ValueError, match="subset must use the net place axis"):
+    assert error_code(exc_info.value) == "petri_net.marking_parent"
+    with pytest.raises(ValueError) as exc_info:
         place_set_initial_marking_profile(
             net, PetriPlaceSubset(places=(1,)), Marking(tokens=(0,))
         )
+    assert error_code(exc_info.value) == "petri_net.place_axis"
 
 
 def test_catalog_publishes_the_marking_profile_operation() -> None:

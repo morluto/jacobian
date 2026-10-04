@@ -150,8 +150,9 @@ def test_native_admission_rejects_distance_height_before_squaring() -> None:
             _pt("b", (0,)),
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="squared-distance"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_pinned_distance_support_profile(config)
+    assert exc_info.value.errors()[0]["type"] == "pinned_distance.distance_height_bound"
 
 
 def test_overheight_denominator_is_rejected_at_the_first_pair() -> None:
@@ -164,8 +165,9 @@ def test_overheight_denominator_is_rejected_at_the_first_pair() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="squared-distance"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_pinned_distance_support_profile(config)
+    assert exc_info.value.errors()[0]["type"] == "pinned_distance.distance_height_bound"
 
 
 def test_coprime_coordinate_denominators_are_bounded_before_summing() -> None:
@@ -181,8 +183,9 @@ def test_coprime_coordinate_denominators_are_bounded_before_summing() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="squared-distance"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_pinned_distance_support_profile(config)
+    assert exc_info.value.errors()[0]["type"] == "pinned_distance.distance_height_bound"
 
 
 def test_squared_coordinate_terms_can_cancel_to_a_small_distance() -> None:

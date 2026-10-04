@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.logic.games.impartial._models import (
     DisjunctiveSumRequest,
@@ -194,7 +195,7 @@ class TestDisjunctiveSumValidation:
             )
 
     def test_cyclic_component_rejected(self) -> None:
-        with pytest.raises(ValueError, match="acyclic"):
+        with pytest.raises(ValueError) as exc_info:
             compute_disjunctive_sum(
                 DisjunctiveSumRequest.model_validate(
                     {
@@ -211,6 +212,7 @@ class TestDisjunctiveSumValidation:
                     }
                 )
             )
+        assert error_code(exc_info.value) == "impartial_game_acyclic"
 
 
 class TestToolRegistration:

@@ -68,8 +68,9 @@ def test_dense_space_is_refused_before_preorder_expansion() -> None:
     request = tool.request_type.model_validate_json(
         json.dumps({"space": space.model_dump(mode="json"), "subset": [0]})
     )
-    with pytest.raises(OperationResourceAdmissionError, match="bitset work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         tool.run(request)
+    assert exc_info.value.errors()[0]["type"] == "finite_topology_space.preorder_work"
 
 
 def test_sparse_equivalence_quotient_at_bit_work_boundary() -> None:

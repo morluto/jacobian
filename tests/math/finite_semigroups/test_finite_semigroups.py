@@ -116,8 +116,9 @@ def test_regular_elements_use_the_ax_a_definition() -> None:
 
     forged = result.model_dump(mode="json")
     forged["regular_elements"][0][1] = "not-in-source"
-    with pytest.raises(ValidationError, match="source semigroup axis"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "finite_semigroup.regular_row_axis"
 
 
 def test_nilpotent_elements_return_least_exponents_and_require_absorbing_zero() -> None:
@@ -136,8 +137,9 @@ def test_nilpotent_elements_return_least_exponents_and_require_absorbing_zero() 
 
     forged = result.model_dump(mode="json")
     forged["nilpotent_elements"][1][0] = "not-in-source"
-    with pytest.raises(ValidationError, match="source semigroup axis"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate(forged)
+    assert exc_info.value.errors()[0]["type"] == "finite_semigroup.nilpotent_row_axis"
     with pytest.raises(OperationDomainValidationError) as error:
         nilpotent_elements(_finite_semigroup(Z3), "0")
     assert error.value.errors()[0]["type"] == "finite_semigroup.not_absorbing_zero"

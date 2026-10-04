@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -265,7 +266,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
         update={"variables": ("x", "x")}
     )
     zero = _polynomial(("t",), ())
-    with pytest.raises(Exception, match=r"tropical\.polynomial_axis"):
+    with pytest.raises(Exception) as exc_info:
         compute_polynomial_substitute(
             PolynomialSubstituteRequest(
                 polynomial=source,
@@ -273,6 +274,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
                 images=(zero, zero),
             )
         )
+    assert error_code(exc_info.value) == "tropical.polynomial_axis"
 
 
 def test_scalar_dual_rejects_unknown_forged_kind() -> None:

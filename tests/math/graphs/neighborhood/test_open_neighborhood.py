@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.neighborhood._models import (
@@ -136,20 +137,22 @@ def test_native_operation_rejects_nonexistent_vertex() -> None:
 
 def test_native_operation_rejects_an_oversized_raw_selection_before_hashing() -> None:
     g = _graph(["a"], ())
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=(f"at most {MAX_SIMPLE_GRAPH_VERTICES} raw vertices"),
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         open_neighborhood(g, ("a",) * (MAX_SIMPLE_GRAPH_VERTICES + 1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.open_neighborhood.selected_vertices_bound"
+    )
 
 
 def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
     g = _graph(["a"], ())
-    with pytest.raises(ValueError, match="raw tuple-length bound"):
+    with pytest.raises(ValueError) as exc_info:
         NeighborhoodRequest(
             graph=g,
             selected_vertices=("a",) * (MAX_SIMPLE_GRAPH_VERTICES + 1),
         )
+    assert error_code(exc_info.value) == "graph.selected_vertices_bound"
 
 
 def test_catalog_request_reuses_selection_admission() -> None:

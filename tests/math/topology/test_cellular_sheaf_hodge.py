@@ -106,8 +106,12 @@ def test_hodge_requires_characteristic_zero() -> None:
         prime=5,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="rational coefficient"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         hodge_laplacians(sheaf)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "topology.cellular_sheaf.hodge.characteristic_zero_required"
+    )
 
 
 def test_hodge_work_is_admitted_before_cohomology_expansion(monkeypatch) -> None:

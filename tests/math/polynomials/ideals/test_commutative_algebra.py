@@ -9,6 +9,7 @@ from itertools import combinations
 
 import pytest
 import sympy
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -163,11 +164,12 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_ideal_contract_rejects_mixed_polynomial_rings() -> None:
-    with pytest.raises(ValueError, match="declared ordered ring"):
+    with pytest.raises(ValueError) as exc_info:
         RationalPolynomialIdeal(
             variables=("x",),
             generators=(_polynomial(("y",), {(1,): 1}),),
         )
+    assert error_code(exc_info.value) == "polynomial.ideal_ring"
 
 
 def test_backend_unavailability_is_an_execution_failure(
@@ -534,13 +536,14 @@ def test_zero_basis_must_use_the_source_ideal_ring() -> None:
 
     request = GroebnerBasisRequest(ideal=_ideal(("x",), {}))
     foreign_zero_basis = _ideal(("y",), {})
-    with pytest.raises(ValueError, match="source ideal's ordered ring"):
+    with pytest.raises(ValueError) as exc_info:
         GroebnerBasisResult(
             ideal=request.ideal,
             basis=foreign_zero_basis,
             generator_count=1,
             monomial_order="grevlex",
         )
+    assert error_code(exc_info.value) == "polynomial.ideal_contract"
     same_ring_zero_basis = _ideal(("x",), {})
     result = GroebnerBasisResult(
         ideal=request.ideal,

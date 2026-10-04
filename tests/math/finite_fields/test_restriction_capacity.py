@@ -1,6 +1,7 @@
 """Restriction output axes use the prime-field matrix capacity."""
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -60,10 +61,14 @@ def test_restricted_axes_reach_the_matrix_capacity(
 
 
 def test_source_admission_rejects_expansion_beyond_matrix_capacity() -> None:
-    with pytest.raises(OperationDomainValidationError, match="restriction output"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_scalars(*_source(129, (1, 1, 0, 1, 1, 0, 0, 0, 1)))
+    assert exc_info.value.errors()[0]["type"] == "finite_field.restriction_output_shape"
 
 
 def test_larger_axis_does_not_expand_extension_matrix_source_capacity() -> None:
-    with pytest.raises(ValueError, match="matrix axes exceed"):
+    with pytest.raises(ValueError) as exc_info:
         _source(257, (1, 1, 1))
+    assert (
+        error_code(exc_info.value) == "finite_field.axis_exceeds_supported_label_bound"
+    )

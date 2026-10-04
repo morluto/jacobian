@@ -95,26 +95,34 @@ def test_zero_constant_and_negative_are_distinct_exact_conclusions() -> None:
 
 
 def test_source_carrier_requires_canonical_nonzero_ordered_terms() -> None:
-    with pytest.raises(ValidationError, match="ordered"):
+    with pytest.raises(ValidationError) as exc_info:
         HermitianLaurentPolynomial(
             terms=(
                 HermitianLaurentTerm(exponent=1, coefficient=q(1)),
                 HermitianLaurentTerm(exponent=-1, coefficient=q(1)),
             )
         )
-    with pytest.raises(ValidationError, match="zero Laurent"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.laurent_term_order"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         HermitianLaurentPolynomial(
             terms=(HermitianLaurentTerm(exponent=0, coefficient=q(0)),)
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial.unit_circle.zero_laurent_term"
+    )
 
 
 def test_operation_admits_only_real_symmetric_sources() -> None:
-    with pytest.raises(OperationDomainValidationError, match="Hermitian"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         real_symmetric_degree_one_fejer_riesz_factor(
             HermitianLaurentPolynomial(
                 terms=(HermitianLaurentTerm(exponent=1, coefficient=q(1)),)
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "polynomial.unit_circle.hermitian"
 
 
 def test_verifier_rejects_reciprocal_and_source_forgeries() -> None:

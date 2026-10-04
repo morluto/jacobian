@@ -67,8 +67,12 @@ def test_schur_result_is_bound_and_verifiable() -> None:
 def test_native_schur_rejects_oversized_variable_axis_before_label_validation() -> None:
     labels = tuple(f"x{index}" for index in range(21))
 
-    with pytest.raises(OperationDomainValidationError, match="same length"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         schur_evaluation(IntegerPartition(parts=(1,)), (1,), labels)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_function.schur_dimensions_mismatch"
+    )
 
 
 def test_schur_verifier_rejects_oversized_constructed_axes_without_dumping() -> None:
@@ -145,11 +149,12 @@ def test_schur_verifier_propagates_claim_outside_execution_envelope() -> None:
         value=0,
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="partition length must not exceed 50",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         verify_schur_evaluation(claim)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_function.schur_partition_length_exceeded"
+    )
 
 
 def test_schur_verifier_accepts_boundary_execution_envelope() -> None:
@@ -379,11 +384,12 @@ def test_schur_rejects_variable_name_exceeding_length_bound() -> None:
 
 def test_native_schur_rejects_variable_name_exceeding_length_bound() -> None:
     variable = "x" * (_MAX_SCHUR_VARIABLE_NAME_LENGTH + 1)
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="canonical nonempty labels",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_function.schur_variable_name_bounded"
+    )
 
 
 @pytest.mark.parametrize("variable", (" x", "x ", "x\x00"))
@@ -401,11 +407,12 @@ def test_schur_rejects_noncanonical_variable_name(variable: str) -> None:
             point=(1,),
             value=1,
         )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="canonical nonempty labels",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symmetric_function.schur_variable_name_bounded"
+    )
 
 
 def test_schur_accepts_boundary_coordinate() -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.error_assertions import error_code
+
 from jacobian.math.combinatorics.discrepancy.homogeneous_progression.operations import (
     construct_homogeneous_progression_set_system,
 )
@@ -90,5 +92,6 @@ def test_result_preserves_n() -> None:
 def test_native_negative_n_is_rejected() -> None:
     import pytest
 
-    with pytest.raises(ValueError, match="between 0"):
+    with pytest.raises(ValueError) as exc_info:
         construct_homogeneous_progression_set_system(-1)
+    assert error_code(exc_info.value) == "discrepancy.n_too_large"

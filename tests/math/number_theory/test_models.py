@@ -59,8 +59,12 @@ def test_malformed_crt_backend_result_is_typed_backend_failure() -> None:
 @pytest.mark.parametrize("residue", [-1, 3])
 def test_chinese_remainder_rejects_noncanonical_residues(residue: int) -> None:
     request = ChineseRemainderRequest(residues=(residue,), moduli=(3,))
-    with pytest.raises(OperationDomainValidationError, match="canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         chinese_remainder(request.residues, request.moduli)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.every_residue_must_be_canonical_for_its_modulus"
+    )
 
 
 @pytest.mark.parametrize(
@@ -90,10 +94,12 @@ def test_legendre_request_admits_prime_denominators_without_a_backend(
 @pytest.mark.parametrize("composite", (9, 99, 9_999_999))
 def test_legendre_request_rejects_composite_denominators(composite: int) -> None:
     request = LegendreSymbolRequest(a=2, prime=composite)
-    with pytest.raises(
-        OperationDomainValidationError, match="Legendre denominator must be prime"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_legendre_symbol(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.legendre_denominator_must_be_prime"
+    )
 
 
 def test_constant_work_integer_operations_admit_safe_integer_scale() -> None:
@@ -156,8 +162,12 @@ def test_kummer_carries_match_direct_binomial_factorization() -> None:
 
 def test_scalar_binomial_valuation_rejects_composite_base() -> None:
     request = BinomialPrimeValuationRequest(n=20, k=7, prime=4)
-    with pytest.raises(OperationDomainValidationError, match="prime must be prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_binomial_prime_valuation(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.binomial_valuation.prime_required"
+    )
 
 
 def test_valuation_request_schemas_publish_semantic_bounds() -> None:
@@ -193,8 +203,12 @@ def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> No
         moduli.append(candidate)
 
     request = ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
-    with pytest.raises(OperationDomainValidationError, match="combined modulus"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         chinese_remainder(request.residues, request.moduli)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.combined_modulus_exceeds_bound"
+    )
 
 
 def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
@@ -353,8 +367,12 @@ def test_direct_factorization_admits_nonzero_values_in_models() -> None:
 
     request = FactorizationRequest(value=0)
     for operation in (enumerate_divisors, enumerate_proper_divisors, factorize_primes):
-        with pytest.raises(OperationDomainValidationError, match="zero"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             operation(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "number_theory.zero_has_no_finite_factorization_or_divisor_enumeration"
+        )
 
 
 def test_prime_factorization_result_accepts_kernel_shape() -> None:

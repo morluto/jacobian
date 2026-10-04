@@ -154,15 +154,20 @@ def test_native_admission_rejects_hypergraph_edge_and_incidence_overflow() -> No
     colored_graph = ColoredUndirectedGraph(
         graph=graph, edge_colors=("red",) * len(graph.edges)
     )
-    with pytest.raises(OperationDomainValidationError, match="hypergraph bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_monochromatic_clique_hypergraph(colored_graph, 5)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "monochromatic_clique.incidence_bound_exceeded"
+    )
 
 
 def test_native_admission_rejects_missing_total_coloring() -> None:
-    with pytest.raises(OperationDomainValidationError, match="edge_colors"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_monochromatic_clique_hypergraph(
             _k4_red().model_copy(update={"edge_colors": ()}), 3
         )
+    assert exc_info.value.errors()[0]["type"] == "monochromatic_clique.no_edge_colors"
 
 
 def test_native_admission_rejects_labels_outside_the_hypergraph_carrier() -> None:
@@ -178,8 +183,12 @@ def test_native_admission_rejects_labels_outside_the_hypergraph_carrier() -> Non
     colored_graph = ColoredUndirectedGraph.model_construct(
         graph=graph, edge_colors=("red",) * len(graph.edges)
     )
-    with pytest.raises(OperationDomainValidationError, match="label bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_monochromatic_clique_hypergraph(colored_graph, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "monochromatic_clique.vertex_label_too_long"
+    )
 
 
 def test_request_keeps_structural_validation_separate_from_domain_admission() -> None:

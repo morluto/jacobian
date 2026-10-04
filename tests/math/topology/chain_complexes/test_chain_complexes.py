@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -52,7 +53,6 @@ from jacobian.math.topology.chain_complexes.operations import (
     construct_chain_complex as construct_chain_complex_native,
 )
 from jacobian.math.topology.chain_complexes.values import (
-    MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
     ChainMapValue,
     CoefficientRing,
@@ -116,6 +116,7 @@ def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
     assert calls == []
     with pytest.raises(OperationDomainValidationError) as caught:
         differential_squares_to_zero(value)
+    assert caught.value.errors()[0]["type"] == "chain_complex.prime_not_prime"
     assert calls == [15]
     assert caught.value.errors()[0]["type"] == "chain_complex.prime_not_prime"
     assert caught.value.errors()[0]["loc"] == ("complex", "prime")
@@ -199,8 +200,11 @@ class TestConstructAdmitsOnlyChainComplexes:
             basis_sizes=(1, 1, 1),
             differential_matrices=(((1,),), ((1,),)),
         )
-        with pytest.raises(ValueError, match=r"d\^2=0"):
+        with pytest.raises(ValueError) as exc_info:
             construct_chain_complex(request)
+        assert (
+            error_code(exc_info.value) == "chain_complex.differential_not_square_zero"
+        )
 
 
 class TestComputeHomology:
@@ -259,11 +263,12 @@ class TestComputeHomology:
             differential_matrices=(zero, zero),
         )
 
-        with pytest.raises(
-            ValidationError,
-            match=f"{MAX_OPERATION_MATRIX_CELLS}-cell operation budget",
-        ):
+        with pytest.raises(ValidationError) as exc_info:
             VerifyDifferentialRequest(complex=complex_value)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "chain_complex.operation_matrix_cell_budget_exceeded"
+        )
 
 
 class TestIntegralHomology:
@@ -295,8 +300,12 @@ class TestIntegralHomology:
         )
 
     def test_zz_contract_rejects_fractional_entries(self) -> None:
-        with pytest.raises(ValidationError, match="must be integers"):
+        with pytest.raises(ValidationError) as exc_info:
             self._complex((1, 1), (((Fraction(1, 2),),),))
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "chain_complex.coefficient_entry_not_integer"
+        )
 
     @pytest.mark.parametrize("order", (2, 6, 97))
     def test_multiplication_by_m_returns_exact_torsion(self, order: int) -> None:
@@ -1137,36 +1146,60 @@ class TestChainMapAdmission:
         shifted = self._two_term(-1, 1)
         circle = _circle_complex()
         ones = ((1,),)
-        with pytest.raises(ValueError, match="same degree interval"):
+        with pytest.raises(ValueError) as exc_info:
             _verify_chain_map_request(
                 source=circle, target=shifted, map_matrices=(ones, ones)
             )
-        with pytest.raises(ValueError, match="same degree interval"):
+        assert (
+            error_code(exc_info.value)
+            == "chain_complex.chain_map_degree_interval_mismatch"
+        )
+        with pytest.raises(ValueError) as exc_info:
             compute_mapping_cone(
                 _mapping_cone_request(
                     source=circle, target=shifted, map_matrices=(ones, ones)
                 )
             )
+        assert (
+            error_code(exc_info.value)
+            == "chain_complex.chain_map_degree_interval_mismatch"
+        )
 
     def test_incomplete_component_count_is_rejected(self) -> None:
         circle = _circle_complex()
         identity = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
-        with pytest.raises(ValueError, match="per chain degree"):
+        with pytest.raises(ValueError) as exc_info:
             _verify_chain_map_request(source=circle, target=circle, map_matrices=())
-        with pytest.raises(ValueError, match="per chain degree"):
+        assert (
+            error_code(exc_info.value)
+            == "chain_complex.chain_map_degree_count_mismatch"
+        )
+        with pytest.raises(ValueError) as exc_info:
             compute_mapping_cone(
                 _mapping_cone_request(source=circle, target=circle, map_matrices=())
             )
-        with pytest.raises(ValueError, match="per chain degree"):
+        assert (
+            error_code(exc_info.value)
+            == "chain_complex.chain_map_degree_count_mismatch"
+        )
+        with pytest.raises(ValueError) as exc_info:
             _verify_chain_map_request(
                 source=circle, target=circle, map_matrices=(identity,)
             )
-        with pytest.raises(ValueError, match="per chain degree"):
+        assert (
+            error_code(exc_info.value)
+            == "chain_complex.chain_map_degree_count_mismatch"
+        )
+        with pytest.raises(ValueError) as exc_info:
             compute_mapping_cone(
                 _mapping_cone_request(
                     source=circle, target=circle, map_matrices=(identity,)
                 )
             )
+        assert (
+            error_code(exc_info.value)
+            == "chain_complex.chain_map_degree_count_mismatch"
+        )
 
 
 class TestMappingConeDefiningEquations:
@@ -1436,7 +1469,7 @@ class TestHomologySourceBinding:
                 betti_number=100,
             ),
         )
-        with pytest.raises(ValueError, match="betti_number"):
+        with pytest.raises(ValueError) as exc_info:
             HomologyResult(
                 homology_groups=payload_groups,
                 coefficient_ring=CoefficientRing.RATIONAL,
@@ -1444,7 +1477,10 @@ class TestHomologySourceBinding:
                 degree_max=0,
                 complex=_point_complex(),
             )
-        with pytest.raises(ValueError, match="ring and prime must match"):
+        assert (
+            error_code(exc_info.value) == "chain_complex.homology_rank_identity_invalid"
+        )
+        with pytest.raises(ValueError) as exc_info:
             HomologyResult(
                 homology_groups=(
                     HomologyGroupValue(
@@ -1461,6 +1497,7 @@ class TestHomologySourceBinding:
                 degree_max=0,
                 complex=_point_complex(),
             )
+        assert error_code(exc_info.value) == "chain_complex.homology_context_mismatch"
 
 
 class TestAggregateChainMapWork:
@@ -1482,10 +1519,13 @@ class TestAggregateChainMapWork:
             tuple(1 if i == j else 0 for j in range(64)) for i in range(64)
         )
         components = tuple(identity_64 if i % 2 == 0 else () for i in range(33))
-        with pytest.raises(ValueError, match="aggregate"):
+        with pytest.raises(ValueError) as exc_info:
             _verify_chain_map_request(
                 source=complex_value, target=complex_value, map_matrices=components
             )
+        assert (
+            error_code(exc_info.value) == "chain_complex.chain_map_cell_budget_exceeded"
+        )
 
 
 class TestNativeSurface:
@@ -2012,16 +2052,24 @@ class TestTensorPrimeFieldResidues:
         requests; an in-range residue still verifies."""
         point = self._gf_point(3)
         for bad in (3, 4, -1):
-            with pytest.raises(ValueError, match="residue"):
+            with pytest.raises(ValueError) as exc_info:
                 _verify_chain_map_request(
                     source=point, target=point, map_matrices=(((bad,),),)
                 )
-            with pytest.raises(ValueError, match="residue"):
+            assert (
+                error_code(exc_info.value)
+                == "chain_complex.prime_field_residue_invalid"
+            )
+            with pytest.raises(ValueError) as exc_info:
                 compute_mapping_cone(
                     _mapping_cone_request(
                         source=point, target=point, map_matrices=(((bad,),),)
                     )
                 )
+            assert (
+                error_code(exc_info.value)
+                == "chain_complex.prime_field_residue_invalid"
+            )
         request = _verify_chain_map_request(
             source=point, target=point, map_matrices=(((2,),),)
         )

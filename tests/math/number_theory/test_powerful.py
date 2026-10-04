@@ -206,8 +206,12 @@ def test_result_keeps_cheap_branch_consistency_validation() -> None:
     )
     payload["is_powerful"] = False
 
-    with pytest.raises(ValidationError, match="must agree"):
+    with pytest.raises(ValidationError) as exc_info:
         PowerfulNumberResult.model_validate_json(__import__("json").dumps(payload))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.powerful_number_conclusion_boolean_mismatch"
+    )
 
 
 @pytest.mark.exhaustive

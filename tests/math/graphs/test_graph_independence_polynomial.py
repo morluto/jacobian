@@ -248,8 +248,11 @@ def test_rejects_excessive_retained_label_allocation() -> None:
     )
     request = TreeIndependencePolynomialRequest(graph=graph)
 
-    with pytest.raises(OperationDomainValidationError, match="retained label"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _run_independence(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph.polynomial.independence.admission"
+    )
 
 
 def test_request_schema_exposes_tree_and_work_preconditions() -> None:

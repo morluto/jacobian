@@ -148,8 +148,9 @@ def test_automorphism_element_application_rejects_a_different_parent() -> None:
     identity = automorphisms(split.field).automorphisms[0]
     rational_field = _split((-1, 1)).field
     rational_element = rational_field.root_values[0]
-    with pytest.raises(OperationDomainValidationError, match="automorphism field"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         apply_automorphism_to_element(identity, rational_element)
+    assert exc_info.value.errors()[0]["type"] == "galois_theory.parent_mismatch"
 
 
 def test_automorphism_inverse_composes_to_identity_on_both_sides() -> None:

@@ -148,16 +148,19 @@ def test_orbit_cardinality_is_rejected_before_expansion() -> None:
         for i in range(8)
     )
     regular = (1, 1, 1, 1, 1, 1, 1, 1)
-    with pytest.raises(OperationDomainValidationError, match="complete weight orbit"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_weight_orbit(a8, regular)
+    assert exc_info.value.errors()[0]["type"] == "root_system.weight_orbit_size_bound"
     assert MAX_WEIGHT_ORBIT_SIZE == 4096
 
 
 def test_nonintegral_and_wrong_rank_weights_are_rejected() -> None:
-    with pytest.raises(OperationDomainValidationError, match="fundamental-weight"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_weight_orbit(((2, -1), (-1, 2)), (1,))
-    with pytest.raises(OperationDomainValidationError, match="fundamental-weight"):
+    assert exc_info.value.errors()[0]["type"] == "root_system.invalid_integral_weight"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         weyl_weight_orbit(((2, -1), (-1, 2)), (1, 0.5))  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "root_system.invalid_integral_weight"
 
 
 @pytest.mark.parametrize(

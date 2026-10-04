@@ -291,14 +291,12 @@ def test_characteristic_polynomial_native_admission_stays_below_carrier() -> Non
     request = GraphCharacteristicPolynomialRequest.model_validate(
         {"graph": {"vertex_count": _MAX_CHARPOLY_VERTICES + 1, "edges": []}}
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=(
-            "characteristic-polynomial operations support at most "
-            f"{_MAX_CHARPOLY_VERTICES} vertices"
-        ),
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         adjacency_characteristic_polynomial(request.graph)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.characteristic_polynomial_vertex_count_exceeds_operation_bound"
+    )
 
 
 def test_native_adjacency_returns_canonical_polynomial() -> None:

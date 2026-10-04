@@ -41,8 +41,9 @@ def test_order_preflights_a_difference_that_cannot_be_returned() -> None:
         left=_value(maximum_component),
         right=_value(-maximum_component),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="difference") as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         real_quadratic_order(request.left, request.right)
+    assert error.value.errors()[0]["type"] == "real_quadratic.difference_bound_exceeded"
     assert error.value.errors()[0]["type"] == "real_quadratic.difference_bound_exceeded"
     assert error.value.errors()[0]["loc"] == ()
 
@@ -88,9 +89,7 @@ def test_order_result_parsing_retains_structural_source_context_only(
 
 
 def test_native_order_api_retains_shared_field_admission() -> None:
-    with pytest.raises(
-        OperationDomainValidationError, match="comparison requires one shared radicand"
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         real_quadratic_order(
             _value(1),
             RealQuadraticValue(
@@ -99,6 +98,7 @@ def test_native_order_api_retains_shared_field_admission() -> None:
                 radicand=3,
             ),
         )
+    assert error.value.errors()[0]["type"] == "real_quadratic.radicand_mismatch"
     assert error.value.errors()[0]["type"] == "real_quadratic.radicand_mismatch"
     assert error.value.errors()[0]["loc"] == ("right", "radicand")
 

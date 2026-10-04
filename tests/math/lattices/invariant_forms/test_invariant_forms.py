@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 from sympy import Matrix
+from tests.error_assertions import error_code
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
@@ -273,13 +274,14 @@ def test_one_dimensional_alternating_action_does_not_parse_unused_scalars() -> N
 def test_native_api_rejects_unknown_form_kind() -> None:
     """Native callers cannot route an unknown kind through alternating semantics."""
     action = _action([], axis=("x",))
-    with pytest.raises(OperationDomainValidationError, match="kind must be"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_invariant_bilinear_form_lattice(action, "UNKNOWN")  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "lattice.invariant_form.invalid_kind"
 
 
 def test_raw_request_rejects_unknown_kind_before_nested_action_parsing() -> None:
     """Malformed kinds fail before expensive nested rational validation."""
-    with pytest.raises(ValueError, match="kind must be"):
+    with pytest.raises(ValueError) as exc_info:
         InvariantBilinearFormLatticeRequest.model_validate(
             {
                 "action": {
@@ -295,6 +297,7 @@ def test_raw_request_rejects_unknown_kind_before_nested_action_parsing() -> None
                 "kind": "UNKNOWN",
             }
         )
+    assert error_code(exc_info.value) == "lattice.invariant_form.invalid_kind"
 
 
 def test_rational_action_regression_saturates_the_full_integer_kernel() -> None:
@@ -384,10 +387,13 @@ def test_coordinate_axis_iterables_are_bounded_before_tuple_materialization() ->
             yield f"e{index}"
             index += 1
 
-    with pytest.raises(ValidationError, match="coordinate_axis has at most"):
+    with pytest.raises(ValidationError) as exc_info:
         RationalMatrixAction.model_validate(
             {"coordinate_axis": labels(), "generators": []}
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "lattice.invariant_form.budget_exceeded"
+    )
 
 
 def test_deep_unknown_form_data_is_rejected_before_recursive_canonicalization() -> None:

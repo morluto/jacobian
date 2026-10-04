@@ -102,8 +102,12 @@ def test_cubic_signature_and_torsion() -> None:
 
 def test_reducible_polynomial_rejected() -> None:
     """x^2 - 1 is reducible, so it does not define a field."""
-    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         class_group(_field(1, 0, -1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_field.field_polynomial_must_be_irreducible"
+    )
 
 
 def test_degree_bound_rejected_natively() -> None:
@@ -162,10 +166,9 @@ def test_forged_rank_signature_rejected() -> None:
 
 
 def test_unit_request_validates_field_type() -> None:
-    with pytest.raises(
-        OperationDomainValidationError, match="SimpleNumberFieldPresentation"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         unit_group("not a field")  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "number_field.unit_group_field_type"
 
 
 def test_class_group_request_admits_native_field() -> None:

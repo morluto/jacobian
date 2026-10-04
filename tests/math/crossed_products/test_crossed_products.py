@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from math import isqrt
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -441,10 +442,11 @@ def test_presentation_rejects_oversized_nested_rows(
     payload = _c2_presentation().model_dump(mode="json")
     payload[field][0] = oversized_value
 
-    with pytest.raises(ValueError, match="at most"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteCosetCrossedProductPresentation.model_validate_json(
             encode_strict_json(payload)
         )
+    assert error_code(exc_info.value) == "too_long"
 
 
 def test_request_rejects_pairwise_convolution_before_expansion() -> None:
@@ -495,8 +497,9 @@ def test_request_rejects_scalar_work_before_expansion() -> None:
     right = _element(presentation, {"a": support})
 
     request = CrossedProductMultiplyRequest(left=left, right=right)
-    with pytest.raises(OperationDomainValidationError, match="scalar-work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_product(request)
+    assert exc_info.value.errors()[0]["type"] == "crossed_product.scalar_work_bound"
 
 
 def test_request_rejects_predicted_exponent_growth_before_expansion() -> None:
@@ -506,10 +509,9 @@ def test_request_rejects_predicted_exponent_growth_before_expansion() -> None:
     right = _element(presentation, {"e": {(0, int("9" * 64))}})
 
     request = CrossedProductMultiplyRequest(left=left, right=right)
-    with pytest.raises(
-        OperationDomainValidationError, match="predicted product exponents"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_product(request)
+    assert exc_info.value.errors()[0]["type"] == "crossed_product.exponent_growth_bound"
 
 
 def test_owner_declares_only_the_admitted_atomic_operation() -> None:
@@ -553,5 +555,8 @@ def test_product_claim_verifier_does_not_refute_unadmitted_convolution() -> None
     )
     claim = CrossedProductMultiplyResult(left=operand, right=operand, product=product)
     decoded = CrossedProductMultiplyResult.model_validate_json(claim.model_dump_json())
-    with pytest.raises(OperationResourceAdmissionError, match="convolution budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         verify_multiply(decoded)
+    assert (
+        exc_info.value.errors()[0]["type"] == "crossed_product.convolution_work_bound"
+    )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.error_assertions import error_code
+
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum.operations import (
     compute_cyclic_prefix_sum_residue_profile,
 )
@@ -88,13 +90,15 @@ def test_native_admission_rejects_nonpositive_modulus() -> None:
     """Native execution rejects modulus zero through the domain channel."""
     import pytest
 
-    with pytest.raises(ValueError, match="modulus must be positive"):
+    with pytest.raises(ValueError) as exc_info:
         compute_cyclic_prefix_sum_residue_profile(_sequence(1), 0)
+    assert error_code(exc_info.value) == "cyclic_prefix_sum.modulus_domain"
 
 
 def test_native_admission_rejects_noncanonical_sequence() -> None:
     """Native execution uses the shared canonical indexed sequence value."""
     import pytest
 
-    with pytest.raises(ValueError, match="indexed integer sequence"):
+    with pytest.raises(ValueError) as exc_info:
         compute_cyclic_prefix_sum_residue_profile((1, 2), 5)  # type: ignore[arg-type]
+    assert error_code(exc_info.value) == "cyclic_prefix_sum.sequence_type"

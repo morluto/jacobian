@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.relational_structures import (
@@ -157,8 +158,13 @@ def test_result_structure_rejects_malformed_assignment_payload() -> None:
     )
     payload = enumerate_csp_solutions(instance).model_dump()
     payload["assignments"] = [[1], [0]]
-    with pytest.raises(ValueError, match="lexicographically ordered"):
+    with pytest.raises(ValueError) as exc_info:
         CspSolutions.model_validate(payload)
+    assert error_code(exc_info.value) == "relational.homomorphism.solutions.order"
     payload["assignments"] = [[2], [3]]
-    with pytest.raises(ValueError, match="template-valued"):
+    with pytest.raises(ValueError) as exc_info:
         CspSolutions.model_validate(payload)
+    assert (
+        error_code(exc_info.value)
+        == "relational.homomorphism.solutions.assignment_shape"
+    )

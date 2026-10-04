@@ -6,6 +6,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.algebraic_curves import (
@@ -148,10 +149,18 @@ def test_target_labels_change_only_axis() -> None:
 
 def test_rejects_target_collision_with_source() -> None:
     poly = UnivariateGaussianPolynomial(variable="z", terms=(_term(1, 0, 1),))
-    with pytest.raises(ValidationError, match="distinct from the source"):
+    with pytest.raises(ValidationError) as exc_info:
         GaussianRealificationRequest(polynomial=poly, target_variables=("z", "y"))
-    with pytest.raises(ValidationError, match="distinct"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_geometry.gaussian_target_collides_with_source"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         GaussianRealificationRequest(polynomial=poly, target_variables=("x", "x"))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "algebraic_geometry.gaussian_target_variables_not_unique"
+    )
 
 
 def test_defining_invariant_reconstruction() -> None:
@@ -223,11 +232,12 @@ def test_json_round_trip() -> None:
 
 
 def test_admission_rejects_excessive_degree() -> None:
-    with pytest.raises(ValidationError, match=r"64|less_than_equal|degree"):
+    with pytest.raises(ValidationError) as exc_info:
         UnivariateGaussianPolynomial(
             variable="z",
             terms=(UnivariateGaussianPolynomialTerm(coefficient=_cr(1), exponent=65),),
         )
+    assert exc_info.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_admission_bounds_each_component_before_expansion() -> None:
@@ -235,8 +245,12 @@ def test_admission_bounds_each_component_before_expansion() -> None:
         variable="z",
         terms=tuple(_term(1, 1, degree) for degree in range(64, 59, -1)),
     )
-    with pytest.raises(Exception, match="realification component"):
+    with pytest.raises(Exception) as exc_info:
         gaussian_realification(polynomial, ("x", "y"))
+    assert (
+        error_code(exc_info.value)
+        == "algebraic_geometry.gaussian_realification.result_terms"
+    )
 
 
 def test_admission_reserves_binomial_coefficient_digits() -> None:
@@ -244,5 +258,9 @@ def test_admission_reserves_binomial_coefficient_digits() -> None:
         variable="z",
         terms=(_term(10**256 - 1, 0, 64),),
     )
-    with pytest.raises(Exception, match="Gaussian coefficient"):
+    with pytest.raises(Exception) as exc_info:
         gaussian_realification(polynomial, ("x", "y"))
+    assert (
+        error_code(exc_info.value)
+        == "algebraic_geometry.gaussian_realification.coefficient_digits"
+    )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.gauge import (
@@ -130,16 +131,17 @@ def test_forged_transform_result_rejects_a_foreign_lattice() -> None:
         )
         for vertex in ("a", "b", "c")
     )
-    with pytest.raises(ValueError, match="transform_parent"):
+    with pytest.raises(ValueError) as exc_info:
         GaugeTransformResult.model_validate(
             {"source": field, "transformed": foreign, "vertex_values": frames}
         )
+    assert error_code(exc_info.value) == "lattice_gauge.transform_parent"
 
 
 def test_forged_plaquette_result_rejects_unbound_curvature_degree() -> None:
     field = _field()
     path = _path()
-    with pytest.raises(ValueError, match="plaquette_degree"):
+    with pytest.raises(ValueError) as exc_info:
         PlaquetteResult.model_validate(
             {
                 "field": field,
@@ -148,6 +150,7 @@ def test_forged_plaquette_result_rejects_unbound_curvature_degree() -> None:
                 "start": "a",
             }
         )
+    assert error_code(exc_info.value) == "lattice_gauge.plaquette_degree"
 
 
 def test_native_transform_rejects_forged_nested_values() -> None:

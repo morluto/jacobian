@@ -68,8 +68,9 @@ def test_near_complete_block_still_refuses_exponential_search() -> None:
         for b in vertices[i + 1 :]
         if (a, b) != (vertices[0], vertices[1])
     )
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _run(SimpleUndirectedGraph(vertices=vertices, edges=edges))
+    assert exc_info.value.errors()[0]["type"] == "cycle_profile.work_bound"
 
 
 def test_block_profile_agrees_with_exhaustive_small_cycle_oracle() -> None:

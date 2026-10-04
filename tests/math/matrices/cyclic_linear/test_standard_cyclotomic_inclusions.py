@@ -344,7 +344,7 @@ def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:
     )
     assert len(str(valid_boundary.generator_image[0].num)) == 256
 
-    with pytest.raises(ValidationError, match="256-digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         CyclotomicFieldInclusion(
             source=source,
             target=target,
@@ -353,3 +353,7 @@ def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:
                 CanonicalRational(num=0, den=1),
             ),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "matrix.cyclic.cyclotomic_coordinate_digits"
+    )

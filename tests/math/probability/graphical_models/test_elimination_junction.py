@@ -312,5 +312,6 @@ def test_duplicate_table_network_has_nonnormalized_joint() -> None:
         domain_sizes=(2, 2),
         tables=(root, root),
     )
-    with pytest.raises(OperationDomainValidationError, match="joint must sum"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         bayes_net_joint(forged)
+    assert exc_info.value.errors()[0]["type"] == "graphical_model.joint_not_normalized"

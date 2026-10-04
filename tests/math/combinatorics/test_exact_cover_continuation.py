@@ -4,6 +4,7 @@ import time
 from threading import Event
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -239,12 +240,13 @@ def test_combine_rejects_partial_child_coverage() -> None:
     ).children
     assert len(children) == 2
     partial = (find_generalized_exact_cover(instance, shard=children[0]),)
-    with pytest.raises(ValueError, match="disjoint"):
+    with pytest.raises(ValueError) as exc_info:
         combine_generalized_exact_cover_shard_results(
             GeneralizedExactCoverShardResultsCombineRequest(
                 instance=instance, parent_shard=root, child_results=partial
             )
         )
+    assert error_code(exc_info.value) == "combinatorics.exact_cover_invariant"
 
 
 def test_shard_semantic_rejections_are_owner_typed() -> None:

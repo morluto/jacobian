@@ -33,8 +33,12 @@ def _poset(elements: tuple[str, ...], covers: tuple[tuple[str, str], ...]):
 
 def test_order_complex_rejects_non_request_native_arguments() -> None:
     for invalid in ({"poset": _poset(("a",), ())}, _poset(("a",), ())):
-        with pytest.raises(OperationDomainValidationError, match="OrderComplexRequest"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             order_complex(invalid)  # type: ignore[arg-type]
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.order_complex.invalid_request"
+        )
 
 
 def test_order_complex_revalidates_forged_request_before_dereferencing() -> None:
@@ -91,8 +95,9 @@ def test_antichain_singleton_and_empty_poset_contract() -> None:
     assert singleton.maximal_chains == (("x",),)
 
     empty = _poset((), ())
-    with pytest.raises(OperationDomainValidationError, match="empty poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         order_complex(OrderComplexRequest(poset=empty))
+    assert exc_info.value.errors()[0]["type"] == "topology.order_complex.empty_poset"
 
 
 def test_order_complex_of_a_face_poset_is_the_barycentric_subdivision() -> None:
@@ -146,8 +151,11 @@ def test_order_complex_bounds_before_chain_materialization() -> None:
         tuple(f"v{i}" for i in range(9)),
         tuple((f"v{i}", f"v{i + 1}") for i in range(8)),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="longest chain"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         order_complex(OrderComplexRequest(poset=too_long))
+    assert (
+        exc_info.value.errors()[0]["type"] == "topology.order_complex.dimension_budget"
+    )
 
     boolean_lattice_elements = tuple(f"s{mask:02d}" for mask in range(32))
     boolean_lattice_covers = tuple(
@@ -157,8 +165,9 @@ def test_order_complex_bounds_before_chain_materialization() -> None:
         if not mask & (1 << bit)
     )
     boolean_lattice = _poset(boolean_lattice_elements, boolean_lattice_covers)
-    with pytest.raises(OperationResourceAdmissionError, match="more nonempty chains"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         order_complex(OrderComplexRequest(poset=boolean_lattice))
+    assert exc_info.value.errors()[0]["type"] == "topology.order_complex.face_budget"
 
     layers = (3, 3, 2, 2, 2, 2)
     layer_elements = tuple(
@@ -176,16 +185,18 @@ def test_order_complex_bounds_before_chain_materialization() -> None:
         for upper in upper_layer
     )
     too_many_facets = _poset(layer_elements, layered_covers)
-    with pytest.raises(OperationResourceAdmissionError, match="maximal-chain facets"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         order_complex(OrderComplexRequest(poset=too_many_facets))
+    assert exc_info.value.errors()[0]["type"] == "topology.order_complex.facet_budget"
 
 
 def test_order_complex_rechecks_caller_supplied_poset_claims() -> None:
     poset = _poset(("a", "b"), (("a", "b"),))
     malformed = poset.model_copy(update={"poset_digest": "sha256:" + "0" * 64})
 
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         order_complex(OrderComplexRequest(poset=malformed))
+    assert exc_info.value.errors()[0]["type"] == "topology.order_complex.invalid_poset"
 
 
 def test_order_complex_result_survives_json_round_trip() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from sympy import factorint, isprime
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._interval_profile_models import (
@@ -119,12 +120,13 @@ class TestSquarefreeProfile:
         assert list(result.nonsquarefree_values) == expected_nsf
 
     def test_request_rejects_reversed_interval(self) -> None:
-        with pytest.raises(
-            OperationDomainValidationError, match="upper_bound must be >= lower_bound"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_squarefree_profile(
                 SquarefreeProfileRequest(lower_bound=2, upper_bound=1)
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "number_theory.interval.order_bound"
+        )
 
     def test_request_rejects_overwide_interval(self) -> None:
         request = IntervalProfileRequest(
@@ -204,8 +206,9 @@ class TestSquarefreeProfile:
 
     def test_work_budget_replaces_fixed_upper_bound(self) -> None:
         request = SquarefreeProfileRequest(lower_bound=10**13, upper_bound=10**13)
-        with pytest.raises(ValueError, match="segmented-sieve work budget"):
+        with pytest.raises(ValueError) as exc_info:
             compute_squarefree_profile(request)
+        assert error_code(exc_info.value) == "number_theory.interval.work_bound"
 
     def test_prime_square_boundary(self) -> None:
         """4 = 2^2 is the first non-squarefree, 9 = 3^2 is another."""

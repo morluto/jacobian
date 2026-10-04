@@ -385,8 +385,9 @@ def test_full_box_affine_jet_encloses_all_eight_variables() -> None:
 def test_work_budget_scales_with_the_jet_dimension() -> None:
     box = tuple((variable, Fraction(2), Fraction(3)) for variable in "abcdefgh")
     wide_tree = _balanced_binary_tree("div", tuple("abcdefgh"))
-    with pytest.raises(OperationDomainValidationError, match="work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _run(wide_tree, box)
+    assert exc_info.value.errors()[0]["type"] == "analysis.second_jet.work_bound"
 
     narrow_box = (
         ("a", Fraction(2), Fraction(3)),

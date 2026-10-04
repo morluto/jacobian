@@ -165,16 +165,21 @@ def test_oversized_code_support_family_is_a_domain_rejection() -> None:
         ),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="relation carrier"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_binary_union_relation(to_set_system(code))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.binary_union_relation.family_exceeds_carrier"
+    )
 
 
 def test_noncanonical_code_support_is_a_domain_rejection() -> None:
     code = ExplicitBinaryCode(length=2, codewords=((1, 1),))
     payload = to_set_system(code).model_dump(mode="json")
     payload["members"] = [[1, 0]]
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    with pytest.raises(ValidationError) as exc_info:
         IndexedFiniteSetFamily.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "set_system.elements_not_sorted"
 
 
 def test_support_target_is_an_ordinary_set_family() -> None:
@@ -192,8 +197,9 @@ def test_serialized_code_support_axis_is_bound_to_source_coordinates() -> None:
     payload = to_set_system(code).model_dump(mode="json")
     payload["ground_set_size"] = 0
 
-    with pytest.raises(ValidationError, match="ground_set_size"):
+    with pytest.raises(ValidationError) as exc_info:
         type(to_set_system(code)).model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "set_system.element_out_of_range"
 
 
 def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
@@ -204,8 +210,12 @@ def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
         members=tuple((*common, common_size + index) for index in range(256)),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="membership work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_binary_union_relation(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.binary_union_relation.work_exceeded"
+    )
 
 
 def test_generated_union_hashing_is_charged_to_membership_work() -> None:
@@ -216,8 +226,12 @@ def test_generated_union_hashing_is_charged_to_membership_work() -> None:
         ground_set_size=51_200,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="membership work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_binary_union_relation(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.binary_union_relation.work_exceeded"
+    )
 
 
 def test_single_member_normalization_is_charged(
@@ -229,8 +243,12 @@ def test_single_member_normalization_is_charged(
         31,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="membership work"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_binary_union_relation(source)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "set_system.binary_union_relation.work_exceeded"
+    )
 
 
 def test_ground_axis_is_independent_of_relation_vertex_count() -> None:

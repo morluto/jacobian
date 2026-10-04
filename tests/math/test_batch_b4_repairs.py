@@ -126,11 +126,12 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
         side="two-sided",
     )
 
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="coefficient multiplication exceeds",
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         groebner_shirshov_through_degree(ideal, 3)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.gs_coefficient_growth_budget"
+    )
 
 
 def test_koszul_cycle_and_boundary_dimensions_follow_chain_degrees() -> None:

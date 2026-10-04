@@ -51,5 +51,6 @@ def test_sparse_multivariate_gram_does_not_expand_ambient_degree_box() -> None:
 
 
 def test_unrepresentable_sos_sum_is_rejected_before_multiplication() -> None:
-    with pytest.raises(OperationDomainValidationError, match="reconstruction"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         check_sos_decomposition(_monomial((32768,)), (_monomial((16385,)),))
+    assert exc_info.value.errors()[0]["type"] == "sum_of_squares.degree_bound"

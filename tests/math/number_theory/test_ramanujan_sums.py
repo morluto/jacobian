@@ -213,8 +213,12 @@ def test_owner_grammar_admits_negative_moduli_the_operation_rejects(
     negative: int,
 ) -> None:
     assert TypeAdapter(ExactInteger).validate_python(negative) == negative
-    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus=negative, frequency=0))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.modulus_must_be_nonnegative"
+    )
     with expect_validation("number_theory."):
         RamanujanSumResult(modulus=negative, frequency=2, value=-2)
 
@@ -275,8 +279,12 @@ def test_ramanujan_sum_request_bounds_factorization_and_frequency_work() -> None
         RamanujanSumRequest.model_validate_json(
             json.dumps({"modulus": "1", "frequency": "9" * (MAX_INTEGER_DIGITS + 1)})
         )
-    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus=-1, frequency=0))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.modulus_must_be_nonnegative"
+    )
 
 
 def test_ramanujan_sum_rejects_negative_native_modulus() -> None:

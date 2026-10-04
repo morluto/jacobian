@@ -10,6 +10,7 @@ from itertools import product
 from typing import Any
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -245,8 +246,9 @@ def test_decoded_profile_enforces_the_aggregate_witness_node_bound() -> None:
         for row in payload["witnesses"]
     ]
 
-    with pytest.raises(ValueError, match="language_profile_witness_nodes"):
+    with pytest.raises(ValueError) as exc_info:
         TreeLanguageProfile.model_validate(payload)
+    assert error_code(exc_info.value) == "tree_automata.language_profile_witness_nodes"
 
     assert TreeLanguageProfile.model_validate(genuine.model_dump()) == genuine
 

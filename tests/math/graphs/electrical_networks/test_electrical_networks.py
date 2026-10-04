@@ -221,16 +221,14 @@ def test_solve_work_rejects_accumulated_star_height_on_both_ops() -> None:
     """Hub incidence of 215 distinct 50-digit dens exceeds the solve-work bound."""
 
     net = _star_of_distinct_fifty_digit_dens()
-    with pytest.raises(
-        OperationDomainValidationError, match="solve-work bound"
-    ) as resistance:
+    with pytest.raises(OperationDomainValidationError) as resistance:
         compute_effective_resistance(
             EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
         )
-    with pytest.raises(
-        OperationDomainValidationError, match="solve-work bound"
-    ) as potentials:
+    assert resistance.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
+    with pytest.raises(OperationDomainValidationError) as potentials:
         compute_node_potentials(NodePotentialRequest(network=net, source=0, sink=1))
+    assert potentials.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
     assert resistance.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
     assert potentials.value.errors()[0]["type"] == "electrical_network.solve_work_bound"
 

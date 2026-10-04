@@ -93,10 +93,9 @@ class TestFlowPolynomial:
         request = GraphPolynomialRequest(
             graph=IndexedSimpleUndirectedGraph(vertex_count=8, edges=edges),
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="exact computation envelope"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _run_flow(request)
+        assert exc_info.value.errors()[0]["type"] == "graph.polynomial.edge_count_limit"
 
     def test_bridge_is_zero_polynomial(self) -> None:
         req = GraphPolynomialRequest(

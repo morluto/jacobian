@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.logic.games.impartial import (
     GameMove,
@@ -180,5 +181,6 @@ def test_serialized_game_dag_is_admitted_by_consumers() -> None:
     game = ImpartialGame.model_validate_json(
         '{"positions":["a","b"],"moves":[{"source":"a","target":"b"},{"source":"b","target":"a"}]}'
     )
-    with pytest.raises(ValueError, match="acyclic"):
+    with pytest.raises(ValueError) as exc_info:
         grundy_table(game)
+    assert error_code(exc_info.value) == "impartial_game_acyclic"

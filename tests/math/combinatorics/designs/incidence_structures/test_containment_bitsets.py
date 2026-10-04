@@ -155,10 +155,12 @@ def test_twelve_thousand_indexed_edges_preserve_multiplicity(order: int) -> None
 
 def test_subset_refusal_stays_at_the_real_complete_output_boundary() -> None:
     points = tuple(f"p{i}" for i in range(101))
-    with pytest.raises(
-        OperationDomainValidationError, match="complete subset-count budget"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         containment_profile(FiniteHypergraph(vertices=points, edges=()), 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "incidence_structure.containment_subset_budget_exceeded"
+    )
 
 
 def test_work_estimate_charges_word_width_and_skips_short_blocks() -> None:

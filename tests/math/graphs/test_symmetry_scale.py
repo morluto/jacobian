@@ -57,5 +57,6 @@ def test_large_action_table_retains_old_memory_envelope() -> None:
         )
         for i in range(64)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="action entries"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graph_symmetry_orbits(graph, generators)
+    assert exc_info.value.errors()[0]["type"] == "graph.symmetry.work_bound"

@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -81,12 +82,16 @@ def test_finite_field_presentation_order_still_has_a_separate_upper_bound() -> N
 def test_projective_line_keeps_its_direction_cap_after_field_widens() -> None:
     presentation = finite_field(65_537, (0, 1))
 
-    with pytest.raises(ValidationError, match="projective line exceeds"):
+    with pytest.raises(ValidationError) as exc_info:
         ProjectiveLine(
             presentation=presentation,
             axis=Axis(name="variables", labels=("x", "y")),
             points=(),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.projective_line_exceeds_supported_direction_bound"
+    )
 
 
 def test_exact_field_integer_leaves_are_native_in_python_and_decimal_in_json() -> None:
@@ -216,10 +221,18 @@ def test_presentation_rejects_reducible_or_noncanonical_moduli() -> None:
         characteristic=2, modulus_coefficients=(0, 0, 1)
     )
     candidate = FiniteFieldPresentation.model_validate_json(candidate.model_dump_json())
-    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         element(candidate, (1, 0))
-    with pytest.raises(ValueError, match="canonical"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.modulus_irreducible_over_prime_field"
+    )
+    with pytest.raises(ValueError) as exc_info:
         FiniteFieldPresentation(characteristic=2, modulus_coefficients=(1, 3, 1))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.modulus_coefficients_canonical_field_residues"
+    )
 
 
 def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> None:
@@ -231,30 +244,40 @@ def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> N
     zero = _element(presentation, (0, 0, 0))
     one = _element(presentation, (1, 0, 0))
 
-    with pytest.raises(ValueError, match="presentation"):
+    with pytest.raises(ValueError) as exc_info:
         AxisBoundMatrix(
             presentation=presentation,
             row_axis=row_axis,
             column_axis=column_axis,
             entries=((one, zero), (zero, _element(other_presentation, (1, 0, 0)))),
         )
-    with pytest.raises(ValueError, match="normalized"):
+    assert (
+        error_code(exc_info.value)
+        == "finite_field.matrix_entries_matrix_field_presentation"
+    )
+    with pytest.raises(ValueError) as exc_info:
         ProjectivePoint(
             presentation=presentation,
             axis=row_axis,
             coordinates=(_element(presentation, (0, 1, 0)), zero),
         )
+    assert (
+        error_code(exc_info.value) == "finite_field.projective_coordinates_normalized"
+    )
     matrix = FiniteLinearMap(
         source_axis=column_axis,
         target_axis=row_axis,
         matrix=PrimeFieldMatrix(2, ((1, 0), (0, 1)), 2),
     )
-    with pytest.raises(ValueError, match="target axis"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteLinearMap(
             source_axis=column_axis,
             target_axis=wrong_axis,
             matrix=PrimeFieldMatrix(2, ((1, 0),), 2),
         )
+    assert (
+        error_code(exc_info.value) == "finite_field.linear_map_rows_match_target_axis"
+    )
     assert matrix.matrix.prime == presentation.characteristic
 
 
@@ -322,16 +345,24 @@ def test_subspace_rejects_dependent_basis_matrices() -> None:
     direction = ProjectivePoint(
         presentation=presentation, axis=rows, coordinates=(one, zero)
     )
-    with pytest.raises(OperationDomainValidationError, match="independent"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         restrict_scalars(candidate, direction)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_field.subspace_basis_matrices_linearly_independent"
+    )
 
 
 def test_presentation_rejects_oversized_characteristic_before_primality() -> None:
-    with pytest.raises(ValueError, match="field-order bound"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteFieldPresentation(
             characteristic=99991,
             modulus_coefficients=(1, 0, 1),
         )
+    assert (
+        error_code(exc_info.value)
+        == "finite_field.characteristic_exceeds_supported_field_order_bound"
+    )
 
 
 def test_presentation_rejects_oversized_field_order_before_irreducibility() -> None:
@@ -343,16 +374,22 @@ def test_presentation_rejects_oversized_field_order_before_irreducibility() -> N
 
 
 def test_presentation_rejects_oversized_modulus_length() -> None:
-    with pytest.raises(ValueError, match="length"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteFieldPresentation(
             characteristic=2,
             modulus_coefficients=(1,) + (0,) * 17 + (1,),
         )
+    assert (
+        error_code(exc_info.value) == "finite_field.presentation_modulus_length_bound"
+    )
 
 
 def test_axis_rejects_oversized_label_set() -> None:
-    with pytest.raises(ValueError, match="label bound"):
+    with pytest.raises(ValueError) as exc_info:
         Axis(name="large", labels=tuple(f"x{i}" for i in range(1025)))
+    assert (
+        error_code(exc_info.value) == "finite_field.axis_exceeds_supported_label_bound"
+    )
 
 
 def test_subspace_rejects_oversized_rank_matrix_before_allocation() -> None:
@@ -367,7 +404,7 @@ def test_subspace_rejects_oversized_rank_matrix_before_allocation() -> None:
         entries=((zero,) * 16,) * 16,
     )
 
-    with pytest.raises(ValueError, match="rank matrix"):
+    with pytest.raises(ValueError) as exc_info:
         FiniteDimensionalSubspace(
             presentation=presentation,
             row_axis=row_axis,
@@ -378,3 +415,7 @@ def test_subspace_rejects_oversized_rank_matrix_before_allocation() -> None:
             ),
             basis=(matrix,) * 86,
         )
+    assert (
+        error_code(exc_info.value)
+        == "finite_field.subspace_rank_matrix_exceeds_supported_bound"
+    )

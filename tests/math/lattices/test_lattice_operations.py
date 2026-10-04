@@ -11,6 +11,7 @@ from math import gcd
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
@@ -107,8 +108,9 @@ def test_rank_gram_of_scaled_lattice() -> None:
 
 
 def test_rank_gram_rejects_dependent_basis_rows() -> None:
-    with pytest.raises(ValueError, match="full row rank"):
+    with pytest.raises(ValueError) as exc_info:
         compute_rank_gram(_lattice(2, [[1, 0], [2, 0]]))
+    assert error_code(exc_info.value) == "lattice.basis_not_full_rank"
 
 
 # ---------------------------------------------------------------------------
@@ -453,8 +455,9 @@ def test_lattice_sum_rejects_combined_dimension_before_backend(
         "_direct_sum" if operation is compute_direct_sum else "_orthogonal_sum",
         lambda *_args: pytest.fail("sum backend must not run after admission failure"),
     )
-    with pytest.raises(OperationDomainValidationError, match="output envelope"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         operation(first, second)
+    assert exc_info.value.errors()[0]["type"] == "lattice.sum_work_exceeds_bound"
 
 
 # ---------------------------------------------------------------------------
@@ -525,8 +528,9 @@ def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
 
     with pytest.raises(ValidationError):
         LatticeReductionRequest(basis=matrix)
-    with pytest.raises(OperationDomainValidationError, match="32"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
+    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
 
 
 def test_lattice_wire_parsing_does_not_prove_rank(
@@ -546,10 +550,12 @@ def test_lattice_wire_parsing_does_not_prove_rank(
 def test_native_lll_uses_the_same_envelope_as_the_published_operation() -> None:
     from jacobian.math.lattices import reduce_basis
 
-    with pytest.raises(OperationDomainValidationError, match="32"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reduce_basis(_identity_entries(33))
-    with pytest.raises(OperationDomainValidationError, match="256"):
+    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         reduce_basis([[10**256]])
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 @pytest.mark.parametrize("hermite", [False, True])
@@ -676,7 +682,9 @@ def test_discriminant_reconstructs_from_gram_on_a_skewed_lattice() -> None:
 def test_dual_and_discriminant_reject_a_rank_deficient_basis() -> None:
     deficient = _lattice(2, [[1, 0], [2, 0]])
 
-    with pytest.raises(OperationDomainValidationError, match="full row rank"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_dual(deficient)
-    with pytest.raises(OperationDomainValidationError, match="full row rank"):
+    assert exc_info.value.errors()[0]["type"] == "lattice.basis_not_full_rank"
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_discriminant_group(deficient)
+    assert exc_info.value.errors()[0]["type"] == "lattice.basis_not_full_rank"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -74,8 +75,9 @@ def test_wire_result_roundtrip_binds_graph_axis_and_matrix() -> None:
 
     forged = result.model_dump(mode="json")
     forged["matrix"]["entries"] = [[0]]
-    with pytest.raises(ValueError, match="adjacency matrix"):
+    with pytest.raises(ValueError) as exc_info:
         LoopedGraphDeltaMatroidResult.model_validate(forged)
+    assert error_code(exc_info.value) == "delta_matroid.graph_result_matrix"
 
 
 def test_looped_graph_rejects_duplicate_or_undeclared_loops() -> None:
@@ -111,8 +113,9 @@ def test_operation_bounds_graph_before_adjacency_matrix_expansion() -> None:
     graph = LoopedSimpleGraph(
         vertices=tuple(f"v{i}" for i in range(9)), edges=(), loops=()
     )
-    with pytest.raises(OperationResourceAdmissionError, match="at most 8 vertices"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         looped_adjacency_delta_matroid(graph)
+    assert exc_info.value.errors()[0]["type"] == "delta_matroid.binary_work"
     assert (
         len(
             LoopedGraphDeltaMatroidRequest.model_validate(

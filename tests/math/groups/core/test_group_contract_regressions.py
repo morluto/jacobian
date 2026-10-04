@@ -465,15 +465,17 @@ def test_group_stabilizer_rejects_invalid_point() -> None:
         compute_group_stabilizer(request)
     assert info.value.errors()[0]["type"] == "group.point_out_of_range"
     assert info.value.errors()[0]["loc"] == ("point",)
-    with pytest.raises(OperationDomainValidationError, match="point") as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         group_stabilizer(group, 7)
+    assert error.value.errors()[0]["type"] == "group.point_out_of_range"
     assert error.value.errors()[0]["loc"] == ("point",)
     assert error.value.errors()[0]["type"] == "group.point_out_of_range"
 
 
 def test_element_order_rejects_invalid_generator() -> None:
-    with pytest.raises(OperationDomainValidationError, match="generator") as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         element_order(3, [0, 0, 1])
+    assert error.value.errors()[0]["type"] == "group.generator_permutation"
     assert error.value.errors()[0]["loc"] == ("generator",)
     assert error.value.errors()[0]["type"] == "group.generator_permutation"
 

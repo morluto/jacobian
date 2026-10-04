@@ -6,6 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
@@ -71,8 +72,9 @@ class TestHenselRootLifting:
             "precision": 2,
             "lifted_root": -1,
         }
-        with pytest.raises(ValueError, match=r"lifted_root must be in 0..p\^k - 1"):
+        with pytest.raises(ValueError) as exc_info:
             HenselRootResult.model_validate(payload)
+        assert error_code(exc_info.value) == "padic_arithmetic.lifted_root_out_of_range"
 
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""
@@ -296,24 +298,31 @@ class TestHenselFactorLifting:
         f = IntegerPolynomial(coefficients=(1, 0, 1))
         g = _wire_poly(2, 1)
         h = _wire_poly(0, 1)
-        with pytest.raises(OperationDomainValidationError, match="not congruent"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _hensel_lift_factors(
                 HenselFactorLiftRequest(
                     polynomial=f, factor_g=g, factor_h=h, prime=5, precision=2
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "padic_arithmetic.factorization_not_congruent"
+        )
 
     def test_shared_factor_rejected(self) -> None:
         """Factors sharing a root mod p are not coprime and are rejected."""
         f = IntegerPolynomial(coefficients=(1, 0, 0))  # x^2
         g = _wire_poly(0, 1)
         h = _wire_poly(0, 1)
-        with pytest.raises(OperationDomainValidationError, match="coprime"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             _hensel_lift_factors(
                 HenselFactorLiftRequest(
                     polynomial=f, factor_g=g, factor_h=h, prime=5, precision=2
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "padic_arithmetic.factors_not_coprime"
+        )
 
     def test_result_coefficients_stay_canonical(self) -> None:
         """Lifted factors omit leading zeros and stay below p^k."""

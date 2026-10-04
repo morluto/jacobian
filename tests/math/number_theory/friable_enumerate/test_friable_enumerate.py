@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.math.number_theory._friable_enumerate import compute_friable_enumerate
 from jacobian.math.number_theory._friable_enumerate_kernels import enumerate_friable
@@ -170,28 +171,40 @@ def test_materialized_regime_reaches_its_boundary() -> None:
 def test_operation_request_rejects_negative_sources() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
-    with pytest.raises(OperationDomainValidationError, match="must be nonnegative"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_friable_enumerate(FriableEnumerateRequest(x=-1, y=2))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.friable_enumerate_sources_must_be_nonnegative"
+    )
 
 
 def test_operation_rejects_unbounded_generated_prime_cutoff() -> None:
-    with pytest.raises(ValueError, match="exceeds the admitted prime cutoff"):
+    with pytest.raises(ValueError) as exc_info:
         compute_friable_enumerate(
             FriableEnumerateRequest(
                 x=MAX_FRIABLE_ENUMERATE_MATERIALIZED_X + 1,
                 y=MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF + 1,
             )
         )
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.generated_friable_enumerate_exceeds_the_admitted_prime_cutoff"
+    )
 
 
 def test_operation_rejects_family_above_result_size_budget() -> None:
-    with pytest.raises(ValueError, match="result-size budget"):
+    with pytest.raises(ValueError) as exc_info:
         compute_friable_enumerate(
             FriableEnumerateRequest(
                 x=10000000,
                 y=100,
             )
         )
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.friable_enumerate_family_exceeds_the_result_size_budget"
+    )
 
 
 def test_operation_example_executes() -> None:
@@ -202,15 +215,23 @@ def test_operation_example_executes() -> None:
 
 
 def test_result_rejects_impossible_degenerate_families() -> None:
-    with pytest.raises(ValueError, match="must be empty when x is zero"):
+    with pytest.raises(ValueError) as exc_info:
         FriableEnumerateResult.model_validate(
             {"x": 0, "y": 5, "family": {"elements": [1]}}
         )
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.friable_enumerate_zero_source_must_be_empty"
+    )
 
-    with pytest.raises(ValueError, match=r"must have family \{1\}"):
+    with pytest.raises(ValueError) as exc_info:
         FriableEnumerateResult.model_validate(
             {"x": 5, "y": 0, "family": {"elements": [2]}}
         )
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.friable_enumerate_small_cutoff_is_singleton"
+    )
 
 
 def test_result_binds_zero_sources_by_value_and_requires_increasing_family() -> None:
@@ -219,7 +240,11 @@ def test_result_binds_zero_sources_by_value_and_requires_increasing_family() -> 
     )
     assert result.x == 0
 
-    with pytest.raises(ValueError, match="strictly increasing order"):
+    with pytest.raises(ValueError) as exc_info:
         FriableEnumerateResult.model_validate(
             {"x": 5, "y": 5, "family": {"elements": [2, 1]}}
         )
+    assert (
+        error_code(exc_info.value)
+        == "number_theory.friable_enumerate_family_must_be_increasing"
+    )

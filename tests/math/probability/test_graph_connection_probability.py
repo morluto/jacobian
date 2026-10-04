@@ -6,6 +6,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -54,8 +55,11 @@ def test_probability_domain_is_admitted_at_operation_time() -> None:
         terminals=("a", "b"),
     )
 
-    with pytest.raises(ValueError, match=r"lie in \[0, 1\]"):
+    with pytest.raises(ValueError) as exc_info:
         GRAPH_CONNECTION_PROBABILITY_OPERATION.run(request)
+    assert (
+        error_code(exc_info.value) == "probability.graph_reliability.probability_range"
+    )
 
 
 def test_empty_edge_axis_is_retained_and_verifiable() -> None:

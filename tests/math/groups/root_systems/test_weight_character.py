@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -203,27 +204,30 @@ def test_character_value_retains_its_supported_type() -> None:
     valid = highest_weight_character(A2, (1, 1))
     payload = valid.model_dump()
     payload["matrix"] = type(valid.matrix).model_validate(B2)
-    with pytest.raises(ValueError, match="character terms"):
+    with pytest.raises(ValueError) as exc_info:
         IrreducibleWeightCharacter.model_validate(payload)
+    assert error_code(exc_info.value) == "root_system.character_shape"
 
 
 def test_request_rejects_wrong_rank_and_negative_highest_weight() -> None:
-    with pytest.raises(ValueError, match="highest weight"):
+    with pytest.raises(ValueError) as exc_info:
         HighestWeightCharacterRequest.model_validate(
             {"matrix": A2, "highest_weight": (1,)}
         )
-    with pytest.raises(ValueError, match="highest weight"):
+    assert error_code(exc_info.value) == "root_system.invalid_dominant_weight"
+    with pytest.raises(ValueError) as exc_info:
         HighestWeightCharacterRequest.model_validate(
             {"matrix": A1, "highest_weight": (-1,)}
         )
+    assert error_code(exc_info.value) == "root_system.invalid_dominant_weight"
 
 
 def test_non_type_a_finite_data_is_rejected_without_a_partial_table() -> None:
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="irreducible type A only",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         highest_weight_character(B2, (1, 0))
+    assert (
+        exc_info.value.errors()[0]["type"] == "root_system.character_type_unsupported"
+    )
 
 
 def test_candidate_state_bound_precedes_enumeration() -> None:

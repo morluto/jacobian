@@ -68,5 +68,6 @@ def test_empty_poset_has_the_empty_antichain_as_its_unique_maximum() -> None:
 
 
 def test_antichain_profile_rejects_the_next_exponential_envelope() -> None:
-    with pytest.raises(OperationDomainValidationError, match="candidate subsets"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         antichain_profile(_chain(15))
+    assert exc_info.value.errors()[0]["type"] == "poset.antichain_profile_elements"

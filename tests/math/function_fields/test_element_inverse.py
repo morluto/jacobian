@@ -68,8 +68,9 @@ def test_rational_function_inverse_is_exact_and_parent_bound() -> None:
 def test_zero_has_no_inverse() -> None:
     zero = _element((_rf((0,)), _rf((0,))))
 
-    with pytest.raises(OperationDomainValidationError, match="zero element"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         function_field_element_inverse(zero)
+    assert exc_info.value.errors()[0]["type"] == "function_field.zero_not_invertible"
 
 
 def test_reducible_parent_is_a_domain_error() -> None:
@@ -81,15 +82,23 @@ def test_reducible_parent_is_a_domain_error() -> None:
     )
     value = FiniteFunctionFieldElement(field=field, coordinates=(_rf((1,)), _rf((0,))))
 
-    with pytest.raises(OperationDomainValidationError, match="reducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         function_field_element_inverse(value)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "function_field.extension_not_admitted_irreducible"
+    )
 
 
 def test_conservative_coefficient_growth_boundary_rejects_before_inversion() -> None:
     value = _element((_rf((1, 0, 0, 1)), _rf((1,))))
 
-    with pytest.raises(OperationResourceAdmissionError, match="coefficient bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         function_field_element_inverse(value)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "function_field.inverse_coefficient_growth_exceeds_envelope"
+    )
 
 
 def test_inverse_is_published_in_owner_manifest() -> None:

@@ -5,6 +5,7 @@ from time import monotonic
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.math.number_theory._contiguous_sum import (
@@ -111,8 +112,9 @@ def test_high_magnitude_width_is_admitted_at_request_parse_but_rejected_before_k
         lower_bound=1000000000001, upper_bound=1000000000129
     )
 
-    with pytest.raises(ValueError, match="direct-factorization width bound"):
+    with pytest.raises(ValueError) as exc_info:
         compute_contiguous_sum_profile(request)
+    assert error_code(exc_info.value) == "number_theory.contiguous_sum_factoring_width"
 
 
 def test_large_endpoint_uses_canonical_strings_and_immutable_rows() -> None:

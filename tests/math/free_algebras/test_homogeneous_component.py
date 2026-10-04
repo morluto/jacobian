@@ -110,13 +110,20 @@ def test_native_operation_rejects_invalid_or_over_bound_degree() -> None:
     with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
         homogeneous_component(polynomial, True)
     forged = FreeAlgebraPolynomial.model_construct(alphabet=("x", "x"), terms=())
-    with pytest.raises(OperationDomainValidationError, match="not canonical"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         homogeneous_component(forged, 0)
+    assert (
+        exc_info.value.errors()[0]["type"] == "free_algebra.homogeneous_component.shape"
+    )
     oversized = FreeAlgebraPolynomial.model_construct(
         alphabet=(), terms=(None,) * 600001
     )
-    with pytest.raises(OperationResourceAdmissionError, match="scan bound"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         homogeneous_component(oversized, 0)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.homogeneous_component.work_bound"
+    )
 
 
 def _component_wire(degree: str) -> dict[str, object]:

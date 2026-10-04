@@ -238,8 +238,9 @@ def test_flint_resultant_accepts_degree_sum_above_previous_ceiling() -> None:
 
 
 def test_univariate_discriminant_rejects_degree_above_work_bound() -> None:
-    with pytest.raises(OperationDomainValidationError, match="operation budget"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polynomial_discriminant(_binomial(1_025, -2), "x")
+    assert exc_info.value.errors()[0]["type"] == "polynomial.admission"
 
 
 def test_sparse_polynomial_schema_explains_canonical_term_order() -> None:

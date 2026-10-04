@@ -391,10 +391,12 @@ class TestEdgeColoringRequestSchema:
             graph=IndexedSimpleUndirectedGraph(vertex_count=65, edges=edges),
             colors=3,
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="2016 adjacency constraints"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_k_colorability(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.coloring_edge_count_exceeds_formula_bound"
+        )
 
     def test_65_vertex_boundary_request_is_admitted(self) -> None:
         from jacobian.math.graphs.coloring._models import (

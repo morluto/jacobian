@@ -105,8 +105,11 @@ def test_split_quadratic_carrier_has_only_the_trivial_correspondence() -> None:
 def test_subgroup_admission_rejects_non_subsets_of_the_exact_parent() -> None:
     field = _split((-2, 0, 1)).field
     identity, conjugation = automorphisms(field).automorphisms
-    with pytest.raises(OperationDomainValidationError, match="identity"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _subgroup(field, (conjugation,))
+    assert (
+        exc_info.value.errors()[0]["type"] == "galois_theory.subgroup_missing_identity"
+    )
 
     other_field = _split((-3, 0, 1)).field
     other_conjugation = next(
@@ -127,8 +130,12 @@ def test_intermediate_field_embedding_must_target_the_exact_extension() -> None:
         target=wrong_target,
         generator_image=_element(wrong_target, 0, 0),
     )
-    with pytest.raises(OperationDomainValidationError, match="retained extension"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         intermediate_field_stabilizer(field, inclusion)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "galois_theory.intermediate_field_parent_mismatch"
+    )
 
 
 def test_stabilizer_uses_the_exact_embedded_image_not_just_field_degree() -> None:
@@ -155,5 +162,9 @@ def test_stabilizer_rejects_a_generator_image_that_breaks_the_field_relation() -
         generator_image=_element(field.extension, 0, 1),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="injective QQ-field map"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         intermediate_field_stabilizer(field, inclusion)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "galois_theory.invalid_intermediate_field_embedding"
+    )

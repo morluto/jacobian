@@ -6,6 +6,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.petri_nets import (
@@ -47,8 +48,9 @@ def test_empty_place_set_has_vacuous_support_predicates() -> None:
 
 def test_profile_rejects_a_place_outside_its_net_axis() -> None:
     net = PetriNet(place_count=1, transition_count=0, pre=((),), post=((),))
-    with pytest.raises(ValueError, match="subset must use the net place axis"):
+    with pytest.raises(ValueError) as exc_info:
         place_set_support(net, PetriPlaceSubset(places=(1,)))
+    assert error_code(exc_info.value) == "petri_net.place_axis"
 
 
 @pytest.mark.parametrize("malformed", [None, [0], (0,), {"places": (0,)}, 1])

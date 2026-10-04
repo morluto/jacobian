@@ -141,8 +141,9 @@ def test_sparse_rational_matrix_strict_json_retains_zero_axes(
 def test_sparse_rational_matrix_rejects_entries_on_a_zero_axis(
     payload: dict[str, object],
 ) -> None:
-    with pytest.raises(ValidationError, match="coordinates exceed declared axes"):
+    with pytest.raises(ValidationError) as exc_info:
         SparseRationalMatrix.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
 
 
 @pytest.mark.parametrize(

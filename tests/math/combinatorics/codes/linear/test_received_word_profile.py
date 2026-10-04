@@ -297,11 +297,16 @@ def test_small_binary_profiles_match_independent_set_enumeration() -> None:
 
 def test_encoder_rejects_ambiguous_or_invalid_presentations() -> None:
     dependent = _encoder(((1, 1), (1, 1)))
-    with pytest.raises(OperationDomainValidationError, match="full row rank"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_puncture(PunctureRequest(encoder=dependent, coordinate=0))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "code_linear.generator_matrix_must_have_full_row_rank"
+    )
     composite = _encoder(((1,),), field_order=4)
-    with pytest.raises(OperationDomainValidationError, match="must be prime"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_puncture(PunctureRequest(encoder=composite, coordinate=0))
+    assert exc_info.value.errors()[0]["type"] == "code_linear.field_order_must_be_prime"
     with _validation_error("canonical"):
         _encoder(((2,),))
     with _validation_error("message_axis"):

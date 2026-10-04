@@ -269,8 +269,9 @@ def test_vertex_unlabelled_consumer_rejects_forged_family() -> None:
         edge_appearances=family.edge_appearances,
         vertex_appearances=family.vertex_appearances,
     )
-    with pytest.raises(OperationDomainValidationError, match="complete source family"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         unlabelled_vertex_deck(forged)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.vertex_family_relation"
 
 
 def test_vertex_unlabelled_exact_work_boundary() -> None:
@@ -284,8 +285,11 @@ def test_vertex_unlabelled_exact_work_boundary() -> None:
         vertices=tuple(f"v{i}" for i in range(9)), edges=()
     )
     family = vertex_deletion_family(rejected)
-    with pytest.raises(OperationResourceAdmissionError, match="permutation work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         unlabelled_vertex_deck(family)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.vertex_isomorphism_work_bound"
+    )
 
 
 def test_kelly_induced_count_matches_exhaustive_direct_graph_oracle() -> None:
@@ -362,11 +366,12 @@ def test_kelly_operation_example_and_proper_order_boundary() -> None:
             SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
         )
     )
-    with pytest.raises(ValidationError, match="strictly smaller"):
+    with pytest.raises(ValidationError) as exc_info:
         VertexDeckInducedSubgraphCountRequest(
             deck=deck,
             pattern=SimpleUndirectedGraph(vertices=("x", "y"), edges=(("x", "y"),)),
         )
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.kelly_pattern_not_proper"
 
 
 def test_kelly_induced_count_rejects_oversized_label_echo_before_expansion(
@@ -415,5 +420,6 @@ def test_kelly_count_rejects_forged_deck_class_multiplicity() -> None:
         card_count=deck.card_count,
     )
     pattern = SimpleUndirectedGraph(vertices=("x",), edges=())
-    with pytest.raises(OperationDomainValidationError, match="exact multiset quotient"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_induced_subgraph_count(forged, pattern)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.kelly_class_partition"

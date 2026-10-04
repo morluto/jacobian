@@ -155,13 +155,21 @@ def test_input_height_bound_applies_to_native_and_json_components(sign: int) -> 
         == accepted
     )
     oversized = _source("p", (1, 1), (sign * boundary, 0))
-    with pytest.raises(ValidationError, match="input bound"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(oversized, companion)
-    with pytest.raises(ValidationError, match="input bound"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_coefficient_digits"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         CommonInterlacingRequest.model_validate(
             {"family": [oversized.model_dump(), companion.model_dump()]}
         )
-    with pytest.raises(ValidationError, match="input bound"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_coefficient_digits"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         CommonInterlacingRequest.model_validate_json(
             encode_strict_json(
                 {
@@ -172,6 +180,10 @@ def test_input_height_bound_applies_to_native_and_json_components(sign: int) -> 
                 }
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_coefficient_digits"
+    )
 
 
 def _referenced_value(
@@ -488,7 +500,7 @@ def test_result_root_schema_and_runtime_keep_the_factor_degree_bound() -> None:
     schema = PolynomialRealRoot.model_json_schema()
     assert schema["properties"]["value"]["properties"]["polynomial"]["maxItems"] == 9
 
-    with pytest.raises(ValidationError, match="factor degree at most 8"):
+    with pytest.raises(ValidationError) as exc_info:
         PolynomialRealRoot.model_validate(
             {
                 "value": {
@@ -503,6 +515,10 @@ def test_result_root_schema_and_runtime_keep_the_factor_degree_bound() -> None:
                 },
             }
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_factor_degree"
+    )
 
 
 def test_worker_factor_root_counts_reuse_the_computed_root_profile() -> None:
@@ -628,8 +644,12 @@ def test_aggregate_source_bounds_are_checked_before_worker_launch(
 
     monkeypatch.setattr("jacobian.process.run_bounded_process", unexpected_worker)
 
-    with pytest.raises(OperationDomainValidationError, match="total-degree bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         run_common_interlacing_profile(family)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_total_degree"
+    )
 
 
 def test_linear_sources_have_an_exists_profile_with_no_gaps() -> None:
@@ -676,12 +696,14 @@ def test_request_result_and_endpoint_values_round_trip_and_compose() -> None:
 
 def test_trusted_producer_does_not_weaken_caller_authored_algebraic_values() -> None:
     reducible = RealAlgebraicValue(polynomial=(1, 0, -1), real_root_index=0)
-    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compare_real_algebraic(reducible, reducible)
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.not_irreducible"
 
     no_real_root = RealAlgebraicValue(polynomial=(1, 0, 1), real_root_index=0)
-    with pytest.raises(OperationDomainValidationError, match="existing real root"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compare_real_algebraic(no_real_root, no_real_root)
+    assert exc_info.value.errors()[0]["type"] == "real_algebraic.root_index"
 
 
 @pytest.mark.parametrize(
@@ -748,11 +770,12 @@ def test_request_raw_preflight_rejects_oversized_axes_before_nested_parsing() ->
             },
         },
     }
-    with pytest.raises(
-        ValidationError,
-        match="common interlacing admits at most 8 family members",
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         CommonInterlacingRequest.model_validate({"family": [invalid_member] * 9})
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_family_size"
+    )
 
     over_degree = {
         "family": [
@@ -773,8 +796,12 @@ def test_request_raw_preflight_rejects_oversized_axes_before_nested_parsing() ->
             for label in ("a", "b")
         ]
     }
-    with pytest.raises(ValidationError, match="degree-32"):
+    with pytest.raises(ValidationError) as exc_info:
         CommonInterlacingRequest.model_validate(over_degree)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.common_interlacing_source_degree"
+    )
 
 
 def test_source_degree_and_factor_degree_boundaries() -> None:

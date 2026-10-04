@@ -87,10 +87,12 @@ def test_translation_has_expected_matrix_and_stable_basis_roundtrips() -> None:
 
 def test_noninvariant_span_is_rejected() -> None:
     # span{x} fails since x+t contains the constant polynomial.
-    with pytest.raises(
-        OperationDomainValidationError, match="outside the supplied span"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ga_stable_subrepresentation(_translation_action(), (_poly("x", 1),))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_subrepresentation.not_stable"
+    )
 
 
 def test_large_valid_translation_coefficient_preserves_constant_subspace() -> None:
@@ -102,8 +104,12 @@ def test_large_valid_translation_coefficient_preserves_constant_subspace() -> No
 
 def test_dependent_supplied_basis_is_rejected() -> None:
     x = _poly("x", 1)
-    with pytest.raises(OperationDomainValidationError, match="linearly independent"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ga_stable_subrepresentation(_translation_action(), (x, x))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_subrepresentation.dependent_basis"
+    )
 
 
 def test_serialized_action_claim_must_satisfy_additive_law() -> None:
@@ -124,8 +130,12 @@ def test_serialized_action_claim_must_satisfy_additive_law() -> None:
         parameter=action.parameter,
         generator_images=(malformed_image,),
     )
-    with pytest.raises(OperationDomainValidationError, match="composition law"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ga_stable_subrepresentation(forged, (_poly("x", 0),))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_subrepresentation.action_composition"
+    )
 
 
 def test_retained_action_cells_are_included_before_substitution(monkeypatch) -> None:
@@ -138,8 +148,12 @@ def test_retained_action_cells_are_included_before_substitution(monkeypatch) -> 
         raise AssertionError("substitution ran before combined output admission")
 
     monkeypatch.setattr(_stable_kernels, "_substitute_basis", expansion_must_not_start)
-    with pytest.raises(OperationResourceAdmissionError, match="output budget"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ga_stable_subrepresentation(action, (_poly("x", 0),))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial_ga_subrepresentation.output_bytes"
+    )
 
 
 def test_admitted_stable_subrepresentation_phases_observe_cancellation(

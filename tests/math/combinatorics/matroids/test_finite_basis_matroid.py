@@ -129,16 +129,20 @@ def test_schema_and_raw_envelope_publish_and_enforce_exact_limits() -> None:
     rank_zero = FiniteBasisMatroid(ground=max_ground, bases=((),))
     assert rank_zero.ground_size == MAX_FINITE_BASIS_GROUND_SIZE
 
-    with pytest.raises(ValidationError, match="ground_size_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteBasisMatroid.model_validate(
             {"ground": [*max_ground, "too-many"], "bases": [[]]}
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_basis_matroid.ground_size_bound"
+    )
 
     over_membership_family = [list(range(MAX_FINITE_BASIS_GROUND_SIZE))] * 1_025
-    with pytest.raises(ValidationError, match="membership_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteBasisMatroid.model_validate(
             {"ground": max_ground, "bases": over_membership_family}
         )
+    assert exc_info.value.errors()[0]["type"] == "finite_basis_matroid.membership_bound"
 
     work_overflow = tuple(itertools.islice(itertools.combinations(range(64), 32), 45))
     bounded_claim = FiniteBasisMatroid(ground=max_ground, bases=work_overflow)
@@ -151,8 +155,9 @@ def test_raw_json_oversized_nested_family_fails_before_model_construction() -> N
     bases = [list(range(64))] * 1_025
     raw_json = json.dumps({"ground": ground, "bases": bases})
 
-    with pytest.raises(ValidationError, match="membership_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteBasisMatroid.model_validate_json(raw_json)
+    assert exc_info.value.errors()[0]["type"] == "finite_basis_matroid.membership_bound"
 
 
 def test_raw_envelope_stops_at_first_unknown_field() -> None:
@@ -161,8 +166,9 @@ def test_raw_envelope_stops_at_first_unknown_field() -> None:
             yield "unexpected"
             raise AssertionError("raw envelope scan continued past unknown field")
 
-    with pytest.raises(ValidationError, match="unknown_field"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteBasisMatroid.model_validate(UnknownFirst())
+    assert exc_info.value.errors()[0]["type"] == "finite_basis_matroid.unknown_field"
 
 
 def test_utf8_label_limits_apply_per_label_and_in_aggregate() -> None:
@@ -170,8 +176,11 @@ def test_utf8_label_limits_apply_per_label_and_in_aggregate() -> None:
     accepted_single = FiniteBasisMatroid(ground=(per_label_limit,), bases=((),))
     assert accepted_single.ground == (per_label_limit,)
 
-    with pytest.raises(ValidationError, match="ground_label_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteBasisMatroid(ground=(per_label_limit + "🦊",), bases=((),))
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_basis_matroid.ground_label_bound"
+    )
 
     exact_aggregate = tuple(
         f"{index}:" + "x" * (MAX_FINITE_BASIS_LABEL_BYTES - len(f"{index}:"))
@@ -185,10 +194,14 @@ def test_utf8_label_limits_apply_per_label_and_in_aggregate() -> None:
     FiniteBasisMatroid(ground=exact_aggregate, bases=((),))
 
     over_aggregate = (*exact_aggregate, "new-label")
-    with pytest.raises(ValidationError, match="ground_label_total_bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteBasisMatroid.model_validate_json(
             json.dumps({"ground": over_aggregate, "bases": [[]]})
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_basis_matroid.ground_label_total_bound"
+    )
 
 
 @pytest.mark.parametrize(

@@ -70,7 +70,7 @@ def test_split_parametrization_is_rejected_not_converted(tmp_path: Path) -> None
     )
     usable, rejected = convertible_sites(load(path))
     assert not usable
-    assert rejected["multiple_codes_across_executions"] == 1
+    assert rejected["mixed_code_presence_across_executions"] == 1
 
 
 def test_split_parametrization_to_two_codes_is_rejected(tmp_path: Path) -> None:
@@ -211,6 +211,12 @@ def test_recorder_import_and_supported_raises_forms() -> None:
         if "check" in inspect.signature(original_raises).parameters:
             with pytest.raises(check=lambda exc: isinstance(exc, ValueError)):
                 int("still not an integer")
+        expected_line = sys._getframe().f_lineno + 1
+        with pytest.raises(ValueError, match="invalid literal"):
+            int("not an integer")
+        assert f"tests/tooling/test_match_pin_rewriter.py:{expected_line}" in (
+            recorder.RECORD
+        )
     finally:
         recorder.pytest_unconfigure(None)
     assert pytest.raises is original_raises

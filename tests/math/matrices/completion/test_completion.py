@@ -163,8 +163,9 @@ def test_nonchordal_is_unsupported_not_infeasible() -> None:
     source = partial(
         [[1, 0, None, 0], [0, 1, 0, None], [None, 0, 1, 0], [0, None, 0, 1]]
     )
-    with pytest.raises(OperationDomainValidationError, match="must be chordal"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         complete_chordal_psd(source)
+    assert exc_info.value.errors()[0]["type"] == "matrix.chordal_completion.domain"
 
 
 @pytest.mark.parametrize(

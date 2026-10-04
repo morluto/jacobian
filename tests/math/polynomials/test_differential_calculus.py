@@ -134,8 +134,9 @@ def test_contraction_rejects_axis_mismatch() -> None:
         components=(_poly_on_axis(("x",), (1, (0,))),),
     )
     form = _form(("x", "y"), 1, ((0,), _poly((1, (0, 0)))))
-    with pytest.raises(OperationDomainValidationError, match="axis"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         interior_product(field, form)
+    assert exc_info.value.errors()[0]["type"] == "differential_form.field_axis"
 
 
 def test_pullback_known_answer() -> None:

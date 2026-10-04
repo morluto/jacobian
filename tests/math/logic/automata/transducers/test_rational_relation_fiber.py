@@ -154,10 +154,18 @@ def test_derived_bounds_allow_long_input_with_empty_fiber() -> None:
 
 def test_input_word_is_bound_to_relation_input_alphabet() -> None:
     relation = _finite_relation()
-    with pytest.raises(OperationDomainValidationError, match="input_word"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_relation_outputs_for_input(relation, (2,))
-    with pytest.raises(OperationDomainValidationError, match="input_word"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_state_transducer.relation_fiber_input_word"
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_relation_outputs_for_input(relation, (True,))  # type: ignore[arg-type]
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_state_transducer.relation_fiber_input_word"
+    )
 
 
 def test_output_parent_is_required_for_regular_language_composition() -> None:
@@ -169,8 +177,12 @@ def test_output_parent_is_required_for_regular_language_composition() -> None:
         accepting_states=(0,),
         edges=(),
     )
-    with pytest.raises(OperationDomainValidationError, match="output alphabet"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         rational_relation_outputs_for_input(relation, ())
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_state_transducer.relation_fiber_output_parent_missing"
+    )
 
 
 def test_work_admission_precedes_input_pattern_matching(monkeypatch) -> None:

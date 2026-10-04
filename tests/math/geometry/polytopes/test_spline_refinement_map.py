@@ -111,12 +111,13 @@ def test_refinement_map_rejects_a_coarsening_with_equal_support() -> None:
     )
     one_cell = polytopal_complex_closure((_interval(0, 2, "whole"),))
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="target complex must be a face-to-face refinement",
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         spline_refinement_map(
             SplineRefinementMapRequest(
                 coarse=coarse, refined=one_cell, degree=1, smoothness=0
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polytopal_complex.spline_refinement_map_not_refinement"
+    )

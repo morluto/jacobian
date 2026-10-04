@@ -5,6 +5,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.logic.games.finite._models import (
@@ -41,8 +42,9 @@ def test_equilibrium_parsing_checks_axes_without_resolving_game() -> None:
         type(result).model_validate_json(json.dumps(payload)).value.as_fraction() == 17
     )
     payload["col_strategy"] = [_r(1).model_dump(mode="json")]
-    with pytest.raises(ValidationError, match="row and column axes"):
+    with pytest.raises(ValidationError) as exc_info:
         type(result).model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == "finite_game.equilibrium_strategy_axes"
 
 
 class TestBestResponse:
@@ -103,8 +105,9 @@ class TestNashEquilibrium:
                 ),
             )
         )
-        with pytest.raises(ValueError, match="exact-equilibrium work bound"):
+        with pytest.raises(ValueError) as exc_info:
             nash_equilibrium(request.payoff_matrix)
+        assert error_code(exc_info.value) == "finite_game.exact_equilibrium_budget"
 
     def test_pure_strategy(self) -> None:
         req = NashEquilibriumRequest(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.words import (
@@ -102,8 +103,9 @@ def test_image_lengths_bound_to_source() -> None:
 
 
 def test_apply_rejects_axis_mismatch() -> None:
-    with pytest.raises(Exception, match="source alphabet"):
+    with pytest.raises(Exception) as exc_info:
         apply_morphism(_fib(), FiniteWord(alphabet=("x", "y"), letters=("x",)))
+    assert error_code(exc_info.value) == "word.morphism_source_axis_mismatch"
 
 
 def test_compose_rejects_middle_mismatch() -> None:
@@ -112,8 +114,9 @@ def test_compose_rejects_middle_mismatch() -> None:
         target_alphabet=("x", "y"),
         images=(("x",), ("y",)),
     )
-    with pytest.raises(Exception, match="must equal"):
+    with pytest.raises(Exception) as exc_info:
         compose_morphisms(_fib(), other)
+    assert error_code(exc_info.value) == "word.morphism_axis_mismatch"
 
 
 def test_power_rejects_non_endomorphism() -> None:
@@ -122,8 +125,9 @@ def test_power_rejects_non_endomorphism() -> None:
         target_alphabet=("x", "y"),
         images=(("x",), ("y",)),
     )
-    with pytest.raises(Exception, match="identical source"):
+    with pytest.raises(Exception) as exc_info:
         morphism_power(non_endo, 2)
+    assert error_code(exc_info.value) == "word.morphism_not_endomorphism"
 
 
 def test_output_budget_is_resource_refusal() -> None:
@@ -133,17 +137,20 @@ def test_output_budget_is_resource_refusal() -> None:
         images=(("a",) * 2,),
     )
     word = FiniteWord(alphabet=("a",), letters=("a",) * 500)
-    with pytest.raises(OperationResourceAdmissionError, match="exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         apply_morphism(expanding, word)
-    with pytest.raises(OperationResourceAdmissionError, match="exceeds"):
+    assert exc_info.value.errors()[0]["type"] == "word.morphism_output_budget"
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         iterate_morphism(expanding, FiniteWord(alphabet=("a",), letters=("a",)), 9)
+    assert exc_info.value.errors()[0]["type"] == "word.morphism_iterate_budget"
     big = WordMorphism(
         source_alphabet=("a",),
         target_alphabet=("a",),
         images=(("a",) * 1000,),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         morphism_power(big, 2)
+    assert exc_info.value.errors()[0]["type"] == "word.morphism_power_budget"
 
 
 def test_serialized_apply_round_trip() -> None:

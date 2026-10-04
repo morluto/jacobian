@@ -63,12 +63,15 @@ def test_truncation_preserves_the_initial_all_empty_prefix() -> None:
 
 def test_truncation_rejects_degree_above_source() -> None:
     source = standard_simplex(1, 1)
-    with pytest.raises(OperationDomainValidationError, match="must not exceed"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         truncate_simplicial_set(
             SimplicialSetTruncateRequest.model_construct(
                 simplicial_set=source, max_degree=2
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "simplicial_set.truncation_exceeds_source"
+    )
 
 
 def test_truncation_requires_strict_integer_degree() -> None:
@@ -82,8 +85,9 @@ def test_truncation_rechecks_runtime_degree_even_for_constructed_request() -> No
     request = SimplicialSetTruncateRequest.model_construct(
         simplicial_set=source, max_degree=True
     )
-    with pytest.raises(OperationDomainValidationError, match="integer"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         truncate_simplicial_set(request)
+    assert exc_info.value.errors()[0]["type"] == "simplicial_set.degree_out_of_bounds"
 
 
 def test_truncation_rechecks_retained_caller_tables() -> None:
@@ -99,12 +103,15 @@ def test_truncation_rechecks_retained_caller_tables() -> None:
         total_simplices=source.total_simplices,
         checked_identities=source.checked_identities,
     )
-    with pytest.raises(OperationDomainValidationError, match="do not satisfy"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         truncate_simplicial_set(
             SimplicialSetTruncateRequest.model_construct(
                 simplicial_set=forged, max_degree=1
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "simplicial_set.truncation_source_invalid"
+    )
 
 
 @pytest.mark.parametrize("label", [17, "x" * 33])
@@ -141,7 +148,9 @@ def test_output_admission_accepts_exact_cell_estimate_and_rejects_one_cell_less(
     monkeypatch.setattr(truncate_module, "MAX_TRUNCATE_OUTPUT_CELLS", estimate)
     assert truncate_simplicial_set(request).max_degree == 1
     monkeypatch.setattr(truncate_module, "MAX_TRUNCATE_OUTPUT_CELLS", estimate - 1)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="estimated truncation output"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         truncate_simplicial_set(request)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "simplicial_set.truncation_output_budget_exceeded"
+    )

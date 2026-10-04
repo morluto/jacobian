@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import canonicalize_json
@@ -212,8 +213,12 @@ class TestEvaluate:
 class TestReduce:
     def test_semantically_invalid_form_is_a_typed_domain_rejection(self) -> None:
         request = BinaryQuadraticFormReduceRequest(form=_positive_form(-1, 3, 1))
-        with pytest.raises(OperationDomainValidationError, match="positive definite"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_reduce(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "integral_binary_quadratic_form.not_positive_definite"
+        )
 
     def test_reduce_already_reduced(self) -> None:
         result = compute_reduce(
@@ -261,8 +266,12 @@ class TestProperEquivalence:
             first=_positive_form(-1, 1, 1),
             second=_positive_form(1, 1, 1),
         )
-        with pytest.raises(OperationDomainValidationError, match="positive definite"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_proper_equivalence(request)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "integral_binary_quadratic_form.not_positive_definite"
+        )
 
     def test_self_equivalent(self) -> None:
         result = compute_proper_equivalence(
@@ -609,21 +618,27 @@ class TestProperClassComposition:
     def test_composition_rejects_mismatched_discriminants(self) -> None:
         first = _proper_class(1, 0, 7_351)
         second = _proper_class(1, 0, 7)
-        with pytest.raises(ValueError, match="same discriminant"):
+        with pytest.raises(ValueError) as exc_info:
             compute_class_compose(
                 BinaryQuadraticFormClassComposeRequest(first=first, second=second)
             )
+        assert (
+            error_code(exc_info.value)
+            == "integral_binary_quadratic_form.class_discriminant_mismatch"
+        )
 
     def test_composition_rejects_oversized_output_coefficients(self) -> None:
         """Composition of large discriminant forms can exceed the coefficient bound."""
         first = _proper_class(600_014, 0, 999_993)
         second = _proper_class(666_662, 0, 900_021)
-        with pytest.raises(
-            OperationDomainValidationError, match="composition product exceeds"
-        ):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_class_compose(
                 BinaryQuadraticFormClassComposeRequest(first=first, second=second)
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "integral_binary_quadratic_form.composition_output_overflow"
+        )
 
 
 class TestRepresentations:

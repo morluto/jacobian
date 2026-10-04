@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Poly, Symbol, cyclotomic_poly
 from sympy.polys.domains import ZZ
+from tests.error_assertions import error_code
 from tests.math.groups.finite_abelian._support import finite_abelian_validation_error
 
 from jacobian.canonical import encode_strict_json
@@ -374,12 +375,15 @@ def test_group_rank_and_order_boundaries() -> None:
         left=((0, 0),),
         right=((0, 0),),
     )
-    with pytest.raises(ValueError, match=f"{MAX_FINITE_GROUP_ORDER:,}-element"):
+    with pytest.raises(ValueError) as exc_info:
         finite_abelian_group_factorization(
             FiniteAbelianProductGroup(moduli=factorization_request.moduli),
             factorization_request.left,
             factorization_request.right,
         )
+    assert (
+        error_code(exc_info.value) == "finite_abelian_group.factorization_group_order"
+    )
 
 
 def test_native_factorization_accepts_canonical_group_values() -> None:

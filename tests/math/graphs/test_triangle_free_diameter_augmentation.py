@@ -205,14 +205,22 @@ def test_multiple_additions_minimality() -> None:
 
 def test_invalid_disconnected_rejected() -> None:
     g = _graph(("0", "1", "2"), (("0", "1"),))
-    with pytest.raises(OperationDomainValidationError, match="connected"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         triangle_free_diameter_augmentation(g, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.triangle_free_diameter_augmentation.not_connected"
+    )
 
 
 def test_invalid_triangle_rejected() -> None:
     g = _graph(("0", "1", "2"), (("0", "1"), ("1", "2"), ("0", "2")))
-    with pytest.raises(OperationDomainValidationError, match="triangle-free"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         triangle_free_diameter_augmentation(g, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.triangle_free_diameter_augmentation.not_triangle_free"
+    )
 
 
 def test_invalid_target_boundary() -> None:
@@ -366,8 +374,12 @@ def test_admission_bounds_candidate_and_reachability() -> None:
     orig_cand = mod.HARD_MAX_CANDIDATES
     try:
         mod.HARD_MAX_CANDIDATES = 1
-        with pytest.raises(OperationDomainValidationError, match="candidate"):
+        with pytest.raises(OperationDomainValidationError) as exc_info:
             triangle_free_diameter_augmentation(g, 2, resource_budget=budget)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "graph.triangle_free_diameter_augmentation.candidate_bound"
+        )
     finally:
         mod.HARD_MAX_CANDIDATES = orig_cand
 
@@ -381,15 +393,21 @@ def test_admission_bounds_candidate_and_reachability() -> None:
 
 def test_empty_graph_rejected() -> None:
     g = SimpleUndirectedGraph(vertices=(), edges=())
-    with pytest.raises(OperationDomainValidationError, match="nonempty"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         triangle_free_diameter_augmentation(g, 2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.triangle_free_diameter_augmentation.empty_graph"
+    )
 
 
 def test_widened_path_is_refused_before_diameter_presolve() -> None:
     vertices = tuple(f"v{index:05d}" for index in range(257))
     edges = tuple((vertices[index], vertices[index + 1]) for index in range(256))
     source = SimpleUndirectedGraph(vertices=vertices, edges=edges)
-    with pytest.raises(
-        OperationDomainValidationError, match="declared max_order budget"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         triangle_free_diameter_augmentation(source, 12)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.triangle_free_diameter_augmentation.max_order_budget"
+    )

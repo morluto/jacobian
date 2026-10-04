@@ -49,8 +49,11 @@ def test_root_position_returns_exact_source_tree() -> None:
 
 def test_missing_child_index_is_rejected_as_invalid_address() -> None:
     source = RankedTree(symbol=0, children=(RankedTree(symbol=1),))
-    with pytest.raises(OperationDomainValidationError, match="does not identify"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         ranked_tree_subtree(source, (1,))
+    assert (
+        exc_info.value.errors()[0]["type"] == "tree_automata.subtree.position_missing"
+    )
 
 
 def test_subtree_catalog_example_is_published_and_round_trips() -> None:

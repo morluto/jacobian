@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
@@ -90,7 +91,7 @@ def test_normalizer_result_rejects_a_foreign_register_row() -> None:
         basis=(PhaseFreeQubitPauli(register=first, x_bits=(0,), z_bits=(1,)),),
     )
     foreign = PhaseFreeQubitPauli(register=second, x_bits=(0,), z_bits=(1,))
-    with pytest.raises(ValueError, match="normalizer_parent"):
+    with pytest.raises(ValueError) as exc_info:
         NormalizerResult.model_validate(
             {
                 "check_space": check,
@@ -100,6 +101,7 @@ def test_normalizer_result_rejects_a_foreign_register_row() -> None:
                 "logical_dimension": 0,
             }
         )
+    assert error_code(exc_info.value) == "stabilizer.normalizer_parent"
 
     forged_check = CheckSpaceValue.model_construct(
         qubit_register=first, basis=(foreign,)
@@ -122,13 +124,15 @@ def test_result_carriers_reject_foreign_registers_and_pairing_claims() -> None:
     left = _pauli(first, (1,), (0,))
     right = _pauli(second, (0,), (1,))
     foreign = _pauli(second, (0,), (0,))
-    with pytest.raises(ValueError, match="register_binding"):
+    with pytest.raises(ValueError) as exc_info:
         PauliProductResult.model_validate(
             {"left": left, "right": right, "product": foreign}
         )
-    with pytest.raises(ValueError, match="register_binding"):
+    assert error_code(exc_info.value) == "stabilizer.register_binding"
+    with pytest.raises(ValueError) as exc_info:
         PauliInverseResult.model_validate({"source": left, "inverse": foreign})
-    with pytest.raises(ValueError, match="register_binding"):
+    assert error_code(exc_info.value) == "stabilizer.register_binding"
+    with pytest.raises(ValueError) as exc_info:
         PauliPairingResult.model_validate(
             {
                 "left": left.phase_free,
@@ -137,6 +141,7 @@ def test_result_carriers_reject_foreign_registers_and_pairing_claims() -> None:
                 "commute": True,
             }
         )
+    assert error_code(exc_info.value) == "stabilizer.register_binding"
 
 
 def test_normalizer_result_bounds_orthogonal_carrier() -> None:

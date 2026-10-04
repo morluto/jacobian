@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.math.number_theory.arithmetic._integers import base_digits
 from jacobian.math.number_theory.arithmetic._models import (
@@ -59,10 +60,12 @@ def test_base_digits_result_rejects_noncanonical_separated_fields(
 
 
 def test_base_digits_rejects_an_oversized_result_before_integer_conversion() -> None:
-    with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
+    with pytest.raises(ValueError) as exc_info:
         base_digits(IntegerBaseDigitsRequest(value=10**MAX_BASE_DIGITS, base=10))
+    assert error_code(exc_info.value) == "arithmetic.base_expansion_exceeds_bound"
 
 
 def test_base_digits_uses_limit_safe_integer_formatting() -> None:
-    with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
+    with pytest.raises(ValueError) as exc_info:
         base_digits(IntegerBaseDigitsRequest(value=10**5000, base=10))
+    assert error_code(exc_info.value) == "arithmetic.base_expansion_exceeds_bound"

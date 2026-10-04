@@ -161,10 +161,16 @@ def test_exponent_limit_and_every_product_preflight_before_expansion(
 ) -> None:
     polynomial = _polynomial(("x",), {("x",): 1})
     assert _coefficients(power_polynomial(polynomial, 64)) == {("x",) * 64: Fraction(1)}
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         power_polynomial(polynomial, 65)
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "free_algebra.polynomial_power_exponent"
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         power_polynomial(polynomial, True)
+    assert (
+        exc_info.value.errors()[0]["type"] == "free_algebra.polynomial_power_exponent"
+    )
     with pytest.raises(ValidationError):
         FreeAlgebraPolynomialPowerRequest(polynomial=polynomial, exponent=65)
 

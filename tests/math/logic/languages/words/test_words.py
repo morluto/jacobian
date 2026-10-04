@@ -10,6 +10,7 @@ from contextlib import contextmanager
 
 import pytest
 from pydantic import ValidationError
+from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.words import (
@@ -207,10 +208,11 @@ def test_empty_factor_occurs_at_every_boundary() -> None:
 
 
 def test_factor_length_is_validated_at_operation_time() -> None:
-    with pytest.raises(ValueError, match="factor length"):
+    with pytest.raises(ValueError) as exc_info:
         compute_factors_length(
             FactorsLengthRequest(word=_word("aa", ("a",)), factor_length=3)
         )
+    assert error_code(exc_info.value) == "word.factor_length_out_of_range"
 
 
 def test_periods_distinguish_overlap_period_from_proper_power() -> None:
@@ -336,16 +338,20 @@ def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None
 
     above_limit = _substitution((("0",) * 5_001, ("1",) * 5_000))
     request = SubstitutionDependencyGraphRequest(substitution=above_limit)
-    with pytest.raises(OperationDomainValidationError, match="aggregate bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_substitution_dependency_graph(request)
+    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
     graph = SubstitutionDependencyGraph(substitution=above_limit, edges=())
-    with pytest.raises(ValueError, match="aggregate bound"):
+    with pytest.raises(ValueError) as exc_info:
         substitution_dependency_graph(above_limit)
+    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
     profile_request = SubstitutionPrimitivityProfileRequest(dependency_graph=graph)
-    with pytest.raises(OperationDomainValidationError, match="aggregate bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_substitution_primitivity_profile(profile_request)
-    with pytest.raises(ValueError, match="aggregate bound"):
+    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
+    with pytest.raises(ValueError) as exc_info:
         substitution_primitivity_profile(graph)
+    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
 
 
 def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> None:
@@ -680,11 +686,12 @@ def test_value_models_reject_ambiguous_or_unbounded_inputs() -> None:
         target_alphabet=("a",),
         images=(("a",) * 2,),
     )
-    with pytest.raises(ValueError, match="output exceeds"):
+    with pytest.raises(ValueError) as exc_info:
         apply_morphism(
             expanding,
             FiniteWord(alphabet=("a",), letters=("a",) * 500),
         )
+    assert error_code(exc_info.value) == "word.morphism_output_budget"
 
 
 def test_empty_alphabet_carries_exactly_the_empty_word_through_json() -> None:
@@ -803,8 +810,9 @@ def test_composition_admits_length_before_expansion() -> None:
     )
     tracemalloc.start()
     try:
-        with pytest.raises(ValueError, match="composed morphism image"):
+        with pytest.raises(ValueError) as exc_info:
             compose_morphisms(morphism, morphism)
+        assert error_code(exc_info.value) == "word.composed_morphism_image_budget"
         _, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()

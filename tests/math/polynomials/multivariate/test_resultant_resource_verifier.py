@@ -116,8 +116,12 @@ def test_domain_invalidity_stays_separate_from_work_refusal(wrong_axis: bool) ->
 
 def test_resource_diagnostic_names_actual_degree_and_bound() -> None:
     source = _polynomial(("x", "y"), {(33, 0): 1})
-    with pytest.raises(OperationResourceAdmissionError, match=r"66.*64"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         operations.verify_multivariate_resultant(_claim(source))
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.multivariate_resultant.degree_budget"
+    )
 
 
 def test_right_source_budget_has_right_location() -> None:

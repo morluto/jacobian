@@ -86,15 +86,17 @@ def test_rejects_a_forged_card_multiplicity_before_using_it() -> None:
         card_count=deck.card_count,
     )
 
-    with pytest.raises(OperationDomainValidationError, match="exact multiset quotient"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_degree_multiset(forged)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.edge_count_class_partition"
 
 
 def test_small_order_boundary_and_empty_graph_on_three_vertices() -> None:
     small = SimpleUndirectedGraph(vertices=("a", "b"), edges=())
     small_deck = unlabelled_vertex_deck(vertex_deletion_family(small))
-    with pytest.raises(OperationDomainValidationError, match="at least three"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         vertex_deck_degree_multiset(small_deck)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.degree_multiset_order"
 
     empty = SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=())
     empty_deck = unlabelled_vertex_deck(vertex_deletion_family(empty))
@@ -111,5 +113,8 @@ def test_admits_degree_output_bound_before_deck_work() -> None:
     forged_deck = UnlabelledVertexDeck.model_construct(
         family=forged_family, classes=(), card_count=0
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output exceeds"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         vertex_deck_degree_multiset(forged_deck)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.degree_multiset_output_bound"
+    )

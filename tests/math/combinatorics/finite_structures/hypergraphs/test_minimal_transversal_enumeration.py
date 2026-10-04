@@ -161,10 +161,14 @@ def test_single_edge_slice_uses_closed_form_above_global_row_bound() -> None:
 
 
 def test_direct_native_guard_rejects_untyped_request() -> None:
-    with pytest.raises(OperationDomainValidationError, match="malformed typed request"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_minimal_transversals(
             {"hypergraph": None, "maximum_cardinality": 1}  # type: ignore[arg-type]
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.minimal_transversal.malformed_request"
+    )
 
 
 def test_three_near_universal_edges_use_source_sensitive_row_bound() -> None:
@@ -226,8 +230,12 @@ def test_direct_native_guard_rejects_model_constructed_request() -> None:
     malformed = MinimalTransversalEnumerationRequest.model_construct(
         hypergraph=source, maximum_cardinality="1"
     )
-    with pytest.raises(OperationDomainValidationError, match="malformed typed request"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_minimal_transversals(malformed)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.minimal_transversal.malformed_request"
+    )
 
 
 def test_native_operation_honors_request_deadline_before_search() -> None:
@@ -298,12 +306,16 @@ def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:
             (f"edge{index:05d}", triple) for index, triple in enumerate(triples)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         enumerate_minimal_transversals(
             MinimalTransversalEnumerationRequest(
                 hypergraph=source, maximum_cardinality=6
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.minimal_transversal.work_bound"
+    )
 
 
 def test_minimality_work_bound_is_enforced_after_candidate_work_fits() -> None:

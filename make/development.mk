@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup container-image eval-image eval-image-pull hooks fix lint lint-full security-audit typecheck architecture repository-hygiene test-hygiene docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup container-image eval-image eval-image-pull hooks fix lint lint-full security-audit typecheck architecture repository-hygiene test-hygiene test-dead-code docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
@@ -50,6 +50,9 @@ repository-hygiene: ## Reject tracked local artifacts and unresolved conflict ma
 
 test-hygiene: ## Require test monkeypatches to carry assertion evidence.
 	$(UV_RUN) python tools/check_test_monkeypatch.py
+
+test-dead-code: ## Require every module-level test helper to be referenced by its own module.
+	$(UV_RUN) python tools/check_test_dead_helpers.py
 
 docs-command-check: ## Validate Make targets and TESTS paths in command examples.
 	$(UV_RUN) python tools/check_doc_commands.py

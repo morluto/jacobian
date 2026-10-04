@@ -1,0 +1,79 @@
+"""Verifier failure-channel checks through the public operation boundary."""
+
+from __future__ import annotations
+
+import json
+from types import ModuleType
+from typing import get_type_hints
+
+import pytest
+
+from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.dispatch import invoke_operation
+from jacobian.math.geometry.differential import operations as differential
+from jacobian.math.geometry.exact import operations as exact_geometry
+from jacobian.math.matrices.quadratic_spectral import operations as quadratic_spectral
+from jacobian.math.number_theory.sequences.recurrence_solving import (
+    operations as recurrence,
+)
+from jacobian.math.polynomials.real_algebra import operations as real_algebra
+
+
+@pytest.mark.parametrize(
+    ("module", "recompute", "resource_refusal"),
+    [
+        (differential, "lie_derivative", False),
+        (differential, "lie_derivative", True),
+        (real_algebra, "common_interlacing_profile", False),
+        (quadratic_spectral, "inertia", False),
+        (quadratic_spectral, "inertia", True),
+        (exact_geometry, "distance_profile", False),
+        (exact_geometry, "distance_profile", True),
+        (recurrence, "closed_form", False),
+        (recurrence, "closed_form", True),
+    ],
+)
+def test_verifiers_propagate_operational_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
+    recompute: str,
+    resource_refusal: bool,
+) -> None:
+    verifier = getattr(module, f"verify_{recompute}")
+    result_type = get_type_hints(verifier)["claim"]
+    if module is exact_geometry and recompute == "distance_profile":
+        # Native rational-only and catalog union specializations intentionally
+        # have distinct Pydantic generic identities.
+        tool = next(
+            tool
+            for tool in BUILTIN_TOOLS
+            if tool.operation_id == "geometry.points.distance_profile.compute"
+        )
+    else:
+        tool = next(tool for tool in BUILTIN_TOOLS if tool.result_type is result_type)
+    example_input = tool.examples[0].input
+    # The claim under test must come back through the public boundary, so the
+    # verifier is exercised on a dispatched, strictly parsed, wire-encoded value.
+    dispatched = invoke_operation(tool.operation_id, example_input, Catalog.open())
+    claim = tool.result_type.model_validate_json(json.dumps(dispatched.output))
+    assert verifier(claim)
+
+    failure = (
+        OperationResourceAdmissionError(
+            location=("source",),
+            code="test.resource_bound",
+            message="resource bound exceeded",
+        )
+        if resource_refusal
+        else RuntimeError("backend failed")
+    )
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise failure
+
+    monkeypatch.setattr(module, recompute, fail)
+    with pytest.raises(type(failure)) as caught:
+        verifier(claim)
+    assert caught.value is failure

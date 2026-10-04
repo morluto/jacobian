@@ -29,8 +29,6 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_TRANSPORT_TUPLES,
 )
 
-OPERATION_ID = "relational.homomorphism.check"
-
 _EDGE = (FiniteRelationSymbol(symbol_id="E", arity=2),)
 
 

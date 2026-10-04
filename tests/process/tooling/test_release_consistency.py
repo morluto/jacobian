@@ -9,8 +9,6 @@ from pathlib import Path
 import pytest
 from tests.process.tooling.ci import run_ci_script
 
-ROOT = Path(__file__).resolve().parents[3]
-
 
 def test_release_consistency_passes_on_clean_tree() -> None:
     """The checked-in tree must agree across all version-bearing surfaces."""

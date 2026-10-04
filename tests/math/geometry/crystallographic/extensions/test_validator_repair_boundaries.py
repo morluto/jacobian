@@ -120,10 +120,6 @@ def _klein_domain() -> CrystallographicFundamentalDomainResult:
     return check_crystallographic_fundamental_domain(pairing)
 
 
-def _rational(value: int) -> CanonicalRational:
-    return CanonicalRational(num=value, den=1)
-
-
 # --- an orbit map must land on the endpoint the pairing sends it to ---------
 
 

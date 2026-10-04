@@ -27,7 +27,6 @@ from jacobian.math.topology.chain_complexes.values import (
     CoefficientRing,
 )
 
-_OPERATION_ID = "homological.filtered_chain_complex.direct_sum.compute"
 _DIRECT_SUM_MODULE = import_module(
     "jacobian.math.topology.chain_complexes.filtered_direct_sum"
 )

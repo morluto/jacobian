@@ -46,18 +46,6 @@ def _triangle_count(graph: nx.Graph[str]) -> int:
     return sum(triangles.values()) // 3
 
 
-def _path(n: int) -> SimpleUndirectedGraph:
-    verts = tuple(str(i) for i in range(n))
-    edges = tuple(_edge(str(i), str(i + 1)) for i in range(n - 1))
-    # canonical sort
-    verts = tuple(sorted(verts))
-    edges = tuple(sorted(_edge(*e) for e in edges))
-    # For n>=10 lexicographic weirdness, keep numeric string order but ensure edges canonical left<right string cmp
-    # Rebuild with proper canonical edges via sorted string compare
-    edges = tuple(sorted(_edge(*e) for e in edges))
-    return SimpleUndirectedGraph(vertices=verts, edges=edges)
-
-
 def _path_padded(n: int) -> SimpleUndirectedGraph:
     verts = tuple(f"{i:02d}" for i in range(n))
     edges = tuple(_edge(f"{i:02d}", f"{(i + 1):02d}") for i in range(n - 1))

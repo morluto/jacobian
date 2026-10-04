@@ -28,8 +28,6 @@ from jacobian.math.topology.cellular_sheaves.constants._models import (
 from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology
 from jacobian.math.topology.cohomology.operations import simplicial_cohomology
 
-OPERATION_ID = "cellular_sheaf.constant.compute"
-
 _INTERVAL = canonical_complex(("a", "b"), (("a", "b"),))
 _CIRCLE = canonical_complex(("a", "b", "c"), (("a", "b"), ("b", "c"), ("a", "c")))
 _TRIANGLE = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))

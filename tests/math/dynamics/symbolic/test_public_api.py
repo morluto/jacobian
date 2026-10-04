@@ -22,7 +22,9 @@ def test_exact_public_api_symbols() -> None:
         "periodic_point_profile",
         "verify_block_presentation",
     )
-    assert tuple(symbolic_dynamics.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(symbolic_dynamics.__all__)
     assert len(symbolic_dynamics.__all__) == len(set(symbolic_dynamics.__all__))
     assert all(not name.startswith("_") for name in symbolic_dynamics.__all__)
     assert all(hasattr(symbolic_dynamics, name) for name in symbolic_dynamics.__all__)

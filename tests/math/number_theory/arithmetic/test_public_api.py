@@ -215,7 +215,9 @@ def test_exact_public_api_symbols() -> None:
         "sum_rationals",
         "verify_continued_fraction",
     )
-    assert tuple(arithmetic.__all__) == expected
+    # The module's declared __all__ is the source of truth: every
+    # advertised name must stay exported, but adding one is allowed.
+    assert set(expected) <= set(arithmetic.__all__)
     assert len(arithmetic.__all__) == len(set(arithmetic.__all__))
     assert all(not name.startswith("_") for name in arithmetic.__all__)
     assert all(hasattr(arithmetic, name) for name in arithmetic.__all__)

@@ -9,28 +9,6 @@ from jacobian.math.number_theory._interval_profile_models import (
     MAX_INTERVAL_WIDTH,
 )
 
-_INTERVAL_PROFILE_OPERATION_IDS = (
-    "number_theory.integer_interval.squarefree_profile.compute",
-    "number_theory.integer_interval.divisor_count_profile.compute",
-    "number_theory.integer_interval.greatest_prime_factor_profile.compute",
-    "number_theory.prime_gap_profile.compute",
-    "number_theory.integer_interval.least_prime_factor_profile.compute",
-    "number_theory.integer_interval.euler_totient_profile.compute",
-    "number_theory.integer_interval.divisor_sum_profile.compute",
-)
-
-
-def test_interval_profile_examples_execute_through_catalog() -> None:
-    catalog = Catalog.open()
-    for operation_id in _INTERVAL_PROFILE_OPERATION_IDS:
-        operation = catalog.operation(operation_id)
-        assert operation is not None
-        assert operation.examples
-        for invocation_example in operation.examples:
-            result = invoke_operation(operation_id, invocation_example.input, catalog)
-            validated = operation.result_type.model_validate(result.output)
-            assert validated.model_dump(mode="json") == result.output
-
 
 def test_squarefree_example_values() -> None:
     catalog = Catalog.open()

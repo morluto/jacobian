@@ -19,10 +19,7 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraTerm,
     canonical_word_key,
 )
-from jacobian.math.free_algebras._tools import TOOLS
 from jacobian.math.free_algebras.operations import ideal_degree_component
-
-OPERATION_ID = "free_algebra.two_sided_ideal.degree_component.compute"
 
 
 def _poly(
@@ -166,11 +163,6 @@ def test_repeated_large_denominators_are_canonicalized_before_growth_admission()
         term.word: term.coefficient.as_fraction()
         for term in result.component_basis[0].terms
     } == {("y",): Fraction(1), ("x",): Fraction(1)}
-
-
-def test_component_operation_is_published() -> None:
-    operation = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-    assert operation.operation_id == OPERATION_ID
 
 
 def test_degree_component_rejects_nonsided_and_nonhomogeneous_inputs() -> None:

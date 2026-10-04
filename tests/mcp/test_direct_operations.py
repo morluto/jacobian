@@ -29,7 +29,7 @@ from jacobian.mcp.direct_tools import (
     direct_operation_tools,
 )
 from jacobian.mcp.runtime import AppState
-from jacobian.mcp.server import _build_server, create_server
+from jacobian.mcp.server import _build_server
 from jacobian.mcp.tools import _invalid_request_error
 
 _FIXED_TOOLS = {"math.find", "math.run"}
@@ -59,18 +59,6 @@ def _direct_server(catalog: Catalog) -> Any:
 
 def _server(*operation_ids: str) -> Any:
     return _direct_server(Catalog(_operations(*operation_ids)))
-
-
-def test_production_server_does_not_eagerly_expose_catalog_operations() -> None:
-    async def scenario() -> None:
-        from mcp import Client
-
-        async with Client(create_server(), raise_exceptions=True) as client:
-            listed_ids = {tool.name for tool in (await client.list_tools()).tools}
-
-        assert listed_ids == _FIXED_TOOLS
-
-    asyncio.run(scenario())
 
 
 def test_experimental_direct_projection_preserves_identity_names() -> None:

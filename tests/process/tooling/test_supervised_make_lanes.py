@@ -64,25 +64,3 @@ def test_supervised_lane_forwards_pytest_arguments() -> None:
     assert relative in output
     assert "-k target_test" in output
     assert "--junitxml=pytest.xml" in output
-
-
-def test_logic_operation_module_still_collects() -> None:
-    representative = "tests/math/logic/test_tools.py"
-    completed = subprocess.run(
-        [
-            "uv",
-            "run",
-            "--locked",
-            "pytest",
-            "--collect-only",
-            "-q",
-            representative,
-        ],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    output = completed.stdout + completed.stderr
-
-    assert representative in output

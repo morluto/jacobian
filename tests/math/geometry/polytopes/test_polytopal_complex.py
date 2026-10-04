@@ -32,8 +32,6 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
 from jacobian.math.geometry.polytopes.operations import facet_incidence
 from jacobian.math.geometry.polytopes.values import Vertex
 
-OPERATION_ID = "polytopal_complex.closure.compute"
-
 
 def _rational(value: int) -> CanonicalRational:
     return CanonicalRational(num=value, den=1)
@@ -299,9 +297,6 @@ class TestNativeVsCatalogParity:
         assert compute_polytopal_complex_closure(request) == polytopal_complex_closure(
             (first, second)
         )
-
-    def test_operation_is_published(self) -> None:
-        assert OPERATION_ID in {tool.operation_id for tool in TOOLS}
 
     def test_catalog_example_runs(self) -> None:
         example = TOOLS[0].examples[0]

@@ -881,6 +881,52 @@ def test_unmatched_class_match_preserves_module_helper_fallback(
     assert _reported(tmp_path, "test_class_match_fallback.py", body) == set()
 
 
+def test_module_compound_suites_publish_helpers_to_the_gate(tmp_path: Path) -> None:
+    body = """\
+    if True:
+        def helper():
+            return 1
+
+        value = 2
+
+        class Support:
+            pass
+    """
+    assert _reported(tmp_path, "test_module_compound_helpers.py", body) == {
+        "helper",
+        "value",
+        "Support",
+    }
+
+
+def test_autouse_fixture_name_can_use_a_boolean_constant(tmp_path: Path) -> None:
+    body = """\
+    import pytest
+
+    AUTO = True
+
+    @pytest.fixture(autouse=AUTO)
+    def setup_environment():
+        return 1
+    """
+    assert _reported(tmp_path, "test_autouse_constant.py", body) == set()
+
+
+def test_collected_callable_alias_reaches_runtime_dependencies(
+    tmp_path: Path,
+) -> None:
+    body = """\
+    def dependency():
+        return 1
+
+    def check():
+        return dependency()
+
+    test_alias = check
+    """
+    assert _reported(tmp_path, "test_callable_alias_dependencies.py", body) == set()
+
+
 def test_class_body_bindings_apply_in_execution_order(tmp_path: Path) -> None:
     body = """\
     def helper() -> int:

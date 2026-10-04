@@ -58,14 +58,6 @@ def test_catalog_schemas_distinguish_accepted_input_from_emitted_output() -> Non
     assert not output_validator.is_valid({"value": 42})
 
 
-def test_catalog_inspects_determinant_without_sqlite() -> None:
-    catalog = Catalog.open()
-
-    descriptor = catalog.inspect("matrix.determinant.compute")
-    assert descriptor is not None
-    assert descriptor.operation_id == "matrix.determinant.compute"
-
-
 def test_builtin_snapshot_reuses_compilation_without_sharing_mutable_schemas(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

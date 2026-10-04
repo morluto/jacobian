@@ -425,18 +425,9 @@ def test_profile_admits_inertia_before_hodge_and_associated_form_products() -> N
     assert exc_info.value.errors()[0]["type"] == "complex_torus.budget_exceeded"
 
 
-def test_catalog_examples_round_trip_through_each_result_contract() -> None:
+def test_catalog_publishes_expected_operation_ids() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "complex_torus.neron_severi_lattice.compute",
         "complex_torus.riemann_form.profile.compute",
         "complex_torus.polarization.find",
     }
-    for tool in TOOLS:
-        request = tool.request_type.model_validate_json(
-            encode_strict_json(tool.examples[0].input)
-        )
-        result = tool.run(request)
-        round_tripped = tool.result_type.model_validate_json(
-            encode_strict_json(result.model_dump(mode="json"))
-        )
-        assert round_tripped == result

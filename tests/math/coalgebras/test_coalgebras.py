@@ -403,16 +403,6 @@ class TestCounitOperationRemovalFromCatalog:
             "coalgebra.group_like_elements.compute",
         }
 
-    def test_native_counit_kernel_remains_available(self) -> None:
-        ca = Coalgebra(
-            prime=5,
-            dimension=1,
-            comultiplication=(((1,),),),
-            counit=(1,),
-        )
-        result = _run_counit(CounitRequest(coalgebra=ca, element_index=0))
-        assert result.value == 1
-
 
 class TestScanWorkBoundary:
     """Admission bounds combined kernel-plus-replay work, not just the

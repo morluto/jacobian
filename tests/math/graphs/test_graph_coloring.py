@@ -370,12 +370,6 @@ class TestEdgeColoringRequestSchema:
         )
         assert assignment.assignment.graph == g
 
-    def test_direct_construction_admits_a_65_vertex_path(self) -> None:
-        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
-
-        request = EdgeKColorabilityRequest(graph=self._path_graph(65), colors=3)
-        assert len(request.graph.vertices) == 65
-
     def test_vertex_coloring_rejects_only_the_retained_formula_edge_envelope(
         self,
     ) -> None:

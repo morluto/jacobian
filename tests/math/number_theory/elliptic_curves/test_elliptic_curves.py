@@ -499,3 +499,5 @@ class TestGroupLawComposition:
             ScalarMultiplicationRequest(curve=curve, point=added, scalar=2)
         )
         assert result.point is not None
+        assert result.point.x.as_fraction() == Fraction(12_769, 7_056)
+        assert result.point.y.as_fraction() == Fraction(900_271, 592_704)

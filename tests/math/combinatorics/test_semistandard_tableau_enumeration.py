@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.semistandard_tableaux._models import (
     SemistandardTableauEnumerationRequest,
 )
+from jacobian.math.combinatorics.semistandard_tableaux._tools import TOOLS
 from jacobian.math.combinatorics.semistandard_tableaux.enumeration import (
     enumerate_semistandard_young_tableaux,
     semistandard_tableaux_count,
@@ -68,8 +69,16 @@ def test_enumeration_matches_brute_force_and_hook_content_count(
 
 def test_exact_maximum_single_cell_family_is_accepted() -> None:
     partition = IntegerPartition(parts=(1,))
+    request = SemistandardTableauEnumerationRequest(
+        partition=partition, max_entry=4_096
+    )
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "combinatorics.semistandard_young_tableaux.enumerate"
+    )
 
-    result = enumerate_semistandard_young_tableaux(partition, max_entry=4_096)
+    result = operation.run(request)
 
     assert len(result.tableaux) == 4_096
     assert result.tableaux[0].rows == ((1,),)
@@ -114,11 +123,3 @@ def test_native_invalid_alphabet_is_rejected_before_count(max_entry: int) -> Non
 def test_exported_count_rejects_invalid_alphabet(max_entry: int) -> None:
     with pytest.raises(OperationDomainValidationError):
         semistandard_tableaux_count(IntegerPartition(parts=(1,)), max_entry)
-
-
-def test_catalog_request_keeps_alphabet_bound() -> None:
-    request = SemistandardTableauEnumerationRequest(
-        partition=IntegerPartition(parts=(1,)), max_entry=4_096
-    )
-
-    assert request.max_entry == 4_096

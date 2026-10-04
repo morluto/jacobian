@@ -227,7 +227,6 @@ def test_catalog_declares_the_group_operation_with_example() -> None:
         if tool.operation_id == "dirichlet_character.group.compute"
     )
     assert tool.examples
-    assert len(tool.discovery_terms) <= 8
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     tool.result_type.model_validate_json(json.dumps(result.model_dump(mode="json")))

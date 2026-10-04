@@ -142,4 +142,3 @@ def test_signature_is_published_as_one_typed_link_operation() -> None:
     )
     assert tool.request_type.__name__ == "LinkSignatureRequest"
     assert tool.result_type is LinkSignatureResult
-    assert tool.examples

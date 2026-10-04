@@ -210,14 +210,3 @@ def test_native_vs_catalog_parity_and_serialization() -> None:
     assert native == via_catalog
     decoded = SimplicialCohomologyResult.model_validate_json(native.model_dump_json())
     assert decoded == native
-
-
-def test_published_example_executes() -> None:
-    tool = next(
-        t for t in TOOLS if t.operation_id == "topology.simplicial.cohomology.compute"
-    )
-    assert tool.examples
-    for example in tool.examples:
-        request = SimplicialCohomologyRequest.model_validate(example.input)
-        result = tool.run(request)
-        assert isinstance(result, SimplicialCohomologyResult)

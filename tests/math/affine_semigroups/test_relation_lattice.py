@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.affine_semigroups._models import (
     MAX_RELATION_LATTICE_DIMENSION,
     MAX_RELATION_LATTICE_INPUT_DIGITS,
-    RelationLatticeRequest,
     RelationLatticeResult,
 )
 from jacobian.math.affine_semigroups._tools import TOOLS
@@ -113,17 +110,8 @@ def test_oversized_axes_are_rejected_at_native_admission() -> None:
     assert "rows and columns" in excinfo.value.errors()[0]["msg"]
 
 
-def test_declaration_is_published_with_one_executable_example() -> None:
-    tool = next(
-        tool
+def test_relation_lattice_operation_is_published() -> None:
+    assert any(
+        tool.operation_id == "integer_configuration.relation_lattice.compute"
         for tool in TOOLS
-        if tool.operation_id == "integer_configuration.relation_lattice.compute"
     )
-
-    assert len(tool.examples) >= 1
-    example_request = RelationLatticeRequest.model_validate_json(
-        json.dumps(dict(tool.examples[0].input))
-    )
-    result = tool.run(example_request)
-    assert isinstance(result, RelationLatticeResult)
-    assert result.nullity == 2

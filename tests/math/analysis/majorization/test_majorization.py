@@ -286,7 +286,23 @@ class TestTTransform:
             )
         )
         assert result.majorizes is True
-        assert len(result.steps) > 0
+        assert [
+            (step.i_label, step.j_label, step.lam.as_fraction())
+            for step in result.steps
+        ] == [("a", "b", Fraction(1, 2))]
+        assert result.final_permutation == ()
+        assert tuple(
+            tuple(value.as_fraction() for value in vector)
+            for vector in result.intermediate_vectors
+        ) == ((Fraction(4), Fraction(0)), (Fraction(2), Fraction(2)))
+        assert result.composed_matrix is not None
+        assert tuple(
+            tuple(value.as_fraction() for value in row)
+            for row in result.composed_matrix.entries
+        ) == (
+            (Fraction(1, 2), Fraction(1, 2)),
+            (Fraction(1, 2), Fraction(1, 2)),
+        )
 
     def test_permutation_equivalent_vectors_return_an_exact_witness(self) -> None:
         """A label permutation needs no averaging, but must still replay to y."""

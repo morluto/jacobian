@@ -97,12 +97,13 @@ def test_exact_cover_prices_primary_mask_width_even_with_few_rows() -> None:
         ).output["status"]
         == "FOUND"
     )
-    with pytest.raises(OperationDomainValidationError, match="item-scan"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(
             "combinatorics.generalized_exact_cover.find",
             {"instance": instance, "search_node_limit": 6251},
             catalog,
         )
+    assert exc_info.value.errors()[0]["type"] == "combinatorics.exact_cover_work"
 
 
 def test_center_retains_parent_and_rejects_noncanonical_residue() -> None:
@@ -127,7 +128,7 @@ def test_sublattice_index_rejects_false_inclusion(embedding: list[list[int]]) ->
     from jacobian.catalog.catalog import Catalog
     from jacobian.dispatch import invoke_operation
 
-    with pytest.raises(OperationDomainValidationError, match="E @ parent"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation(
             "lattice.sublattice_index.compute",
             {
@@ -137,6 +138,7 @@ def test_sublattice_index_rejects_false_inclusion(embedding: list[list[int]]) ->
             },
             Catalog.open(),
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice.sublattice_embedding_mismatch"
 
 
 def test_symbolic_characteristic_support_collects_raw_products() -> None:

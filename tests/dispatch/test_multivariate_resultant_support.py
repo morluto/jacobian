@@ -149,9 +149,7 @@ def test_public_resultant_refuses_actual_output_growth_before_backend(
         pytest.fail("public resultant admission must precede the backend")
 
     monkeypatch.setattr(operations, "_sylvester_resultant_value", unexpected_backend)
-    with pytest.raises(
-        OperationDomainValidationError, match="resultant output"
-    ) as public:
+    with pytest.raises(OperationDomainValidationError) as public:
         invoke_operation(
             _OPERATION,
             {
@@ -161,8 +159,14 @@ def test_public_resultant_refuses_actual_output_growth_before_backend(
             },
             catalog,
         )
-    with pytest.raises(
-        OperationDomainValidationError, match="resultant output"
-    ) as native:
+    assert (
+        public.value.errors()[0]["type"]
+        == "polynomial.multivariate_resultant.support_budget"
+    )
+    with pytest.raises(OperationDomainValidationError) as native:
         operations.multivariate_resultant(left, right, "x")
+    assert (
+        native.value.errors()[0]["type"]
+        == "polynomial.multivariate_resultant.support_budget"
+    )
     assert public.value.errors() == native.value.errors()

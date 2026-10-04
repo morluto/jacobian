@@ -70,7 +70,7 @@ def test_split_parametrization_is_rejected_not_converted(tmp_path: Path) -> None
     )
     usable, rejected = convertible_sites(load(path))
     assert not usable
-    assert rejected["multiple_codes_across_executions"] == 1
+    assert rejected["mixed_code_presence_across_executions"] == 1
 
 
 def test_split_parametrization_to_two_codes_is_rejected(tmp_path: Path) -> None:

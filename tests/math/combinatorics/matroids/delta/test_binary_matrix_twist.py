@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from tests.error_assertions import error_code
 
 from jacobian._execution import OperationExecutionCancelledError, request_cancellation
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryMatrixRequest,
     BinaryMatrixResult,
@@ -175,7 +176,7 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
 @pytest.mark.parametrize("entry", [True, "1", 1.0])
 def test_native_twist_rejects_forged_coerced_matrix_entries(entry: object) -> None:
     matrix = BinarySymmetricMatrix.model_construct(ground=("e0",), entries=((entry,),))
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         binary_matrix_twist(matrix)
     assert error_code(exc_info.value) == "delta_matroid.binary_carrier"
 

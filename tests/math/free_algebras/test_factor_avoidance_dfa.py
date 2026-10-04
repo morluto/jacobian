@@ -5,7 +5,6 @@ from random import Random
 
 import pytest
 
-from jacobian._execution import request_execution
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.free_algebras import operations
 from jacobian.math.free_algebras._models import FreeAlgebraFactorAvoidanceRequest
@@ -21,13 +20,6 @@ def _request(
         alphabet=tuple(alphabet),
         forbidden_factors=tuple(tuple(word) for word in patterns),
     )
-
-
-def test_factor_avoidance_dfa_checkpoints_during_construction() -> None:
-    from time import monotonic
-
-    with request_execution(monotonic()):
-        factor_avoidance_dfa(("x", "y"), (("x", "y", "x"), ("y", "x", "y")))
 
 
 def test_factor_avoidance_dfa_matches_direct_factor_search_and_round_trips() -> None:

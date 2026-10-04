@@ -13,7 +13,7 @@ from jacobian.math.affine_semigroups._models import (
     RelationLatticeRequest,
     RelationLatticeResult,
 )
-from jacobian.math.affine_semigroups._tools import TOOLS, _run_relation_lattice
+from jacobian.math.affine_semigroups._tools import TOOLS
 from jacobian.math.affine_semigroups.operations import relation_lattice
 from jacobian.math.matrices.values import IntegerMatrix
 
@@ -111,13 +111,6 @@ def test_oversized_axes_are_rejected_at_native_admission() -> None:
         relation_lattice(_matrix(entries))
 
     assert "rows and columns" in excinfo.value.errors()[0]["msg"]
-
-
-def test_native_and_catalog_paths_agree() -> None:
-    configuration = _matrix([[1, 2, 3]])
-    request = RelationLatticeRequest(configuration=configuration)
-
-    assert _run_relation_lattice(request) == relation_lattice(configuration)
 
 
 def test_declaration_is_published_with_one_executable_example() -> None:

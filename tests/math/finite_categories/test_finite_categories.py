@@ -437,11 +437,14 @@ class TestProduct:
             compute_category_product(request)
 
     def test_product_admission_uses_structural_identifier_bounds(self) -> None:
-        short = _parallel_arrow_category(50, 4)
-        CategoryProductRequest(left=short, right=short)
-
         long = _parallel_arrow_category(50, 64)
-        compute_category_product(CategoryProductRequest(left=long, right=long))
+        result = compute_category_product(CategoryProductRequest(left=long, right=long))
+
+        assert result.left == long
+        assert result.right == long
+        assert len(result.product.objects) == 4
+        assert len(result.product.morphisms) == 52**2
+        assert len(result.product.composition) == len(long.composition) ** 2
 
     def test_identifier_nesting_is_bounded_before_another_product(self) -> None:
         terminal = FiniteCategory.model_validate(TERMINAL_CATEGORY)

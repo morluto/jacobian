@@ -167,12 +167,6 @@ class TestWeylLengthRejections:
 
 
 class TestWeylLengthComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = WeylElementRequest(matrix=_cartan(A2), word=(0, 1, 0))
-        assert weyl_element_length(request.matrix, request.word) == weyl_element_length(
-            A2, (0, 1, 0)
-        )
-
     def test_constructor_result_feeds_length(self) -> None:
         built = cartan_matrix_from_type("A", 2)
         result = weyl_element_length(built.matrix, (0, 1, 0))

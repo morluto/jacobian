@@ -129,7 +129,7 @@ def _site_key() -> str | None:
     return f"{os.path.relpath(filename)}:{frame.f_lineno}"
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     if not _OUT:
         return
     if exitstatus != 0:
@@ -155,7 +155,7 @@ def _recording_raises(expected_exception=None, *args, **kwargs):
     return _RecordingRaises(expected_exception, *args, **kwargs)
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config | None) -> None:
     global _manual_configuration, _original_raises
     if _original_raises is not None:
         return
@@ -170,7 +170,7 @@ def pytest_configure(config):
     pytest.raises = _recording_raises
 
 
-def pytest_unconfigure(config):
+def pytest_unconfigure(config: pytest.Config | None) -> None:
     global _manual_configuration, _original_raises
     if config is None and not _manual_configuration:
         return

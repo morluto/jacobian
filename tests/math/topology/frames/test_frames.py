@@ -404,7 +404,6 @@ def test_complex_derived_denominator_growth_is_admitted_before_basis_grams() -> 
             MutuallyUnbiasedBasesRequest(dimension=33, bases=(frame,))
         )
     assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
-    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
 
 
 @pytest.mark.parametrize("operation", (_complex_frame_profile, _sic_profile))
@@ -823,7 +822,6 @@ def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
         _mutually_unbiased_bases(
             MutuallyUnbiasedBasesRequest(dimension=64, bases=(frame,))
         )
-    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
     assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
 
 

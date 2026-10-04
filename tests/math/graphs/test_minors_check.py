@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.graphs.minors._models import (
     BranchSet,
     EdgeWitness,
     MinorModelCheckRequest,
     MinorModelCheckResult,
 )
-from jacobian.math.graphs.minors._tools import _check
+from jacobian.math.graphs.minors._tools import TOOLS
 from jacobian.math.graphs.minors.operations import check_minor_model
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -197,6 +199,12 @@ class TestNativeCatalogParity:
             branch_sets=(_branch("x", ["a"]), _branch("y", ["b"])),
             witnesses=(_witness(["x", "y"], ["a", "b"]),),
         )
-        assert _check(request) == check_minor_model(
+        operation = cast(
+            MathTool[MinorModelCheckRequest, MinorModelCheckResult],
+            next(
+                tool for tool in TOOLS if tool.operation_id == "graph.minor_model.check"
+            ),
+        )
+        assert operation.run(request) == check_minor_model(
             request.source, request.target, request.branch_sets, request.witnesses
         )

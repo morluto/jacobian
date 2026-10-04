@@ -253,14 +253,14 @@ def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:
         "domain": "rational",
         "values": [0] * (MAX_SEQUENCE_LENGTH + 1),
     }
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         FiniteRationalSequence.model_validate(payload)
     assert error_code(exc_info.value) == "sequences.sequence_length_exceeded"
 
 
 def test_rational_sequence_rejects_oversized_integer_strings_before_parse() -> None:
     digits = "1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         FiniteRationalSequence.model_validate_json(
             '{"domain":"rational","values":["' + digits + '"]}'
         )

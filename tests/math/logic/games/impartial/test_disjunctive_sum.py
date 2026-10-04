@@ -216,10 +216,6 @@ class TestDisjunctiveSumValidation:
 
 
 class TestToolRegistration:
-    def test_tool_is_registered(self) -> None:
-        operation_ids = {t.operation_id for t in TOOLS}
-        assert "game.impartial.disjunctive_sum.compute" in operation_ids
-
     def test_tool_has_correct_tags(self) -> None:
         tool = next(
             t

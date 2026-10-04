@@ -3,6 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 from tests.error_assertions import error_code
 
 from jacobian._exact import CanonicalRational
@@ -266,7 +267,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
         update={"variables": ("x", "x")}
     )
     zero = _polynomial(("t",), ())
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         compute_polynomial_substitute(
             PolynomialSubstituteRequest(
                 polynomial=source,

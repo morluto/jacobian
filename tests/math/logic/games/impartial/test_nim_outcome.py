@@ -75,26 +75,12 @@ class TestNimSum:
 
 
 class TestOutcomeProfile:
-    def test_p_positions(self) -> None:
+    def test_known_game_profile(self) -> None:
         request = OutcomeProfileRequest.model_validate({"game": _GAME})
         result = compute_outcome_profile(request)
-        assert "0" in result.p_positions
-        assert "3" in result.p_positions
-
-    def test_n_positions(self) -> None:
-        request = OutcomeProfileRequest.model_validate({"game": _GAME})
-        result = compute_outcome_profile(request)
-        assert "1" in result.n_positions
-        assert "2" in result.n_positions
-
-    def test_terminal_position(self) -> None:
-        request = OutcomeProfileRequest.model_validate({"game": _GAME})
-        result = compute_outcome_profile(request)
-        assert "0" in result.terminal_positions
-
-    def test_grundy_values(self) -> None:
-        request = OutcomeProfileRequest.model_validate({"game": _GAME})
-        result = compute_outcome_profile(request)
+        assert result.p_positions == ("0", "3")
+        assert result.n_positions == ("1", "2")
+        assert result.terminal_positions == ("0",)
         grundy_map = dict(result.grundy_values)
         assert grundy_map["0"] == 0
         assert grundy_map["1"] == 1

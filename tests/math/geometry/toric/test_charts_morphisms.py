@@ -238,7 +238,6 @@ def test_hilbert_reduction_shortcuts_exact_two_sum_witnesses() -> None:
     assert metrics.solver_builds == metrics.solver_checks == len(reduced)
     assert metrics.two_sum_redundancies == len(candidates) - len(reduced)
     assert metrics.removed_generators == len(candidates) - len(reduced)
-    assert metrics.solver_seconds >= 0
 
 
 def test_hilbert_reduction_falls_back_for_longer_exact_combinations() -> None:

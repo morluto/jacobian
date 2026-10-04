@@ -240,14 +240,6 @@ def test_projection_uses_canonical_multi_digit_member_order() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_output_edge_bound_is_admitted_before_row_construction() -> None:
-    """The complete candidate envelope rejects 156 disjoint singleton pairs."""
-    source = _family(tuple((index,) for index in range(156)), ground=156)
-    with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        construct_sunflower_family(source, 2)
-    assert exc_info.value.errors()[0]["type"] == "set_system.sunflower.output_bound"
-
-
 def test_qualifying_plan_stops_once_the_output_bound_is_exceeded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -5,11 +5,7 @@ import pytest
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
-    CartanMatrix as CartanMatrixValue,
-)
-from jacobian.math.groups.root_systems._models import (
     WeylDescentsResult,
-    WeylElementRequest,
 )
 from jacobian.math.groups.root_systems.operations import (
     weyl_element_descents,
@@ -22,10 +18,6 @@ Matrix = tuple[tuple[int, ...], ...]
 A2: Matrix = ((2, -1), (-1, 2))
 B2: Matrix = ((2, -2), (-1, 2))
 A2_AFFINE: Matrix = ((2, -1, -1), (-1, 2, -1), (-1, -1, 2))
-
-
-def _cartan(rows: Matrix) -> CartanMatrixValue:
-    return CartanMatrixValue.model_validate(rows)
 
 
 class TestDescentsKnownAnswers:
@@ -97,12 +89,6 @@ class TestDescentsRejections:
 
 
 class TestDescentsComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = WeylElementRequest(matrix=_cartan(A2), word=(0, 1))
-        assert weyl_element_descents(
-            request.matrix, request.word
-        ) == weyl_element_descents(A2, (0, 1))
-
     def test_serialized_result_round_trips(self) -> None:
         result = weyl_element_descents(A2, (0, 1))
         revived = WeylDescentsResult.model_validate_json(result.model_dump_json())

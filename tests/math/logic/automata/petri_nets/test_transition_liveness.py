@@ -154,4 +154,4 @@ def test_parent_matrix_work_is_not_charged_twice() -> None:
     assert len(result.transitions) == size
 
     # the sibling that already charged the value directly still agrees
-    assert reachability_terminal_scc_profile(graph) is not None
+    assert reachability_terminal_scc_profile(graph).terminal_components == ((0,),)

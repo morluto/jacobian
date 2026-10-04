@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
-    LieAlgebraRequest,
     LieKillingRadicalResult,
     LieKillingResult,
 )
@@ -135,10 +134,6 @@ class TestKillingRejections:
 
 
 class TestKillingComposition:
-    def test_request_model_and_native_paths_agree(self) -> None:
-        request = LieAlgebraRequest(algebra=SL2)
-        assert lie_killing_form(request.algebra) == lie_killing_form(SL2)
-
     def test_serialized_result_round_trips(self) -> None:
         result = lie_killing_form(SL2)
         assert LieKillingResult.model_validate_json(result.model_dump_json()) == result

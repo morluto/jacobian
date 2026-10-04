@@ -30,7 +30,6 @@ from jacobian.math.topology.cellular_sheaves._models import (
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     Component,
-    SheafMorphismRequest,
     cochain_map,
     compose_morphisms,
 )
@@ -161,7 +160,6 @@ def test_composition_preserves_zero_dimensional_middle_stalks() -> None:
     assert tuple(matrix for _, matrix in composed.components) == (((_q("0"),),),) * len(
         axis
     )
-    assert SheafMorphismRequest is not None
 
 
 def test_cochain_map_consumer_rechecks_serialized_naturality_claim() -> None:

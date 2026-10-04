@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 from tests.error_assertions import error_code
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups._models import (
     GroupConjugacyClassesRequest,
     GroupConjugacyClassesResult,
@@ -62,7 +63,7 @@ def test_class_power_map_reestablishes_input_partition() -> None:
     request = GroupConjugacyClassesRequest.model_validate(group)
     partition = compute_group_conjugacy_classes(request)
     altered = partition.model_copy(update={"classes": partition.classes[:-1]})
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         class_power_map(altered, 2)
     assert error_code(exc_info.value) == "groups.characters.partition_not_group_bound"
 

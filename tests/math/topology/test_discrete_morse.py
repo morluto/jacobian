@@ -19,21 +19,6 @@ from jacobian.math.topology.discrete_morse._models import (
 )
 from jacobian.math.topology.operations import canonicalize
 
-OPERATION_ID = "topology.discrete_morse.matching.construct"
-
-
-def _request(
-    vertices: list[str],
-    facets: list[list[str]],
-    pairs: list[tuple[list[str], list[str]]],
-) -> DiscreteMorseMatchingRequest:
-    return DiscreteMorseMatchingRequest.model_validate(
-        {
-            "complex": {"vertices": vertices, "facets": facets},
-            "pairs": [{"face": face, "coface": coface} for face, coface in pairs],
-        }
-    )
-
 
 def _args(
     vertices: list[str],

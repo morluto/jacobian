@@ -20,9 +20,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.minors._models import (
-    BranchSet,
     BranchVertex,
-    EdgeWitness,
     MinorModelFindBudget,
     MinorModelFindRequest,
     MinorModelFindResult,
@@ -46,14 +44,6 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 def _graph(vertices: list[str], edges: list[list[str]]) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph.model_validate({"vertices": vertices, "edges": edges})
-
-
-def _branch(target: str, members: list[str]) -> BranchSet:
-    return BranchSet(target=target, members=tuple(sorted(members)))
-
-
-def _witness(targets: list[str], edge: list[str]) -> EdgeWitness:
-    return EdgeWitness(targets=(targets[0], targets[1]), source_edge=(edge[0], edge[1]))
 
 
 def _branch_vertex(target: str, source: str) -> BranchVertex:

@@ -18,7 +18,6 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_value,
 )
 from jacobian.math.number_theory.modular_forms import character_basis as basis_module
-from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
     modular_character_coordinates_u_prime,
@@ -31,36 +30,9 @@ from jacobian.math.number_theory.modular_forms.values import (
 _FIELD = RationalCyclotomicField(order=6)
 _GENERIC_BASIS = "gamma0-cyclotomic-character-sturm-rref-v1"
 
+
 # Columns are U_p images of canonical basis vectors; rows are target
 # coordinates in ascending cyclotomic power-basis order.
-_EXPECTED = {
-    (2, 26, 2): (((0, 0), (0, -2)), ((1, 0), (-1, -1))),
-    (10, 26, 2): (((0, 0), (-2, 2)), ((1, 0), (-2, 1))),
-    (2, 26, 13): (((-1, -3), (0, 0)), ((0, 0), (-1, -3))),
-    (10, 26, 13): (((-4, 3), (0, 0)), ((0, 0), (-4, 3))),
-    (2, 39, 3): (
-        ((0, 0), (2, -1), (0, -3)),
-        ((0, 0), (1, -1), (-2, -2)),
-        ((1, 0), (-1, -1), (-2, 2)),
-    ),
-    (10, 39, 3): (
-        ((0, 0), (1, 1), (-3, 3)),
-        ((0, 0), (0, 1), (-4, 2)),
-        ((1, 0), (-2, 1), (0, -2)),
-    ),
-    (2, 39, 13): (
-        ((4, -1), (0, 0), (7, -5)),
-        ((4, -1), (-1, -3), (3, -4)),
-        ((0, 0), (0, 0), (-1, -3)),
-    ),
-    (10, 39, 13): (
-        ((3, 1), (0, 0), (2, 5)),
-        ((3, 1), (-4, 3), (-1, 4)),
-        ((0, 0), (0, 0), (-4, 3)),
-    ),
-}
-
-
 def _inflated_character(coordinate: int, level: int):
     source = dirichlet_character(character_group(13), (coordinate,))
     group = character_group(level)
@@ -118,18 +90,6 @@ def _coordinates(space: ModularFormSpace, index: int) -> ModularFormCoordinates:
             for coordinate in range(len(basis.elements))
         ),
     )
-
-
-def _numerators(value: RationalCyclotomicElement) -> tuple[int, ...]:
-    return tuple(int(coefficient.num) for coefficient in value.coefficients_ascending)
-
-
-@pytest.mark.parametrize("character_coordinate,level,prime", tuple(_EXPECTED))
-def _sum(values):
-    result = _zero(_FIELD)
-    for value in values:
-        result = cyclotomic.add(result, value)
-    return result
 
 
 def test_u_prime_rejects_a_prime_outside_the_exact_level_action() -> None:

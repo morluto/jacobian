@@ -114,6 +114,7 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
     found: list[tuple[str, int, str, ast.AST]] = []
     callable_test_aliases = _pytest_callable_test_aliases(tree)
     unittest_classes = _pytest_unittest_testcase_classes(tree)
+    opted_in_classes = _pytest_opted_in_test_classes(tree)
     for node in _module_scope_statements(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             # pytest uses distinct name prefixes for test functions and classes.
@@ -124,6 +125,7 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
             if isinstance(node, ast.ClassDef) and (
                 node.name.startswith(_PYTEST_COLLECTED_PREFIX)
                 or node.name in unittest_classes
+                or node.name in opted_in_classes
             ):
                 continue
             if _is_overload_declaration(node):
@@ -227,6 +229,38 @@ def _pytest_unittest_testcase_classes(tree: ast.Module) -> frozenset[str]:
     return frozenset(collected)
 
 
+def _pytest_opted_in_test_classes(tree: ast.Module) -> frozenset[str]:
+    """Classes with a literal ``__test__ = True`` opt-in for pytest."""
+
+    collected: set[str] = set()
+    for statement in _module_scope_statements(tree):
+        if not isinstance(statement, ast.ClassDef):
+            continue
+        opted_in = False
+        for child in statement.body:
+            if isinstance(child, ast.Assign):
+                names = {
+                    name
+                    for target in child.targets
+                    for name in _assignment_names(target)
+                }
+                value = child.value
+            elif isinstance(child, ast.AnnAssign):
+                names = set(_assignment_names(child.target))
+                value = child.value
+            elif isinstance(child, ast.Delete):
+                if any("__test__" in _assignment_names(target) for target in child.targets):
+                    opted_in = False
+                continue
+            else:
+                continue
+            if "__test__" in names:
+                opted_in = isinstance(value, ast.Constant) and value.value is True
+        if opted_in:
+            collected.add(statement.name)
+    return frozenset(collected)
+
+
 def _is_overload_declaration(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Overload signatures do not create runtime bindings of their own."""
 
@@ -261,6 +295,7 @@ def _definition_only_references(
     fixtures = _fixture_names(fixture_declarations)
     constants_by_line, module_constants = _module_string_constants_at_definitions(tree)
     unittest_classes = _pytest_unittest_testcase_classes(tree)
+    opted_in_classes = _pytest_opted_in_test_classes(tree)
     collected_class_lines = frozenset(
         node.lineno
         for node in _module_scope_statements(tree)
@@ -268,6 +303,7 @@ def _definition_only_references(
         and (
             node.name.startswith(_PYTEST_COLLECTED_PREFIX)
             or node.name in unittest_classes
+            or node.name in opted_in_classes
         )
     )
     referenced.update(
@@ -1102,7 +1138,15 @@ def _scan_class_body(
             lexical_outer,
             deferred,
         )
-        bound = bound | _class_statement_bindings(statement)
+        if isinstance(statement, ast.Delete):
+            deleted_names = frozenset(
+                name
+                for target in statement.targets
+                for name in _assignment_names(target)
+            )
+            bound = bound - deleted_names
+        else:
+            bound = bound | _class_statement_bindings(statement)
 
 
 def _scan_class_statement(

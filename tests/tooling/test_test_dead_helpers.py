@@ -826,6 +826,30 @@ def test_unittest_testcase_class_is_collected_by_pytest(tmp_path: Path) -> None:
     assert _reported(tmp_path, "test_unittest_case.py", body) == set()
 
 
+def test_pytest_opted_in_class_is_collected(tmp_path: Path) -> None:
+    body = """\
+    class Example:
+        __test__ = True
+
+        def test_it(self):
+            assert True
+    """
+    assert _reported(tmp_path, "test_opted_in_class.py", body) == set()
+
+
+def test_class_delete_unbinds_class_local_name(tmp_path: Path) -> None:
+    body = """\
+    def helper():
+        pass
+
+    class TestCase:
+        helper = 2
+        del helper
+        value = helper()
+    """
+    assert _reported(tmp_path, "test_class_delete.py", body) == set()
+
+
 def test_fixture_lookup_resolves_module_string_constants(tmp_path: Path) -> None:
     body = """\
     import pytest

@@ -112,6 +112,7 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
     in-file reference and reporting them would flag the entire suite.
     """
     found: list[tuple[str, int, str, ast.AST]] = []
+    callable_test_aliases = _pytest_callable_test_aliases(tree)
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             # pytest collects test functions and Test* classes by name, so they
@@ -133,14 +134,48 @@ def _definition_names(tree: ast.Module) -> list[tuple[str, int, str, ast.AST]]:
                     (name, node.lineno, "variable", node)
                     for name in _assignment_names(target)
                     if name not in _PYTEST_MODULE_NAMES
+                    and name not in callable_test_aliases
                 )
         elif isinstance(node, ast.AnnAssign):
             found.extend(
                 (name, node.lineno, "variable", node)
                 for name in _assignment_names(node.target)
                 if name not in _PYTEST_MODULE_NAMES
+                and name not in callable_test_aliases
             )
     return found
+
+
+def _pytest_callable_test_aliases(tree: ast.Module) -> frozenset[str]:
+    """Module assignment aliases that pytest collects as test callables."""
+
+    callable_names: set[str] = set()
+    aliases: set[str] = set()
+    for statement in tree.body:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            callable_names.add(statement.name)
+            continue
+        value = (
+            statement.value
+            if isinstance(statement, (ast.Assign, ast.AnnAssign))
+            else None
+        )
+        callable_alias = isinstance(value, ast.Name) and value.id in callable_names
+        if isinstance(statement, ast.Assign):
+            targets = statement.targets
+        elif isinstance(statement, ast.AnnAssign):
+            targets = [statement.target]
+        else:
+            targets = []
+        for target in targets:
+            for name in _assignment_names(target):
+                if name.startswith("test") and callable_alias:
+                    aliases.add(name)
+                    callable_names.add(name)
+                else:
+                    callable_names.discard(name)
+                    aliases.discard(name)
+    return frozenset(aliases)
 
 
 def _is_overload_declaration(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -175,6 +210,7 @@ def _definition_only_references(
     referenced: set[str] = set()
     fixture_declarations = _pytest_fixture_declarations(tree)
     fixtures = _fixture_names(fixture_declarations)
+    constants_by_line = _module_string_constants_at_definitions(tree)
     referenced.update(
         fixtures[name]
         for name in _pytest_string_references(tree, nodes)
@@ -189,7 +225,7 @@ def _definition_only_references(
     )
     reference_sites.update(
         _pytest_injected_fixture_reference_sites(
-            nodes, parents, fixtures, aliases, fixture_declarations
+            nodes, parents, fixtures, aliases, fixture_declarations, constants_by_line
         )
     )
     synthetic_line = (
@@ -321,6 +357,7 @@ def _pytest_injected_fixture_reference_sites(
     declarations: Sequence[
         tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool]
     ],
+    constants_by_line: dict[int, dict[str, str]],
 ) -> set[tuple[str, int, bool, int | None]]:
     """Resolve fixture arguments only on module-collected tests and fixtures."""
 
@@ -328,19 +365,32 @@ def _pytest_injected_fixture_reference_sites(
         definition.lineno
         for definition, _fixture_name, _autouse, _unknown_name in declarations
     }
+    fixture_lines.update(
+        node.lineno
+        for node in nodes
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and _pytest_collected_test_class(node, parents) is not None
+        and _is_pytest_fixture_function(node, aliases)
+    )
     sites: set[tuple[str, int, bool, int | None]] = set()
     for node in nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if node.lineno in fixture_lines:
             class_parameters = frozenset()
+            parameter_constants = constants_by_line.get(node.lineno, {})
         elif _is_pytest_collected_test(node, parents):
-            class_parameters = _pytest_test_class_parameters(node, parents, aliases)
+            class_node = _pytest_collected_test_class(node, parents)
+            context_line = class_node.lineno if class_node is not None else node.lineno
+            parameter_constants = constants_by_line.get(context_line, {})
+            class_parameters = _pytest_test_class_parameters(
+                node, parents, aliases, parameter_constants
+            )
         else:
             continue
         requested = (
             _argument_names(node)
-            - _direct_parametrize_names(node, aliases)
+            - _direct_parametrize_names(node, aliases, parameter_constants)
             - class_parameters
         )
         sites.update(
@@ -361,24 +411,50 @@ def _is_pytest_collected_test(
         parent, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     ):
         parent = parents.get(parent)
-    if isinstance(parent, ast.Module):
-        return True
+    return (
+        isinstance(parent, ast.Module)
+        or _pytest_collected_test_class(node, parents) is not None
+    )
+
+
+def _pytest_collected_test_class(
+    node: ast.AST, parents: dict[ast.AST, ast.AST]
+) -> ast.ClassDef | None:
+    parent = parents.get(node)
+    while parent is not None and not isinstance(
+        parent, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    ):
+        parent = parents.get(parent)
     if not isinstance(parent, ast.ClassDef) or not parent.name.startswith(
         _PYTEST_COLLECTED_PREFIX
     ):
-        return False
+        return None
     enclosing = parents.get(parent)
     while enclosing is not None and not isinstance(
         enclosing, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     ):
         enclosing = parents.get(enclosing)
-    return isinstance(enclosing, ast.Module)
+    return parent if isinstance(enclosing, ast.Module) else None
+
+
+def _is_pytest_fixture_function(
+    node: ast.FunctionDef | ast.AsyncFunctionDef, aliases: dict[str, str]
+) -> bool:
+    return any(
+        _canonical_pytest_name(
+            decorator.func if isinstance(decorator, ast.Call) else decorator,
+            aliases,
+        )
+        == "pytest.fixture"
+        for decorator in node.decorator_list
+    )
 
 
 def _pytest_test_class_parameters(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     parents: dict[ast.AST, ast.AST],
     aliases: dict[str, str],
+    constants: dict[str, str],
 ) -> frozenset[str]:
     parent = parents.get(node)
     while parent is not None and not isinstance(
@@ -386,8 +462,25 @@ def _pytest_test_class_parameters(
     ):
         parent = parents.get(parent)
     if isinstance(parent, ast.ClassDef):
-        return _direct_parametrize_names(parent, aliases)
+        return _direct_parametrize_names(parent, aliases, constants)
     return frozenset()
+
+
+def _module_string_constants_at_definitions(
+    tree: ast.Module,
+) -> dict[int, dict[str, str]]:
+    constants: dict[str, str] = {}
+    snapshots: dict[int, dict[str, str]] = {}
+    for statement in tree.body:
+        if isinstance(statement, _SCOPE_NODES):
+            snapshots[statement.lineno] = constants.copy()
+            if isinstance(
+                statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            ):
+                constants.pop(statement.name, None)
+        else:
+            _update_module_string_constants(statement, constants)
+    return snapshots
 
 
 def _pytest_import_aliases(tree: ast.Module) -> dict[str, str]:
@@ -435,7 +528,18 @@ def _string_values(node: ast.AST) -> set[str]:
     return set()
 
 
-def _parameter_names(node: ast.AST) -> set[str]:
+def _parameter_names(
+    node: ast.AST, constants: dict[str, str] | None = None
+) -> set[str]:
+    if isinstance(node, ast.Name):
+        value = (constants or {}).get(node.id)
+        return (
+            {part.strip() for part in value.split(",") if part.strip()}
+            if value
+            else set()
+        )
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return set().union(*(_parameter_names(item, constants) for item in node.elts))
     return {
         name.strip()
         for value in _string_values(node)
@@ -444,7 +548,9 @@ def _parameter_names(node: ast.AST) -> set[str]:
     }
 
 
-def _parametrize_argnames(node: ast.Call) -> set[str]:
+def _parametrize_argnames(
+    node: ast.Call, constants: dict[str, str] | None = None
+) -> set[str]:
     argument = (
         node.args[0]
         if node.args
@@ -453,7 +559,7 @@ def _parametrize_argnames(node: ast.Call) -> set[str]:
             None,
         )
     )
-    return _parameter_names(argument) if argument is not None else set()
+    return _parameter_names(argument, constants) if argument is not None else set()
 
 
 def _fixture_names(
@@ -1120,7 +1226,7 @@ def _pattern_binding_names(pattern: ast.pattern) -> frozenset[str]:
     )
 
 
-def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
+def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:  # noqa: C901
     if isinstance(statement, ast.If):
         if isinstance(statement.test, ast.Constant) and isinstance(
             statement.test.value, bool
@@ -1130,6 +1236,18 @@ def _class_statement_bindings(statement: ast.stmt) -> frozenset[str]:
         body_names = _class_suite_bindings(statement.body)
         else_names = _class_suite_bindings(statement.orelse)
         return body_names & else_names
+    if isinstance(statement, (ast.Try, ast.TryStar)):
+        normal_names = _class_suite_bindings(statement.body) | _class_suite_bindings(
+            statement.orelse
+        )
+        if statement.handlers:
+            handler_names = [
+                _class_suite_bindings(handler.body) for handler in statement.handlers
+            ]
+            guaranteed = normal_names.intersection(*handler_names)
+        else:
+            guaranteed = normal_names
+        return frozenset(guaranteed | _class_suite_bindings(statement.finalbody))
     if isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
         return (
             _class_suite_bindings(statement.orelse)
@@ -1208,7 +1326,9 @@ def _argument_names(node: ast.AST) -> frozenset[str]:
 
 
 def _direct_parametrize_names(
-    node: ast.AST, pytest_aliases: dict[str, str]
+    node: ast.AST,
+    pytest_aliases: dict[str, str],
+    constants: dict[str, str] | None = None,
 ) -> frozenset[str]:
     """Test arguments supplied as values do not request same-named fixtures."""
 
@@ -1222,7 +1342,7 @@ def _direct_parametrize_names(
             != "pytest.mark.parametrize"
         ):
             continue
-        parameter_names = _parametrize_argnames(decorator)
+        parameter_names = _parametrize_argnames(decorator, constants)
         indirect_keyword = next(
             (item.value for item in decorator.keywords if item.arg == "indirect"),
             None,
@@ -1233,7 +1353,7 @@ def _direct_parametrize_names(
         ):
             indirect = parameter_names
         elif indirect_keyword is not None:
-            indirect = _parameter_names(indirect_keyword)
+            indirect = _parameter_names(indirect_keyword, constants)
         else:
             indirect = set()
         direct.update(parameter_names - indirect)

@@ -170,20 +170,27 @@ def _definition_only_references(
     separately in :func:`_definition_names`.
     """
 
+    nodes, parents = _ast_nodes_and_parents(tree)
     module_names = {name for name, _line, _kind, _node in _definition_names(tree)}
     referenced: set[str] = set()
-    fixtures = _fixture_names(tree)
+    fixture_declarations = _pytest_fixture_declarations(tree)
+    fixtures = _fixture_names(fixture_declarations)
     referenced.update(
-        fixtures[name] for name in _pytest_string_references(tree) if name in fixtures
+        fixtures[name]
+        for name in _pytest_string_references(tree, nodes)
+        if name in fixtures
     )
-    referenced.update(_autouse_fixture_definitions(tree))
+    autouse_fixtures = _autouse_fixture_definitions(fixture_declarations)
+    referenced.update(autouse_fixtures)
     aliases = _pytest_import_aliases(tree)
     reference_sites: set[tuple[str, int, bool, int | None]] = set()
     _scan(
         tree, frozenset(), module_names, referenced, fixtures, aliases, reference_sites
     )
     reference_sites.update(
-        _pytest_injected_fixture_reference_sites(tree, fixtures, aliases)
+        _pytest_injected_fixture_reference_sites(
+            nodes, parents, fixtures, aliases, fixture_declarations
+        )
     )
     synthetic_line = (
         max(
@@ -195,10 +202,27 @@ def _definition_only_references(
         )
         + 1
     )
-    for definition in _autouse_fixture_definitions(tree):
+    for definition in autouse_fixtures:
         reference_sites.add((definition, synthetic_line, True, None))
-    reference_sites.update(_pytest_fixture_reference_sites(tree, fixtures))
+    reference_sites.update(
+        _pytest_fixture_reference_sites(nodes, parents, fixtures, aliases)
+    )
     return referenced, reference_sites
+
+
+def _ast_nodes_and_parents(
+    tree: ast.AST,
+) -> tuple[list[ast.AST], dict[ast.AST, ast.AST]]:
+    nodes: list[ast.AST] = []
+    parents: dict[ast.AST, ast.AST] = {}
+    pending = [tree]
+    while pending:
+        node = pending.pop()
+        nodes.append(node)
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+            pending.append(child)
+    return nodes, parents
 
 
 def _assignment_names(target: ast.expr) -> frozenset[str]:
@@ -213,12 +237,12 @@ def _assignment_names(target: ast.expr) -> frozenset[str]:
     return frozenset()
 
 
-def _pytest_string_references(tree: ast.Module) -> set[str]:
+def _pytest_string_references(tree: ast.Module, nodes: Sequence[ast.AST]) -> set[str]:
     """Names that pytest resolves from supported string-bearing markers."""
 
     referenced: set[str] = set()
     aliases = _pytest_import_aliases(tree)
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, ast.Call):
             continue
         name = _canonical_pytest_name(node.func, aliases)
@@ -242,18 +266,15 @@ def _pytest_string_references(tree: ast.Module) -> set[str]:
 
 
 def _pytest_fixture_reference_sites(
-    tree: ast.Module, fixtures: dict[str, str]
+    nodes: Sequence[ast.AST],
+    parents: dict[ast.AST, ast.AST],
+    fixtures: dict[str, str],
+    aliases: dict[str, str],
 ) -> set[tuple[str, int, bool, int | None]]:
     """Preserve the fixture function that owns each string-based request."""
 
-    aliases = _pytest_import_aliases(tree)
-    parents = {
-        child: parent
-        for parent in ast.walk(tree)
-        for child in ast.iter_child_nodes(parent)
-    }
     sites: set[tuple[str, int, bool, int | None]] = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, ast.Call):
             continue
         name = _canonical_pytest_name(node.func, aliases)
@@ -293,23 +314,22 @@ def _pytest_fixture_reference_sites(
 
 
 def _pytest_injected_fixture_reference_sites(
-    tree: ast.Module, fixtures: dict[str, str], aliases: dict[str, str]
+    nodes: Sequence[ast.AST],
+    parents: dict[ast.AST, ast.AST],
+    fixtures: dict[str, str],
+    aliases: dict[str, str],
+    declarations: Sequence[
+        tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool]
+    ],
 ) -> set[tuple[str, int, bool, int | None]]:
     """Resolve fixture arguments only on module-collected tests and fixtures."""
 
-    parents = {
-        child: parent
-        for parent in ast.walk(tree)
-        for child in ast.iter_child_nodes(parent)
-    }
     fixture_lines = {
         definition.lineno
-        for definition, _fixture_name, _autouse, _unknown_name in _pytest_fixture_declarations(
-            tree
-        )
+        for definition, _fixture_name, _autouse, _unknown_name in declarations
     }
     sites: set[tuple[str, int, bool, int | None]] = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if node.lineno in fixture_lines:
@@ -436,7 +456,11 @@ def _parametrize_argnames(node: ast.Call) -> set[str]:
     return _parameter_names(argument) if argument is not None else set()
 
 
-def _fixture_names(tree: ast.Module) -> dict[str, str]:
+def _fixture_names(
+    declarations: Sequence[
+        tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool]
+    ],
+) -> dict[str, str]:
     """Module-level helpers pytest injects by parameter name.
 
     Only these are exempt from lexical resolution. A test parameter that
@@ -446,18 +470,18 @@ def _fixture_names(tree: ast.Module) -> dict[str, str]:
 
     return {
         fixture_name or definition.name: definition.name
-        for definition, fixture_name, _autouse, _unknown_name in _pytest_fixture_declarations(
-            tree
-        )
+        for definition, fixture_name, _autouse, _unknown_name in declarations
     }
 
 
-def _autouse_fixture_definitions(tree: ast.Module) -> frozenset[str]:
+def _autouse_fixture_definitions(
+    declarations: Sequence[
+        tuple[ast.FunctionDef | ast.AsyncFunctionDef, str | None, bool, bool]
+    ],
+) -> frozenset[str]:
     return frozenset(
         definition.name
-        for definition, _fixture_name, autouse, unknown_name in _pytest_fixture_declarations(
-            tree
-        )
+        for definition, _fixture_name, autouse, unknown_name in declarations
         if autouse or unknown_name
     )
 

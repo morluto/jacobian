@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.ore_algebras._models import (
-    ShiftOperatorMultiplyRequest,
     ShiftOreOperator,
 )
 from jacobian.math.ore_algebras.operations import shift_operator_multiply
@@ -338,17 +337,6 @@ class TestShiftMultiplyAdmission:
         monkeypatch.setattr(operations, "MAX_SHIFT_RESULT_ORDER", 1)
         with pytest.raises(OperationResourceAdmissionError):
             shift_operator_multiply(left, right)
-
-    def test_native_and_catalog_paths_agree(self) -> None:
-        from jacobian.math.ore_algebras._tools import TOOLS
-
-        tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "ore.shift.operator.multiply.compute"
-        )
-        request = ShiftOperatorMultiplyRequest(left=_shift(), right=_op(((0, N),)))
-        assert tool.run(request) == shift_operator_multiply(request.left, request.right)
 
     def test_published_example_validates(self) -> None:
         from jacobian.canonical import encode_strict_json

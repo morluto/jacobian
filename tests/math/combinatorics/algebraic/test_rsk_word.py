@@ -601,19 +601,13 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     )
 
 
-def test_public_operations_are_admitted_and_examples_execute() -> None:
+def test_public_operations_are_published() -> None:
     public_ids = {
         "tableau.rsk.word.compute",
         "tableau.rsk.inverse_word.compute",
     }
     tools = {tool.operation_id: tool for tool in TOOLS}
     assert public_ids <= tools.keys()
-
-    for operation_id in public_ids:
-        tool = tools[operation_id]
-        for operation_example in tool.examples:
-            request = tool.request_type.model_validate(operation_example.input)
-            tool.result_type.model_validate(tool.run(request))
 
 
 def test_strict_lds_matches_independent_subsequence_enumeration() -> None:

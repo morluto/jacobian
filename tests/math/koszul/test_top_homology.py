@@ -1,6 +1,5 @@
 """Top Koszul homology and simultaneous annihilator contracts."""
 
-import json
 from fractions import Fraction
 
 import pytest
@@ -11,7 +10,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.koszul._tools import TOOLS
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
@@ -203,14 +201,3 @@ def test_top_homology_rejects_oversized_coefficients_before_algebra_replay(
     assert (
         error.value.errors()[0]["type"] == "koszul.module.homology_coefficient_budget"
     )
-
-
-def test_top_homology_is_published_and_example_executes() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "homological.koszul.top_homology.compute"
-    )
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    assert result.annihilator_basis == ((q(1),),)

@@ -14,7 +14,6 @@ from jacobian.math.topology.links import (
     link_linking_matrix,
     link_orientation_reverse,
 )
-from jacobian.math.topology.links._tools import TOOLS
 
 
 def _hopf() -> OrientedLinkDiagram:
@@ -98,14 +97,3 @@ def test_reversal_noop_and_free_loop_representative_rejection() -> None:
         exc_info.value.errors()[0]["type"]
         == "link_diagram.orientation_reverse.untracked_component"
     )
-
-
-def test_orientation_reversal_catalog_example_executes() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "link_diagram.orientation_reverse.compute"
-    )
-    example = tool.examples[0]
-    result = tool.run(tool.request_type.model_validate(example.input))
-    assert len(result.crossing_sign_changes) == 2

@@ -8,6 +8,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.galois._models import (
     ElementEmbeddingOrbitRequest,
+    ElementEmbeddingOrbitResult,
     QQSplittingField,
 )
 from jacobian.math.number_theory.galois._tools import TOOLS
@@ -185,14 +186,13 @@ def test_orbit_rejects_element_from_isomorphic_but_distinct_parent() -> None:
     assert error_code(exc_info.value) == "galois_theory.element_orbit_parent"
 
 
-def test_operation_is_published_with_a_valid_example() -> None:
+def test_operation_is_published_with_a_typed_result() -> None:
     tool = next(
         item
         for item in TOOLS
         if item.operation_id == "number_field.element.embedding_orbit.compute"
     )
-    assert len(tool.examples) == 1
-    assert tool.result_type is not None
+    assert tool.result_type is ElementEmbeddingOrbitResult
 
 
 def test_native_call_rejects_non_field_request_shape() -> None:

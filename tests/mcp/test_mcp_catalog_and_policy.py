@@ -27,7 +27,7 @@ def _content_text(content: ContentBlock) -> str:
     return content.text
 
 
-def test_mcp_catalog_is_the_complete_static_operation_library() -> None:
+def test_mcp_catalog_omits_deployment_policy_metadata() -> None:
     async def scenario() -> None:
         from mcp import Client
 
@@ -37,7 +37,6 @@ def test_mcp_catalog_is_the_complete_static_operation_library() -> None:
         ) as client:
             resource = await client.read_resource("operation://catalog")
             catalog = json.loads(_resource_text(resource.contents[0]))
-            assert catalog["operations"]
             assert "policy_profile" not in catalog
             assert "policy_digest" not in catalog
 

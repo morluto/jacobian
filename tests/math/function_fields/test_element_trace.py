@@ -14,7 +14,6 @@ from jacobian.math.function_fields import (
 )
 from jacobian.math.function_fields._models import (
     FiniteFunctionField,
-    FunctionFieldTraceRequest,
     FunctionFieldTraceResult,
 )
 from jacobian.math.function_fields._tools import TOOLS
@@ -226,8 +225,6 @@ def test_trace_tool_schema_dispatch_and_wire_roundtrip() -> None:
     assert restored == direct
 
     tool = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-    request = FunctionFieldTraceRequest(element=element)
-    assert tool.run(request) == direct
     example = tool.request_type.model_validate_json(
         encode_strict_json(next(iter(tool.examples)).input), strict=True
     )

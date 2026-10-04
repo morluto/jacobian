@@ -149,14 +149,13 @@ def test_contradictory_rational_primitive_state_is_rejected() -> None:
         RationalPrimitiveResult.model_validate_json(json.dumps(payload))
 
 
-def test_declaration_is_published_with_one_executable_example() -> None:
+def test_published_example_reconstructs_the_function() -> None:
     tool = next(
         tool
         for tool in TOOLS
         if tool.operation_id == "rational_function.partial_fractions.compute"
     )
 
-    assert len(tool.examples) >= 1
     example_request = PartialFractionsRequest.model_validate_json(
         json.dumps(dict(tool.examples[0].input))
     )

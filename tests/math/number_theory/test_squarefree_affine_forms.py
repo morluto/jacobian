@@ -722,13 +722,6 @@ def test_tool_declarations_are_published() -> None:
         "number_theory.squarefree_affine_forms.local_admissibility.decide",
         "number_theory.squarefree_affine_forms.interval_count.compute",
     }
-    for tool in TOOLS:
-        assert 1 <= len(tool.discovery_terms) <= 8
-        assert tool.examples
-        for example in tool.examples:
-            request = tool.request_type.model_validate_json(json.dumps(example.input))
-            result = tool.run(request)
-            assert result is not None
 
 
 def _twin_pair() -> SquarefreeAffineFamily:

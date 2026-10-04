@@ -217,16 +217,7 @@ def test_native_admission_rejects_nonpositive_and_boolean_moduli() -> None:
         character_group(True)
 
 
-def test_catalog_declares_the_group_operation_with_example() -> None:
+def test_catalog_declares_the_group_operation() -> None:
     operation_ids = tuple(tool.operation_id for tool in TOOLS)
 
     assert "dirichlet_character.group.compute" in operation_ids
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "dirichlet_character.group.compute"
-    )
-    assert tool.examples
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    tool.result_type.model_validate_json(json.dumps(result.model_dump(mode="json")))

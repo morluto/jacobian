@@ -363,8 +363,11 @@ class TestUnification:
         assert result == {0: _app(2)}
 
     def test_unify_variables(self) -> None:
-        result = unify(_var(0), _var(1))
+        left, right = _var(0), _var(1)
+        result = unify(left, right)
         assert result is not None
+        assert result in ({0: right}, {1: left})
+        assert apply_substitution(left, result) == apply_substitution(right, result)
 
     def test_unify_failure(self) -> None:
         result = unify(_app(0), _app(1))

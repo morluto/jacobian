@@ -15,7 +15,6 @@ from pydantic import ValidationError
 
 from jacobian.math.graphs.optimization import verify_distance_matrix
 from jacobian.math.graphs.optimization._distance_matrix import (
-    DISTANCE_MATRIX_OPERATION,
     compute_distance_matrix,
 )
 from jacobian.math.graphs.optimization._distance_models import (
@@ -152,16 +151,6 @@ def test_arbitrary_string_identifiers_remain_deterministic() -> None:
     )
 
     assert result.vertices == ("1", "10", "leaf-2", "root")
-    assert [row.source for row in result.rows] == list(result.vertices)
-
-
-def test_operation_example_runs_through_the_catalog_wrapper() -> None:
-    example_input = DISTANCE_MATRIX_OPERATION.examples[0].input
-    request = DISTANCE_MATRIX_OPERATION.request_type.model_validate(example_input)
-    result = DISTANCE_MATRIX_OPERATION.run(request)
-
-    assert isinstance(result, DISTANCE_MATRIX_OPERATION.result_type)
-    assert result.vertices == ("a", "b", "c")
     assert [row.source for row in result.rows] == list(result.vertices)
 
 

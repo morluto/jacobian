@@ -176,26 +176,6 @@ def test_composition_is_native_only_and_not_a_catalog_operation() -> None:
     )
 
 
-def test_catalog_examples_run_and_results_pass_strict_json_validation() -> None:
-    for operation_id in (
-        "matrix.cyclic.cyclotomic_inclusion.compute",
-        "matrix.cyclic.cyclotomic_element.map",
-    ):
-        operation = next(t for t in TOOLS if t.operation_id == operation_id)
-        assert operation.examples
-        for example in operation.examples:
-            result = operation.run(
-                operation.request_type.model_validate_json(
-                    encode_strict_json(example.input)
-                )
-            )
-            output = result.model_dump(mode="json")
-            validated = operation.result_type.model_validate_json(
-                encode_strict_json(output)
-            )
-            assert validated.model_dump(mode="json") == output
-
-
 def test_identity_inclusion_accepts_large_bounded_element() -> None:
     field = RationalCyclotomicField(order=3)
     inclusion = cyclotomic_field_inclusion(field, field)

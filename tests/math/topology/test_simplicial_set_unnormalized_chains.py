@@ -1,11 +1,17 @@
+from typing import cast
+
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.operations import (
     differential_squares_to_zero,
     homology_groups,
 )
-from jacobian.math.topology.chain_complexes.values import CoefficientRing
+from jacobian.math.topology.chain_complexes.values import (
+    CoefficientRing,
+    HomologyGroup,
+    IntegralHomologyGroupValue,
+)
 from jacobian.math.topology.simplicial_sets import chains as chains_module
 from jacobian.math.topology.simplicial_sets import maps as maps_module
 from jacobian.math.topology.simplicial_sets.chains import (
@@ -13,6 +19,8 @@ from jacobian.math.topology.simplicial_sets.chains import (
     unnormalized_chains,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
+    NormalizedChainsRequest,
+    NormalizedHomologyResult,
     normalized_chains,
     normalized_homology,
 )
@@ -23,7 +31,9 @@ def _compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]
     return tuple(second[index] for index in first)
 
 
-def _dense_product(left, right):
+def _dense_product(
+    left: tuple[tuple[int, ...], ...], right: tuple[tuple[int, ...], ...]
+) -> tuple[tuple[int, ...], ...]:
     return tuple(
         tuple(
             sum(left[row][inner] * right[inner][column] for inner in range(len(right)))
@@ -33,7 +43,12 @@ def _dense_product(left, right):
     )
 
 
-def test_unnormalized_delta_one_uses_every_simplex_and_is_chain_complex():
+def _integral_group(group: HomologyGroup) -> IntegralHomologyGroupValue:
+    assert isinstance(group, IntegralHomologyGroupValue)
+    return group
+
+
+def test_unnormalized_delta_one_uses_every_simplex_and_is_chain_complex() -> None:
     source = standard_simplex(1, 3)
     for degree in range(2, source.max_degree + 1):
         for outer in range(degree + 1):
@@ -85,16 +100,16 @@ def test_unnormalized_delta_one_uses_every_simplex_and_is_chain_complex():
     )
     assert differential_squares_to_zero(normalized.chain_complex).is_valid
     reusable_homology = homology_groups(normalized.chain_complex)
-    assert [group.free_rank for group in reusable_homology.homology_groups[:2]] == [
-        1,
-        0,
-    ]
+    assert [
+        _integral_group(group).free_rank
+        for group in reusable_homology.homology_groups[:2]
+    ] == [1, 0]
     assert (
         type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
     )
 
 
-def test_unnormalized_chain_result_retains_reusable_canonical_value():
+def test_unnormalized_chain_result_retains_reusable_canonical_value() -> None:
     source = standard_simplex(0, 2)
     result = unnormalized_chains(UnnormalizedChainsRequest(simplicial_set=source))
     rebuilt = result.chain_complex.model_validate_json(
@@ -104,7 +119,7 @@ def test_unnormalized_chain_result_retains_reusable_canonical_value():
     assert result.simplex_bases == (("(0)",), ("(0,0)",), ("(0,0,0)",))
 
 
-def test_unnormalized_chains_use_requested_exact_coefficient_context():
+def test_unnormalized_chains_use_requested_exact_coefficient_context() -> None:
     source = standard_simplex(1, 2)
     rational = unnormalized_chains(
         UnnormalizedChainsRequest(
@@ -128,18 +143,23 @@ def test_unnormalized_chains_use_requested_exact_coefficient_context():
     assert differential_squares_to_zero(binary.chain_complex).is_valid
 
 
-def test_normalized_homology_reports_only_degrees_with_known_incoming_boundary():
+def test_normalized_homology_reports_only_degrees_with_known_incoming_boundary() -> (
+    None
+):
     source = standard_simplex(1, 2)
     result = normalized_homology(source)
     assert [group.degree for group in result.homology_groups] == [0, 1]
-    assert [group.free_rank for group in result.homology_groups] == [1, 0]
+    assert [_integral_group(group).free_rank for group in result.homology_groups] == [
+        1,
+        0,
+    ]
     assert result.nondegenerate_bases[0] == source.sets[0]
     # Degree 2 is intentionally absent: a degree-3 face map would be needed.
     assert result.chain_complex.degree_max == 2
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_normalized_homology_of_triangle_boundary_has_circle_group():
+def test_normalized_homology_of_triangle_boundary_has_circle_group() -> None:
     # The three-edge simplicial circle has H_0 = Z and H_1 = Z. Its complete
     # degree-0..2 simplicial-set prefix contains the differential needed for
     # both groups, while the unused formal top group is not returned.
@@ -154,17 +174,21 @@ def test_normalized_homology_of_triangle_boundary_has_circle_group():
         SimplicialComplexPrefixRequest(complex=circle, max_degree=2)
     ).simplicial_set
     result = normalized_homology(source)
-    assert [group.free_rank for group in result.homology_groups] == [1, 1]
-    assert all(not group.torsion_generators for group in result.homology_groups)
+    integral_groups = tuple(_integral_group(group) for group in result.homology_groups)
+    assert [group.free_rank for group in integral_groups] == [1, 1]
+    assert all(not group.torsion_generators for group in integral_groups)
 
 
-def test_normalized_homology_manifest_example_is_composable():
+def test_normalized_homology_manifest_example_is_composable() -> None:
     from jacobian.math.topology.simplicial_sets.maps_tools import TOOLS
 
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "topology.simplicial_set.homology.compute"
+    tool = cast(
+        MathTool[NormalizedChainsRequest, NormalizedHomologyResult],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "topology.simplicial_set.homology.compute"
+        ),
     )
     request = tool.request_type.model_validate(tool.examples[0].input)
     result = tool.run(request)
@@ -174,7 +198,7 @@ def test_normalized_homology_manifest_example_is_composable():
     )
 
 
-def test_output_admission_counts_domain_cells(monkeypatch):
+def test_output_admission_counts_domain_cells(monkeypatch: pytest.MonkeyPatch) -> None:
     source = standard_simplex(1, 3)
     sizes = tuple(len(level) for level in source.sets)
     cells = sum(sizes[n - 1] * sizes[n] for n in range(1, len(sizes)))
@@ -191,10 +215,12 @@ def test_output_admission_counts_domain_cells(monkeypatch):
         chains_module._preflight(source)
 
 
-def test_normalized_chain_output_is_admitted_before_identity_replay(monkeypatch):
+def test_normalized_chain_output_is_admitted_before_identity_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = standard_simplex(1, 2)
 
-    def reject(*_args, **_kwargs):
+    def reject(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("identity replay started before output admission")
 
     monkeypatch.setattr(maps_module, "from_tables", reject)

@@ -49,10 +49,15 @@ def _evaluate(poly: TropicalPolynomial, point: Fraction) -> Fraction | None:
     if not poly.terms:
         return None
     values = tuple(
-        term.coefficient.value.as_fraction() + term.exponents[0] * point  # type: ignore[union-attr]
+        _finite_coefficient(term).as_fraction() + term.exponents[0] * point
         for term in poly.terms
     )
     return min(values) if poly.semiring.convention == "MIN_PLUS" else max(values)
+
+
+def _finite_coefficient(term: TropicalPolynomialTerm) -> CanonicalRational:
+    assert term.coefficient.value is not None
+    return term.coefficient.value
 
 
 def _active_slope(poly: TropicalPolynomial, point: Fraction) -> int | None:
@@ -60,8 +65,7 @@ def _active_slope(poly: TropicalPolynomial, point: Fraction) -> int | None:
         return None
     values = tuple(
         (
-            term.coefficient.value.as_fraction()  # type: ignore[union-attr]
-            + term.exponents[0] * point,
+            _finite_coefficient(term).as_fraction() + term.exponents[0] * point,
             term.exponents[0],
         )
         for term in poly.terms
@@ -83,7 +87,7 @@ def _exact_function_equality_probes(
     lines = tuple(
         (
             term.exponents[0],
-            term.coefficient.value.as_fraction(),  # type: ignore[union-attr]
+            _finite_coefficient(term).as_fraction(),
         )
         for poly in (left, right)
         for term in poly.terms
@@ -141,10 +145,7 @@ def test_split_form_is_functionally_equal_and_keeps_exact_roots(
         range(first_exponent, first_exponent + len(expected_coefficients))
     )
     assert (
-        tuple(
-            term.coefficient.value.as_fraction()  # type: ignore[union-attr]
-            for term in result.terms
-        )
+        tuple(_finite_coefficient(term).as_fraction() for term in result.terms)
         == expected_coefficients
     )
     # Pairwise line crossings partition the whole real line into intervals.
@@ -164,7 +165,7 @@ def test_integer_input_promotes_when_a_split_coefficient_is_rational() -> None:
     assert result.semiring == TropicalSemiring(convention="MIN_PLUS", base="QQ")
     assert result.terms[1].coefficient.value == CanonicalRational.from_integer_ratio(
         1, 2
-    )  # type: ignore[union-attr]
+    )
 
 
 def test_zero_and_monomial_have_their_obvious_split_forms() -> None:
@@ -180,10 +181,12 @@ def test_zero_and_monomial_have_their_obvious_split_forms() -> None:
     )
 
 
-def test_support_growth_is_rejected_before_root_computation(monkeypatch) -> None:
+def test_support_growth_is_rejected_before_root_computation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _poly("MIN_PLUS", "ZZ", ((0, Fraction(0)), (512, Fraction(0))))
 
-    def unexpected_root_computation(_poly: TropicalPolynomial):
+    def unexpected_root_computation(_poly: TropicalPolynomial) -> None:
         raise AssertionError("root computation must follow split-form admission")
 
     monkeypatch.setattr(
@@ -210,10 +213,7 @@ def test_split_form_cancellation_is_admitted_and_package_exports_function() -> N
     result = tropical_polynomial_univariate_split_form(source)
     assert _evaluate(result, Fraction(0)) == _evaluate(source, Fraction(0))
     assert (
-        max(
-            len(str(abs(term.coefficient.value.num)))  # type: ignore[union-attr]
-            for term in result.terms
-        )
+        max(len(str(abs(_finite_coefficient(term).num))) for term in result.terms)
         <= MAX_TROPICAL_SCALAR_DIGITS
     )
 

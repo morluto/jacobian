@@ -178,22 +178,23 @@ def test_mixed_and_non_square_free_fields_reject() -> None:
         configuration(((value(0), value(0, d=2)),))
     assert exc_info.value.errors()[0]["type"] == "geometry.quadratic_parent_mismatch"
     invalid = configuration(((value(0, d=4), value(0, d=4)),), 4)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as parent_error:
         distance_profile(invalid)
     assert (
-        exc_info.value.errors()[0]["type"] == "real_quadratic.radicand_not_square_free"
+        parent_error.value.errors()[0]["type"]
+        == "real_quadratic.radicand_not_square_free"
     )
     source = configuration(((value(0), value(0)),))
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as target_parent_error:
         distance_graph(source, value(1, d=2))
     assert (
-        exc_info.value.errors()[0]["type"]
+        target_parent_error.value.errors()[0]["type"]
         == "geometry.quadratic_distance.target_parent_mismatch"
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as negative_target_error:
         distance_graph(source, value(-1))
     assert (
-        exc_info.value.errors()[0]["type"]
+        negative_target_error.value.errors()[0]["type"]
         == "geometry.squared_distance_target_nonnegative"
     )
     heavy = configuration(
@@ -205,10 +206,10 @@ def test_mixed_and_non_square_free_fields_reject() -> None:
             for i in range(64)
         )
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as heavy_error:
         distance_graph(heavy, value(-1))
     assert (
-        exc_info.value.errors()[0]["type"]
+        heavy_error.value.errors()[0]["type"]
         == "geometry.squared_distance_target_nonnegative"
     )
 

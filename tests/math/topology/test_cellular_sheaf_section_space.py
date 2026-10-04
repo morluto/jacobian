@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from fractions import Fraction
 from itertools import product
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -27,17 +28,33 @@ from jacobian.math.topology.cellular_sheaves._models import (
 )
 from jacobian.math.topology.cellular_sheaves._tools import TOOLS as SHEAF_TOOLS
 
+if TYPE_CHECKING:
+    from jacobian.math.topology.cellular_sheaves import FiniteCellularSheaf
+
 
 def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
+
+
+def _fraction(value: CanonicalRational | int) -> Fraction:
+    if isinstance(value, CanonicalRational):
+        return value.as_fraction()
+    return Fraction(value)
+
+
+def _integer(value: CanonicalRational | int) -> int:
+    if isinstance(value, CanonicalRational):
+        assert value.den == 1
+        return value.num
+    return value
 
 
 def _constant_interval(
     *,
     field: SheafField = SheafField.PRIME_FIELD,
     prime: int = 2,
-    scalar=None,
-):
+    scalar: CanonicalRational | int | None = None,
+) -> FiniteCellularSheaf:
     if scalar is None:
         scalar = 1 if field is SheafField.PRIME_FIELD else _q(1)
     complex_value = canonical_complex(("a", "b"), (("a", "b"),))
@@ -72,9 +89,13 @@ def _constant_interval(
     return built.sheaf
 
 
-def _matrix_vector_mod2(matrix, vector):
+def _matrix_vector_mod2(
+    matrix: tuple[tuple[CanonicalRational | int, ...], ...],
+    vector: tuple[int, ...],
+) -> tuple[int, ...]:
     return tuple(
-        sum(int(entry) * value for entry, value in zip(row, vector, strict=True)) % 2
+        sum(_integer(entry) * value for entry, value in zip(row, vector, strict=True))
+        % 2
         for row in matrix
     )
 
@@ -98,7 +119,9 @@ def test_section_space_matches_all_globally_compatible_interval_assignments() ->
         if vertex_a == edge and vertex_b == edge:
             compatible.add(assignment)
     assert compatible == {(0, 0, 0), (1, 1, 1)}
-    basis = tuple(tuple(map(int, vector)) for vector in space.basis_coordinates)
+    basis = tuple(
+        tuple(_integer(value) for value in vector) for vector in space.basis_coordinates
+    )
     assert all(
         _matrix_vector_mod2(space.compatibility_matrix, vector) == (0, 0)
         for vector in basis
@@ -118,8 +141,8 @@ def test_section_space_matches_all_globally_compatible_interval_assignments() ->
 
     for stalk_index, evaluation in enumerate(space.evaluations):
         ambient_position = stalk_index
-        assert tuple(int(row[0]) for row in evaluation.entries) == (
-            int(space.basis_coordinates[0][ambient_position]),
+        assert tuple(_integer(row[0]) for row in evaluation.entries) == (
+            _integer(space.basis_coordinates[0][ambient_position]),
         )
     assert SheafSectionSpace.model_validate_json(space.model_dump_json()) == space
 
@@ -145,20 +168,15 @@ def test_zero_stalks_and_no_compatibility_rows_are_canonical() -> None:
 
 def test_rational_section_basis_and_stalk_evaluations_are_exact() -> None:
     space = sections(_constant_interval(field=SheafField.RATIONAL, scalar=_q("2/3")))
-    vector = tuple(
-        Fraction(value.num, value.den) for value in space.basis_coordinates[0]
-    )
+    vector = tuple(_fraction(value) for value in space.basis_coordinates[0])
     assert space.dimension == 1
     assert tuple(
-        sum(
-            Fraction(entry.num, entry.den) * value
-            for entry, value in zip(row, vector, strict=True)
-        )
+        sum(_fraction(entry) * value for entry, value in zip(row, vector, strict=True))
         for row in space.compatibility_matrix
     ) == (Fraction(0), Fraction(0))
     for coordinate, evaluation in enumerate(space.evaluations):
         value = evaluation.entries[0][0]
-        assert Fraction(value.num, value.den) == vector[coordinate]
+        assert _fraction(value) == vector[coordinate]
 
 
 def test_section_restriction_is_the_exact_inclusion_induced_map() -> None:
@@ -171,7 +189,7 @@ def test_section_restriction_is_the_exact_inclusion_induced_map() -> None:
     # Independent oracle: source assignments satisfy 2*a=edge=2*b, so their
     # restrictions to the two isolated vertices are precisely the diagonal.
     assert tuple(
-        tuple(Fraction(value.num, value.den) for value in row) for row in result.entries
+        tuple(_fraction(value) for value in row) for row in result.entries
     ) == (
         (Fraction(1, 2),),
         (Fraction(1, 2),),
@@ -230,7 +248,9 @@ def test_full_matrix_includes_derived_comparable_restrictions() -> None:
         for assignment in product(range(2), repeat=7)
         if len(set(assignment)) == 1
     }
-    basis = tuple(tuple(map(int, vector)) for vector in space.basis_coordinates)
+    basis = tuple(
+        tuple(_integer(value) for value in vector) for vector in space.basis_coordinates
+    )
     span = {
         tuple(
             sum(

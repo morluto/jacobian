@@ -57,7 +57,7 @@ def _filtration() -> tuple[FiltrationLevel, ...]:
     )
 
 
-def _map(scale: int):
+def _map(scale: int) -> FilteredChainMapResult:
     complex_value = _complex()
     filtration = _filtration()
     return filtered_map(
@@ -282,7 +282,9 @@ def test_page_map_admits_sparse_large_coefficients_by_entry() -> None:
 
 
 @pytest.mark.parametrize("nested_map", [{"source": None}, None])
-def test_page_map_rejects_forged_nested_map_at_native_boundary(nested_map) -> None:
+def test_page_map_rejects_forged_nested_map_at_native_boundary(
+    nested_map: object,
+) -> None:
     request = FilteredChainMapPageRequest.model_construct(map=nested_map, page=1)
     with pytest.raises(OperationDomainValidationError) as exc_info:
         filtered_chain_map_page(request.map, request.page)

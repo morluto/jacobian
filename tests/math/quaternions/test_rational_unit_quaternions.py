@@ -1,4 +1,5 @@
 from fractions import Fraction
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -15,9 +16,17 @@ from jacobian.math.quaternions import (
 
 
 def q(*coordinates: Fraction) -> RationalUnitQuaternion:
+    assert len(coordinates) == 4
+    converted = tuple(CanonicalRational.from_fraction(value) for value in coordinates)
     return RationalUnitQuaternion(
-        coordinates=tuple(
-            CanonicalRational.from_fraction(value) for value in coordinates
+        coordinates=cast(
+            tuple[
+                CanonicalRational,
+                CanonicalRational,
+                CanonicalRational,
+                CanonicalRational,
+            ],
+            converted,
         )
     )
 
@@ -27,8 +36,12 @@ def test_hamilton_product_is_noncommutative_and_inverse_is_two_sided() -> None:
     j = q(Fraction(0), Fraction(0), Fraction(1), Fraction(0))
     ij = multiply_rational_unit_quaternions(i, j)
     ji = multiply_rational_unit_quaternions(j, i)
-    assert tuple(value.as_fraction() for value in ij.coordinates) == (0, 0, 0, 1)
-    assert tuple(value.as_fraction() for value in ji.coordinates) == (0, 0, 0, -1)
+    assert tuple(value.as_fraction() for value in ij.coordinates) == tuple(
+        Fraction(value) for value in (0, 0, 0, 1)
+    )
+    assert tuple(value.as_fraction() for value in ji.coordinates) == tuple(
+        Fraction(value) for value in (0, 0, 0, -1)
+    )
 
     value = q(Fraction(3, 5), Fraction(4, 5), Fraction(0), Fraction(0))
     inverse = inverse_rational_unit_quaternion(value)

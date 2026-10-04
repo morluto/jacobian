@@ -54,10 +54,12 @@ def test_discriminant_scales_by_scalar_to_power_two_n_minus_two() -> None:
     assert scaled.discriminant == 16
 
 
-def test_discriminant_rejects_out_of_domain_before_backend(monkeypatch) -> None:
+def test_discriminant_rejects_out_of_domain_before_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import sympy
 
-    def forbidden(*args, **kwargs):
+    def forbidden(*args: object, **kwargs: object) -> None:
         raise AssertionError("backend was reached before domain admission")
 
     monkeypatch.setattr(sympy, "Poly", forbidden)

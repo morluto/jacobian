@@ -156,10 +156,10 @@ class TestCartanTypeKnownAnswers:
         assert result.matrix == CartanMatrixValue.model_validate(expected)
 
     def test_b_and_c_differ_only_in_bond_direction(self) -> None:
-        long_end = cartan_matrix_from_type("B", 3).matrix.entries
-        short_end = cartan_matrix_from_type("C", 3).matrix.entries
-        assert long_end[1][2] == -1 and long_end[2][1] == -2
-        assert short_end[1][2] == -2 and short_end[2][1] == -1
+        long_end = cartan_matrix_from_type("B", 3).matrix
+        short_end = cartan_matrix_from_type("C", 3).matrix
+        assert long_end.entries[1][2] == -1 and long_end.entries[2][1] == -2
+        assert short_end.entries[1][2] == -2 and short_end.entries[2][1] == -1
         assert cartan_datum(long_end).symmetrizer[-1].as_fraction() == Fraction(1, 2)
         assert cartan_datum(short_end).symmetrizer[-1].as_fraction() == 2
 

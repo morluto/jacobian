@@ -126,7 +126,7 @@ def test_kernel_builds_its_result_through_the_trusted_producer_constructor(
 
     def record(**values: object) -> GreeneWitnessResult:
         calls.append(values)
-        return original(**values)
+        return original(_fields_set=None, **values)
 
     monkeypatch.setattr(GreeneWitnessResult, "model_construct", record)
     word = FiniteWord(alphabet=("z", "a", "m"), letters=("m", "z", "a", "m"))

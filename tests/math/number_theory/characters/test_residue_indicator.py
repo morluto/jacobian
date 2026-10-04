@@ -1,4 +1,5 @@
 from itertools import product
+from typing import NoReturn
 
 import pytest
 from sympy import Poly, cyclotomic_poly, symbols
@@ -13,6 +14,7 @@ from jacobian.math.number_theory.characters import (
     operations,
 )
 from jacobian.math.number_theory.characters._tools import TOOLS
+from jacobian.math.number_theory.characters.values import DirichletCharacterGroup
 
 
 def _root_sum(exponents: list[int], order: int) -> Poly:
@@ -22,7 +24,7 @@ def _root_sum(exponents: list[int], order: int) -> Poly:
     )
 
 
-def _unit_coordinates(group, residue: int) -> tuple[int, ...]:
+def _unit_coordinates(group: DirichletCharacterGroup, residue: int) -> tuple[int, ...]:
     for coords in product(*(range(n) for n in group.generator_orders)):
         value = 1 % group.modulus
         for generator, power in zip(group.generators, coords, strict=True):
@@ -32,7 +34,7 @@ def _unit_coordinates(group, residue: int) -> tuple[int, ...]:
     raise AssertionError("group generators did not produce the supplied unit")
 
 
-def test_character_coefficients_reconstruct_unit_indicator_exactly():
+def test_character_coefficients_reconstruct_unit_indicator_exactly() -> None:
     for modulus in (1, 3, 5, 8, 12):
         group = character_group(modulus)
         for target in group.unit_residues:
@@ -65,7 +67,7 @@ def test_character_coefficients_reconstruct_unit_indicator_exactly():
                 )
 
 
-def test_nonunit_target_is_rejected():
+def test_nonunit_target_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         dirichlet_character_residue_indicator_expansion(character_group(8), 2)
     assert (
@@ -74,11 +76,13 @@ def test_nonunit_target_is_rejected():
     )
 
 
-def test_work_is_admitted_before_dual_coordinates_are_built(monkeypatch):
+def test_work_is_admitted_before_dual_coordinates_are_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     group = character_group(5)
     monkeypatch.setattr(operations, "MAX_CHARACTER_ORTHOGONALITY_WORK", 1)
 
-    def unexpected_product(*_args, **_kwargs):
+    def unexpected_product(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("dual coordinates must follow admission")
 
     monkeypatch.setattr(operations, "product", unexpected_product)
@@ -90,7 +94,7 @@ def test_work_is_admitted_before_dual_coordinates_are_built(monkeypatch):
     )
 
 
-def test_public_tool_example_computes_mod3_indicator():
+def test_public_tool_example_computes_mod3_indicator() -> None:
     tool = next(
         item
         for item in TOOLS

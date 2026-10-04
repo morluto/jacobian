@@ -7,6 +7,7 @@ from itertools import combinations
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.topology._models import Simplex, SimplicialComplexRequest
 from jacobian.math.topology.discrete_morse._models import (
     MorseMatchingOutcome,
 )
@@ -19,7 +20,7 @@ from jacobian.math.topology.discrete_morse.operations import construct_matching
 from jacobian.math.topology.operations import canonicalize
 
 
-def _all_faces(facets):
+def _all_faces(facets: tuple[Simplex, ...]) -> set[Simplex]:
     return {
         subset
         for facet in facets
@@ -28,7 +29,7 @@ def _all_faces(facets):
     }
 
 
-def _facets_of(faces):
+def _facets_of(faces: set[Simplex]) -> tuple[Simplex, ...]:
     return tuple(
         sorted(
             face for face in faces if not any(set(face) < set(other) for other in faces)
@@ -36,10 +37,12 @@ def _facets_of(faces):
     )
 
 
-def _oracle(facets):
+def _oracle(
+    facets: tuple[Simplex, ...],
+) -> tuple[tuple[tuple[Simplex, Simplex], ...], set[Simplex]]:
     """Rebuild all faces and discover free pairs without production helpers."""
     faces = _all_faces(facets)
-    pairs = []
+    pairs: list[tuple[Simplex, Simplex]] = []
     while True:
         maximal = _facets_of(faces)
         candidates = []
@@ -67,7 +70,9 @@ def _oracle(facets):
         (("a", "b", "c"), ("c", "d")),
     ],
 )
-def test_greedy_collapse_matches_naive_face_poset_oracle(facets) -> None:
+def test_greedy_collapse_matches_naive_face_poset_oracle(
+    facets: tuple[Simplex, ...],
+) -> None:
     vertices = tuple(sorted({vertex for facet in facets for vertex in facet}))
     result = greedy_collapse(canonicalize(vertices, facets).complex)
     expected_pairs, expected_faces = _oracle(tuple(sorted(facets)))
@@ -84,7 +89,13 @@ def test_greedy_collapse_matches_naive_face_poset_oracle(facets) -> None:
 def test_greedy_collapse_composes_with_sequence_and_acyclic_matching() -> None:
     result = greedy_collapse(canonicalize(("a", "b", "c"), (("a", "b", "c"),)).complex)
     replayed = collapse_sequence(
-        CollapseSequenceRequest(complex=result.source, pairs=result.pairs)
+        CollapseSequenceRequest(
+            complex=SimplicialComplexRequest(
+                vertices=result.source.vertices,
+                facets=result.source.maximal_simplices,
+            ),
+            pairs=result.pairs,
+        )
     )
     matching = construct_matching(result.source, result.pairs)
 
@@ -101,7 +112,7 @@ def test_greedy_collapse_composes_with_sequence_and_acyclic_matching() -> None:
     ],
 )
 def test_greedy_collapse_preflight_rejects_before_pair_search(
-    monkeypatch, limit_name, limit_value
+    monkeypatch: pytest.MonkeyPatch, limit_name: str, limit_value: int
 ) -> None:
     import jacobian.math.topology.discrete_morse.extensions as extensions
 

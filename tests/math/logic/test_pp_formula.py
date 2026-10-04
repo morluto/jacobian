@@ -15,10 +15,20 @@ from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
     PPDefinedRelation,
+    PPEqualityAtom,
+    PPRelationAtom,
     PrimitivePositiveFormula,
     evaluate_pp_formula,
     search_homomorphism,
 )
+
+
+def _relation_atom(symbol_id: str, variables: tuple[int, ...]) -> PPRelationAtom:
+    return PPRelationAtom(kind="relation", symbol_id=symbol_id, variables=variables)
+
+
+def _equality_atom(left: int, right: int) -> PPEqualityAtom:
+    return PPEqualityAtom(kind="equality", left=left, right=right)
 
 
 def _structure(
@@ -45,8 +55,8 @@ def test_two_step_formula_returns_exact_ordered_relation_and_roundtrips() -> Non
         variable_count=3,
         free_variables=(2, 0),
         atoms=(
-            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
-            {"kind": "relation", "symbol_id": "E", "variables": (1, 2)},
+            _relation_atom("E", (0, 1)),
+            _relation_atom("E", (1, 2)),
         ),
     )
 
@@ -64,18 +74,18 @@ def test_formula_atoms_normalize_but_free_variable_axis_order_is_preserved() -> 
         variable_count=3,
         free_variables=(2, 0),
         atoms=(
-            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
-            {"kind": "equality", "left": 2, "right": 1},
-            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
-            {"kind": "equality", "left": 1, "right": 2},
+            _relation_atom("E", (0, 1)),
+            _equality_atom(2, 1),
+            _relation_atom("E", (0, 1)),
+            _equality_atom(1, 2),
         ),
     )
     equivalent = PrimitivePositiveFormula(
         variable_count=3,
         free_variables=(2, 0),
         atoms=(
-            {"kind": "equality", "left": 1, "right": 2},
-            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
+            _equality_atom(1, 2),
+            _relation_atom("E", (0, 1)),
         ),
     )
 
@@ -98,8 +108,8 @@ def test_equality_nullary_atoms_and_empty_carrier_semantics() -> None:
         variable_count=2,
         free_variables=(0,),
         atoms=(
-            {"kind": "equality", "left": 0, "right": 1},
-            {"kind": "relation", "symbol_id": "P", "variables": ()},
+            _equality_atom(0, 1),
+            _relation_atom("P", ()),
         ),
     )
     assert evaluate_pp_formula(structure, same_endpoint).tuples == ((0,), (1,))
@@ -125,15 +135,15 @@ def test_pp_evaluator_matches_independent_assignment_oracle() -> None:
         PrimitivePositiveFormula(
             variable_count=2,
             free_variables=(1,),
-            atoms=({"kind": "relation", "symbol_id": "E", "variables": (0, 1)},),
+            atoms=(_relation_atom("E", (0, 1)),),
         ),
         PrimitivePositiveFormula(
             variable_count=3,
             free_variables=(2, 0),
             atoms=(
-                {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
-                {"kind": "relation", "symbol_id": "E", "variables": (1, 2)},
-                {"kind": "equality", "left": 0, "right": 2},
+                _relation_atom("E", (0, 1)),
+                _relation_atom("E", (1, 2)),
+                _equality_atom(0, 2),
             ),
         ),
     )
@@ -183,8 +193,8 @@ def test_closed_pp_sentence_matches_canonical_structure_homomorphism() -> None:
         variable_count=2,
         free_variables=(),
         atoms=(
-            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
-            {"kind": "relation", "symbol_id": "P", "variables": (0,)},
+            _relation_atom("E", (0, 1)),
+            _relation_atom("P", (0,)),
         ),
     )
 
@@ -202,7 +212,7 @@ def test_evaluation_rejects_signature_mismatch_and_admits_output_before_expansio
     unknown = PrimitivePositiveFormula(
         variable_count=1,
         free_variables=(0,),
-        atoms=({"kind": "relation", "symbol_id": "R", "variables": (0,)},),
+        atoms=(_relation_atom("R", (0,)),),
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
         evaluate_pp_formula(structure, unknown)
@@ -221,7 +231,7 @@ def test_equality_output_bound_uses_identified_coordinate_count() -> None:
     formula = PrimitivePositiveFormula(
         variable_count=3,
         free_variables=(0, 1, 2),
-        atoms=({"kind": "equality", "left": 0, "right": 1},),
+        atoms=(_equality_atom(0, 1),),
     )
     result = evaluate_pp_formula(structure, formula)
     assert len(result.tuples) == 64**2
@@ -232,7 +242,7 @@ def test_defined_value_rejects_formula_incompatible_with_retained_structure() ->
     formula = PrimitivePositiveFormula(
         variable_count=1,
         free_variables=(0,),
-        atoms=({"kind": "relation", "symbol_id": "R", "variables": (0,)},),
+        atoms=(_relation_atom("R", (0,)),),
     )
     with pytest.raises(ValueError) as exc_info:
         PPDefinedRelation(structure=structure, formula=formula, tuples=((0,),))
@@ -249,11 +259,7 @@ def test_evaluation_admits_coordinate_work_separately_from_atom_checks() -> None
         variable_count=5,
         free_variables=(),
         atoms=tuple(
-            {
-                "kind": "relation",
-                "symbol_id": "Q",
-                "variables": variables,
-            }
+            _relation_atom("Q", variables)
             for variables in (
                 (0, 1, 2, 3),
                 (0, 1, 3, 2),

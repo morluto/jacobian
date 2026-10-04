@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from pydantic import ValidationError
 
@@ -96,7 +98,19 @@ def test_reducible_datum_maps_each_component_without_reordering() -> None:
     ],
 )
 def test_lattice_vectors_roundtrip_with_their_datum_parent(
-    constructor, carrier
+    constructor: Callable[
+        [CartanMatrix, tuple[int, ...]],
+        RootLatticeVector
+        | CorootLatticeVector
+        | WeightLatticeVector
+        | CoweightLatticeVector,
+    ],
+    carrier: type[
+        RootLatticeVector
+        | CorootLatticeVector
+        | WeightLatticeVector
+        | CoweightLatticeVector
+    ],
 ) -> None:
     vector = constructor(_cartan(((2, -1), (-1, 2))), (2, -3))
     restored = carrier.model_validate_json(vector.model_dump_json())

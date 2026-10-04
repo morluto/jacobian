@@ -19,7 +19,7 @@ from jacobian.math.ore_algebras.operations import (
 from jacobian.math.polynomials._conversions import rational_function_to_sympy
 
 
-def _coefficient(terms: list[tuple[int, int]]) -> dict:
+def _coefficient(terms: list[tuple[int, int]]) -> dict[str, object]:
     return {
         "domain": "QQ",
         "variables": ["x"],
@@ -51,7 +51,9 @@ def _operator(*terms: tuple[int, list[tuple[int, int]]]) -> DifferentialOreOpera
     )
 
 
-def _action(operator: DifferentialOreOperator, function, x):
+def _action(
+    operator: DifferentialOreOperator, function: sp.Expr, x: sp.Symbol
+) -> sp.Expr:
     return sum(
         rational_function_to_sympy(term.coefficient, symbols=(x,))
         * sp.diff(function, x, term.order)

@@ -29,7 +29,9 @@ NET = PetriNet(
 )
 
 
-def _request(tokens: tuple[int, ...], sequence: tuple[int, ...]):
+def _request(
+    tokens: tuple[int, ...], sequence: tuple[int, ...]
+) -> FiringSequenceReplayRequest:
     return FiringSequenceReplayRequest(
         net=NET, marking=Marking(tokens=tokens), sequence=sequence
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations
+from typing import Literal
 
 import pytest
 
@@ -23,10 +24,10 @@ from jacobian.math.polynomials.tropical.values import (
 
 def _poly(
     values: tuple[tuple[int, int | Fraction], ...],
-    convention: str = "MIN_PLUS",
-    base: str = "QQ",
+    convention: Literal["MIN_PLUS", "MAX_PLUS"] = "MIN_PLUS",
+    base: Literal["QQ", "ZZ"] = "QQ",
 ) -> TropicalPolynomial:
-    semiring = TropicalSemiring(convention=convention, base=base)  # type: ignore[arg-type]
+    semiring = TropicalSemiring(convention=convention, base=base)
     return TropicalPolynomial(
         semiring=semiring,
         variables=("x",),
@@ -48,9 +49,10 @@ def _oracle(
     poly: TropicalPolynomial,
 ) -> list[tuple[Fraction, tuple[int, ...], int, int]]:
     """Brute-force all line crossings, then test exact signs on both sides."""
-    lines = [
-        (term.exponents[0], term.coefficient.value.as_fraction()) for term in poly.terms
-    ]
+    lines = []
+    for term in poly.terms:
+        assert term.coefficient.value is not None
+        lines.append((term.exponents[0], term.coefficient.value.as_fraction()))
     sign = 1 if poly.semiring.convention == "MIN_PLUS" else -1
     candidates = sorted(
         {Fraction(b2 - b1, m1 - m2) for (m1, b1), (m2, b2) in combinations(lines, 2)}
@@ -83,7 +85,9 @@ def _oracle(
 
 
 @pytest.mark.parametrize("convention", ["MIN_PLUS", "MAX_PLUS"])
-def test_roots_match_independent_pairwise_sign_oracle(convention: str) -> None:
+def test_roots_match_independent_pairwise_sign_oracle(
+    convention: Literal["MIN_PLUS", "MAX_PLUS"],
+) -> None:
     fixtures = (
         ((0, 0), (1, 1)),
         ((0, 2), (2, 0), (4, 3)),

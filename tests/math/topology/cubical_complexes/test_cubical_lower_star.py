@@ -85,7 +85,7 @@ def _births(
 
 def test_lower_star_matches_independent_maximum_and_face_monotonicity_oracle() -> None:
     source = (_cell(((0, 1), (0, 1))), _cell(((1, 2), (0, 1))))
-    vertex_values = {
+    vertex_values: dict[tuple[int, ...], Fraction] = {
         (0, 0): Fraction(-1, 3),
         (0, 1): Fraction(1, 2),
         (1, 0): Fraction(4, 5),
@@ -152,7 +152,7 @@ def test_lower_star_matches_independent_maximum_and_face_monotonicity_oracle() -
 
 def test_lower_star_commutes_with_integer_translation() -> None:
     source = (_cell(((0, 1), (0, 1))), _cell(((1, 2), (0, 1))))
-    values = {
+    values: dict[tuple[int, ...], Fraction] = {
         (0, 0): Fraction(0),
         (0, 1): Fraction(1, 2),
         (1, 0): Fraction(2),
@@ -214,7 +214,11 @@ def test_lower_star_commutes_with_integer_translation() -> None:
 
 def test_lower_star_rejects_missing_or_extra_vertex_values() -> None:
     square = (_cell(((0, 1), (0, 1))),)
-    values = {(0, 0): Fraction(0), (0, 1): Fraction(0), (1, 0): Fraction(0)}
+    values: dict[tuple[int, ...], Fraction] = {
+        (0, 0): Fraction(0),
+        (0, 1): Fraction(0),
+        (1, 0): Fraction(0),
+    }
     with pytest.raises(OperationDomainValidationError) as exc_info:
         _lower_star(_request(square, values))
     assert (
@@ -251,7 +255,9 @@ def test_decoded_lower_star_must_retain_source_boundary_and_birth_filtration() -
 
 def test_lower_star_preflights_filtered_chain_levels_and_face_growth() -> None:
     interval_chain = tuple(_cell(((index, index + 1),)) for index in range(9))
-    too_many_levels = {(index,): Fraction(index) for index in range(10)}
+    too_many_levels: dict[tuple[int, ...], Fraction] = {
+        (index,): Fraction(index) for index in range(10)
+    }
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _lower_star(_request(interval_chain, too_many_levels))
     assert (
@@ -259,7 +265,9 @@ def test_lower_star_preflights_filtered_chain_levels_and_face_growth() -> None:
     )
 
     six_cube = (_cell(((0, 1),) * 6),)
-    all_vertices = {vertex: Fraction(0) for vertex in product((0, 1), repeat=6)}
+    all_vertices: dict[tuple[int, ...], Fraction] = {
+        vertex: Fraction(0) for vertex in product((0, 1), repeat=6)
+    }
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         _lower_star(_request(six_cube, all_vertices))
     assert exc_info.value.errors()[0]["type"] == "cubical_complex.face_output_budget"

@@ -17,16 +17,16 @@ from jacobian.math.topology.cubical_complexes._models import (
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
 
 
-def _cell(*intervals):
+def _cell(*intervals: tuple[int, int]) -> CubicalCell:
     return CubicalCell(intervals=intervals)
 
 
-def _closed_star(request):
+def _closed_star(request: CubicalClosedStarRequest) -> CubicalClosedStarResult:
     """Call the native closed_star with unpacked domain arguments."""
     return operations.closed_star(request.cells, request.cell)
 
 
-def test_endpoint_closed_star_in_a_path_is_one_edge_closure():
+def test_endpoint_closed_star_in_a_path_is_one_edge_closure() -> None:
     request = CubicalClosedStarRequest(
         cells=(_cell((0, 1)), _cell((1, 2))), cell=_cell((0, 0))
     )
@@ -48,7 +48,7 @@ def test_endpoint_closed_star_in_a_path_is_one_edge_closure():
     )
 
 
-def test_star_in_square_and_shared_face_of_adjacent_squares():
+def test_star_in_square_and_shared_face_of_adjacent_squares() -> None:
     square = _cell((0, 1), (0, 1))
     one_square = _closed_star(
         CubicalClosedStarRequest(cells=(square,), cell=_cell((0, 0), (0, 0)))
@@ -64,7 +64,7 @@ def test_star_in_square_and_shared_face_of_adjacent_squares():
     assert adjacent.closed_star.cells == adjacent.complex.cells
 
 
-def test_disconnected_component_does_not_enter_the_selected_cell_star():
+def test_disconnected_component_does_not_enter_the_selected_cell_star() -> None:
     request = CubicalClosedStarRequest(
         cells=(_cell((0, 1)), _cell((10, 10))), cell=_cell((0, 0))
     )
@@ -76,7 +76,7 @@ def test_disconnected_component_does_not_enter_the_selected_cell_star():
     )
 
 
-def test_absent_cell_and_wrong_axis_are_rejected():
+def test_absent_cell_and_wrong_axis_are_rejected() -> None:
     with pytest.raises(OperationDomainValidationError) as absent:
         _closed_star(
             CubicalClosedStarRequest(cells=(_cell((0, 1)),), cell=_cell((3, 3)))
@@ -102,8 +102,10 @@ def test_native_closed_star_revalidates_constructed_cells() -> None:
     )
 
 
-def test_digit_and_output_bounds_reject_before_face_expansion(monkeypatch):
-    def fail_if_expanded(*_args, **_kwargs):
+def test_digit_and_output_bounds_reject_before_face_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_expanded(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("face expansion ran before admission")
 
     monkeypatch.setattr(operations, "_canonical_complex", fail_if_expanded)
@@ -125,7 +127,7 @@ def test_digit_and_output_bounds_reject_before_face_expansion(monkeypatch):
     )
 
 
-def test_maximum_one_dimensional_generator_family_stays_bounded():
+def test_maximum_one_dimensional_generator_family_stays_bounded() -> None:
     cells = tuple(_cell((index, index + 1)) for index in range(5000))
     result = _closed_star(
         CubicalClosedStarRequest(cells=cells, cell=_cell((2500, 2500)))
@@ -140,7 +142,7 @@ def test_maximum_one_dimensional_generator_family_stays_bounded():
     )
 
 
-def test_admitted_nine_cube_star_retains_the_complete_source_closure():
+def test_admitted_nine_cube_star_retains_the_complete_source_closure() -> None:
     top_cube = _cell(*((0, 1) for _ in range(9)))
     corner = _cell(*((0, 0) for _ in range(9)))
     result = _closed_star(CubicalClosedStarRequest(cells=(top_cube,), cell=corner))
@@ -148,7 +150,7 @@ def test_admitted_nine_cube_star_retains_the_complete_source_closure():
     assert result.closed_star.cells == result.complex.cells
 
 
-def test_published_closed_star_tool_runs_its_example():
+def test_published_closed_star_tool_runs_its_example() -> None:
     tool = next(
         tool
         for tool in TOOLS

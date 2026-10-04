@@ -20,13 +20,14 @@ from jacobian.math.koszul._models import KoszulComplexRequest
 from jacobian.math.koszul.values import (
     MAX_KOSZUL_DEGREE,
     MAX_KOSZUL_TERMS,
+    KoszulDifferentialMatrix,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.math.topology.chain_complexes import homology_groups
+from jacobian.math.topology.chain_complexes import HomologyGroupValue, homology_groups
 
 
 def _poly(
@@ -64,7 +65,9 @@ _X = _monomial(_XY, (1, 0))
 _Y = _monomial(_XY, (0, 1))
 
 
-def _dense_cells(matrix) -> dict[tuple[int, int], dict[tuple[int, ...], Fraction]]:
+def _dense_cells(
+    matrix: KoszulDifferentialMatrix,
+) -> dict[tuple[int, int], dict[tuple[int, ...], Fraction]]:
     return {
         (entry.row, entry.column): _terms(entry.polynomial) for entry in matrix.entries
     }
@@ -179,12 +182,26 @@ def test_scalar_conversion_composes_with_shared_homology() -> None:
     value = koszul_complex((), (zero, zero))
     assert value.chain_complex is not None
     homology = homology_groups(value.chain_complex)
-    assert tuple(group.betti_number for group in homology.homology_groups) == (1, 2, 1)
+    groups = homology.homology_groups
+    assert len(groups) == 3
+    group0, group1, group2 = groups
+    assert isinstance(group0, HomologyGroupValue)
+    assert isinstance(group1, HomologyGroupValue)
+    assert isinstance(group2, HomologyGroupValue)
+    assert (group0.betti_number, group1.betti_number, group2.betti_number) == (
+        1,
+        2,
+        1,
+    )
 
     acyclic = koszul_complex((), (two,))
     assert acyclic.chain_complex is not None
     homology = homology_groups(acyclic.chain_complex)
-    assert tuple(group.betti_number for group in homology.homology_groups) == (0, 0)
+    assert len(homology.homology_groups) == 2
+    group0, group1 = homology.homology_groups
+    assert isinstance(group0, HomologyGroupValue)
+    assert isinstance(group1, HomologyGroupValue)
+    assert (group0.betti_number, group1.betti_number) == (0, 0)
 
 
 def test_permuted_sequence_keeps_ranks_and_twists_signs() -> None:

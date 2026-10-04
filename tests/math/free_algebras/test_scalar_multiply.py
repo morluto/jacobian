@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
 
@@ -17,6 +18,8 @@ from jacobian.math.free_algebras.scalar_multiply._models import (
     FreeAlgebraPolynomialScalarMultiplyRequest,
 )
 from jacobian.math.free_algebras.scalar_multiply.operations import scalar_multiply
+
+Matrix2x2 = tuple[tuple[Fraction, Fraction], tuple[Fraction, Fraction]]
 
 
 def polynomial(
@@ -57,34 +60,37 @@ def test_rational_scaling_matches_independent_sparse_coefficient_oracle() -> Non
         term.word for term in source.terms
     )
 
-    matrices = {
+    matrices: Mapping[str, Matrix2x2] = {
         "x": ((Fraction(1), Fraction(1)), (Fraction(0), Fraction(1))),
         "y": ((Fraction(0), Fraction(1)), (Fraction(1), Fraction(0))),
     }
 
-    def matrix_product(left, right):
-        return tuple(
-            tuple(
-                sum(left[row][index] * right[index][column] for index in range(2))
-                for column in range(2)
+    def matrix_product(left: Matrix2x2, right: Matrix2x2) -> Matrix2x2:
+        def dot(row: int, column: int) -> Fraction:
+            return sum(
+                (left[row][index] * right[index][column] for index in range(2)),
+                Fraction(0),
             )
-            for row in range(2)
-        )
 
-    def evaluate(value):
-        total = ((Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)))
-        identity = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+        return ((dot(0, 0), dot(0, 1)), (dot(1, 0), dot(1, 1)))
+
+    def evaluate(value: FreeAlgebraPolynomial) -> Matrix2x2:
+        total: Matrix2x2 = ((Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)))
+        identity: Matrix2x2 = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
         for term in value.terms:
-            word_value = identity
+            word_value: Matrix2x2 = identity
             for letter in term.word:
                 word_value = matrix_product(word_value, matrices[letter])
-            total = tuple(
-                tuple(
-                    total[row][column]
-                    + term.coefficient.as_fraction() * word_value[row][column]
-                    for column in range(2)
-                )
-                for row in range(2)
+            coefficient = term.coefficient.as_fraction()
+            total = (
+                (
+                    total[0][0] + coefficient * word_value[0][0],
+                    total[0][1] + coefficient * word_value[0][1],
+                ),
+                (
+                    total[1][0] + coefficient * word_value[1][0],
+                    total[1][1] + coefficient * word_value[1][1],
+                ),
             )
         return total
 

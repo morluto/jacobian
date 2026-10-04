@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -22,7 +23,7 @@ from jacobian.math.topology.links import (
 from jacobian.math.topology.links.extensions_tools import TOOLS
 
 
-def _two_braid(*exponents: int) -> BraidWord:
+def _two_braid(*exponents: Literal[-1, 1]) -> BraidWord:
     return BraidWord(
         strand_count=2,
         letters=tuple(
@@ -106,7 +107,9 @@ def test_conway_is_knot_only_and_keeps_alexander_bound() -> None:
         link_conway_polynomial(hopf)
     assert exc_info.value.errors()[0]["type"] == "link_diagram.alexander_requires_knot"
 
-    over_bound_knot = braid_closure(_two_braid(*([1] * 9))).diagram
+    over_bound_knot = braid_closure(
+        _two_braid(*cast(tuple[Literal[1, -1], ...], (1,) * 9))
+    ).diagram
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         link_conway_polynomial(over_bound_knot)
     assert exc_info.value.errors()[0]["type"] == "link_diagram.alexander_crossing_bound"

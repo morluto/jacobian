@@ -48,7 +48,7 @@ def _polynomial(terms: tuple[tuple[int, int], ...]) -> RationalPolynomial:
     )
 
 
-def test_facet_smoothness_uses_exact_divisibility_not_point_sampling():
+def test_facet_smoothness_uses_exact_divisibility_not_point_sampling() -> None:
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )

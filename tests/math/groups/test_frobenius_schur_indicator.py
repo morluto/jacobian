@@ -1,12 +1,14 @@
 """Ordinary second indicators checked against elementwise squaring."""
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups._models import GroupConjugacyClassesRequest
 from jacobian.math.groups._tools import compute_group_conjugacy_classes
+from jacobian.math.groups.characters._models import CharacterTableResult
 from jacobian.math.groups.characters.operations import (
     character_table,
     frobenius_schur_indicator,
@@ -121,7 +123,7 @@ def test_native_indicator_rejects_malformed_inputs_without_pydantic_leak() -> No
         == "groups.characters.indicator_row_out_of_range"
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        frobenius_schur_indicator({"partition": None}, 0)
+        frobenius_schur_indicator(cast(CharacterTableResult, {"partition": None}), 0)
     assert (
         exc_info.value.errors()[0]["type"] == "groups.characters.indicator_table_type"
     )

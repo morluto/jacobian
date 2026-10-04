@@ -31,7 +31,7 @@ def _gac(request: CspDomainRequest) -> CspDomainConsistency:
 
 def _instance(
     carrier: int,
-    relations: tuple[tuple[int, ...], ...],
+    relations: tuple[int, ...],
     relation_rows: tuple[tuple[tuple[int, ...], ...], ...],
     variable_count: int,
     scopes: tuple[tuple[int, tuple[int, ...]], ...],

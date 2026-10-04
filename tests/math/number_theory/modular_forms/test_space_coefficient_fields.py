@@ -64,6 +64,7 @@ def test_space_allows_explicit_cyclotomic_extension_containing_character_values(
         coefficient_domain=RationalCyclotomicField(order=12),
     )
 
+    assert isinstance(space.coefficient_domain, RationalCyclotomicField)
     assert space.coefficient_domain.order == 12
 
 
@@ -181,6 +182,7 @@ def test_shared_coordinate_carrier_preserves_cyclotomic_parent_and_scalar_type()
         coefficient_domain=RationalCyclotomicField(order=6),
     )
 
+    assert isinstance(space.coefficient_domain, RationalCyclotomicField)
     coordinates = ModularFormCoordinates(
         space=space,
         basis_id="gamma0-13-even-order6-character-sturm-v1",

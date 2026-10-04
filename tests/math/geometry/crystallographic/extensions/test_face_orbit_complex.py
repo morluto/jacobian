@@ -20,8 +20,15 @@ from jacobian.math.geometry.crystallographic.extensions.operations import (
     check_crystallographic_fundamental_domain,
     pair_crystallographic_polytope_facets,
 )
-from jacobian.math.geometry.polytopes._models import RationalVPolytope
+from jacobian.math.geometry.polytopes._models import (
+    RationalCoordinateSpace,
+    RationalPolytopeVertex,
+    RationalVPolytope,
+)
 from jacobian.math.topology.chain_complexes.operations import homology_groups
+from jacobian.math.topology.chain_complexes.values import (
+    IntegralHomologyGroupValue,
+)
 
 
 def _polygon_request(*, klein: bool) -> CrystallographicPolytopePairingRequest:
@@ -34,7 +41,12 @@ def _polygon_request(*, klein: bool) -> CrystallographicPolytopePairingRequest:
             ),
             factor_set=(((0, 0), (0, 0)), ((0, 0), (1, 0))),
         )
-        points = ((0, 0), (0, 1), (Fraction(1, 2), 0), (Fraction(1, 2), 1))
+        points: tuple[tuple[int | Fraction, int | Fraction], ...] = (
+            (0, 0),
+            (0, 1),
+            (Fraction(1, 2), 0),
+            (Fraction(1, 2), 1),
+        )
         pairings = (
             PolytopeFacetPairing(
                 source_facet_index=0,
@@ -95,14 +107,14 @@ def _polygon_request(*, klein: bool) -> CrystallographicPolytopePairingRequest:
             ),
         )
     polytope = RationalVPolytope(
-        space={"axes": ("x", "y")},
+        space=RationalCoordinateSpace(axes=("x", "y")),
         vertices=tuple(
-            {
-                "vertex_id": f"v{index}",
-                "coordinates": tuple(
+            RationalPolytopeVertex(
+                vertex_id=f"v{index}",
+                coordinates=tuple(
                     CanonicalRational.from_fraction(Fraction(value)) for value in point
                 ),
-            }
+            )
             for index, point in enumerate(points)
         ),
     )
@@ -114,7 +126,7 @@ def _polygon_request(*, klein: bool) -> CrystallographicPolytopePairingRequest:
     )
 
 
-def _compute(*, klein: bool):
+def _compute(*, klein: bool) -> BieberbachFaceOrbitComplex:
     request = _polygon_request(klein=klein)
     pairing = pair_crystallographic_polytope_facets(
         request.affine_realization,
@@ -139,7 +151,14 @@ def test_unit_square_face_orbits_augment_to_torus_chains() -> None:
         ((0,), (0,)),
     )
     homology = homology_groups(result.quotient_chain_complex).homology_groups
-    assert tuple(group.free_rank for group in homology) == (1, 2, 1)
+    assert isinstance(homology[0], IntegralHomologyGroupValue)
+    assert isinstance(homology[1], IntegralHomologyGroupValue)
+    assert isinstance(homology[2], IntegralHomologyGroupValue)
+    assert (
+        homology[0].free_rank,
+        homology[1].free_rank,
+        homology[2].free_rank,
+    ) == (1, 2, 1)
 
 
 def test_klein_bottle_face_orbits_give_integral_homology() -> None:
@@ -150,6 +169,9 @@ def test_klein_bottle_face_orbits_give_integral_homology() -> None:
     assert chain.differential_matrices[0] == ((0, 0),)
     assert sorted(row[0] for row in chain.differential_matrices[1]) == [0, 2]
     homology = homology_groups(chain).homology_groups
+    assert isinstance(homology[0], IntegralHomologyGroupValue)
+    assert isinstance(homology[1], IntegralHomologyGroupValue)
+    assert isinstance(homology[2], IntegralHomologyGroupValue)
     assert homology[0].free_rank == 1
     assert homology[1].free_rank == 1
     assert homology[1].torsion_invariant_factors == (2,)

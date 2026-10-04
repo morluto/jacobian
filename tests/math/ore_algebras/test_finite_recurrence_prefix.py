@@ -17,7 +17,7 @@ from jacobian.math.ore_algebras._tools import TOOLS
 from jacobian.math.ore_algebras.operations import polynomial_recurrence_generate_prefix
 
 
-def _rf(terms: list[tuple[int, int]]) -> dict:
+def _rf(terms: list[tuple[int, int]]) -> dict[str, object]:
     return {
         "domain": "QQ",
         "variables": ["n"],

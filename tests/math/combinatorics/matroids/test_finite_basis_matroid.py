@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections.abc import Iterator
 
 import pytest
 from pydantic import ValidationError
@@ -162,7 +163,7 @@ def test_raw_json_oversized_nested_family_fails_before_model_construction() -> N
 
 def test_raw_envelope_stops_at_first_unknown_field() -> None:
     class UnknownFirst(dict[str, object]):
-        def __iter__(self):
+        def __iter__(self) -> Iterator[str]:
             yield "unexpected"
             raise AssertionError("raw envelope scan continued past unknown field")
 
@@ -213,7 +214,7 @@ def test_utf8_label_limits_apply_per_label_and_in_aggregate() -> None:
     ],
 )
 def test_rejects_malformed_containers_before_recursive_canonicalization(
-    payload,
+    payload: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError):
         FiniteBasisMatroid.model_validate(payload)

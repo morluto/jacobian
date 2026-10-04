@@ -1,10 +1,19 @@
 """Induced homology maps on exact finite simplicial-set prefixes."""
 
+from typing import Any
+
 import pytest
 from tests.error_assertions import error_code
 
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.topology.chain_complexes.values import IntegralHomologyGroupValue
+from jacobian.math.topology.chain_complexes._integral_homology import (
+    IntegralHomologyExecutionPlan,
+    admit_integral_homology,
+)
+from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
+    IntegralHomologyGroupValue,
+)
 from jacobian.math.topology.simplicial_sets import (
     FiniteTruncatedSimplicialSet,
     TruncatedSimplicialMap,
@@ -13,7 +22,14 @@ from jacobian.math.topology.simplicial_sets import (
     normalized_chains,
 )
 from jacobian.math.topology.simplicial_sets import maps as simplicial_maps
-from jacobian.math.topology.simplicial_sets.operations import from_tables
+from jacobian.math.topology.simplicial_sets._models import (
+    SimplicialSetTablesResult,
+)
+from jacobian.math.topology.simplicial_sets.operations import (
+    DegreeSets,
+    MapTable,
+    from_tables,
+)
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 
@@ -96,20 +112,27 @@ def test_induced_homology_executes_each_admitted_endpoint_plan_once(
         target=point,
         maps=tuple((0,) * len(level) for level in source.sets),
     )
-    original = simplicial_maps.admit_integral_homology
+    original = admit_integral_homology
     calls = 0
-    original_from_tables = simplicial_maps.from_tables
+    original_from_tables = from_tables
     table_validations = 0
 
-    def count_admissions(complex_value):
+    def count_admissions(
+        complex_value: ChainComplexValue,
+    ) -> IntegralHomologyExecutionPlan:
         nonlocal calls
         calls += 1
         return original(complex_value)
 
-    def count_table_validations(*args, **kwargs):
+    def count_table_validations(
+        max_degree: int,
+        sets: DegreeSets,
+        face_maps: MapTable,
+        degeneracy_maps: MapTable,
+    ) -> SimplicialSetTablesResult:
         nonlocal table_validations
         table_validations += 1
-        return original_from_tables(*args, **kwargs)
+        return original_from_tables(max_degree, sets, face_maps, degeneracy_maps)
 
     monkeypatch.setattr(simplicial_maps, "admit_integral_homology", count_admissions)
     monkeypatch.setattr(simplicial_maps, "from_tables", count_table_validations)
@@ -132,7 +155,7 @@ def test_composition_admits_both_coordinate_projections_before_either_runs(
     original_admit = simplicial_maps._admit_homology_projection
     admitted_work: list[int] = []
 
-    def record_admission(*args, **kwargs):
+    def record_admission(*args: Any, **kwargs: Any) -> Any:
         result = original_admit(*args, **kwargs)
         admitted_work.append(result[-1])
         if len(admitted_work) == 1:
@@ -143,7 +166,7 @@ def test_composition_admits_both_coordinate_projections_before_either_runs(
             )
         return result
 
-    def projection_must_not_run(*args, **kwargs):
+    def projection_must_not_run(*args: Any, **kwargs: Any) -> None:
         pytest.fail("coordinate projection ran before combined work admission")
 
     monkeypatch.setattr(simplicial_maps, "_admit_homology_projection", record_admission)
@@ -197,7 +220,10 @@ def test_composition_admits_each_distinct_carrier_with_shared_chain_axes(
         update={"sets": (("third-vertex",), *first_carrier.sets[1:])}
     )
 
-    def map_between(source, target):
+    def map_between(
+        source: FiniteTruncatedSimplicialSet,
+        target: FiniteTruncatedSimplicialSet,
+    ) -> TruncatedSimplicialMap:
         return TruncatedSimplicialMap(
             source=source,
             target=target,
@@ -207,14 +233,12 @@ def test_composition_admits_each_distinct_carrier_with_shared_chain_axes(
     first = induced_normalized_homology_map(map_between(first_carrier, second_carrier))
     second = induced_normalized_homology_map(map_between(second_carrier, third_carrier))
     chain_complex = normalized_chains(first_carrier).chain_complex
-    one_endpoint_work = simplicial_maps.admit_integral_homology(
-        chain_complex
-    ).total_work
+    one_endpoint_work = admit_integral_homology(chain_complex).total_work
     monkeypatch.setattr(
         simplicial_maps, "MAX_INTEGRAL_HOMOLOGY_WORK_UNITS", one_endpoint_work
     )
 
-    def endpoint_must_not_run(*args, **kwargs):
+    def endpoint_must_not_run(*args: Any, **kwargs: Any) -> None:
         pytest.fail("endpoint homology ran before the aggregate work admission")
 
     monkeypatch.setattr(simplicial_maps, "normalized_homology", endpoint_must_not_run)

@@ -5,7 +5,7 @@ from collections.abc import Iterator, Mapping
 from fractions import Fraction
 from itertools import product
 from math import comb, gcd, prod
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 import sympy
@@ -1516,7 +1516,7 @@ class _HugeDict(dict[str, object]):
         self.iterated += 1
         raise AssertionError("oversized dict must be rejected before iteration")
 
-    def items(self):
+    def items(self) -> NoReturn:
         self.iterated += 1
         raise AssertionError("oversized dict must be rejected before copying")
 

@@ -117,7 +117,10 @@ class TestAdjointMatrices:
         ) -> tuple[tuple[Fraction, ...], ...]:
             return tuple(
                 tuple(
-                    sum(left[row][inner] * right[inner][column] for inner in range(3))
+                    sum(
+                        (left[row][inner] * right[inner][column] for inner in range(3)),
+                        Fraction(0),
+                    )
                     for column in range(3)
                 )
                 for row in range(3)

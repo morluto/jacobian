@@ -13,7 +13,7 @@ from jacobian.math.number_theory.characters.operations import dirichlet_characte
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 
 
-def test_character_order_matches_exact_orders_of_all_unit_values():
+def test_character_order_matches_exact_orders_of_all_unit_values() -> None:
     for modulus in (1, 3, 5, 8, 12, 15):
         group = character_group(modulus)
         family = dirichlet_character_group_enumerate(group)
@@ -39,7 +39,7 @@ def test_character_order_matches_exact_orders_of_all_unit_values():
             assert coordinate_order == lcm(*value_orders)
 
 
-def test_character_order_result_rejects_a_false_divisor_of_the_exponent():
+def test_character_order_result_rejects_a_false_divisor_of_the_exponent() -> None:
     group = character_group(3)
     character = DirichletCharacter(group=group, coordinates=(1,))
 

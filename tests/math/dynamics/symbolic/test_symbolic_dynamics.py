@@ -575,10 +575,10 @@ def test_oversized_enumerations_fail_before_computation() -> None:
         exc_info.value.errors()[0]["type"]
         == "symbolic_dynamics.shift_support_not_admitted"
     )
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as value_error:
         block_language(oversized_support, 1)
     assert (
-        exc_info.value.errors()[0]["type"]
+        value_error.value.errors()[0]["type"]
         == "symbolic_dynamics.shift_support_not_admitted"
     )
 

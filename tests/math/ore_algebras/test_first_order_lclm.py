@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 
 import pytest
 import sympy as sp
@@ -13,7 +14,11 @@ from jacobian.math.ore_algebras.operations import differential_operator_multiply
 from jacobian.math.polynomials._conversions import rational_function_to_sympy
 
 
-def _coefficient(terms: list[tuple[int, int]], *, denominator=None) -> dict:
+def _coefficient(
+    terms: list[tuple[int, int]],
+    *,
+    denominator: Mapping[str, object] | None = None,
+) -> dict[str, object]:
     return {
         "domain": "QQ",
         "variables": ["x"],
@@ -44,7 +49,9 @@ def _operator(*terms: tuple[int, list[tuple[int, int]]]) -> DifferentialOreOpera
     )
 
 
-def _action(operator: DifferentialOreOperator, function, x):
+def _action(
+    operator: DifferentialOreOperator, function: sp.Expr, x: sp.Symbol
+) -> sp.Expr:
     return sum(
         rational_function_to_sympy(term.coefficient, symbols=(x,))
         * sp.diff(function, x, term.order)
@@ -52,7 +59,11 @@ def _action(operator: DifferentialOreOperator, function, x):
     )
 
 
-def _first_order_product(left, right, x):
+def _first_order_product(
+    left: DifferentialOreOperator,
+    right: DifferentialOreOperator,
+    x: sp.Symbol,
+) -> dict[int, sp.Expr]:
     """Independent coefficient formula from D*a = a*D + a'."""
     left_coefficients = {
         term.order: rational_function_to_sympy(term.coefficient, symbols=(x,))

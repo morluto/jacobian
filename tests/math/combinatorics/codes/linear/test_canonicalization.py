@@ -1,5 +1,7 @@
 """Prime-field linear-code canonicalization tests."""
 
+from itertools import permutations
+
 import pytest
 from pydantic import ValidationError
 
@@ -167,7 +169,7 @@ def test_full_symmetric_action_is_admitted_before_orbit_materialization(
 def test_full_symmetric_action_streams_the_orbit_without_retaining_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    real_permutations = _canonicalization.permutations
+    real_permutations = permutations
 
     class OneShotOrbit:
         def __init__(self, width: int) -> None:

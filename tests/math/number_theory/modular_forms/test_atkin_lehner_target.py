@@ -52,7 +52,9 @@ def test_full_fricke_target_inverts_character_on_every_unit() -> None:
     assert result.target_space.weight == source.weight
     assert result.target_space.kind == source.kind
     assert result.target_space.coefficient_domain == source.coefficient_domain
+    assert isinstance(result.target_space.character, DirichletCharacter)
     assert result.target_space.character.coordinates == (3,)
+    assert isinstance(character, DirichletCharacter)
     for unit in character.group.unit_residues:
         source_value = dirichlet_character_value(character, unit).value
         target_value = dirichlet_character_value(

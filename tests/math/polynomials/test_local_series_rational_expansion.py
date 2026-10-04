@@ -39,10 +39,10 @@ def test_simple_pole_and_repeated_pole_have_exact_laurent_prefixes() -> None:
         3,
     )
     assert tuple(c.as_fraction() for c in simple_result.series.coefficients) == (
-        1,
-        0,
-        0,
-        0,
+        Fraction(1),
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
     )
     assert (simple_result.numerator_order, simple_result.denominator_order) == (0, 1)
     assert simple_result.valuation == -1
@@ -58,10 +58,10 @@ def test_simple_pole_and_repeated_pole_have_exact_laurent_prefixes() -> None:
         repeated_result.series.precision,
     ) == (-2, 2)
     assert tuple(c.as_fraction() for c in repeated_result.series.coefficients) == (
-        2,
-        1,
-        0,
-        0,
+        Fraction(2),
+        Fraction(1),
+        Fraction(0),
+        Fraction(0),
     )
 
 
@@ -86,7 +86,11 @@ def test_regular_expansion_at_nonzero_center_and_cutoff_past_valuation() -> None
         high_order_zero, CanonicalRational(num=2, den=1), 3
     )
     assert (zero_prefix.series.valuation_lower, zero_prefix.series.precision) == (0, 3)
-    assert tuple(c.as_fraction() for c in zero_prefix.series.coefficients) == (0, 0, 0)
+    assert tuple(c.as_fraction() for c in zero_prefix.series.coefficients) == (
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
+    )
     assert zero_prefix.valuation == 4
     assert zero_prefix.zero_order == 4
 
@@ -101,9 +105,9 @@ def test_zero_function_canceled_orders_and_rational_center() -> None:
 
     zero_result = rational_function_at_point(zero, CanonicalRational(num=0, den=1), 3)
     assert tuple(value.as_fraction() for value in zero_result.series.coefficients) == (
-        0,
-        0,
-        0,
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
     )
     assert zero_result.valuation is None
     assert (
@@ -198,12 +202,12 @@ def test_infinity_expansion_records_reciprocal_parent_and_exact_growth_order() -
     assert result.series.center == CanonicalRational(num=0, den=1)
     assert (result.series.valuation_lower, result.series.precision) == (-2, 4)
     assert tuple(c.as_fraction() for c in result.series.coefficients) == (
-        1,
-        0,
-        1,
-        0,
-        0,
-        0,
+        Fraction(1),
+        Fraction(0),
+        Fraction(1),
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
     )
     assert (result.numerator_order, result.denominator_order) == (-2, 0)
     assert result.valuation == -2
@@ -217,7 +221,10 @@ def test_infinity_expansion_records_reciprocal_parent_and_exact_growth_order() -
         1,
         3,
     )
-    assert tuple(c.as_fraction() for c in proper_result.series.coefficients) == (1, 1)
+    assert tuple(c.as_fraction() for c in proper_result.series.coefficients) == (
+        Fraction(1),
+        Fraction(1),
+    )
 
     tool = next(
         item

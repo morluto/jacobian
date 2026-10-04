@@ -15,7 +15,9 @@ from jacobian.math.number_theory.characters.values import (
 )
 
 
-def test_character_family_is_complete_and_pairwise_orthogonal_for_small_moduli():
+def test_character_family_is_complete_and_pairwise_orthogonal_for_small_moduli() -> (
+    None
+):
     for modulus in (1, 3, 5, 8, 12):
         group = character_group(modulus)
         family = dirichlet_character_group_enumerate(group)
@@ -36,7 +38,7 @@ def test_character_family_is_complete_and_pairwise_orthogonal_for_small_moduli()
                 )
 
 
-def test_character_family_roundtrips_with_one_shared_group_parent():
+def test_character_family_roundtrips_with_one_shared_group_parent() -> None:
     family = dirichlet_character_group_enumerate(character_group(20))
 
     decoded = DirichletCharacterFamily.model_validate_json(
@@ -50,7 +52,7 @@ def test_character_family_roundtrips_with_one_shared_group_parent():
     )
 
 
-def test_character_family_rejects_duplicate_coordinate_rows():
+def test_character_family_rejects_duplicate_coordinate_rows() -> None:
     group = character_group(5)
 
     with pytest.raises(ValidationError) as exc_info:
@@ -61,7 +63,7 @@ def test_character_family_rejects_duplicate_coordinate_rows():
     assert exc_info.value.errors()[0]["type"] == "dirichlet_character.family_order"
 
 
-def test_character_family_accepts_the_maximum_modulus_with_bounded_output():
+def test_character_family_accepts_the_maximum_modulus_with_bounded_output() -> None:
     group = character_group(2048)
     family = dirichlet_character_group_enumerate(group)
     encoded = encode_strict_json(family.model_dump(mode="json"))

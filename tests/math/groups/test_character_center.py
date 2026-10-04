@@ -25,7 +25,7 @@ from jacobian.math.groups.characters.representation_ring_operations import (
 from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
 
-def _s3_table():
+def _s3_table() -> CharacterTableResult:
     source = PermutationGroup(degree=3, generators=((1, 2, 0), (1, 0, 2)))
     classes = group_conjugacy_classes(3, [list(g) for g in source.generators])
     partition = GroupConjugacyClassesResult._from_kernel(
@@ -34,7 +34,7 @@ def _s3_table():
     return character_table(partition)
 
 
-def _cyclic5_table():
+def _cyclic5_table() -> CharacterTableResult:
     source = PermutationGroup(degree=5, generators=((1, 2, 3, 4, 0),))
     classes = group_conjugacy_classes(5, [list(g) for g in source.generators])
     partition = GroupConjugacyClassesResult._from_kernel(
@@ -43,7 +43,7 @@ def _cyclic5_table():
     return character_table(partition)
 
 
-def _elements(group: PermutationGroup):
+def _elements(group: PermutationGroup) -> set[tuple[int, ...]]:
     return {
         tuple(element)
         for conjugacy_class in group_conjugacy_classes(
@@ -53,7 +53,9 @@ def _elements(group: PermutationGroup):
     }
 
 
-def _standard_representation_matrix(permutation):
+def _standard_representation_matrix(
+    permutation: tuple[int, ...],
+) -> tuple[tuple[int, int], tuple[int, int]]:
     """Matrix on x1+x2+x3=0 in the basis (e1-e2, e2-e3)."""
     basis = ((1, -1, 0), (0, 1, -1))
     columns = []
@@ -66,7 +68,7 @@ def _standard_representation_matrix(permutation):
     )
 
 
-def _direct_standard_center():
+def _direct_standard_center() -> set[tuple[int, ...]]:
     identity = tuple(range(3))
     result = set()
     for permutation in permutations(range(3)):
@@ -77,7 +79,7 @@ def _direct_standard_center():
     return result
 
 
-def _direct_trivial_plus_sign_center():
+def _direct_trivial_plus_sign_center() -> set[tuple[int, ...]]:
     result = set()
     for permutation in permutations(range(3)):
         inversions = sum(
@@ -90,14 +92,16 @@ def _direct_trivial_plus_sign_center():
     return result
 
 
-def _fifth_root_coefficients(exponent):
+def _fifth_root_coefficients(exponent: int) -> tuple[int, ...]:
     exponent %= 5
     if exponent == 4:
         return (-1, -1, -1, -1)
     return tuple(int(power == exponent) for power in range(4))
 
 
-def _compute(coordinates):
+def _compute(
+    coordinates: tuple[int, ...],
+) -> tuple[CharacterTableResult, CharacterCenter]:
     table = _s3_table()
     character = CharacterRingElement(
         table=table, irreducible_multiplicities=tuple(coordinates)
@@ -105,7 +109,7 @@ def _compute(coordinates):
     return table, character_center(CharacterCenterRequest(character=character))
 
 
-def test_s3_standard_character_center_matches_matrix_representation_oracle():
+def test_s3_standard_character_center_matches_matrix_representation_oracle() -> None:
     table, result = _compute((0, 0, 1))
     assert _elements(result.subgroup) == _direct_standard_center()
     assert len(_direct_standard_center()) == 1
@@ -115,7 +119,7 @@ def test_s3_standard_character_center_matches_matrix_representation_oracle():
     assert CharacterCenter.model_validate_json(result.model_dump_json()) == result
 
 
-def test_s3_reducible_character_finds_scalar_a3_action():
+def test_s3_reducible_character_finds_scalar_a3_action() -> None:
     _, result = _compute((1, 1, 0))
     assert _elements(result.subgroup) == _direct_trivial_plus_sign_center()
     assert len(_elements(result.subgroup)) == 3
@@ -126,7 +130,7 @@ def test_s3_reducible_character_finds_scalar_a3_action():
     )
 
 
-def test_one_dimensional_sign_character_is_scalar_on_the_whole_group():
+def test_one_dimensional_sign_character_is_scalar_on_the_whole_group() -> None:
     table, result = _compute((0, 1, 0))
     assert _elements(result.subgroup) == _elements(table.partition.source)
     assert group_order(result.subgroup) == 6
@@ -137,7 +141,7 @@ def test_one_dimensional_sign_character_is_scalar_on_the_whole_group():
     }
 
 
-def test_cyclic_fifth_root_character_keeps_exact_cyclotomic_scalar_values():
+def test_cyclic_fifth_root_character_keeps_exact_cyclotomic_scalar_values() -> None:
     table = _cyclic5_table()
     coordinates = tuple(int(index == 1) for index in range(5))
     character = CharacterRingElement(
@@ -168,28 +172,30 @@ def test_cyclic_fifth_root_character_keeps_exact_cyclotomic_scalar_values():
     assert actual_coefficients == expected_coefficients
 
 
-def test_negative_virtual_character_is_rejected():
+def test_negative_virtual_character_is_rejected() -> None:
     table = _s3_table()
     character = CharacterRingElement(table=table, irreducible_multiplicities=(1, -1, 0))
     with pytest.raises(OperationDomainValidationError):
         character_center(CharacterCenterRequest(character=character))
 
 
-def test_standard_center_matches_the_direct_centralizer_average():
+def test_standard_center_matches_the_direct_centralizer_average() -> None:
     table = _s3_table()
     character = CharacterRingElement(table=table, irreducible_multiplicities=(0, 0, 1))
     result = character_center(CharacterCenterRequest(character=character))
     assert _elements(result.subgroup) == _direct_standard_center()
 
 
-def test_character_center_rejects_zero_dimension_ordinary_value():
+def test_character_center_rejects_zero_dimension_ordinary_value() -> None:
     table = _s3_table()
     zero = CharacterRingElement(table=table, irreducible_multiplicities=(0, 0, 0))
     with pytest.raises(OperationDomainValidationError):
         character_center(CharacterCenterRequest(character=zero))
 
 
-def test_order_bound_precedes_conjugacy_expansion(monkeypatch):
+def test_order_bound_precedes_conjugacy_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     degree = 61
     generator = tuple((point + 1) % degree for point in range(degree))
     source = PermutationGroup(degree=degree, generators=(generator,))
@@ -212,7 +218,7 @@ def test_order_bound_precedes_conjugacy_expansion(monkeypatch):
         table=table, irreducible_multiplicities=(1,)
     )
 
-    def unexpected_conjugacy_expansion(*args, **kwargs):
+    def unexpected_conjugacy_expansion(*args: object, **kwargs: object) -> None:
         raise AssertionError("admission must precede conjugacy expansion")
 
     monkeypatch.setattr(
@@ -222,13 +228,13 @@ def test_order_bound_precedes_conjugacy_expansion(monkeypatch):
         character_center(CharacterCenterRequest.model_construct(character=character))
 
 
-def test_model_constructed_request_missing_character_is_domain_error():
+def test_model_constructed_request_missing_character_is_domain_error() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         character_center(CharacterCenterRequest.model_construct())
     assert exc_info.value.errors()[0]["type"] == "groups.characters.center_input_type"
 
 
-def test_output_admission_accounts_for_retained_full_character_table():
+def test_output_admission_accounts_for_retained_full_character_table() -> None:
     table = _cyclic5_table()
     character = CharacterRingElement(
         table=table, irreducible_multiplicities=(1, 0, 0, 0, 0)

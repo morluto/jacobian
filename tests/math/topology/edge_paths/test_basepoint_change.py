@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.topology._models import canonical_complex
+from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.edge_paths._models import (
+    FiniteGroupWord,
     FundamentalGroupBasepointChangeRequest,
+    FundamentalGroupMapResult,
     PresentationBasepointChangePath,
     PresentationMapCompositionRequest,
 )
@@ -17,14 +19,16 @@ from jacobian.math.topology.edge_paths.presentation_maps import (
 )
 
 
-def _wedge_of_two_circles():
+def _wedge_of_two_circles() -> FiniteSimplicialComplex:
     return canonical_complex(
         ("a", "b", "c", "d", "e"),
         (("a", "b"), ("b", "c"), ("a", "c"), ("a", "d"), ("d", "e"), ("a", "e")),
     )
 
 
-def _transport(complex_, path_vertices):
+def _transport(
+    complex_: FiniteSimplicialComplex, path_vertices: tuple[str, ...]
+) -> FundamentalGroupMapResult:
     path = PresentationBasepointChangePath(
         complex=complex_,
         source_base_vertex=path_vertices[0],
@@ -36,12 +40,12 @@ def _transport(complex_, path_vertices):
     )
 
 
-def _letters(word):
+def _letters(word: FiniteGroupWord) -> tuple[tuple[int, int], ...]:
     return tuple((letter.generator, letter.exponent) for letter in word.letters)
 
 
-def _reduce(sequence):
-    stack = []
+def _reduce(sequence: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
+    stack: list[tuple[int, int]] = []
     for generator, exponent in sequence:
         if stack and stack[-1] == (generator, -exponent):
             stack.pop()
@@ -50,11 +54,11 @@ def _reduce(sequence):
     return tuple(stack)
 
 
-def _inverse(sequence):
+def _inverse(sequence: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
     return tuple((generator, -exponent) for generator, exponent in reversed(sequence))
 
 
-def test_loop_path_conjugates_free_generators_and_composes_with_its_inverse():
+def test_loop_path_conjugates_free_generators_and_composes_with_its_inverse() -> None:
     complex_ = _wedge_of_two_circles()
     loop = _transport(complex_, ("a", "b", "c", "a"))
 
@@ -95,10 +99,8 @@ def test_loop_path_conjugates_free_generators_and_composes_with_its_inverse():
     )
 
 
-def test_path_morphism_serializes_and_binds_exact_basepoints():
+def test_path_morphism_serializes_and_binds_exact_basepoints() -> None:
     result = _transport(_wedge_of_two_circles(), ("a", "b", "c", "a"))
-    from jacobian.math.topology.edge_paths._models import FundamentalGroupMapResult
-
     restored = FundamentalGroupMapResult.model_validate_json(result.model_dump_json())
     assert restored == result
     assert isinstance(restored.map, PresentationBasepointChangePath)
@@ -106,7 +108,7 @@ def test_path_morphism_serializes_and_binds_exact_basepoints():
     assert restored.target_presentation.base_vertex == "a"
 
 
-def test_transport_replays_triangle_relators_as_target_conjugates():
+def test_transport_replays_triangle_relators_as_target_conjugates() -> None:
     complex_ = canonical_complex(
         ("a", "b", "c", "d", "e"),
         (
@@ -127,7 +129,7 @@ def test_transport_replays_triangle_relators_as_target_conjugates():
     assert _letters(witness.conjugator) == ((0, -1),)
 
 
-def test_transport_path_rejects_wrong_endpoints_and_non_edges():
+def test_transport_path_rejects_wrong_endpoints_and_non_edges() -> None:
     complex_ = _wedge_of_two_circles()
     with pytest.raises(ValidationError) as exc_info:
         PresentationBasepointChangePath(
@@ -153,10 +155,7 @@ def test_transport_path_rejects_wrong_endpoints_and_non_edges():
     )
 
 
-def test_basepoint_transport_is_a_typed_composable_math_tool():
-    from jacobian.math.topology.edge_paths._models import (
-        FundamentalGroupMapResult,
-    )
+def test_basepoint_transport_is_a_typed_composable_math_tool() -> None:
     from jacobian.math.topology.edge_paths.presentation_maps_tools import TOOLS
 
     tool = next(

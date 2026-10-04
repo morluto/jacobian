@@ -234,7 +234,7 @@ class TestShiftMultiplyAdmission:
     def test_accumulated_degree_over_128_is_rejected_before_ledger(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from jacobian.math.ore_algebras import operations
+        from jacobian.math.ore_algebras._models import ShiftMultiplyLedgerRow
 
         left_coefficient = _degree_rf(64, 1)
         right_coefficient = _degree_rf(64, 2)
@@ -245,7 +245,7 @@ class TestShiftMultiplyAdmission:
             raise AssertionError("ledger construction must follow degree admission")
 
         monkeypatch.setattr(
-            operations.ShiftMultiplyLedgerRow,
+            ShiftMultiplyLedgerRow,
             "model_construct",
             fail_ledger_construction,
         )
@@ -256,7 +256,7 @@ class TestShiftMultiplyAdmission:
     def test_shifted_coefficient_height_is_rejected_before_ledger(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from jacobian.math.ore_algebras import operations
+        from jacobian.math.ore_algebras._models import ShiftMultiplyLedgerRow
 
         high_digit_coefficient = _rf(((10**63, 64), (1, 0)))
         left = _op(((16, high_digit_coefficient),))
@@ -266,7 +266,7 @@ class TestShiftMultiplyAdmission:
             raise AssertionError("ledger construction must follow height admission")
 
         monkeypatch.setattr(
-            operations.ShiftMultiplyLedgerRow,
+            ShiftMultiplyLedgerRow,
             "model_construct",
             fail_ledger_construction,
         )

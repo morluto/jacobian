@@ -1,8 +1,10 @@
 """Independent exact checks for the Gamma0(2) polynomial basis slice."""
 
 from fractions import Fraction
+from typing import Literal
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -69,7 +71,7 @@ def test_level_two_weight_two_generator_and_weight_four_forms() -> None:
         ModularFormSpace(level=2, weight=2, kind="M"), 8
     )
     assert [
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in weight_two.elements[0].expansion.q_expansion.coefficients
     ] == [1, 24, 24, 96, 24, 144, 96, 192]
     assert weight_two.elements[0].label == "A2"
@@ -94,7 +96,9 @@ def test_gamma0_two_coordinates_round_trip_and_expand() -> None:
     same = ModularFormCoordinates.model_validate(form.model_dump())
 
     expansion = modular_form_coordinates_q_expansion(form, 4)
-    assert [value.as_fraction() for value in expansion.q_expansion.coefficients] == [
+    assert [
+        rational(value).as_fraction() for value in expansion.q_expansion.coefficients
+    ] == [
         1,
         48,
         624,
@@ -135,7 +139,9 @@ def test_gamma0_two_basis_admits_bounded_large_prefix_and_rejects_growth() -> No
 def test_t3_and_u2_reconstruct_exact_gamma0_two_images() -> None:
     space = ModularFormSpace(level=2, weight=4, kind="M")
     basis = modular_form_basis_q_expansions(space, 4)
-    basis_id = "gamma0-two-weight-2-4-monomials-v1"
+    basis_id: Literal["gamma0-two-weight-2-4-monomials-v1"] = (
+        "gamma0-two-weight-2-4-monomials-v1"
+    )
     a2_squared = ModularFormCoordinates(
         space=space,
         basis_id=basis_id,
@@ -150,16 +156,22 @@ def test_t3_and_u2_reconstruct_exact_gamma0_two_images() -> None:
     t3_e4 = modular_form_coordinates_hecke(e4, 3)
     u2_e4 = modular_form_coordinates_u2(e4)
 
-    assert tuple(value.as_fraction() for value in t3_e4.coordinates) == (0, 28)
-    assert tuple(value.as_fraction() for value in u2_e4.coordinates) == (-10, 11)
+    assert tuple(rational(value).as_fraction() for value in t3_e4.coordinates) == (
+        Fraction(0),
+        Fraction(28),
+    )
+    assert tuple(rational(value).as_fraction() for value in u2_e4.coordinates) == (
+        Fraction(-10),
+        Fraction(11),
+    )
     assert [
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_q_expansion(
             t3_e4, 2
         ).q_expansion.coefficients
     ] == [28, 6720]
     assert [
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_q_expansion(
             u2_e4, 2
         ).q_expansion.coefficients
@@ -168,7 +180,7 @@ def test_t3_and_u2_reconstruct_exact_gamma0_two_images() -> None:
     # Independent transforms of basis prefixes using their defining coefficient rules.
     for source, source_element in zip((a2_squared, e4), basis.elements, strict=True):
         coefficients = tuple(
-            value.as_fraction()
+            rational(value).as_fraction()
             for value in source_element.expansion.q_expansion.coefficients
         )
         direct_t3 = tuple(
@@ -185,7 +197,7 @@ def test_t3_and_u2_reconstruct_exact_gamma0_two_images() -> None:
         direct_u2 = (coefficients[0], coefficients[2])
         assert (
             tuple(
-                value.as_fraction()
+                rational(value).as_fraction()
                 for value in modular_form_coordinates_q_expansion(
                     modular_form_coordinates_hecke(source, 3), 2
                 ).q_expansion.coefficients
@@ -194,7 +206,7 @@ def test_t3_and_u2_reconstruct_exact_gamma0_two_images() -> None:
         )
         assert (
             tuple(
-                value.as_fraction()
+                rational(value).as_fraction()
                 for value in modular_form_coordinates_q_expansion(
                     modular_form_coordinates_u2(source), 2
                 ).q_expansion.coefficients
@@ -205,7 +217,9 @@ def test_t3_and_u2_reconstruct_exact_gamma0_two_images() -> None:
 
 def test_level_two_operator_domains_and_precision_bounds() -> None:
     space = ModularFormSpace(level=2, weight=4, kind="M")
-    basis_id = "gamma0-two-weight-2-4-monomials-v1"
+    basis_id: Literal["gamma0-two-weight-2-4-monomials-v1"] = (
+        "gamma0-two-weight-2-4-monomials-v1"
+    )
     e4 = ModularFormCoordinates(
         space=space,
         basis_id=basis_id,
@@ -216,9 +230,9 @@ def test_level_two_operator_domains_and_precision_bounds() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         modular_form_coordinates_hecke(e4, 129)
     assert tuple(
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_hecke(e4, 127).coordinates
-    ) == (0, 2_048_384)
+    ) == (Fraction(0), Fraction(2_048_384))
 
     level_one = ModularFormCoordinates(
         space=ModularFormSpace(level=1, weight=4, kind="M"),
@@ -246,6 +260,6 @@ def test_weight_zero_hecke_keeps_exact_rational_normalization() -> None:
 
     image = modular_form_coordinates_hecke(constant, 3)
 
-    assert tuple(value.as_fraction() for value in image.coordinates) == (
+    assert tuple(rational(value).as_fraction() for value in image.coordinates) == (
         Fraction(4, 3),
     )

@@ -130,20 +130,19 @@ def test_global_equality_re_admits_model_constructed_values() -> None:
 
 def test_global_equality_rejects_noncanonical_forged_rationals() -> None:
     valid = _form(2, 4, (1, 0))
-    noncanonical = CanonicalRational.model_construct(num=2, den=2)
+    noncanonical_scalar = CanonicalRational.model_construct(num=2, den=2)
     forged = ModularFormCoordinates.model_construct(
         space=valid.space,
         basis_id=valid.basis_id,
-        coordinates=(noncanonical, CanonicalRational(num=0, den=1)),
+        coordinates=(noncanonical_scalar, CanonicalRational(num=0, den=1)),
     )
 
     # The kernel re-admits model-constructed values instead of trusting them;
     # the exact diagnostic is the carrier check, not a bespoke message.
-    with pytest.raises(OperationDomainValidationError) as noncanonical:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         modular_form_coordinates_equal(valid, forged)
     assert (
-        noncanonical.value.errors()[0]["type"]
-        == "modular_form.coordinates_carrier_invalid"
+        exc_info.value.errors()[0]["type"] == "modular_form.coordinates_carrier_invalid"
     )
 
 

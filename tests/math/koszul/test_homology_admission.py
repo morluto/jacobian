@@ -1,6 +1,7 @@
 """Coefficient-aware admission tests for finite-module Koszul homology."""
 
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 
@@ -22,7 +23,9 @@ def q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def test_large_component_rejected_before_source_replay_or_rank(monkeypatch) -> None:
+def test_large_component_rejected_before_source_replay_or_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",),
         multiplication=(((q(1),),),),
@@ -43,7 +46,7 @@ def test_large_component_rejected_before_source_replay_or_rank(monkeypatch) -> N
         )
     )
 
-    def arithmetic_must_not_run(_matrix):
+    def arithmetic_must_not_run(_matrix: object) -> NoReturn:
         raise AssertionError("exact arithmetic ran before homology admission")
 
     monkeypatch.setattr(koszul_operations, "_action_matrix", arithmetic_must_not_run)
@@ -55,7 +58,9 @@ def test_large_component_rejected_before_source_replay_or_rank(monkeypatch) -> N
     )
 
 
-def test_dense_matrix_work_rejected_before_source_replay_or_rank(monkeypatch) -> None:
+def test_dense_matrix_work_rejected_before_source_replay_or_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     zero = (q(0), q(0))
     e1 = (q(1), q(0))
     algebra = FiniteCommutativeAlgebra(
@@ -89,7 +94,7 @@ def test_dense_matrix_work_rejected_before_source_replay_or_rank(monkeypatch) ->
         ModuleKoszulRequest(algebra=algebra, module=module, sequence=(e1,) * 6)
     )
 
-    def arithmetic_must_not_run(_matrix):
+    def arithmetic_must_not_run(_matrix: object) -> NoReturn:
         raise AssertionError("exact arithmetic ran before homology admission")
 
     monkeypatch.setattr(koszul_operations, "_action_matrix", arithmetic_must_not_run)
@@ -130,7 +135,9 @@ def test_exact_homology_example_remains_admitted() -> None:
     assert result.boundary_dimensions == (1, 0)
 
 
-def test_large_echoed_label_rejected_before_rank(monkeypatch) -> None:
+def test_large_echoed_label_rejected_before_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",),
         multiplication=(((q(1),),),),
@@ -145,7 +152,7 @@ def test_large_echoed_label_rejected_before_rank(monkeypatch) -> None:
         ModuleKoszulRequest(algebra=algebra, module=module, sequence=())
     )
 
-    def rank_must_not_run(_matrix):
+    def rank_must_not_run(_matrix: object) -> NoReturn:
         raise AssertionError("RREF ran before output admission")
 
     monkeypatch.setattr(koszul_operations, "_matrix_rank", rank_must_not_run)

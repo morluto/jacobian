@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
 from math import gcd
 
@@ -9,9 +10,11 @@ import pytest
 from cypari import pari
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
+    RationalCyclotomicField,
 )
 from jacobian.math.number_theory.characters.operations import (
     character_group,
@@ -38,7 +41,9 @@ from jacobian.math.number_theory.modular_forms.pari_backend import (
 )
 
 
-def _request(character_coordinate: int = 6, index: int = 2):
+def _request(
+    character_coordinate: int = 6, index: int = 2
+) -> ModularCharacterHeckeMatrixRequest:
     payload = dict(TOOLS[0].examples[0].input)
     space = dict(payload["space"])
     character = dict(space["character"])
@@ -49,17 +54,17 @@ def _request(character_coordinate: int = 6, index: int = 2):
     return ModularCharacterHeckeMatrixRequest.model_validate(payload)
 
 
-def _rational(field, value: int) -> RationalCyclotomicElement:
+def _rational(field: RationalCyclotomicField, value: int) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=tuple(
-            {"num": value if index == 0 else 0, "den": 1}
+            CanonicalRational(num=value if index == 0 else 0, den=1)
             for index in range(field.degree)
         ),
     )
 
 
-def test_multidimensional_t2_matrix_matches_independent_pari_oracle():
+def test_multidimensional_t2_matrix_matches_independent_pari_oracle() -> None:
     request = _request()
     result = modular_character_hecke_matrix_multidimensional(
         request.space, request.index
@@ -87,11 +92,12 @@ def test_multidimensional_t2_matrix_matches_independent_pari_oracle():
         cyclotomic.multiply(a, d), cyclotomic.multiply(b, c)
     )
     field = request.space.coefficient_domain
+    assert isinstance(field, RationalCyclotomicField)
     assert trace == _rational(field, 0)
     assert determinant == _rational(field, -1)
 
 
-def test_order_three_field_transport_matches_pari_hecke_matrix():
+def test_order_three_field_transport_matches_pari_hecke_matrix() -> None:
     request = _request(character_coordinate=4)
     result = modular_character_hecke_matrix_multidimensional(
         request.space, request.index
@@ -105,7 +111,7 @@ def test_order_three_field_transport_matches_pari_hecke_matrix():
         len(result.entries),
         character_request=_pari_character_request(request.space),
     )
-    assert raw[0][2] == (1, 1)
+    assert raw[0][2] == (Fraction(1), Fraction(1))
 
     # In PARI's native basis T_2 is diagonal with eigenvalues t+2 and 2t+1.
     character_request = _pari_character_request(request.space)
@@ -132,7 +138,7 @@ def test_order_three_field_transport_matches_pari_hecke_matrix():
         _request(character_coordinate=6, index=13)
 
 
-def test_public_example_runs_through_its_typed_contract():
+def test_public_example_runs_through_its_typed_contract() -> None:
     request = ModularCharacterHeckeMatrixRequest.model_validate(
         TOOLS[0].examples[0].input
     )
@@ -146,7 +152,7 @@ def test_public_example_runs_through_its_typed_contract():
     )
 
 
-def test_precision_81_boundary_is_admitted_for_level39_t8():
+def test_precision_81_boundary_is_admitted_for_level39_t8() -> None:
     # For Γ0(39), B=11, so T_8 requires n(B-1)+1=81 source coefficients.
     source_character = dirichlet_character(character_group(13), (6,))
     target_group = character_group(39)
@@ -176,7 +182,7 @@ def test_precision_81_boundary_is_admitted_for_level39_t8():
     assert result.labels == tuple(f"q^{index}" for index in range(6))
 
 
-def test_hecke_paths_reject_rational_parent_before_coordinate_admission():
+def test_hecke_paths_reject_rational_parent_before_coordinate_admission() -> None:
     request = _request(character_coordinate=6)
     rational_space = request.space.model_copy(update={"coefficient_domain": "QQ"})
     with pytest.raises(OperationDomainValidationError) as exc_info:

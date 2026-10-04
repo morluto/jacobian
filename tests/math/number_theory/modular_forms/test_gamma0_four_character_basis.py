@@ -1,7 +1,9 @@
 from fractions import Fraction
 from math import isqrt
+from typing import Literal
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -24,7 +26,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 
-def _chi4_space(kind: str = "M", weight: int = 1) -> ModularFormSpace:
+def _chi4_space(kind: Literal["M", "S"] = "M", weight: int = 1) -> ModularFormSpace:
     chi4 = dirichlet_character(character_group(4), (1,))
     return ModularFormSpace(
         level=4,
@@ -35,7 +37,7 @@ def _chi4_space(kind: str = "M", weight: int = 1) -> ModularFormSpace:
     )
 
 
-def test_exact_gamma0_four_character_dimension_and_basis():
+def test_exact_gamma0_four_character_dimension_and_basis() -> None:
     space = _chi4_space()
     result = space_dimension(space)
     assert (result.dimension, result.eisenstein_dimension, result.cusp_dimension) == (
@@ -63,7 +65,7 @@ def test_exact_gamma0_four_character_dimension_and_basis():
     assert [4 * coefficient for coefficient in actual] == theta_square
 
 
-def test_character_basis_coordinates_round_trip():
+def test_character_basis_coordinates_round_trip() -> None:
     space = _chi4_space()
     form = ModularFormCoordinates(
         space=space,
@@ -83,7 +85,7 @@ def test_character_basis_coordinates_round_trip():
     assert form.coordinates == recovered.coordinates
 
 
-def test_character_target_rejects_wrong_character_or_weight():
+def test_character_target_rejects_wrong_character_or_weight() -> None:
     chi4 = dirichlet_character(character_group(4), (1,))
     for level, weight, character in (
         (4, 1, dirichlet_character(character_group(4), (0,))),
@@ -103,7 +105,7 @@ def test_character_target_rejects_wrong_character_or_weight():
             raise AssertionError("unsupported character space was admitted")
 
 
-def test_weight_three_character_hecke_actions_match_exact_divisor_formula():
+def test_weight_three_character_hecke_actions_match_exact_divisor_formula() -> None:
     space = _chi4_space(weight=3)
     a = ModularFormCoordinates(
         space=space,
@@ -123,28 +125,28 @@ def test_weight_three_character_hecke_actions_match_exact_divisor_formula():
     )
 
     assert tuple(
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_hecke(a, 3).coordinates
     ) == (
         Fraction(-8),
         Fraction(0),
     )
     assert tuple(
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_hecke(b, 3).coordinates
     ) == (
         Fraction(0),
         Fraction(8),
     )
     assert tuple(
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_hecke(a, 5).coordinates
     ) == (
         Fraction(26),
         Fraction(0),
     )
     assert tuple(
-        value.as_fraction()
+        rational(value).as_fraction()
         for value in modular_form_coordinates_hecke(b, 5).coordinates
     ) == (
         Fraction(0),
@@ -152,7 +154,7 @@ def test_weight_three_character_hecke_actions_match_exact_divisor_formula():
     )
 
 
-def test_character_hecke_requires_an_index_coprime_to_level_four():
+def test_character_hecke_requires_an_index_coprime_to_level_four() -> None:
     form = ModularFormCoordinates(
         space=_chi4_space(weight=3),
         basis_id=GAMMA0_FOUR_CHI4_WEIGHT_THREE_BASIS_ID,
@@ -168,7 +170,7 @@ def test_character_hecke_requires_an_index_coprime_to_level_four():
     )
 
 
-def test_weight_one_character_hecke_actions_match_divisor_sum_eigenvalues():
+def test_weight_one_character_hecke_actions_match_divisor_sum_eigenvalues() -> None:
     form = ModularFormCoordinates(
         space=_chi4_space(),
         basis_id=GAMMA0_FOUR_CHI4_WEIGHT_ONE_BASIS_ID,
@@ -182,7 +184,7 @@ def test_weight_one_character_hecke_actions_match_divisor_sum_eigenvalues():
     )
 
 
-def test_u2_on_character_spaces_matches_direct_coefficient_extraction():
+def test_u2_on_character_spaces_matches_direct_coefficient_extraction() -> None:
     def chi_minus4(n: int) -> int:
         return 0 if n % 2 == 0 else (1 if n % 4 == 1 else -1)
 
@@ -242,11 +244,13 @@ def test_u2_on_character_spaces_matches_direct_coefficient_extraction():
                 entry.as_fraction() for entry in prefix.q_expansion.coefficients
             ] == expected
             if weight == 1:
-                assert tuple(value.as_fraction() for value in image.coordinates) == (
-                    Fraction(1),
-                )
+                assert tuple(
+                    rational(value).as_fraction() for value in image.coordinates
+                ) == (Fraction(1),)
             else:
-                assert tuple(value.as_fraction() for value in image.coordinates) == (
+                assert tuple(
+                    rational(value).as_fraction() for value in image.coordinates
+                ) == (
                     (Fraction(1), Fraction(0))
                     if vector_index == 0
                     else (Fraction(0), Fraction(4))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from tests.error_assertions import error_code
 
@@ -230,12 +232,14 @@ def test_composition_admits_exact_coefficient_growth_before_multiplication() -> 
 
 
 def test_composition_operation_exposes_the_native_contract() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "homological.filtered_chain_map.compose.compute"
+    tool = cast(
+        MathTool[FilteredChainMapCompositionRequest, FilteredChainMapResult],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "homological.filtered_chain_map.compose.compute"
+        ),
     )
-    assert isinstance(tool, MathTool)
     assert tool.result_type is FilteredChainMapResult
     first, second = _composition(_map(2), _map(3))
     request = FilteredChainMapCompositionRequest(first=first, second=second)
@@ -379,7 +383,7 @@ def test_composition_rejects_oversized_map_shape_before_parsing_entries(
     identity = tuple(tuple(1 if i == j else 0 for j in range(32)) for i in range(32))
     filtration = (
         FiltrationLevel(
-            subspaces=(
+            subspaces=tuple(
                 FilteredSubspace(
                     vectors=tuple(
                         tuple(1 if i == j else 0 for j in range(32)) for i in range(32)

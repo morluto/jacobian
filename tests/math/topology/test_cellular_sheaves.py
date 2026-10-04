@@ -35,6 +35,12 @@ def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
+def _fraction(value: CanonicalRational | int) -> Fraction:
+    if isinstance(value, CanonicalRational):
+        return value.as_fraction()
+    return Fraction(value)
+
+
 def _cells(complex_: FiniteSimplicialComplex) -> list[tuple[str, ...]]:
     return [face for group in complex_.faces_by_dimension for face in group.faces]
 
@@ -65,7 +71,7 @@ def _covers(
 
 def _rank_one_request(
     complex_: FiniteSimplicialComplex,
-    scalar=None,
+    scalar: CanonicalRational | int | None = None,
     *,
     field: SheafField = SheafField.RATIONAL,
     prime: int | None = None,
@@ -322,7 +328,7 @@ class TestDefiningInvariant:
         def compose(
             first: tuple[tuple[str, ...], tuple[str, ...]],
             second: tuple[tuple[str, ...], tuple[str, ...]],
-        ) -> tuple[tuple[str, ...], ...]:
+        ) -> tuple[tuple[CanonicalRational, ...], ...]:
             # ``second`` is the later step: rho(second) @ rho(first).
             left, right = cover[second], cover[first]
             rows = len(left)
@@ -330,11 +336,13 @@ class TestDefiningInvariant:
             columns = len(right[0]) if inner else 0
             return tuple(
                 tuple(
-                    _q(
+                    CanonicalRational.from_fraction(
                         sum(
-                            Fraction(left[i][k].num, left[i][k].den)
-                            * Fraction(right[k][j].num, right[k][j].den)
-                            for k in range(inner)
+                            (
+                                _fraction(left[i][k]) * _fraction(right[k][j])
+                                for k in range(inner)
+                            ),
+                            Fraction(0),
                         )
                     )
                     for j in range(columns)

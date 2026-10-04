@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
 
@@ -40,7 +41,7 @@ def _term(coefficient: int | Fraction, word: tuple[str, ...]) -> FreeAlgebraTerm
 
 
 def _poly(
-    alphabet: tuple[str, ...], coefficients: dict[tuple[str, ...], int | Fraction]
+    alphabet: tuple[str, ...], coefficients: Mapping[tuple[str, ...], int | Fraction]
 ) -> FreeAlgebraPolynomial:
     ordered = sorted(
         coefficients.items(),
@@ -244,6 +245,7 @@ def test_result_round_trips_and_matches_native_and_catalog() -> None:
     )
 
     command = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+    assert command.request_type is type(request)
     public = command.run(request)
     assert public.model_dump(mode="json") == native.model_dump(mode="json")
 

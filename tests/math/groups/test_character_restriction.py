@@ -1,4 +1,5 @@
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
@@ -36,7 +37,7 @@ def _s3_standard_class_function() -> FiniteClassFunction:
     return FiniteClassFunction._from_kernel(axis=table.axis, values=standard.values)
 
 
-def test_s3_standard_restricts_to_transposition_subgroup_with_class_map():
+def test_s3_standard_restricts_to_transposition_subgroup_with_class_map() -> None:
     function = _s3_standard_class_function()
     result = class_function_restrict_to_subgroup(
         function, PermutationGroup(degree=3, generators=((1, 0, 2),))
@@ -62,7 +63,7 @@ def test_s3_standard_restricts_to_transposition_subgroup_with_class_map():
     assert (values[0] - values[1]) / 2 == 1
 
 
-def test_s3_standard_restricts_to_three_cycle_subgroup():
+def test_s3_standard_restricts_to_three_cycle_subgroup() -> None:
     function = _s3_standard_class_function()
     result = class_function_restrict_to_subgroup(
         function, PermutationGroup(degree=3, generators=((1, 2, 0),))
@@ -79,7 +80,7 @@ def test_s3_standard_restricts_to_three_cycle_subgroup():
     )
 
 
-def test_restriction_rejects_a_generator_outside_the_source_group():
+def test_restriction_rejects_a_generator_outside_the_source_group() -> None:
     source = PermutationGroup(degree=3, generators=((1, 2, 0),))
     classes = group_conjugacy_classes(
         source.degree, [list(generator) for generator in source.generators]
@@ -116,7 +117,7 @@ def test_restriction_rejects_a_generator_outside_the_source_group():
     )
 
 
-def test_native_restriction_composes_from_canonical_values():
+def test_native_restriction_composes_from_canonical_values() -> None:
     # Thread follow-up: the native API composes canonical mathematical values
     # directly, without constructing the wire-only request model.
     function = _s3_standard_class_function()
@@ -126,7 +127,7 @@ def test_native_restriction_composes_from_canonical_values():
     assert result.target_class_to_source_class == (0, 1)
 
 
-def test_native_restriction_rejects_forged_class_function():
+def test_native_restriction_rejects_forged_class_function() -> None:
     from jacobian.math.groups.characters._models import ClassAxis
 
     forged = FiniteClassFunction.model_construct(
@@ -142,11 +143,12 @@ def test_native_restriction_rejects_forged_class_function():
     )
 
 
-def test_native_restriction_rejects_malformed_subgroup_without_pydantic_leak():
+def test_native_restriction_rejects_malformed_subgroup_without_pydantic_leak() -> None:
     function = _s3_standard_class_function()
     with pytest.raises(OperationDomainValidationError) as error:
         class_function_restrict_to_subgroup(
-            function, {"degree": 3, "generators": [(1, 0, 2)]}
+            function,
+            cast(PermutationGroup, {"degree": 3, "generators": [(1, 0, 2)]}),
         )
     assert error.value.errors()[0]["type"] == (
         "groups.characters.permutation_group_type"

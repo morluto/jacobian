@@ -1,6 +1,8 @@
 from fractions import Fraction
+from typing import Literal
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -10,7 +12,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import (
-    PARI_STURM_RREF_BASIS_ID,
     modular_form_coordinates_q_expansion,
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
@@ -25,7 +26,10 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormSpace,
 )
 
-_BASIS = "level-one-e4-e6-monomials-v1"
+_BASIS: Literal["level-one-e4-e6-monomials-v1"] = "level-one-e4-e6-monomials-v1"
+PARI_STURM_RREF_BASIS_ID: Literal["gamma0-rational-gamma0-sturm-rref-v1"] = (
+    "gamma0-rational-gamma0-sturm-rref-v1"
+)
 
 
 def _q(value: int | Fraction) -> CanonicalRational:
@@ -49,7 +53,7 @@ def test_coordinate_addition_matches_direct_vector_and_q_expansion_oracles() -> 
 
     assert result.space == left.space
     assert result.basis_id == _BASIS
-    assert tuple(value.as_fraction() for value in result.coordinates) == (
+    assert tuple(rational(value).as_fraction() for value in result.coordinates) == (
         Fraction(1),
         Fraction(1, 3),
     )
@@ -61,7 +65,7 @@ def test_coordinate_addition_matches_direct_vector_and_q_expansion_oracles() -> 
     # and E6^2=(1,-1008,220752) through q^2.
     expansion = modular_form_coordinates_q_expansion(result, 3)
     assert tuple(
-        value.as_fraction() for value in expansion.q_expansion.coefficients
+        rational(value).as_fraction() for value in expansion.q_expansion.coefficients
     ) == (
         Fraction(4, 3),
         Fraction(384),
@@ -74,8 +78,8 @@ def test_coordinate_scalar_multiplication_scales_nonunit_coordinates_once() -> N
 
     result = modular_form_coordinates_scalar_multiply(form, _q(3))
 
-    assert tuple(value.as_fraction() for value in result.coordinates) == (
-        6,
+    assert tuple(rational(value).as_fraction() for value in result.coordinates) == (
+        Fraction(6),
         Fraction(9, 2),
     )
 
@@ -137,10 +141,10 @@ def test_coordinate_addition_composes_for_large_shared_denominator() -> None:
 
     result = modular_form_coordinates_add(left, right)
 
-    assert result.coordinates[0].as_fraction() == Fraction(2, denominator)
-    assert modular_form_coordinates_add(result, left).coordinates[
-        0
-    ].as_fraction() == Fraction(3, denominator)
+    assert rational(result.coordinates[0]).as_fraction() == Fraction(2, denominator)
+    assert rational(
+        modular_form_coordinates_add(result, left).coordinates[0]
+    ).as_fraction() == Fraction(3, denominator)
     assert modular_form_coordinates_q_expansion(result, 1).q_expansion.coefficients[
         0
     ] == _q(Fraction(2, denominator))
@@ -183,7 +187,11 @@ def test_coordinate_addition_supports_pari_sturm_basis() -> None:
 
     result = modular_form_coordinates_add(left, right)
 
-    assert tuple(value.as_fraction() for value in result.coordinates) == (1, 1, 0)
+    assert tuple(rational(value).as_fraction() for value in result.coordinates) == (
+        Fraction(1),
+        Fraction(1),
+        Fraction(0),
+    )
 
 
 def test_coordinate_addition_is_published_with_executable_example() -> None:

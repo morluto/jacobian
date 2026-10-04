@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from fractions import Fraction
+from typing import Literal, Protocol, cast
 
 import pytest
 
@@ -25,16 +27,23 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormFramedCoordinates,
     ModularFormSpace,
 )
+from jacobian.process import ProcessResourceLimits
 
-PARI_BASIS_ID = "gamma0-rational-gamma0-sturm-rref-v1"
+PARI_BASIS_ID: Literal["gamma0-rational-gamma0-sturm-rref-v1"] = (
+    "gamma0-rational-gamma0-sturm-rref-v1"
+)
 
 
-def _space(kind: str, weight: int = 4) -> ModularFormSpace:
-    return ModularFormSpace(level=5, weight=weight, kind=kind)  # type: ignore[arg-type]
+class _BasisWithPari(Protocol):
+    pari_gamma0_rational_basis: Callable[..., tuple[tuple[Fraction, ...], ...]]
 
 
-def _coefficients(vector: object) -> tuple[Fraction, ...]:
-    return tuple(coefficient.as_fraction() for coefficient in vector)  # type: ignore[attr-defined]
+def _space(kind: Literal["M", "S"], weight: int = 4) -> ModularFormSpace:
+    return ModularFormSpace(level=5, weight=weight, kind=kind)
+
+
+def _coefficients(vector: tuple[CanonicalRational, ...]) -> tuple[Fraction, ...]:
+    return tuple(coefficient.as_fraction() for coefficient in vector)
 
 
 def test_gamma0_five_m4_basis_is_exact_sturm_frame_and_composes() -> None:
@@ -224,6 +233,8 @@ def test_basis_worker_retains_a_longer_caller_deadline(
     remaining = captured["timeout_seconds"]
     limits = captured["resource_limits"]
     assert isinstance(remaining, float)
+    assert isinstance(limits, ProcessResourceLimits)
+    assert limits.cpu_seconds is not None
     assert remaining > 30.0
     assert limits.cpu_seconds >= 600
 
@@ -249,6 +260,8 @@ def test_basis_worker_caps_only_without_a_caller_deadline(
     remaining = captured["timeout_seconds"]
     limits = captured["resource_limits"]
     assert isinstance(remaining, float)
+    assert isinstance(limits, ProcessResourceLimits)
+    assert limits.cpu_seconds is not None
     assert remaining <= 30.0
     assert limits.cpu_seconds == 30
 
@@ -294,11 +307,26 @@ def _counting_pari_basis(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     import jacobian.math.number_theory.modular_forms.basis as basis_module
 
     calls: list[object] = []
-    real = basis_module.pari_gamma0_rational_basis
+    real = cast(_BasisWithPari, basis_module).pari_gamma0_rational_basis
 
-    def counting(*args: object, **kwargs: object) -> object:
-        calls.append(args)
-        return real(*args, **kwargs)
+    def counting(
+        space: ModularFormSpace,
+        precision: int,
+        sturm_precision: int,
+        expected_dimension: int,
+        *,
+        admitted_work: int,
+        admitted_rref_digits: int,
+    ) -> tuple[tuple[Fraction, ...], ...]:
+        calls.append((space, precision, sturm_precision, expected_dimension))
+        return real(
+            space,
+            precision,
+            sturm_precision,
+            expected_dimension,
+            admitted_work=admitted_work,
+            admitted_rref_digits=admitted_rref_digits,
+        )
 
     monkeypatch.setattr(basis_module, "pari_gamma0_rational_basis", counting)
     return calls

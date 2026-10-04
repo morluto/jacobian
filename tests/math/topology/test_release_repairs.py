@@ -383,7 +383,7 @@ def test_sheaf_morphism_translates_malformed_scalar_to_owner_error() -> None:
             for source in (("a",), ("b",))
         ),
     )
-    components = (("a", (("bad",),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
+    components: Any = (("a", (("bad",),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
     with pytest.raises(OperationDomainValidationError) as exc_info:
         morphism(sheaf, sheaf, components)
     assert (

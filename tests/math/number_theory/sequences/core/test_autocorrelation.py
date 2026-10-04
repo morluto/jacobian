@@ -40,7 +40,7 @@ from jacobian.math.number_theory.sequences.core.operations import (
 from jacobian.math.number_theory.sequences.core.values import MAX_SEQUENCE_LENGTH
 
 
-def values(result: AutocorrelationResult) -> list[tuple[int, int]]:
+def values(result: AutocorrelationResult) -> list[tuple[int, int | CanonicalRational]]:
     return [(cell.lag, cell.value) for cell in result.cells]
 
 

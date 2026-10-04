@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
     MatroidWeightedIntersectionRankCertificateResult,
+    MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
@@ -26,7 +27,9 @@ from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 from jacobian.math.matrices.finite_fields.linear_algebra import rank as field_rank
 
 
-def weighted_intersection_certificate(request):
+def weighted_intersection_certificate(
+    request: MatroidWeightedIntersectionCertificateRequest,
+) -> MatroidWeightedIntersectionResult:
     return _weighted_intersection_certificate(
         request.first,
         request.second,

@@ -1,5 +1,6 @@
 """Real exact behavior for direct sums of rational quadratic forms."""
 
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -33,7 +34,9 @@ def _r(value: int) -> CanonicalRational:
 
 
 def _form(
-    axis: tuple[str, ...], diagonal: tuple[int, ...], cross=()
+    axis: tuple[str, ...],
+    diagonal: tuple[int, ...],
+    cross: Sequence[tuple[int, int, int]] = (),
 ) -> RationalQuadraticForm:
     return RationalQuadraticForm(
         axis=axis,

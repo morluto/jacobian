@@ -17,7 +17,9 @@ from jacobian.math.function_fields.operations import (
 )
 
 
-def _rf(numerator: tuple[int, ...], denominator: tuple[int, ...] = (1,)):
+def _rf(
+    numerator: tuple[int, ...], denominator: tuple[int, ...] = (1,)
+) -> PrimeFieldRationalFunction:
     return PrimeFieldRationalFunction(
         numerator=PrimeFieldPolynomial(characteristic=5, coefficients=numerator),
         denominator=PrimeFieldPolynomial(characteristic=5, coefficients=denominator),
@@ -44,7 +46,19 @@ def _place(field: FiniteFunctionField | None = None) -> HyperellipticInfinityPla
     )
 
 
-def _element(c0: tuple[int, ...], c1: tuple[int, ...] = (0,), den0=(1,), den1=(1,)):
+def _finite_value(
+    valuation: FunctionFieldFiniteValuation | FunctionFieldPositiveInfinityValuation,
+) -> int:
+    assert isinstance(valuation, FunctionFieldFiniteValuation)
+    return valuation.value
+
+
+def _element(
+    c0: tuple[int, ...],
+    c1: tuple[int, ...] = (0,),
+    den0: tuple[int, ...] = (1,),
+    den1: tuple[int, ...] = (1,),
+) -> FiniteFunctionFieldElement:
     field = _field()
     return FiniteFunctionFieldElement(
         field=field,
@@ -62,7 +76,9 @@ def _element(c0: tuple[int, ...], c1: tuple[int, ...] = (0,), den0=(1,), den1=(1
         (_element((0, 1), (1,)), -3),
     ],
 )
-def test_odd_degree_infinity_valuations(element, expected):
+def test_odd_degree_infinity_valuations(
+    element: FiniteFunctionFieldElement, expected: int
+) -> None:
     result = function_field_hyperelliptic_infinity_valuation(_place(), element)
     assert isinstance(result.valuation, FunctionFieldFiniteValuation)
     assert result.valuation.value == expected
@@ -70,7 +86,9 @@ def test_odd_degree_infinity_valuations(element, expected):
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_zero_has_structural_infinite_valuation_and_degree_five_uses_its_degree():
+def test_zero_has_structural_infinite_valuation_and_degree_five_uses_its_degree() -> (
+    None
+):
     zero = function_field_hyperelliptic_infinity_valuation(_place(), _element((0,)))
     assert isinstance(zero.valuation, FunctionFieldPositiveInfinityValuation)
     assert zero.valuation.model_dump() == {"kind": "POSITIVE_INFINITY"}
@@ -81,18 +99,18 @@ def test_zero_has_structural_infinite_valuation_and_degree_five_uses_its_degree(
     assert value.valuation == FunctionFieldFiniteValuation(kind="FINITE", value=-5)
 
 
-def test_valuation_is_multiplicative():
+def test_valuation_is_multiplicative() -> None:
     y = _element((0,), (1,))
     square = function_field_element_multiply(y, y).product
     assert (
-        function_field_hyperelliptic_infinity_valuation(
-            _place(), square
-        ).valuation.value
+        _finite_value(
+            function_field_hyperelliptic_infinity_valuation(_place(), square).valuation
+        )
         == -6
     )
 
 
-def test_even_degree_models_are_not_misrepresented_as_one_rational_place():
+def test_even_degree_models_are_not_misrepresented_as_one_rational_place() -> None:
     even_degree = _field((1, 0, 1, 0, 1))
     element = FiniteFunctionFieldElement(
         field=even_degree, coordinates=(_rf((1,)), _rf((0,)))
@@ -104,7 +122,7 @@ def test_even_degree_models_are_not_misrepresented_as_one_rational_place():
     )
 
 
-def test_valuation_canonicalizes_equivalent_unreduced_parent_spellings():
+def test_valuation_canonicalizes_equivalent_unreduced_parent_spellings() -> None:
     canonical = _field()
     equivalent = FiniteFunctionField(
         characteristic=5,

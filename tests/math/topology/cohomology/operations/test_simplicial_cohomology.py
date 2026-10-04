@@ -1,9 +1,11 @@
 """Tests for prime-field simplicial cohomology with exact bases."""
 
+from collections.abc import Sequence
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.topology._models import HomologyConvention
+from jacobian.math.topology._models import FiniteSimplicialComplex, HomologyConvention
 from jacobian.math.topology.cohomology.operations._simplicial import (
     SimplicialCohomologyRequest,
     SimplicialCohomologyResult,
@@ -13,8 +15,12 @@ from jacobian.math.topology.cohomology.operations._tools import TOOLS
 from jacobian.math.topology.operations import canonicalize
 
 
-def _complex(vertices, facets):
-    return canonicalize(tuple(vertices), tuple(facets)).complex
+def _complex(
+    vertices: Sequence[str], facets: Sequence[Sequence[str]]
+) -> FiniteSimplicialComplex:
+    return canonicalize(
+        tuple(vertices), tuple(tuple(facet) for facet in facets)
+    ).complex
 
 
 _CIRCLE = _complex(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
@@ -26,7 +32,7 @@ _SPHERE = _complex(
 )
 
 
-def _torus():
+def _torus() -> FiniteSimplicialComplex:
     verts = [f"v{i}{j}" for i in range(3) for j in range(3)]
     facets = []
     for i in range(3):
@@ -40,7 +46,7 @@ def _torus():
     return _complex(verts, facets)
 
 
-def _wedge():
+def _wedge() -> FiniteSimplicialComplex:
     return _complex(
         ["w", "a", "b", "c", "d", "p", "q", "r"],
         [
@@ -58,7 +64,7 @@ def _wedge():
     )
 
 
-def _bettis(result):
+def _bettis(result: SimplicialCohomologyResult) -> tuple[int, ...]:
     return tuple(group.betti_number for group in result.groups)
 
 

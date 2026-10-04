@@ -8,6 +8,7 @@ from jacobian.math.koszul._tools import TOOLS
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
+    ModuleKoszulComplex,
     ModuleKoszulHomologyRequest,
     ModuleKoszulRequest,
 )
@@ -21,7 +22,9 @@ def q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _complex(sequence):
+def _complex(
+    sequence: tuple[tuple[CanonicalRational, ...], ...],
+) -> ModuleKoszulComplex:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
     )
@@ -31,7 +34,7 @@ def _complex(sequence):
     )
 
 
-def test_unit_sequence_is_acyclic_above_degree_zero():
+def test_unit_sequence_is_acyclic_above_degree_zero() -> None:
     result = module_koszul_exactness_profile(
         ModuleKoszulHomologyRequest(complex=_complex(((q(1),),)))
     )
@@ -41,7 +44,7 @@ def test_unit_sequence_is_acyclic_above_degree_zero():
     assert result.first_nonzero_class is None
 
 
-def test_zero_sequence_returns_first_higher_homology_class():
+def test_zero_sequence_returns_first_higher_homology_class() -> None:
     result = module_koszul_exactness_profile(
         ModuleKoszulHomologyRequest(complex=_complex(((q(0),),)))
     )
@@ -51,7 +54,7 @@ def test_zero_sequence_returns_first_higher_homology_class():
     assert result.first_nonzero_class == (q(1),)
 
 
-def test_empty_sequence_has_no_positive_degree_and_does_not_require_h0_vanish():
+def test_empty_sequence_has_no_positive_degree_and_does_not_require_h0_vanish() -> None:
     result = module_koszul_exactness_profile(
         ModuleKoszulHomologyRequest(complex=_complex(()))
     )
@@ -59,7 +62,7 @@ def test_empty_sequence_has_no_positive_degree_and_does_not_require_h0_vanish():
     assert result.acyclic_above_zero
 
 
-def test_published_exactness_profile_example_runs():
+def test_published_exactness_profile_example_runs() -> None:
     tool = next(
         tool
         for tool in TOOLS

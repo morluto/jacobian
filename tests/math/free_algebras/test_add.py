@@ -126,10 +126,10 @@ def test_zero_and_empty_alphabet_keep_their_parent() -> None:
 
 
 def test_addition_accepts_canonical_product_support_and_word_lengths() -> None:
-    alphabet = ("x",)
+    unary_alphabet = ("x",)
     long_word = ("x",) * 64
-    left = _polynomial(alphabet, {long_word: 1})
-    zero = _polynomial(alphabet, {})
+    left = _polynomial(unary_alphabet, {long_word: 1})
+    zero = _polynomial(unary_alphabet, {})
     assert add(left, zero) == left
 
     support = tuple(("x",) * degree + ("y",) for degree in range(64))
@@ -188,10 +188,10 @@ def test_coefficient_growth_is_admitted_before_aggregation(
 
 def test_serialized_sum_composes_unchanged_with_multiplication_and_catalog() -> None:
     tool = next(command for command in TOOLS if command.operation_id == OPERATION_ID)
-    request = tool.request_type.model_validate_json(
+    assert tool.request_type is FreeAlgebraPolynomialAddRequest
+    request = FreeAlgebraPolynomialAddRequest.model_validate_json(
         encode_strict_json(tool.examples[0].input), strict=True
     )
-    assert isinstance(request, FreeAlgebraPolynomialAddRequest)
     native = add(request.left, request.right)
     public = tool.run(request)
     assert public == native

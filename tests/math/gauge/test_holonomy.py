@@ -150,8 +150,8 @@ class TestBoundary:
             for example in tool.examples
             if example.name == "trivial_group_identity_path"
         )
-        request = tool.request_type.model_validate(example.input)
-
+        assert tool.request_type is HolonomyRequest
+        request = HolonomyRequest.model_validate(example.input)
         result = tool.run(request)
 
         assert tuple(result.holonomy.image) == (0,)
@@ -263,7 +263,9 @@ class TestNativeVsCatalogParity:
             for tool in TOOLS
             if tool.operation_id == "lattice_gauge.holonomy.compute"
         )
-        assert tool.run(request) == path_holonomy(
+        assert tool.request_type is HolonomyRequest
+        catalog_result = tool.run(request)
+        assert catalog_result == path_holonomy(
             _triangle_field(), _path(("ab", True), ("bc", True), ("ca", True))
         )
 

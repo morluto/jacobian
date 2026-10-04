@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -23,11 +25,11 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementMultiplyRequest,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
+    _to_internal_rational_function,
 )
 from jacobian.math.function_fields._tools import TOOLS
 from jacobian.math.function_fields.operations import (
     _element_inverse,
-    _to_internal_rational_function,
     function_field_element_multiply,
 )
 
@@ -227,14 +229,14 @@ class TestIndependentBackendCrossCheck:
         defining_numerators: tuple[tuple[int, ...], ...],
         left_numerators: tuple[tuple[int, ...], ...],
         right_numerators: tuple[tuple[int, ...], ...],
-    ) -> list:
+    ) -> list[Any]:
         from sympy import GF, Poly, symbols
         from sympy.polys.fields import FractionField
 
         x_symbol, y_symbol = symbols("x y")
         fraction_field = FractionField(GF(prime), [x_symbol])
 
-        def as_poly(numerators: tuple[tuple[int, ...], ...]):
+        def as_poly(numerators: tuple[tuple[int, ...], ...]) -> Any:
             return Poly(
                 sum(
                     _poly_expression(coefficient, x_symbol) * y_symbol**power
@@ -250,19 +252,19 @@ class TestIndependentBackendCrossCheck:
             y_symbol,
             domain=fraction_field,
         )
-        return product.rem(defining).all_coeffs()
+        return cast(list[Any], product.rem(defining).all_coeffs())
 
     @staticmethod
     def _coordinates_descending(
         element: FiniteFunctionFieldElement,
-    ) -> list:
+    ) -> list[Any]:
         from sympy import GF, symbols
         from sympy.polys.fields import FractionField
 
         x_symbol = symbols("x")
         fraction_field = FractionField(GF(element.field.characteristic), [x_symbol])
 
-        def convert(coordinate: PrimeFieldRationalFunction):
+        def convert(coordinate: PrimeFieldRationalFunction) -> Any:
             numerator = fraction_field(
                 _poly_expression(coordinate.numerator.coefficients, x_symbol)
             )
@@ -315,7 +317,7 @@ class TestIndependentBackendCrossCheck:
             for coefficient in GF3_FALLBACK_FIELD.defining_polynomial
         )
         terms = _primitive_polynomial_terms(kpoly, 3)
-        context = nmod_mpoly_ctx.get(("x", "y"), 3, "lex")
+        context = nmod_mpoly_ctx.get(("x", "y"), modulus=3)
         source = context.from_dict(terms)
         unit, factors = source.factor()
         reconstructed = context.constant(unit)
@@ -324,7 +326,7 @@ class TestIndependentBackendCrossCheck:
         assert reconstructed == source
 
 
-def _poly_expression(coefficients: tuple[int, ...], x_symbol) -> object:
+def _poly_expression(coefficients: tuple[int, ...], x_symbol: Any) -> Any:
     if coefficients == ():
         return 0
     return sum(
@@ -387,7 +389,7 @@ class TestBoundariesAndAdversarial:
 
         original_import = builtins.__import__
 
-        def deny_flint(name, *args, **kwargs):
+        def deny_flint(name: str, *args: Any, **kwargs: Any) -> Any:
             if name == "flint":
                 raise ImportError("test backend unavailable")
             return original_import(name, *args, **kwargs)
@@ -404,17 +406,17 @@ class TestBoundariesAndAdversarial:
         from types import SimpleNamespace
 
         class FakeSource:
-            def factor(self):
+            def factor(self) -> tuple[int, list[Any]]:
                 return 1, []
 
-            def __eq__(self, _other):
+            def __eq__(self, _other: object) -> bool:
                 return False
 
         class FakeContext:
-            def from_dict(self, _terms):
+            def from_dict(self, _terms: Any) -> FakeSource:
                 return FakeSource()
 
-            def constant(self, value):
+            def constant(self, value: Any) -> Any:
                 return value
 
         fake_flint = SimpleNamespace(

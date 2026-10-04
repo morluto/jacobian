@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import lcm
+from typing import Any
 
 import pytest
 from sympy import I, Rational, exp, pi, to_number_field
@@ -16,7 +17,7 @@ from jacobian.math.number_theory.characters.operations import (
 )
 
 
-def _direct_root_sum(modulus: int, coordinates: tuple[int, ...]):
+def _direct_root_sum(modulus: int, coordinates: tuple[int, ...]) -> tuple[int, Any]:
     if modulus == 3 and coordinates == (0,):
         value_order, values = 1, {1: 1, 2: 1}
     elif modulus == 5 and coordinates == (2,):
@@ -37,7 +38,9 @@ def _direct_root_sum(modulus: int, coordinates: tuple[int, ...]):
     ((3, (0,)), (5, (2,)), (5, (1,))),
     ids=("principal", "quadratic", "nonreal-quartic"),
 )
-def test_gauss_sum_matches_independent_exact_root_of_unity_sum(modulus, coordinates):
+def test_gauss_sum_matches_independent_exact_root_of_unity_sum(
+    modulus: int, coordinates: tuple[int, ...]
+) -> None:
     character = dirichlet_character(character_group(modulus), coordinates)
     result = dirichlet_character_gauss_sum(character)
     field_order, direct_sum = _direct_root_sum(modulus, coordinates)
@@ -58,7 +61,7 @@ def test_gauss_sum_matches_independent_exact_root_of_unity_sum(modulus, coordina
     assert to_number_field(represented - direct_sum, zeta).as_expr() == 0
 
 
-def test_gauss_sum_admits_target_field_order_before_construction():
+def test_gauss_sum_admits_target_field_order_before_construction() -> None:
     character = dirichlet_character(character_group(257), (0,))
     with pytest.raises(OperationResourceAdmissionError) as error:
         dirichlet_character_gauss_sum(character)

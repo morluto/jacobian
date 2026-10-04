@@ -57,6 +57,7 @@ def test_found_sequence_replays_to_the_bound_target() -> None:
     assert result.status == "REACHABLE"
     assert result.net == net
     assert result.initial_marking == initial
+    assert result.target_marking is not None
     assert result.target_marking == target
     assert result.sequence is not None
     replay = replay_firing_sequence(net, initial, result.sequence.transitions)
@@ -87,6 +88,7 @@ def test_small_exhaustive_queries_match_independent_firing_closure() -> None:
                     net, Marking(tokens=source), result.sequence.transitions
                 )
                 assert replay.status == "FIRES"
+                assert replay.final_marking is not None
                 assert replay.final_marking.tokens == target
             else:
                 assert result.sequence is None

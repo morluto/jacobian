@@ -1,5 +1,6 @@
 import json
 from fractions import Fraction
+from typing import Any
 
 import pytest
 import sympy as sp
@@ -11,13 +12,17 @@ from jacobian.catalog.models import (
 from jacobian.math.ore_algebras.operations import (
     differential_operator_to_coefficient_recurrence,
 )
+from jacobian.math.ore_algebras.recurrence_to_ogf._models import (
+    RecurrenceOGFEquation,
+)
 from jacobian.math.ore_algebras.recurrence_to_ogf._tools import TOOLS
 from jacobian.math.ore_algebras.recurrence_to_ogf.operations import (
     polynomial_recurrence_to_ogf_equation,
 )
+from jacobian.math.polynomials.values import RationalFunction
 
 
-def _rf(terms: list[tuple[int, int]], variable: str = "n") -> dict:
+def _rf(terms: list[tuple[int, int]], variable: str = "n") -> dict[str, Any]:
     return {
         "domain": "QQ",
         "variables": [variable],
@@ -34,7 +39,7 @@ def _rf(terms: list[tuple[int, int]], variable: str = "n") -> dict:
     }
 
 
-def _recurrence(*terms: tuple[int, list[tuple[int, int]]]) -> dict:
+def _recurrence(*terms: tuple[int, list[tuple[int, int]]]) -> dict[str, Any]:
     return {
         "variable": "n",
         "terms": [
@@ -44,21 +49,23 @@ def _recurrence(*terms: tuple[int, list[tuple[int, int]]]) -> dict:
     }
 
 
-def _polynomial(coefficient) -> dict[int, Fraction]:
+def _polynomial(coefficient: RationalFunction) -> dict[int, Fraction]:
     return {
         term.exponents[0]: term.coefficient.as_fraction()
         for term in coefficient.numerator.terms
     }
 
 
-def _as_sympy_polynomial(coefficient, variable):
+def _as_sympy_polynomial(coefficient: RationalFunction, variable: sp.Symbol) -> sp.Expr:
     return sum(
         sp.Rational(value.numerator, value.denominator) * variable**degree
         for degree, value in _polynomial(coefficient).items()
     )
 
 
-def _assert_equation_matches_exact_ogf(result, generating_function) -> None:
+def _assert_equation_matches_exact_ogf(
+    result: RecurrenceOGFEquation, generating_function: sp.Expr
+) -> None:
     x = sp.Symbol("x")
     left = sum(
         _as_sympy_polynomial(term.coefficient, x)

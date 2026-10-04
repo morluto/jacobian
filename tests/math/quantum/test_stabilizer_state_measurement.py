@@ -9,6 +9,7 @@ from jacobian.math.quantum._models import (
     ExactStabilizerGroup,
     PhaseFreeQubitPauli,
     QubitRegister,
+    StabilizerCodeValue,
     StabilizerStatePauliMeasurementRequest,
     StabilizerStatePauliMeasurementResult,
 )
@@ -31,7 +32,7 @@ def _pauli(
     )
 
 
-def _state(*generators: ExactQubitPauli):
+def _state(*generators: ExactQubitPauli) -> StabilizerCodeValue:
     register = generators[0].register
     return stabilizer_code_compute(
         ExactStabilizerGroup(register=register, generators=generators),
@@ -56,7 +57,7 @@ def _pauli_matrix(pauli: ExactQubitPauli) -> sp.Matrix:
     return matrix
 
 
-def _state_projector(state) -> sp.Matrix:
+def _state_projector(state: StabilizerCodeValue) -> sp.Matrix:
     n = len(state.group.register.qubit_ids)
     identity = sp.eye(1 << n)
     projector = identity
@@ -65,7 +66,9 @@ def _state_projector(state) -> sp.Matrix:
     return projector
 
 
-def _assert_branch_projectors(result, source_state) -> None:
+def _assert_branch_projectors(
+    result: StabilizerStatePauliMeasurementResult, source_state: StabilizerCodeValue
+) -> None:
     source_projector = _state_projector(source_state)
     observable_matrix = _pauli_matrix(result.observable)
     for branch in (result.positive_branch, result.negative_branch):

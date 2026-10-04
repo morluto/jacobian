@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -66,11 +67,14 @@ def _wire_payload(
     source: FiniteRelationalStructure,
     target: FiniteRelationalStructure,
     carrier_map: tuple[int, ...],
-) -> dict:
-    return json.loads(
-        HomomorphismCheckRequest(
-            source=source, target=target, carrier_map=carrier_map
-        ).model_dump_json()
+) -> dict[str, Any]:
+    return cast(
+        dict[str, Any],
+        json.loads(
+            HomomorphismCheckRequest(
+                source=source, target=target, carrier_map=carrier_map
+            ).model_dump_json()
+        ),
     )
 
 
@@ -180,7 +184,7 @@ def test_duplicate_rows_normalize_once_and_order_is_transport() -> None:
     shuffled = FiniteRelationalStructure(
         carrier_size=2,
         signature=_EDGE,
-        relation_tables=[((1, 0), (0, 1), (1, 0), (0, 1))],
+        relation_tables=(((1, 0), (0, 1), (1, 0), (0, 1)),),
     )
     canonical = _structure(2, _EDGE, (((0, 1), (1, 0)),))
     assert shuffled == canonical

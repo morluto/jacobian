@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -55,15 +57,19 @@ def test_goeritz_signature_matches_independent_seifert_form(
 ) -> None:
     diagram = _braid(2 if len(letters) == 3 else 3, letters)
     result = link_signature(diagram)
-    symmetric_seifert_form = tuple(
+    symmetric_seifert_form = cast(
+        tuple[tuple[int, int], tuple[int, int]],
         tuple(
-            seifert_matrix[row][column] + seifert_matrix[column][row]
-            for column in range(2)
-        )
-        for row in range(2)
+            tuple(
+                seifert_matrix[row][column] + seifert_matrix[column][row]
+                for column in range(2)
+            )
+            for row in range(2)
+        ),
     )
 
     assert result.signature == _two_by_two_signature(symmetric_seifert_form)
+    assert result.goeritz_data is not None
     assert result.goeritz_data.blackboard_graph.diagram == diagram
     assert (
         result.goeritz_inertia.matrix.row_count
@@ -122,6 +128,7 @@ def test_reidemeister_one_curl_uses_zero_dimensional_goeritz_inertia() -> None:
     curl = _braid(2, (1,))
     result = link_signature(curl)
 
+    assert result.goeritz_data is not None
     assert result.goeritz_data.reduced_matrix.entries == ()
     assert result.goeritz_inertia.n_positive == 0
     assert result.goeritz_inertia.n_negative == 0

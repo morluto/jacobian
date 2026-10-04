@@ -38,8 +38,11 @@ OPERATION_IDS = {tool.operation_id for tool in TOOLS}
 
 def q(*coordinates: Fraction) -> RationalUnitQuaternion:
     return RationalUnitQuaternion(
-        coordinates=tuple(
-            CanonicalRational.from_fraction(value) for value in coordinates
+        coordinates=(
+            CanonicalRational.from_fraction(coordinates[0]),
+            CanonicalRational.from_fraction(coordinates[1]),
+            CanonicalRational.from_fraction(coordinates[2]),
+            CanonicalRational.from_fraction(coordinates[3]),
         )
     )
 
@@ -114,7 +117,7 @@ def _forward_path() -> OrientedGaugePath:
 def expected_loop_product(
     links: tuple[tuple[Fraction, ...], ...],
 ) -> tuple[Fraction, ...]:
-    product = (Fraction(1), Fraction(0), Fraction(0), Fraction(0))
+    product: tuple[Fraction, ...] = (Fraction(1), Fraction(0), Fraction(0), Fraction(0))
     for link in links:
         product = exact_product(product, link)
     return product

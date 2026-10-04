@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from itertools import product
 from math import gcd
+from typing import Literal, NoReturn
 
 import pytest
 from pydantic import TypeAdapter
+from tests.math.number_theory.modular_forms._typing import basis_id as typed_basis_id
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -18,6 +21,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_coordinates_equal,
 )
@@ -36,7 +40,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 _FIELD = RationalCyclotomicField(order=6)
 
 
-def _inflated_character(level: int, coordinate: int = 4):
+def _inflated_character(level: int, coordinate: int = 4) -> DirichletCharacter:
     source = dirichlet_character(character_group(13), (coordinate,))
     target_group = character_group(level)
     for coordinates in product(
@@ -53,7 +57,7 @@ def _inflated_character(level: int, coordinate: int = 4):
     raise AssertionError("exact character inflation fixture was not found")
 
 
-def _space(level: int = 13, kind: str = "M") -> ModularFormSpace:
+def _space(level: int = 13, kind: Literal["M", "S"] = "M") -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
         weight=2,
@@ -67,16 +71,18 @@ def _element(constant: int, zeta: int = 0) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": constant, "den": 1},
-            {"num": zeta, "den": 1},
+            CanonicalRational(num=constant, den=1),
+            CanonicalRational(num=zeta, den=1),
         ),
     )
 
 
-def _form(space: ModularFormSpace, *coordinates: RationalCyclotomicElement):
+def _form(
+    space: ModularFormSpace, *coordinates: RationalCyclotomicElement
+) -> ModularFormCoordinates:
     return ModularFormCoordinates(
         space=space,
-        basis_id=CHARACTER_RREF_BASIS_ID,
+        basis_id=typed_basis_id(CHARACTER_RREF_BASIS_ID),
         coordinates=coordinates,
     )
 
@@ -132,11 +138,13 @@ def test_inflated_multidimensional_coordinates_keep_the_exact_parent() -> None:
     assert error.value.errors()[0]["type"] == "modular_form.equality_parent_unsupported"
 
 
-def test_character_coordinate_equality_does_not_replay_the_basis(monkeypatch) -> None:
+def test_character_coordinate_equality_does_not_replay_the_basis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     space = _space()
     form = _form(space, _element(1), _element(0))
 
-    def backend_must_not_run(*args, **kwargs):
+    def backend_must_not_run(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("coordinate equality must not replay basis mathematics")
 
     from jacobian.math.number_theory.modular_forms import character_basis
@@ -158,8 +166,8 @@ def test_character_coordinates_reject_wrong_canonical_basis_and_parent() -> None
     foreign_field_value = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=3),
         coefficients_ascending=(
-            {"num": 1, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
     forged = ModularFormCoordinates.model_construct(
@@ -179,9 +187,10 @@ def test_character_coordinates_reject_wrong_canonical_basis_and_parent() -> None
 
 
 def test_oversized_character_claim_is_rejected_before_group_reconstruction(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     space = _space()
+    assert isinstance(space.character, DirichletCharacter)
     character = type(space.character).model_construct(
         group=space.character.group,
         coordinates=(0,) * 33,
@@ -202,7 +211,7 @@ def test_oversized_character_claim_is_rejected_before_group_reconstruction(
 
     from jacobian.math.number_theory.modular_forms import character_coordinates
 
-    def reconstruction_must_not_run(*args, **kwargs):
+    def reconstruction_must_not_run(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("oversized caller data reached group reconstruction")
 
     monkeypatch.setattr(

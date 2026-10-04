@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from fractions import Fraction
 
 import pytest
@@ -17,6 +18,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PieceAssignment,
     PiecewisePolynomialAdditionRequest,
     PiecewisePolynomialResult,
+    PolytopalComplexClosureResult,
 )
 from jacobian.math.geometry.polytopes.complexes._spline import (
     piecewise_polynomial_add,
@@ -40,14 +42,14 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
         vertices=tuple(
             RationalPolytopeVertex(
                 vertex_id=f"{prefix}{i}",
-                coordinates=({"num": point, "den": 1},),
+                coordinates=(CanonicalRational(num=point, den=1),),
             )
             for i, point in enumerate((left, right))
         ),
     )
 
 
-def _poly(coefficients: dict[tuple[int, ...], int]) -> RationalPolynomial:
+def _poly(coefficients: Mapping[tuple[int, ...], int]) -> RationalPolynomial:
     return RationalPolynomial(
         variables=("x",),
         polynomial=SparseRationalPolynomial(
@@ -63,11 +65,14 @@ def _poly(coefficients: dict[tuple[int, ...], int]) -> RationalPolynomial:
     )
 
 
-def _complex():
+def _complex() -> PolytopalComplexClosureResult:
     return polytopal_complex_closure((_interval(0, 1, "a"), _interval(1, 2, "b")))
 
 
-def _function(complex_value, coefficients: dict[tuple[int, ...], int]):
+def _function(
+    complex_value: PolytopalComplexClosureResult,
+    coefficients: Mapping[tuple[int, ...], int],
+) -> PiecewisePolynomialResult:
     pieces = tuple(
         PieceAssignment(cell_id=cell.cell_id, polynomial=_poly(coefficients))
         for cell in complex_value.maximal_cells
@@ -75,7 +80,9 @@ def _function(complex_value, coefficients: dict[tuple[int, ...], int]):
     return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
 
 
-def test_addition_matches_independent_coefficient_oracle_and_composes_at_shared_point():
+def test_addition_matches_independent_coefficient_oracle_and_composes_at_shared_point() -> (
+    None
+):
     complex_value = _complex()
     left = _function(complex_value, {(1,): 1})
     right = _function(complex_value, {(2,): 1, (0,): 1})
@@ -106,7 +113,7 @@ def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fr
     }
 
 
-def test_addition_rejects_different_complex_values_even_when_support_matches():
+def test_addition_rejects_different_complex_values_even_when_support_matches() -> None:
     left_complex = polytopal_complex_closure((_interval(0, 2, "a"),))
     right_complex = _complex()
     left = _function(left_complex, {(0,): 1})
@@ -119,7 +126,7 @@ def test_addition_rejects_different_complex_values_even_when_support_matches():
     assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_complex"
 
 
-def test_addition_rejects_a_claimed_piecewise_function_that_is_discontinuous():
+def test_addition_rejects_a_claimed_piecewise_function_that_is_discontinuous() -> None:
     complex_value = _complex()
     pieces = tuple(
         PieceAssignment(
@@ -138,7 +145,7 @@ def test_addition_rejects_a_claimed_piecewise_function_that_is_discontinuous():
     assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_continuity"
 
 
-def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
+def test_addition_preflights_union_term_count_before_coefficient_arithmetic() -> None:
     complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
     left_terms = tuple(
         RationalPolynomialTerm(
@@ -153,7 +160,7 @@ def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
         for exponent in range(2 * MAX_POLYNOMIAL_TERMS - 1, 0, -2)
     )
 
-    def value(terms):
+    def value(terms: tuple[RationalPolynomialTerm, ...]) -> PiecewisePolynomialResult:
         return PiecewisePolynomialResult(
             complex=complex_value,
             pieces=(
@@ -178,11 +185,13 @@ def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
     assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_terms"
 
 
-def test_addition_admits_result_support_after_exact_cancellation():
+def test_addition_admits_result_support_after_exact_cancellation() -> None:
     complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
     shared_terms = 3_000
-    left_terms = {(exponent,): 1 for exponent in range(MAX_POLYNOMIAL_TERMS)}
-    right_terms = {
+    left_terms: dict[tuple[int, ...], int] = {
+        (exponent,): 1 for exponent in range(MAX_POLYNOMIAL_TERMS)
+    }
+    right_terms: dict[tuple[int, ...], int] = {
         **{(exponent,): -1 for exponent in range(shared_terms)},
         **{
             (exponent,): 1
@@ -201,7 +210,9 @@ def test_addition_admits_result_support_after_exact_cancellation():
     assert len(output_terms) == 2 * (MAX_POLYNOMIAL_TERMS - shared_terms)
 
 
-def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound():
+def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound() -> (
+    None
+):
     modulus = 10**20_000 + 3
 
     def constant(numerator: int) -> PiecewisePolynomialResult:
@@ -234,7 +245,7 @@ def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound(
     assert all(_coefficient_map(piece.polynomial) == {} for piece in result.pieces)
 
 
-def test_native_addition_rejects_a_forged_request_with_a_typed_error():
+def test_native_addition_rejects_a_forged_request_with_a_typed_error() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         piecewise_polynomial_add(PiecewisePolynomialAdditionRequest.model_construct())
     assert exc_info.value.errors()[0]["type"] == "polytopal_complex.addition_type"

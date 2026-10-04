@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from itertools import product
 
 import pytest
@@ -11,11 +12,11 @@ from jacobian.math.affine_semigroups.graver import graver_basis, markov_basis
 from jacobian.math.matrices.values import IntegerMatrix
 
 
-def _matrix(entries):
+def _matrix(entries: Iterable[int]) -> IntegerMatrix:
     return IntegerMatrix.model_validate({"entries": [list(entries)]})
 
 
-def test_known_partition_identity_graver_basis():
+def test_known_partition_identity_graver_basis() -> None:
     result = graver_basis(_matrix((1, 2, 3)))
     assert result.vectors == (
         (0, 3, -2),
@@ -30,7 +31,7 @@ def test_known_partition_identity_graver_basis():
     )
 
 
-def test_zero_and_unit_coefficients_have_complete_moves():
+def test_zero_and_unit_coefficients_have_complete_moves() -> None:
     assert graver_basis(_matrix((0, 0, 1))).vectors == (
         (0, 1, 0),
         (1, 0, 0),
@@ -42,13 +43,13 @@ def test_zero_and_unit_coefficients_have_complete_moves():
     )
 
 
-def test_basis_is_covariant_under_row_sign_and_scale():
+def test_basis_is_covariant_under_row_sign_and_scale() -> None:
     expected = graver_basis(_matrix((2, -3, 5))).vectors
     assert graver_basis(_matrix((-2, 3, -5))).vectors == expected
     assert graver_basis(_matrix((4, -6, 10))).vectors == expected
 
 
-def test_small_matrices_against_independent_finite_conformal_check():
+def test_small_matrices_against_independent_finite_conformal_check() -> None:
     for entries in product((-1, 0, 1), repeat=3):
         actual = graver_basis(_matrix(entries)).vectors
         bound = 2
@@ -58,7 +59,7 @@ def test_small_matrices_against_independent_finite_conformal_check():
             if any(vector)
             and sum(a * z for a, z in zip(entries, vector, strict=True)) == 0
         ]
-        minimal = []
+        minimal: list[tuple[int, ...]] = []
         for vector in sorted(
             complete_kernel, key=lambda item: (sum(map(abs, item)), item)
         ):
@@ -88,7 +89,7 @@ def test_small_matrices_against_independent_finite_conformal_check():
         assert actual == expected
 
 
-def test_exact_work_envelope_rejects_before_enumeration():
+def test_exact_work_envelope_rejects_before_enumeration() -> None:
     # The kernel-aware presolve charges the same work envelope before any
     # candidate pair is enumerated, so it is the boundary that rejects.
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
@@ -96,7 +97,9 @@ def test_exact_work_envelope_rejects_before_enumeration():
     assert exc_info.value.errors()[0]["type"] == "affine_semigroup.graver_work"
 
 
-def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix():
+def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix() -> (
+    None
+):
     configuration = IntegerMatrix.model_validate({"entries": [[1, 1, 1], [0, 1, 2]]})
     result = graver_basis(configuration)
     assert result.vectors == ((1, -2, 1),)
@@ -144,14 +147,14 @@ def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix
     assert markov_basis(configuration).moves == result.vectors
 
 
-def test_full_column_rank_configuration_has_empty_graver_basis():
+def test_full_column_rank_configuration_has_empty_graver_basis() -> None:
     configuration = IntegerMatrix.model_validate(
         {"entries": [[1, 0, 2], [0, 1, 3], [1, 1, 0]]}
     )
     assert graver_basis(configuration).vectors == ()
 
 
-def test_multirow_kernel_with_nullity_above_one_is_rejected_without_search():
+def test_multirow_kernel_with_nullity_above_one_is_rejected_without_search() -> None:
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graver_basis(
             IntegerMatrix.model_validate({"entries": [[1, 0, 1, 0], [0, 1, 0, 1]]})
@@ -162,7 +165,7 @@ def test_multirow_kernel_with_nullity_above_one_is_rejected_without_search():
 def test_forged_native_matrix_is_refused_before_enumeration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_if_called(*_args, **_kwargs):
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("enumeration ran before configuration admission")
 
     monkeypatch.setattr(graver_module, "_enumerate_graver_vectors", fail_if_called)

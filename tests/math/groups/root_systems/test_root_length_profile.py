@@ -31,11 +31,11 @@ def test_b2_root_classes_match_independent_euclidean_realization() -> None:
     assert observed == {root: _b2_length(root) for root in roots}
     assert tuple(
         group.squared_length.as_fraction() for group in component.length_classes
-    ) == (2, 4)
+    ) == (Fraction(2), Fraction(4))
     assert tuple(
         group.squared_length_ratio_to_short.as_fraction()
         for group in component.length_classes
-    ) == (1, 2)
+    ) == (Fraction(1), Fraction(2))
     assert result.positive_roots == roots
     assert (
         RootLengthProfileResult.model_validate_json(result.model_dump_json()) == result
@@ -62,7 +62,7 @@ def test_reducible_factors_keep_length_ratios_local() -> None:
     assert tuple(
         group.squared_length_ratio_to_short.as_fraction()
         for group in result.components[1].length_classes
-    ) == (1, 2)
+    ) == (Fraction(1), Fraction(2))
 
 
 def test_root_length_profile_is_published_and_example_is_exact() -> None:

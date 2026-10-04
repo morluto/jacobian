@@ -1,6 +1,7 @@
 """Finite-algebra conversion for complete deterministic tree automata."""
 
 from itertools import product
+from typing import cast
 
 import pytest
 
@@ -73,7 +74,9 @@ def test_state_algebra_rejects_untrusted_or_incomplete_native_inputs() -> None:
     partial = automaton.model_dump()
     partial["transitions"] = partial["transitions"][:-1]
     with pytest.raises(OperationDomainValidationError):
-        deterministic_tree_automaton_state_algebra(partial)
+        deterministic_tree_automaton_state_algebra(
+            cast(CompleteDeterministicBottomUpTreeAutomaton, partial)
+        )
     with pytest.raises(OperationDomainValidationError):
         deterministic_tree_automaton_state_algebra(object())  # type: ignore[arg-type]
     malformed = CompleteDeterministicBottomUpTreeAutomaton.model_construct(**partial)

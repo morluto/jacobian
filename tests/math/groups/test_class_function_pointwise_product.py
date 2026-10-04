@@ -1,5 +1,6 @@
 """Exact pointwise class-function multiplication and tensor characters."""
 
+from collections.abc import Callable
 from fractions import Fraction
 
 import pytest
@@ -190,7 +191,7 @@ def _forged(
     "operation", [class_function_add, class_function_pointwise_product]
 )
 def test_native_operations_reject_forged_empty_class_functions(
-    operation,
+    operation: Callable[[FiniteClassFunction, FiniteClassFunction], object],
 ) -> None:
     forged = _forged(())
     with pytest.raises(OperationDomainValidationError) as error:
@@ -208,7 +209,9 @@ def test_native_operations_reject_forged_empty_class_functions(
         class_function_inner_product,
     ],
 )
-def test_native_operations_reject_values_from_another_axis_length(operation) -> None:
+def test_native_operations_reject_values_from_another_axis_length(
+    operation: Callable[[FiniteClassFunction, FiniteClassFunction], object],
+) -> None:
     # One value on a three-class axis: same-length zips would otherwise pass
     # and the kernel would forge another axis-bound invalid result.
     forged = _forged((_value(1, (1,)),))

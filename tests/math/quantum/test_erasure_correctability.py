@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import cast
 
 import pytest
 from tests.error_assertions import error_code
@@ -33,7 +34,9 @@ def _span(rows: tuple[tuple[int, ...], ...], width: int) -> set[tuple[int, ...]]
     }
 
 
-def _oracle(rows: tuple[tuple[int, ...], ...], n: int, erased: tuple[int, ...]):
+def _oracle(
+    rows: tuple[tuple[int, ...], ...], n: int, erased: tuple[int, ...]
+) -> tuple[int, int, list[tuple[int, ...]]]:
     stabilizers = _span(rows, 2 * n)
     supported_normalizer: list[tuple[int, ...]] = []
     supported_stabilizers: list[tuple[int, ...]] = []
@@ -83,7 +86,9 @@ def _value(n: int, rows: tuple[tuple[int, ...], ...]) -> CheckSpaceValue:
         (3, ((1, 0, 0, 1, 0, 0),)),  # A mixed logical quotient.
     ),
 )
-def test_erasure_profile_matches_exhaustive_pauli_oracle(n, rows) -> None:
+def test_erasure_profile_matches_exhaustive_pauli_oracle(
+    n: int, rows: tuple[tuple[int, ...], ...]
+) -> None:
     value = _value(n, rows)
     for mask in range(1 << n):
         erased_positions = tuple(index for index in range(n) if mask & (1 << index))
@@ -139,7 +144,10 @@ def test_forged_native_request_fields_are_rejected_without_helper_errors() -> No
         (value, ({},)),
     ):
         with pytest.raises(ValueError):
-            stabilizer_erasure_correctability(forged_check_space, forged_ids)
+            stabilizer_erasure_correctability(
+                cast(CheckSpaceValue, forged_check_space),
+                cast(tuple[str, ...], forged_ids),
+            )
 
 
 def test_uncorrectable_result_rejects_identity_witness() -> None:

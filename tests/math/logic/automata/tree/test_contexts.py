@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from itertools import product
+from typing import NoReturn
 
 import pytest
 from tests.error_assertions import error_code
@@ -22,7 +25,7 @@ from jacobian.math.logic.automata.tree.values import (
 )
 
 
-def test_context_accepts_canonical_frames_and_sibling_values():
+def test_context_accepts_canonical_frames_and_sibling_values() -> None:
     sibling = RankedTree(symbol=0)
     frame = TreeContextFrame(symbol=1, hole_child=0, siblings=(sibling,))
     context = FiniteTreeContext(arity=(0, 2), frames=(frame,))
@@ -30,13 +33,13 @@ def test_context_accepts_canonical_frames_and_sibling_values():
     assert context.frames[0].siblings == (sibling,)
 
 
-def test_context_rejects_nested_arity_entries_before_canonicalization():
+def test_context_rejects_nested_arity_entries_before_canonicalization() -> None:
     with pytest.raises(ValueError) as exc_info:
         FiniteTreeContext.model_validate({"arity": [[0] * 10000], "frames": []})
     assert error_code(exc_info.value) == "tree_context.rank"
 
 
-def test_context_plugging_preserves_ranked_tree_structure():
+def test_context_plugging_preserves_ranked_tree_structure() -> None:
     context = FiniteTreeContext.model_validate(
         {
             "arity": [0, 1, 2],
@@ -63,19 +66,19 @@ def test_context_plugging_preserves_ranked_tree_structure():
     )
 
 
-def test_plug_admits_result_depth_using_hole_path_and_fixed_siblings():
+def test_plug_admits_result_depth_using_hole_path_and_fixed_siblings() -> None:
     sibling = RankedTree(symbol=0)
     for _ in range(126):
         sibling = RankedTree(symbol=1, children=(sibling,))
     context = FiniteTreeContext(
         arity=(0, 1, 2),
-        frames=({"symbol": 2, "hole_child": 0, "siblings": (sibling,)},),
+        frames=(TreeContextFrame(symbol=2, hole_child=0, siblings=(sibling,)),),
     )
     result = plug_tree_context_operation(context, RankedTree(symbol=0))
     assert result.plugged_tree.children[1] == sibling
 
 
-def test_induced_state_map_matches_independent_direct_evaluation():
+def test_induced_state_map_matches_independent_direct_evaluation() -> None:
     # Complete DTA over three constants and a binary `f`, with transition
     # f(x,y) = (x + 2y) mod 3. The oracle plugs each state at the hole and
     # evaluates bottom-up independently from the context-spine algorithm.
@@ -98,8 +101,8 @@ def test_induced_state_map_matches_independent_direct_evaluation():
     context = FiniteTreeContext(
         arity=(0, 0, 0, 2),
         frames=(
-            {"symbol": 3, "hole_child": 1, "siblings": (RankedTree(symbol=0),)},
-            {"symbol": 3, "hole_child": 0, "siblings": (RankedTree(symbol=0),)},
+            TreeContextFrame(symbol=3, hole_child=1, siblings=(RankedTree(symbol=0),)),
+            TreeContextFrame(symbol=3, hole_child=0, siblings=(RankedTree(symbol=0),)),
         ),
     )
     actual = map_tree_context_states(machine, context).state_map
@@ -109,11 +112,11 @@ def test_induced_state_map_matches_independent_direct_evaluation():
     }
 
     class Hole:
-        def __init__(self, state):
+        def __init__(self, state: int) -> None:
             self.state = state
 
-    def direct_context_value(state):
-        tree = Hole(state)
+    def direct_context_value(state: int) -> int:
+        tree: object = Hole(state)
         for frame in reversed(context.frames):
             siblings = iter(frame.siblings)
             children = tuple(
@@ -122,12 +125,13 @@ def test_induced_state_map_matches_independent_direct_evaluation():
             )
             tree = (frame.symbol, children)
 
-        def eval_with_hole(node):
+        def eval_with_hole(node: object) -> int:
             if isinstance(node, Hole):
                 return node.state
             if isinstance(node, RankedTree):
                 symbol, children = node.symbol, node.children
             else:
+                assert isinstance(node, tuple)
                 symbol, children = node
             return table[(symbol, tuple(eval_with_hole(child) for child in children))]
 
@@ -137,24 +141,24 @@ def test_induced_state_map_matches_independent_direct_evaluation():
     assert actual == direct
 
 
-def test_context_rank_mismatch_and_plug_growth_are_rejected():
+def test_context_rank_mismatch_and_plug_growth_are_rejected() -> None:
     with pytest.raises(ValueError):
         FiniteTreeContext(
             arity=(0, 2),
-            frames=({"symbol": 1, "hole_child": 1, "siblings": ()},),
+            frames=(TreeContextFrame(symbol=1, hole_child=1, siblings=()),),
         )
     oversized = RankedTree(symbol=0, children=())
     # The 127-frame context plus a depth-2 input exceeds the depth envelope.
     large_context = FiniteTreeContext(
         arity=(0, 1),
-        frames=({"symbol": 1, "hole_child": 0, "siblings": ()},) * 127,
+        frames=(TreeContextFrame(symbol=1, hole_child=0, siblings=()),) * 127,
     )
     tree = RankedTree(symbol=1, children=(oversized,))
     with pytest.raises(OperationResourceAdmissionError):
         plug_tree_context_operation(large_context, tree)
 
 
-def test_native_operations_revalidate_forged_nested_values():
+def test_native_operations_revalidate_forged_nested_values() -> None:
     forged_context = FiniteTreeContext.model_construct(
         arity=(0, 2),
         frames=(TreeContextFrame.model_construct(symbol=1, hole_child=0, siblings=()),),
@@ -174,7 +178,7 @@ def test_native_operations_revalidate_forged_nested_values():
         map_tree_context_states(machine, forged_context)
 
 
-def test_context_json_admission_bounds_tree_growth_before_parsing():
+def test_context_json_admission_bounds_tree_growth_before_parsing() -> None:
     sibling = {"symbol": 0, "children": []}
     for _ in range(128):
         sibling = {"symbol": 1, "children": [sibling]}
@@ -188,13 +192,15 @@ def test_context_json_admission_bounds_tree_growth_before_parsing():
     assert error_code(exc_info.value) == "tree_context.depth"
 
 
-def test_native_tree_and_context_bounds_run_before_serialization(monkeypatch):
+def test_native_tree_and_context_bounds_run_before_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tree = RankedTree.model_construct(symbol=0, children=())
     for _ in range(128):
         tree = RankedTree.model_construct(symbol=1, children=(tree,))
     context = FiniteTreeContext(arity=(0, 1), frames=())
 
-    def serialization_must_not_run(*_args, **_kwargs):
+    def serialization_must_not_run(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("oversized value was serialized before admission")
 
     monkeypatch.setattr(RankedTree, "model_dump", serialization_must_not_run)
@@ -202,7 +208,9 @@ def test_native_tree_and_context_bounds_run_before_serialization(monkeypatch):
         plug_tree_context_operation(context, tree)
 
 
-def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
+def test_state_map_bounds_automaton_rows_before_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     transition = TreeAutomatonTransition.model_construct(
         symbol=0, child_states=(), target_state=0
     )
@@ -214,7 +222,7 @@ def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
     )
     context = FiniteTreeContext(arity=(0,), frames=())
 
-    def serialization_must_not_run(*_args, **_kwargs):
+    def serialization_must_not_run(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("oversized value was serialized before admission")
 
     monkeypatch.setattr(

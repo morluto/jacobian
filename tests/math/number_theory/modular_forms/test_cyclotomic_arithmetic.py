@@ -62,7 +62,9 @@ def test_inverse_admits_low_height_element_in_degree_six() -> None:
     )
 
 
-def test_inverse_height_bound_rejects_before_cyclotomic_expansion(monkeypatch) -> None:
+def test_inverse_height_bound_rejects_before_cyclotomic_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     value = _element(7, 10_000, 1)
 
     def unexpected_work(*_args: object) -> tuple[int, ...]:

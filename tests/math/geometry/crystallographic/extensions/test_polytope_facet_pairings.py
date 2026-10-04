@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
 from jacobian.math.geometry.crystallographic.extensions._models import (
     CrystallographicAffineRealization,
     CrystallographicPolytopePairingRequest,
+    CrystallographicPolytopePairingResult,
     FiniteLatticeExtension,
     PolytopeFacetPairing,
 )
@@ -37,14 +38,14 @@ def _request() -> CrystallographicPolytopePairingRequest:
         factor_set=(((0, 0),),),
     )
     polytope = RationalVPolytope(
-        space={"axes": ("x", "y")},
+        space=RationalCoordinateSpace(axes=("x", "y")),
         vertices=tuple(
-            {
-                "vertex_id": f"v{index}",
-                "coordinates": tuple(
+            RationalPolytopeVertex(
+                vertex_id=f"v{index}",
+                coordinates=tuple(
                     CanonicalRational.from_fraction(Fraction(value)) for value in point
                 ),
-            }
+            )
             for index, point in enumerate(((0, 0), (0, 1), (1, 0), (1, 1)))
         ),
     )
@@ -81,7 +82,7 @@ def _request() -> CrystallographicPolytopePairingRequest:
     )
 
 
-def test_pairing_native_boundary_revalidates_affine_realization():
+def test_pairing_native_boundary_revalidates_affine_realization() -> None:
     request = _request()
     with pytest.raises(OperationDomainValidationError) as exc_info:
         pair_crystallographic_polytope_facets(
@@ -96,7 +97,7 @@ def test_pairing_native_boundary_revalidates_affine_realization():
     )
 
 
-def test_oversized_pairing_coordinates_are_resource_refusals():
+def test_oversized_pairing_coordinates_are_resource_refusals() -> None:
     request = _request()
     large_polytope = RationalVPolytope(
         space=RationalCoordinateSpace(axes=("x", "y")),
@@ -124,7 +125,9 @@ def test_oversized_pairing_coordinates_are_resource_refusals():
     )
 
 
-def _pair(request: CrystallographicPolytopePairingRequest):
+def _pair(
+    request: CrystallographicPolytopePairingRequest,
+) -> CrystallographicPolytopePairingResult:
     """Call the native pairing function with unpacked domain arguments."""
     return pair_crystallographic_polytope_facets(
         request.affine_realization,
@@ -150,10 +153,10 @@ def test_unit_square_translation_pairings_are_exact_and_source_bound() -> None:
         )
         for facet in result.facet_profile.facets
     ) == (
-        ((-1, 0), 0),
-        ((0, -1), 0),
-        ((0, 1), 1),
-        ((1, 0), 1),
+        ((Fraction(-1), Fraction(0)), Fraction(0)),
+        ((Fraction(0), Fraction(-1)), Fraction(0)),
+        ((Fraction(0), Fraction(1)), Fraction(1)),
+        ((Fraction(1), Fraction(0)), Fraction(1)),
     )
     assert tuple(
         (item.source_facet_index, item.target_facet_index, item.lattice_translation)

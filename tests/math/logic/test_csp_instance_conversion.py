@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.relational_structures import (
+    FiniteCspConstraint,
     FiniteCspInstance,
     FiniteRelationalStructure,
     FiniteRelationSymbol,
@@ -26,12 +27,12 @@ def _instance() -> FiniteCspInstance:
         ),
         variable_count=3,
         constraints=(
-            {"constraint_id": "c0", "symbol_id": "E", "scope": (0, 1)},
-            {"constraint_id": "c1", "symbol_id": "E", "scope": (1, 0)},
-            {"constraint_id": "c2", "symbol_id": "E", "scope": (2, 2)},
+            FiniteCspConstraint(constraint_id="c0", symbol_id="E", scope=(0, 1)),
+            FiniteCspConstraint(constraint_id="c1", symbol_id="E", scope=(1, 0)),
+            FiniteCspConstraint(constraint_id="c2", symbol_id="E", scope=(2, 2)),
             # A second named occurrence is retained but deduplicates as a
             # relation row, as required by canonical-database semantics.
-            {"constraint_id": "c3", "symbol_id": "E", "scope": (0, 1)},
+            FiniteCspConstraint(constraint_id="c3", symbol_id="E", scope=(0, 1)),
         ),
     )
 

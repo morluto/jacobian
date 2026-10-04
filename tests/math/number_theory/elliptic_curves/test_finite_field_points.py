@@ -138,7 +138,7 @@ def test_model_isomorphism_matches_independent_complete_scaling_oracle() -> None
 
 
 def test_model_isomorphism_bounds_complete_search_before_field_arithmetic(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     field = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"
@@ -205,7 +205,9 @@ def test_quadratic_twist_composes_with_extension_count_consumer() -> None:
     assert source_count.cardinality + twist_count.cardinality == 2 * (25 + 1)
 
 
-def test_quadratic_twist_rejects_field_order_before_search(monkeypatch) -> None:
+def test_quadratic_twist_rejects_field_order_before_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     field = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"
     )
@@ -376,7 +378,9 @@ def test_point_orders_match_independent_repeated_addition_and_witnesses() -> Non
         coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1,)),
     )
 
-    def add(left, right):
+    def add(
+        left: tuple[int, int] | None, right: tuple[int, int] | None
+    ) -> tuple[int, int] | None:
         if left is None:
             return right
         if right is None:
@@ -395,11 +399,11 @@ def test_point_orders_match_independent_repeated_addition_and_witnesses() -> Non
         return (x3, (slope * (x1 - x3) - y1) % 5)
 
     for point in finite_field_points(curve).points:
-        coordinates = (
-            None
-            if point.at_infinity
-            else (point.x.coordinates[0], point.y.coordinates[0])
-        )
+        if point.at_infinity:
+            coordinates = None
+        else:
+            assert point.x is not None and point.y is not None
+            coordinates = (point.x.coordinates[0], point.y.coordinates[0])
         multiple = None
         expected_order = None
         for scalar in range(1, 10):
@@ -552,7 +556,10 @@ def test_scaled_point_enumeration_uses_exact_character_count_oracle() -> None:
     )
     assert sum(point.at_infinity for point in point_set.points) == 1
     affine = [point for point in point_set.points if not point.at_infinity]
-    pairs = {(point.x.coordinates[0], point.y.coordinates[0]) for point in affine}
+    pairs = set()
+    for point in affine:
+        assert point.x is not None and point.y is not None
+        pairs.add((point.x.coordinates[0], point.y.coordinates[0]))
     assert len(pairs) == len(affine)
     assert all((y * y - (x * x * x + x + 1)) % prime == 0 for x, y in pairs)
 
@@ -618,7 +625,9 @@ def test_f5_point_group_law_matches_independent_oracle_and_hand_examples() -> No
         == identity
     )
 
-    def oracle(left: tuple[int, int] | None, right: tuple[int, int] | None):
+    def oracle(
+        left: tuple[int, int] | None, right: tuple[int, int] | None
+    ) -> tuple[int, int] | None:
         if left is None:
             return right
         if right is None:
@@ -634,7 +643,9 @@ def test_f5_point_group_law_matches_independent_oracle_and_hand_examples() -> No
         x3 = (slope * slope - x1 - x2) % 5
         return (x3, (slope * (x1 - x3) - y1) % 5)
 
-    def coordinates(point: FiniteFieldEllipticPoint):
+    def coordinates(
+        point: FiniteFieldEllipticPoint,
+    ) -> tuple[int, int] | None:
         if point.at_infinity:
             return None
         assert point.x is not None and point.y is not None

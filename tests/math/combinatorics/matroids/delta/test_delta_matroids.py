@@ -1068,7 +1068,7 @@ def test_twist_polynomial_rejects_before_expanding_too_many_masks(
 
 
 def test_twist_polynomial_request_preflights_raw_nested_ground() -> None:
-    raw_request = {
+    raw_request: dict[str, object] = {
         "delta_matroid": {
             "ground": ["same-label"] * 100_000,
             "feasible": [[]],
@@ -1104,7 +1104,7 @@ def test_twist_polynomial_request_preflights_raw_feasible_memberships() -> None:
 
 
 def test_twist_polynomial_request_checks_rows_when_ground_is_malformed() -> None:
-    raw_request = {
+    raw_request: dict[str, object] = {
         "delta_matroid": {
             "feasible": [[]] * 16_386,
         }

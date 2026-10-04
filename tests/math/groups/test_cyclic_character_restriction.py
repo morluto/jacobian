@@ -1,6 +1,7 @@
 """Exact restriction from supported cyclic groups to their unique subgroups."""
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -11,7 +12,10 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters import operations as character_operations
-from jacobian.math.groups.characters._models import CyclicCharacterRestrictionRequest
+from jacobian.math.groups.characters._models import (
+    CyclicCharacterRestrictionRequest,
+    CyclicCharacterRestrictionResult,
+)
 from jacobian.math.groups.characters.operations import restrict_cyclic_character
 from jacobian.math.groups.operations import group_conjugacy_classes
 
@@ -26,7 +30,9 @@ def _partition(order: int, degree: int | None = None) -> GroupConjugacyClassesRe
     )
 
 
-def _restrict(order: int, row: int, subgroup_order: int):
+def _restrict(
+    order: int, row: int, subgroup_order: int
+) -> CyclicCharacterRestrictionResult:
     return restrict_cyclic_character(_partition(order), row, subgroup_order)
 
 
@@ -129,6 +135,6 @@ def test_native_restriction_rejects_malformed_scalars_without_pydantic_leak() ->
     with pytest.raises(OperationDomainValidationError):
         restrict_cyclic_character(_partition(4), True, 2)
     with pytest.raises(OperationDomainValidationError):
-        restrict_cyclic_character(_partition(4), 1, "2")
+        restrict_cyclic_character(_partition(4), 1, cast(int, "2"))
     with pytest.raises(OperationDomainValidationError):
         restrict_cyclic_character(_partition(4), 1, 0)

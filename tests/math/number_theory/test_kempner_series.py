@@ -385,7 +385,9 @@ def test_decimal_minus_nine_six_digit_family_fits_fixed_point_boundary() -> None
     )
 
 
-def test_fixed_point_dense_boundary_rejects_before_expansion(monkeypatch) -> None:
+def test_fixed_point_dense_boundary_rejects_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import jacobian.math.number_theory.kempner.operations as operations
 
     def expansion_must_not_start(_phase: str) -> None:

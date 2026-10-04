@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import combinations
 
 import pytest
@@ -82,6 +83,8 @@ def test_small_families_agree_with_independent_finite_oracle(base: int) -> None:
         oracle = _finite_witness(base, digits, 3, base**4)
         if oracle is not None:
             assert result.status == "CONTAINS_PROGRESSION"
+            assert result.first_term is not None
+            assert result.common_difference is not None
             assert result.first_term + 2 * result.common_difference == result.values[-1]
             assert all(_member(term, base, digits) for term in result.values)
 
@@ -367,8 +370,8 @@ def test_source_reachable_witness_bound_admits_two_digit_family() -> None:
 def test_oversized_constructed_digit_set_is_rejected_before_scanning() -> None:
     """A forged oversized digit tuple is rejected by length before inspection."""
 
-    class _NoIterTuple(tuple):
-        def __iter__(self):
+    class _NoIterTuple(tuple[int, ...]):
+        def __iter__(self) -> Iterator[int]:
             raise AssertionError("oversized digit set was scanned")
 
     digit_set = KempnerDigitSet.model_construct(

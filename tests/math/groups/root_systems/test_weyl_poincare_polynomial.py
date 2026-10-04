@@ -15,7 +15,9 @@ from jacobian.math.groups.root_systems.operations import (
 )
 
 
-def _enumerated_length_profile(cartan):
+def _enumerated_length_profile(
+    cartan: tuple[tuple[int, ...], ...],
+) -> tuple[int, ...]:
     """Independent BFS on root-lattice action matrices for tiny groups."""
     rank = len(cartan)
     identity = tuple(
@@ -53,8 +55,8 @@ def _enumerated_length_profile(cartan):
     ),
 )
 def test_small_weyl_poincare_polynomials_match_exact_length_profiles(
-    matrix, coefficients
-):
+    matrix: tuple[tuple[int, ...], ...], coefficients: tuple[int, ...]
+) -> None:
     cartan = CartanMatrix.model_validate(matrix)
     result = weyl_poincare_polynomial(cartan)
     assert result.polynomial.coefficients == coefficients
@@ -68,7 +70,7 @@ def test_small_weyl_poincare_polynomials_match_exact_length_profiles(
     )
 
 
-def test_reducible_poincare_polynomial_is_the_product_of_factor_polynomials():
+def test_reducible_poincare_polynomial_is_the_product_of_factor_polynomials() -> None:
     a1_times_a2 = CartanMatrix.model_validate(((2, 0, 0), (0, 2, -1), (0, -1, 2)))
     result = weyl_poincare_polynomial(a1_times_a2)
     # (1 + q)(1 + 2q + 2q^2 + q^3)
@@ -76,7 +78,7 @@ def test_reducible_poincare_polynomial_is_the_product_of_factor_polynomials():
     assert sum(result.polynomial.coefficients) == 12
 
 
-def test_e8_degree_equals_the_number_of_positive_roots():
+def test_e8_degree_equals_the_number_of_positive_roots() -> None:
     e8 = CartanMatrix.model_validate(
         (
             (2, -1, 0, 0, 0, 0, 0, 0),
@@ -96,7 +98,7 @@ def test_e8_degree_equals_the_number_of_positive_roots():
     assert polynomial == tuple(reversed(polynomial))
 
 
-def test_public_operation_and_example_use_the_parented_result():
+def test_public_operation_and_example_use_the_parented_result() -> None:
     tool = next(
         tool
         for tool in TOOLS

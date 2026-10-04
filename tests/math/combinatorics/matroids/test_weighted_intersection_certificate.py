@@ -32,7 +32,9 @@ def _matroid(
     )
 
 
-def weighted_intersection_certificate(request):
+def weighted_intersection_certificate(
+    request: MatroidWeightedIntersectionCertificateRequest,
+) -> MatroidWeightedIntersectionResult:
     return _weighted_intersection_certificate(
         request.first,
         request.second,

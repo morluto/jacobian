@@ -3,9 +3,10 @@
 from fractions import Fraction
 from math import isqrt
 
-from jacobian.math.number_theory.galois._compositum import (
+from jacobian.math.number_theory.galois._compositum import galois_compositum
+from jacobian.math.number_theory.galois._models import (
     GaloisCompositumResult,
-    galois_compositum,
+    QQSplittingField,
 )
 from jacobian.math.number_theory.galois.operations import splitting_field
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -29,7 +30,7 @@ def _polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
     )
 
 
-def _field(radicand: int):
+def _field(radicand: int) -> QQSplittingField:
     return splitting_field(_polynomial((-radicand, 0, 1))).field
 
 

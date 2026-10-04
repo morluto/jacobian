@@ -1,5 +1,6 @@
 """Exact order-one GCRD fixtures and ambient Ore identities."""
 
+from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
 
@@ -10,7 +11,13 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.ore_algebras._models import DifferentialOreOperator
+from jacobian.math.ore_algebras._models import (
+    DifferentialOreOperator,
+    DifferentialOreTerm,
+)
+from jacobian.math.ore_algebras.differential_gcrd._models import (
+    DifferentialOperatorGCRDResult,
+)
 from jacobian.math.ore_algebras.differential_gcrd.operations import (
     differential_operator_gcrd,
 )
@@ -41,11 +48,11 @@ def _constant(value: Fraction | int) -> RationalFunction:
     )
 
 
-def _operator(coefficients: dict[int, Fraction | int]) -> DifferentialOreOperator:
+def _operator(coefficients: Mapping[int, Fraction | int]) -> DifferentialOreOperator:
     return DifferentialOreOperator(
         variable="x",
         terms=tuple(
-            {"order": order, "coefficient": _constant(value)}
+            DifferentialOreTerm(order=order, coefficient=_constant(value))
             for order, value in sorted(coefficients.items())
             if value
         ),
@@ -61,14 +68,16 @@ def _coefficients(operator: DifferentialOreOperator) -> dict[int, Fraction]:
     return result
 
 
-def _add(left: DifferentialOreOperator, right: DifferentialOreOperator):
+def _add(
+    left: DifferentialOreOperator, right: DifferentialOreOperator
+) -> DifferentialOreOperator:
     coefficients = _coefficients(left)
     for order, value in _coefficients(right).items():
         coefficients[order] = coefficients.get(order, Fraction(0)) + value
     return _operator(coefficients)
 
 
-def _check_relations(result) -> None:
+def _check_relations(result: DifferentialOperatorGCRDResult) -> None:
     assert (
         differential_operator_multiply(result.left_cofactor, result.divisor).product
         == result.left
@@ -163,7 +172,7 @@ def test_nonconstant_or_higher_order_inputs_are_outside_the_slice() -> None:
         differential_operator_gcrd(
             DifferentialOreOperator(
                 variable="x",
-                terms=({"order": 0, "coefficient": x},),
+                terms=(DifferentialOreTerm(order=0, coefficient=x),),
             ),
             _operator({1: 1}),
         )

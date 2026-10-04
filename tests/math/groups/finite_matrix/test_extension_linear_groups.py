@@ -13,12 +13,17 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.finite_fields.values import Axis, FiniteFieldPresentation
+from jacobian.math.finite_fields.values import (
+    Axis,
+    FiniteFieldElement,
+    FiniteFieldPresentation,
+)
 from jacobian.math.groups.actions.operations import cycle_index
 from jacobian.math.groups.finite_matrix._models import (
     ExtensionFieldGeneralLinearGroup,
     ExtensionFieldGeneralLinearProjectiveAction,
     ExtensionFieldLinearGroupRequest,
+    ExtensionFieldSpecialLinearGroup,
     ExtensionFieldSpecialLinearProjectiveAction,
 )
 from jacobian.math.groups.finite_matrix.extension_operations import (
@@ -49,7 +54,7 @@ def _multiply_field(left: int, right: int) -> int:
 
 def _multiply_matrix(left: Matrix, right: Matrix) -> Matrix:
     dimension = len(left)
-    return tuple(
+    result: Matrix = tuple(
         tuple(
             _add(
                 _multiply_field(left[row][0], right[0][column]),
@@ -59,6 +64,7 @@ def _multiply_matrix(left: Matrix, right: Matrix) -> Matrix:
         )
         for row in range(dimension)
     )
+    return result
 
 
 def _determinant_2(matrix: Matrix) -> int:
@@ -68,7 +74,9 @@ def _determinant_2(matrix: Matrix) -> int:
     )
 
 
-def _generator_matrices(group: object) -> tuple[Matrix, ...]:
+def _generator_matrices(
+    group: ExtensionFieldGeneralLinearGroup | ExtensionFieldSpecialLinearGroup,
+) -> tuple[Matrix, ...]:
     return tuple(
         tuple(
             tuple(
@@ -76,14 +84,14 @@ def _generator_matrices(group: object) -> tuple[Matrix, ...]:
             )
             for row in generator.entries
         )
-        for generator in group.generators  # type: ignore[attr-defined]
+        for generator in group.generators
     )
 
 
 def _generated_matrices(generators: tuple[Matrix, ...]) -> set[Matrix]:
-    identity = ((1, 0), (0, 1))
-    seen = {identity}
-    frontier = [identity]
+    identity: Matrix = ((1, 0), (0, 1))
+    seen: set[Matrix] = {identity}
+    frontier: list[Matrix] = [identity]
     while frontier:
         current = frontier.pop()
         for generator in generators:
@@ -114,8 +122,8 @@ def _generated_permutations(
     return seen
 
 
-def _coordinates(value: object) -> int:
-    return value.coordinates[0] + 2 * value.coordinates[1]  # type: ignore[attr-defined]
+def _coordinates(value: FiniteFieldElement) -> int:
+    return value.coordinates[0] + 2 * value.coordinates[1]
 
 
 def _projective_image(matrix: Matrix, point: tuple[int, int]) -> tuple[int, int]:

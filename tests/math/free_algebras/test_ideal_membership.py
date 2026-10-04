@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
+from typing import Any, NoReturn
 
 import pytest
 
@@ -25,7 +27,7 @@ OPERATION_ID = "free_algebra.two_sided_ideal.membership.decide"
 
 
 def _poly(
-    alphabet: tuple[str, ...], terms: dict[tuple[str, ...], int | Fraction]
+    alphabet: tuple[str, ...], terms: Mapping[tuple[str, ...], int | Fraction]
 ) -> FreeAlgebraPolynomial:
     ordered = sorted(
         terms.items(),
@@ -109,11 +111,11 @@ def test_nonhomogeneous_generators_are_rejected() -> None:
 
 
 def test_resource_incompletion_returns_unknown_without_a_conclusion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ideal, relation = _commutator_ideal()
 
-    def incomplete(*args, **kwargs):
+    def incomplete(*args: Any, **kwargs: Any) -> NoReturn:
         raise OperationResourceAdmissionError(
             location=("degree",), code="free_algebra.gs_pair_budget", message="limit"
         )

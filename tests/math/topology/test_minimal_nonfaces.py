@@ -70,7 +70,9 @@ def _subset_oracle(
         (("w", "x", "y", "z"), (("w", "x"), ("y", "z"))),
     ],
 )
-def test_matches_independent_all_proper_subsets_oracle(vertices, facets) -> None:
+def test_matches_independent_all_proper_subsets_oracle(
+    vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]
+) -> None:
     source = _complex(vertices, facets)
     result = compute_minimal_nonfaces(MinimalNonfacesRequest(complex=source))
     assert result.minimal_nonfaces == _subset_oracle(
@@ -132,7 +134,10 @@ def test_candidate_cap_accepts_14_vertices_and_rejects_15_before_expansion() -> 
     [(0, None, "work_over_envelope"), (None, 1, "output_over_envelope")],
 )
 def test_work_and_output_are_preflighted_before_face_closure(
-    monkeypatch, max_work, max_cells, expected_code
+    monkeypatch: pytest.MonkeyPatch,
+    max_work: int | None,
+    max_cells: int | None,
+    expected_code: str,
 ) -> None:
     request = _request(("a", "b", "c"), (("a",), ("b",), ("c",)))
     if max_work is not None:
@@ -140,7 +145,7 @@ def test_work_and_output_are_preflighted_before_face_closure(
     if max_cells is not None:
         monkeypatch.setattr(structural, "MAX_MINIMAL_NONFACE_RESULT_CELLS", max_cells)
 
-    def unexpected_closure(_facets):
+    def unexpected_closure(_facets: tuple[tuple[str, ...], ...]) -> None:
         pytest.fail("request expanded the source closure before admission")
 
     monkeypatch.setattr(structural, "face_closure", unexpected_closure)
@@ -150,7 +155,9 @@ def test_work_and_output_are_preflighted_before_face_closure(
 
 
 @pytest.mark.parametrize("facets", [(), ((),)])
-def test_void_and_zero_vertex_values_are_rejected_by_existing_carrier(facets) -> None:
+def test_void_and_zero_vertex_values_are_rejected_by_existing_carrier(
+    facets: tuple[tuple[()], ...] | tuple[()],
+) -> None:
     malformed = FiniteSimplicialComplex.model_construct(
         vertices=(),
         maximal_simplices=facets,

@@ -52,10 +52,10 @@ def _oracle_compose(outer: list[Fraction], inner: list[Fraction]) -> list[Fracti
 def _oracle_reversion(values: list[Fraction]) -> list[Fraction]:
     order = len(values)
     result = [Fraction()] * order
-    result[1] = 1 / values[1]
+    result[1] = Fraction(1) / values[1]
     for degree in range(2, order):
         powers = [[Fraction()] * (degree + 1) for _ in range(degree + 1)]
-        powers[0][0] = 1
+        powers[0][0] = Fraction(1)
         powers[1][:degree] = result[:degree]
         for exponent in range(2, degree + 1):
             powers[exponent] = [

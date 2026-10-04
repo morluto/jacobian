@@ -147,7 +147,7 @@ class _OversizedComponentSequence(Sequence[RationalPolynomial]):
     def __len__(self) -> int:
         return self.length
 
-    def __getitem__(self, index: int) -> RationalPolynomial:
+    def __getitem__(self, index: int | slice) -> Any:
         raise AssertionError("component parsed beyond the vector-field bound")
 
     def __iter__(self) -> Iterator[RationalPolynomial]:
@@ -181,7 +181,7 @@ def test_vector_field_iteration_cannot_exceed_component_bound() -> None:
         def __len__(self) -> int:
             return 1
 
-        def __getitem__(self, index: int) -> Any:
+        def __getitem__(self, index: int | slice) -> Any:
             raise AssertionError
 
         def __iter__(self) -> Iterator[Any]:

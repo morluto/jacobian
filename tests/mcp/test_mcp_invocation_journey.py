@@ -120,7 +120,6 @@ def test_mcp_describes_and_invokes_operations() -> None:
             assert isinstance(result.structured_content, dict)
             response = json.loads(_text_content(result.content[0]))
             assert response["runtime_ms"] >= 0
-            assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
             assert result.structured_content["output"] == {

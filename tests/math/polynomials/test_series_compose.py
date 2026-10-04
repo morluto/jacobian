@@ -1,4 +1,14 @@
-def test_composition_stops_building_inner_powers_past_the_last_outer_term() -> None:
+from __future__ import annotations
+
+from collections.abc import Sequence
+from fractions import Fraction
+
+import pytest
+
+
+def test_composition_stops_building_inner_powers_past_the_last_outer_term(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Horner-style power building must not outrun the nonzero outer terms.
 
     The kernel adds `inner_power` only when the outer coefficient is nonzero,
@@ -9,8 +19,6 @@ def test_composition_stops_building_inner_powers_past_the_last_outer_term() -> N
     meant to enforce - and the admitted request took about 36 minutes. The
     admission path's skip-zero-powers branch already assumed the kernel stopped.
     """
-    from fractions import Fraction
-
     import jacobian.math.polynomials.series.operations as operations
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials.series._models import TruncatedSeries
@@ -53,15 +61,14 @@ def test_composition_stops_building_inner_powers_past_the_last_outer_term() -> N
     calls = 0
     original_convolve = operations._cauchy_convolve
 
-    def _counting_convolve(*args, **kwargs):
+    def _counting_convolve(
+        left: Sequence[Fraction], right: Sequence[Fraction], order: int
+    ) -> list[Fraction]:
         nonlocal calls
         calls += 1
-        return original_convolve(*args, **kwargs)
+        return original_convolve(left, right, order)
 
-    operations._cauchy_convolve = _counting_convolve
-    try:
-        operations.compose(outer, inner)
-    finally:
-        operations._cauchy_convolve = original_convolve
+    monkeypatch.setattr(operations, "_cauchy_convolve", _counting_convolve)
+    operations.compose(outer, inner)
     # x^2 needs G^2, i.e. two convolutions, not order - 1 = 63
     assert calls == 2

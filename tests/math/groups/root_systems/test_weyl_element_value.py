@@ -19,7 +19,9 @@ from jacobian.math.groups.root_systems.operations import (
 )
 
 
-def _multiply(a, b):
+def _multiply(
+    a: tuple[tuple[int, ...], ...], b: tuple[tuple[int, ...], ...]
+) -> tuple[tuple[int, ...], ...]:
     n = len(a)
     return tuple(
         tuple(sum(a[i][k] * b[k][j] for k in range(n)) for j in range(n))
@@ -27,7 +29,9 @@ def _multiply(a, b):
     )
 
 
-def _oracle_group(cartan):
+def _oracle_group(
+    cartan: tuple[tuple[int, ...], ...],
+) -> set[tuple[tuple[int, ...], ...]]:
     """Enumerate actions independently by multiplying simple reflections."""
     n = len(cartan)
     generators = []
@@ -54,8 +58,8 @@ def _oracle_group(cartan):
     [(((2, -1), (-1, 2)), 6), (((2, -2), (-1, 2)), 8)],
 )
 def test_canonical_element_values_match_independent_finite_group(
-    cartan, expected_order
-):
+    cartan: tuple[tuple[int, ...], ...], expected_order: int
+) -> None:
     parent = CartanMatrix.model_validate(cartan)
     identity = weyl_element_from_word(parent, ())
     oracle = _oracle_group(cartan)
@@ -74,7 +78,7 @@ def test_canonical_element_values_match_independent_finite_group(
     assert generated == oracle
 
 
-def test_equal_words_share_canonical_action_and_serialize_composably():
+def test_equal_words_share_canonical_action_and_serialize_composably() -> None:
     parent = CartanMatrix.model_validate(((2, -1), (-1, 2)))
     first = weyl_element_from_word(parent, (0, 1, 0))
     same = weyl_element_from_word(parent, (1, 0, 1))
@@ -85,7 +89,7 @@ def test_equal_words_share_canonical_action_and_serialize_composably():
     assert weyl_element_inverse(first).root_action.entries == first.root_action.entries
 
 
-def test_composition_rejects_different_cartan_parents():
+def test_composition_rejects_different_cartan_parents() -> None:
     a2 = weyl_element_from_word(((2, -1), (-1, 2)), (0,))
     b2 = weyl_element_from_word(((2, -2), (-1, 2)), (0,))
     with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -93,7 +97,7 @@ def test_composition_rejects_different_cartan_parents():
     assert exc_info.value.errors()[0]["type"] == "root_system.weyl_parent_mismatch"
 
 
-def test_requests_round_trip_element_contracts():
+def test_requests_round_trip_element_contracts() -> None:
     element = weyl_element_from_word(((2, -1), (-1, 2)), (1,))
     assert WeylElementRequest.model_validate(
         {"matrix": ((2, -1), (-1, 2)), "word": [1]}

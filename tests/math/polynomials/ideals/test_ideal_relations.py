@@ -19,6 +19,7 @@ from jacobian.math.polynomials.ideals._models import (
     IdealContainmentRequest,
     IdealEqualityRequest,
 )
+from jacobian.math.polynomials.ideals._sympy_process import _SympyKernelError
 from jacobian.math.polynomials.ideals.operations import (
     ideal_containment,
     ideal_equality,
@@ -261,7 +262,7 @@ def test_backend_failure_does_not_become_noncontainment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail(*args: object, **kwargs: object) -> dict[str, object]:
-        raise operations._SympyKernelError("backend failure")
+        raise _SympyKernelError("backend failure")
 
     monkeypatch.setattr(operations, "_run_sympy_kernel", fail)
     source = _ideal(("x",), {(1,): 1})

@@ -22,7 +22,9 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
-def graphic_matroid(graph):
+def graphic_matroid(
+    graph: SimpleUndirectedGraph | GraphicMatroidRequest,
+) -> LinearMatroid:
     if isinstance(graph, GraphicMatroidRequest):
         graph = graph.graph
     return _graphic_matroid(graph)
@@ -125,7 +127,6 @@ def test_binary_matroid_composes_with_keyed_maximum_weight_basis() -> None:
 def test_edge_cap_is_rejected_before_incidence_matrix_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.combinatorics.matroids import graphic
 
     graph = _graph(
         tuple(f"v{index:02}" for index in range(24)),
@@ -138,7 +139,7 @@ def test_edge_cap_is_rejected_before_incidence_matrix_expansion(
     def forbidden(**_kwargs: object) -> None:
         raise AssertionError("matrix construction ran before edge admission")
 
-    monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
+    monkeypatch.setattr(PrimeFieldMatrix, "_from_admitted", forbidden)
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graphic_matroid(graph)
     assert exc_info.value.errors()[0]["type"] == "matroid.graphic.edge_bound"
@@ -147,7 +148,6 @@ def test_edge_cap_is_rejected_before_incidence_matrix_expansion(
 def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.combinatorics.matroids import graphic
     from jacobian.math.combinatorics.matroids._models import (
         MAX_GROUND_AXIS_CODEPOINTS,
     )
@@ -158,7 +158,7 @@ def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
     def forbidden(**_kwargs: object) -> None:
         raise AssertionError("matrix construction ran before axis admission")
 
-    monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
+    monkeypatch.setattr(PrimeFieldMatrix, "_from_admitted", forbidden)
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         graphic_matroid(graph)
     assert exc_info.value.errors()[0]["type"] == "matroid.graphic.retained_axis_bound"

@@ -16,13 +16,14 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import CyclotomicValue
 
 
 def _small_divisors(modulus: int) -> tuple[int, ...]:
     return tuple(divisor for divisor in range(1, modulus + 1) if modulus % divisor == 0)
 
 
-def test_restriction_agrees_with_independent_small_fiber_tables():
+def test_restriction_agrees_with_independent_small_fiber_tables() -> None:
     for source_modulus in (1, 2, 3, 4, 5, 8, 12, 15, 20):
         source_group = character_group(source_modulus)
         coordinates = tuple(
@@ -32,7 +33,7 @@ def test_restriction_agrees_with_independent_small_fiber_tables():
             source = dirichlet_character(source_group, source_coordinates)
             for target_modulus in _small_divisors(source_modulus):
                 target_group = character_group(target_modulus)
-                fibers: dict[int, list[tuple[int, object]]] = {
+                fibers: dict[int, list[tuple[int, CyclotomicValue]]] = {
                     residue: [] for residue in target_group.unit_residues
                 }
                 for source_residue in source_group.unit_residues:
@@ -92,7 +93,7 @@ def test_restriction_agrees_with_independent_small_fiber_tables():
                 )
 
 
-def test_mod8_character_has_a_concrete_mod4_nonfactor_obstruction():
+def test_mod8_character_has_a_concrete_mod4_nonfactor_obstruction() -> None:
     source = dirichlet_character(character_group(8), (0, 1))
 
     result = dirichlet_character_restrict_modulus(source, 4)
@@ -104,7 +105,7 @@ def test_mod8_character_has_a_concrete_mod4_nonfactor_obstruction():
     assert result.obstruction.values[0] != result.obstruction.values[1]
 
 
-def test_restriction_rejects_a_target_that_is_not_a_positive_divisor():
+def test_restriction_rejects_a_target_that_is_not_a_positive_divisor() -> None:
     source = dirichlet_character(character_group(8), (1, 0))
 
     with pytest.raises(OperationDomainValidationError) as error:
@@ -115,7 +116,7 @@ def test_restriction_rejects_a_target_that_is_not_a_positive_divisor():
     )
 
 
-def test_nontrivial_mod8_character_descends_and_inflation_recovers_it():
+def test_nontrivial_mod8_character_descends_and_inflation_recovers_it() -> None:
     source = dirichlet_character(character_group(8), (1, 0))
 
     result = dirichlet_character_restrict_modulus(source, 4)

@@ -213,8 +213,8 @@ def test_vertex_deck_multiset_matches_exhaustive_permutation_oracle() -> None:
 
     import networkx as nx
 
-    def as_networkx(graph: SimpleUndirectedGraph) -> nx.Graph:
-        result = nx.Graph()
+    def as_networkx(graph: SimpleUndirectedGraph) -> nx.Graph[str]:
+        result: nx.Graph[str] = nx.Graph()
         result.add_nodes_from(graph.vertices)
         result.add_edges_from(graph.edges)
         return result
@@ -230,7 +230,7 @@ def test_vertex_deck_multiset_matches_exhaustive_permutation_oracle() -> None:
             family = vertex_deletion_family(source)
             deck = unlabelled_vertex_deck(family)
             expected: list[list[int]] = []
-            expected_representatives: list[nx.Graph] = []
+            expected_representatives: list[nx.Graph[str]] = []
             for index, card in enumerate(family.cards):
                 graph_card = as_networkx(card.card)
                 for class_index, representative in enumerate(expected_representatives):
@@ -308,8 +308,8 @@ def test_kelly_induced_count_matches_exhaustive_direct_graph_oracle() -> None:
             ),
         )
 
-    def networkx_graph(graph: SimpleUndirectedGraph) -> nx.Graph:
-        result = nx.Graph()
+    def networkx_graph(graph: SimpleUndirectedGraph) -> nx.Graph[str]:
+        result: nx.Graph[str] = nx.Graph()
         result.add_nodes_from(graph.vertices)
         result.add_edges_from(graph.edges)
         return result

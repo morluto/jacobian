@@ -3,7 +3,7 @@
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 
-def test_all_empty_degree_prefix_is_the_initial_simplicial_set_and_roundtrips():
+def test_all_empty_degree_prefix_is_the_initial_simplicial_set_and_roundtrips() -> None:
     for max_degree in range(5):
         value = from_tables(
             max_degree=max_degree,
@@ -28,7 +28,7 @@ def test_all_empty_degree_prefix_is_the_initial_simplicial_set_and_roundtrips():
         )
 
 
-def test_empty_degree_prefix_can_be_truncated_without_inventing_simplices():
+def test_empty_degree_prefix_can_be_truncated_without_inventing_simplices() -> None:
     source = from_tables(
         3,
         ((), (), (), ()),

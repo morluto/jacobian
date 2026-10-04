@@ -1,8 +1,10 @@
 """Exact accepted-word symbol Parikh profiles."""
 
 import json
+from collections.abc import Iterator
 from itertools import product
 from math import comb
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -912,7 +914,7 @@ def test_forged_dfa_fields_are_bounded_before_materialization() -> None:
         "regular_language.symbol_parikh.dfa_contract"
     )
 
-    def unbounded():
+    def unbounded() -> Iterator[int]:
         while True:
             yield 0
 
@@ -937,7 +939,7 @@ def test_forged_iterable_does_not_trust_reported_length() -> None:
         def __len__(self) -> int:
             return 0
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[int]:
             while True:
                 yield 0
 
@@ -958,8 +960,8 @@ def test_forged_iterable_does_not_trust_reported_length() -> None:
 def test_forged_tuple_subclass_still_uses_bounded_iteration() -> None:
     """A tuple subclass's overridden ``__iter__`` is bounded by islice."""
 
-    class LyingTuple(tuple):  # type: ignore[type-arg]
-        def __iter__(self):
+    class LyingTuple(tuple[int, ...]):
+        def __iter__(self) -> Iterator[int]:
             while True:
                 yield 0
 
@@ -1054,7 +1056,12 @@ def test_profile_result_retains_the_canonical_dfa() -> None:
 
 def test_profile_cell_ordering_matches_sorted() -> None:
     """The checkpointed counting order is the canonical lexicographic order."""
-    profile = {(0, 1): 3, (1, 1): 1, (0, 0): 2, (1, 0): 4}
+    profile: dict[tuple[int, ...], int] = {
+        (0, 1): 3,
+        (1, 1): 1,
+        (0, 0): 2,
+        (1, 0): 4,
+    }
     ordered = profile_module._sorted_profile_items_with_checkpoints(profile)
     assert ordered == sorted(profile.items())
 
@@ -1071,21 +1078,25 @@ def test_profile_cell_ordering_observes_mid_materialization_cancellation() -> No
 
     signal = Signal()
 
-    class TrippingProfile(dict):  # type: ignore[type-arg]
-        def items(self):
-            for index, item in enumerate(super().items()):
+    class TrippingProfile:
+        def items(self) -> Iterator[tuple[tuple[int, ...], int]]:
+            entries = ((0, 0), (0, 1), (1, 0), (1, 1))
+            counts = (2, 3, 4, 1)
+            for index, (key, count) in enumerate(zip(entries, counts, strict=True)):
                 if index == 1:
                     signal.set = True
-                yield item
+                yield key, count
 
-    profile: dict[tuple[int, ...], int] = TrippingProfile(
-        {(0, 0): 2, (0, 1): 3, (1, 0): 4, (1, 1): 1}
-    )
+    profile = TrippingProfile()
     with (
         request_execution(0.0, cancellation_signal=signal),
         pytest.raises(OperationExecutionCancelledError),
     ):
-        profile_module._sorted_profile_items_with_checkpoints(profile)
+        # The helper consumes only ``items``; this duck type trips cancellation
+        # during iteration without adding an execution-only production seam.
+        profile_module._sorted_profile_items_with_checkpoints(
+            cast(dict[tuple[int, ...], int], profile)
+        )
 
 
 def test_wide_profile_ordering_work_is_charged_before_materialization() -> None:

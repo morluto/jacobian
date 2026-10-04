@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections.abc import Mapping
 from itertools import pairwise
+from typing import Any, cast
 
 import pytest
+from pydantic import BaseModel
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -61,7 +64,9 @@ def _run(operation_id: str, request):  # type: ignore[no-untyped-def]
     raise AssertionError(f"operation {operation_id!r} not declared")
 
 
-def _json_request(model, payload: dict):  # type: ignore[no-untyped-def]
+def _json_request[RequestModel: BaseModel](
+    model: type[RequestModel], payload: Mapping[str, Any]
+) -> RequestModel:
     return model.model_validate(json.loads(json.dumps(payload)))
 
 
@@ -237,9 +242,13 @@ def _oracle_has_minor(
     """
 
     kept_vertices = list(source.vertices)
-    kept_edges = [tuple(sorted(edge)) for edge in source.edges]
+    kept_edges: list[tuple[str, str]] = [
+        (min(left, right), max(left, right)) for left, right in source.edges
+    ]
     target_vertices = list(target.vertices)
-    target_edges = {tuple(sorted(edge)) for edge in target.edges}
+    target_edges: set[tuple[str, str]] = {
+        (min(left, right), max(left, right)) for left, right in target.edges
+    }
     order = len(target_vertices)
     if order > len(kept_vertices) or len(target_edges) > len(kept_edges):
         return False
@@ -806,11 +815,15 @@ class TestToolExamplesExecute:
     def test_declared_examples_parse_and_run(
         self,
         operation_id: str,
-        request_model,  # type: ignore[no-untyped-def]
+        request_model: (
+            type[MinorModelFindRequest]
+            | type[TopologicalMinorCheckRequest]
+            | type[TopologicalMinorFindRequest]
+        ),
     ) -> None:
         tools = [tool for tool in TOOLS if tool.operation_id == operation_id]
         assert len(tools) == 1
         for example in tools[0].examples:
             request = _json_request(request_model, example.input)
-            outcome = tools[0].run(request)
+            outcome = tools[0].run(cast(Any, request))
             assert outcome.status in ("FOUND", "VALID_SUBDIVISION")

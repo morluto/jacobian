@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredSubspace,
     FiltrationLevel,
@@ -37,7 +38,9 @@ def _filtration() -> tuple[FiltrationLevel, ...]:
     ("ring", "prime"),
     ((CoefficientRing.RATIONAL, None), (CoefficientRing.PRIME_FIELD, 5)),
 )
-def test_stable_page_maps_isomorphically_to_graded_homology(ring, prime) -> None:
+def test_stable_page_maps_isomorphically_to_graded_homology(
+    ring: CoefficientRing, prime: int | None
+) -> None:
     """A diagonal filtration yields one nontrivial graded class at each level."""
     complex_value = ChainComplexValue(
         coefficient_ring=ring,
@@ -81,10 +84,13 @@ def test_stable_page_maps_isomorphically_to_graded_homology(ring, prime) -> None
 def test_abutment_tool_example_serializes_as_a_typed_result() -> None:
     from jacobian.math.topology.chain_complexes.filtered_extensions_tools import TOOLS
 
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "homological.spectral_sequence.abutment.compute"
+    tool = cast(
+        MathTool[SpectralAbutmentRequest, SpectralAbutmentResult],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "homological.spectral_sequence.abutment.compute"
+        ),
     )
     request = SpectralAbutmentRequest.model_validate_json(
         json.dumps(tool.examples[0].input)

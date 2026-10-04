@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.affine_semigroups.semigroup import (
     AffineConfiguration,
     AffineFiberGraph,
     PositiveAffineSemigroup,
     fiber_graph,
 )
+from jacobian.math.affine_semigroups.semigroup_models import AffineFiberGraphRequest
 from jacobian.math.affine_semigroups.semigroup_tools import TOOLS
 
 
@@ -83,10 +85,13 @@ def test_decoded_graph_rejects_false_fiber_claims(changes: dict[str, object]) ->
 
 
 def test_fiber_graph_tool_is_discoverable_and_round_trips() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "affine_semigroup.fiber_graph.compute"
+    tool = cast(
+        MathTool[AffineFiberGraphRequest, AffineFiberGraph],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "affine_semigroup.fiber_graph.compute"
+        ),
     )
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)

@@ -80,7 +80,9 @@ def test_zero_order_cards_retain_empty_maps(vertices: tuple[str, ...]) -> None:
     profile = vertex_deck_isomorphism_profile(family)
     assert len(profile.family.cards) == len(vertices)
     if not vertices:
-        assert profile.classes == profile.vertex_maps == profile.class_indices == ()
+        assert profile.classes == ()
+        assert profile.vertex_maps == ()
+        assert profile.class_indices == ()
     else:
         assert len(profile.classes) == 1
         assert profile.classes[0].multiplicity == 1
@@ -105,7 +107,7 @@ def test_profile_round_trip_validates_maps_and_rejects_forged_bijection() -> Non
 
 
 def test_native_operation_admits_and_checks_family_before_canonicalization(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     family = vertex_deletion_family(_path3())
     forged = family.model_copy(update={"cards": family.cards[:-1]})
@@ -148,7 +150,9 @@ def test_native_operation_rejects_boolean_card_edge_counts(field: str) -> None:
     )
 
 
-def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
+def test_work_and_output_admission_have_exact_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     family = vertex_deletion_family(_path3())
     request = VertexDeckIsomorphismProfileRequest.model_construct(deck=family)
     _, exact_work, exact_output = deck_models._vertex_iso_profile_resource_estimates(
@@ -188,7 +192,7 @@ def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
 
 
 def test_serialized_profile_admits_representative_validation_before_canonicalizing(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile = vertex_deck_isomorphism_profile(vertex_deletion_family(_path3()))
     data = json.dumps(profile.model_dump(mode="json"))
@@ -201,7 +205,9 @@ def test_serialized_profile_admits_representative_validation_before_canonicalizi
     original = deck_models._canonical_card_edges
     calls = 0
 
-    def counted(vertices, edges):
+    def counted(
+        vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+    ) -> tuple[tuple[str, str], ...]:
         nonlocal calls
         calls += 1
         return original(vertices, edges)

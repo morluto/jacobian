@@ -1,3 +1,5 @@
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
@@ -58,12 +60,19 @@ def test_laurent_arithmetic_preserves_exact_residual_prefixes() -> None:
     source = _s()
     inverse_prefix = inverse(source)
     product = multiply(source, inverse_prefix, output_precision=2)
-    assert tuple(value.as_fraction() for value in product.coefficients) == (1, 0)
+    assert tuple(value.as_fraction() for value in product.coefficients) == (
+        Fraction(1),
+        Fraction(0),
+    )
     assert residue(source).residue.num == 1
     recovered = derivative(integral(source).laurent_part)
     assert recovered.valuation_lower == -1
     assert recovered.precision == 2
-    assert tuple(value.as_fraction() for value in recovered.coefficients) == (0, 2, 3)
+    assert tuple(value.as_fraction() for value in recovered.coefficients) == (
+        Fraction(0),
+        Fraction(2),
+        Fraction(3),
+    )
 
 
 def test_ramification_multiplies_exponents() -> None:
@@ -71,12 +80,12 @@ def test_ramification_multiplies_exponents() -> None:
     assert result.valuation_lower == -2
     assert result.precision == 4
     assert tuple(value.as_fraction() for value in result.coefficients) == (
-        1,
-        0,
-        2,
-        0,
-        3,
-        0,
+        Fraction(1),
+        Fraction(0),
+        Fraction(2),
+        Fraction(0),
+        Fraction(3),
+        Fraction(0),
     )
 
 
@@ -92,10 +101,10 @@ def test_principal_and_regular_parts_are_disjoint() -> None:
     )
     assert tuple(
         value.as_fraction() for value in result.principal_part.coefficients
-    ) == (1,)
+    ) == (Fraction(1),)
     assert tuple(value.as_fraction() for value in result.regular_part.coefficients) == (
-        2,
-        3,
+        Fraction(2),
+        Fraction(3),
     )
 
     regular_source = TruncatedLaurentWindow(
@@ -122,7 +131,7 @@ def test_deramify_does_not_invent_unknown_lower_tail() -> None:
     assert result.status == "IN_IMAGE_OF_RAMIFICATION"
     assert result.result is not None
     assert (result.result.valuation_lower, result.result.precision) == (0, 1)
-    assert result.result.coefficients[0].as_fraction() == 5
+    assert result.result.coefficients[0].as_fraction() == Fraction(5)
 
 
 def test_power_one_preserves_the_known_source_window() -> None:

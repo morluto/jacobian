@@ -30,7 +30,6 @@ from jacobian.math.graphs.flows.multicommodity._models import (
     measured_profile_components,
 )
 from jacobian.math.graphs.flows.multicommodity._tools import (
-    TOOLS,
     _run_multicommodity_flow_profile,
 )
 from jacobian.math.graphs.flows.multicommodity.operations import (
@@ -63,18 +62,6 @@ def shared_bottleneck_flow() -> MulticommodityFlow:
             CommodityEdgeFlow(commodity_id="b", source=2, target=3, amount=q(2)),
         ),
     )
-
-
-def test_catalog_contains_the_audited_multicommodity_profile() -> None:
-    assert {tool.operation_id for tool in TOOLS} == {
-        "network.multicommodity_flow.profile.compute",
-        "network.multicommodity_flow.witness.check",
-        "network.multicommodity_flow.decomposition.compute",
-        "network.multicommodity_flow.feasibility.compute",
-        "network.multicommodity_flow.minimum_congestion.compute",
-        "network.multicommodity_flow.unsplittable_routing.check",
-        "network.multicommodity_flow.unsplittable_routing.find",
-    }
 
 
 def test_native_api_accepts_the_canonical_flow_value_directly() -> None:

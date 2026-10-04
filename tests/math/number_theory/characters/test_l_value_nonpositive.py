@@ -8,6 +8,7 @@ import pytest
 from jacobian.math.number_theory.characters import _tools
 from jacobian.math.number_theory.characters._models import (
     DirichletCharacterLValueNonpositiveRequest,
+    DirichletCharacterLValueNonpositiveResult,
 )
 from jacobian.math.number_theory.characters.operations import (
     character_group,
@@ -16,7 +17,9 @@ from jacobian.math.number_theory.characters.operations import (
 )
 
 
-def _coefficients(result) -> tuple[Fraction, ...]:
+def _coefficients(
+    result: DirichletCharacterLValueNonpositiveResult,
+) -> tuple[Fraction, ...]:
     return tuple(
         Fraction(value.num, value.den) for value in result.value.coefficients_ascending
     )

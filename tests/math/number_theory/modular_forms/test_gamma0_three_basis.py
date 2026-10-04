@@ -1,6 +1,7 @@
 """Exact canonical basis and coordinate behavior at Gamma0(3)."""
 
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 
@@ -16,7 +17,9 @@ from jacobian.math.number_theory.modular_forms import (
     modular_form_coordinates_q_expansion,
 )
 
-BASIS_ID = "gamma0-three-weight-2-4-6-hypersurface-v1"
+BASIS_ID: Literal["gamma0-three-weight-2-4-6-hypersurface-v1"] = (
+    "gamma0-three-weight-2-4-6-hypersurface-v1"
+)
 
 
 def _rank(matrix: list[list[Fraction]]) -> int:

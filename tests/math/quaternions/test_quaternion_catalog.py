@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import cast
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.quaternions import (
@@ -17,9 +18,17 @@ OPERATION_IDS = {tool.operation_id for tool in TOOLS}
 
 
 def q(*coordinates: Fraction) -> RationalUnitQuaternion:
+    assert len(coordinates) == 4
+    converted = tuple(CanonicalRational.from_fraction(value) for value in coordinates)
     return RationalUnitQuaternion(
-        coordinates=tuple(
-            CanonicalRational.from_fraction(value) for value in coordinates
+        coordinates=cast(
+            tuple[
+                CanonicalRational,
+                CanonicalRational,
+                CanonicalRational,
+                CanonicalRational,
+            ],
+            converted,
         )
     )
 

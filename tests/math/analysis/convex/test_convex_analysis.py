@@ -1,6 +1,7 @@
 """Tests for convex analysis operations."""
 
 import json
+from collections.abc import Callable
 
 import pytest
 
@@ -147,7 +148,7 @@ class TestMaxAffineEvaluation:
         "operation", [max_affine_evaluation, max_affine_subdifferential]
     )
     def test_derived_product_height_is_rejected_before_exact_evaluation(
-        self, operation
+        self, operation: Callable[..., object]
     ) -> None:
         height = 16_384
         value = 10**height

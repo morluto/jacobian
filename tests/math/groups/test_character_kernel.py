@@ -28,7 +28,7 @@ from jacobian.math.groups.characters.representation_ring_operations import (
 from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
 
-def _s3_table():
+def _s3_table() -> CharacterTableResult:
     source = PermutationGroup(degree=3, generators=((1, 2, 0), (1, 0, 2)))
     classes = group_conjugacy_classes(3, [list(g) for g in source.generators])
     partition = GroupConjugacyClassesResult._from_kernel(
@@ -37,13 +37,15 @@ def _s3_table():
     return character_table(partition)
 
 
-def _element(table, coordinates):
+def _element(
+    table: CharacterTableResult, coordinates: tuple[int, ...]
+) -> CharacterRingElement:
     return CharacterRingElement(
         table=table, irreducible_multiplicities=tuple(coordinates)
     )
 
 
-def _direct_s3_kernel(coordinates):
+def _direct_s3_kernel(coordinates: tuple[int, ...]) -> set[tuple[int, ...]]:
     members = []
     for permutation in permutations(range(3)):
         fixed = sum(permutation[index] == index for index in range(3))
@@ -65,7 +67,7 @@ def _direct_s3_kernel(coordinates):
     return set(members)
 
 
-def _elements(group: PermutationGroup):
+def _elements(group: PermutationGroup) -> set[tuple[int, ...]]:
     return {
         tuple(element)
         for conjugacy_class in group_conjugacy_classes(
@@ -80,7 +82,7 @@ def _elements(group: PermutationGroup):
     [((0, 1, 0), 3), ((0, 0, 1), 1), ((1, 0, 0), 6), ((1, 1, 0), 3)],
 )
 def test_s3_character_kernels_match_elementwise_trace_oracle(
-    coordinates, expected_order
+    coordinates: tuple[int, ...], expected_order: int
 ) -> None:
     table = _s3_table()
     result = character_kernel(
@@ -112,7 +114,9 @@ def test_sign_kernel_is_trivial_and_retains_ambient_parent() -> None:
     assert result.ambient_group == _s3_table().partition.source
 
 
-def test_group_order_admission_precedes_conjugacy_expansion(monkeypatch) -> None:
+def test_group_order_admission_precedes_conjugacy_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     degree = 61
     generator = tuple((point + 1) % degree for point in range(degree))
     source = PermutationGroup(degree=degree, generators=(generator,))
@@ -136,7 +140,7 @@ def test_group_order_admission_precedes_conjugacy_expansion(monkeypatch) -> None
         )
     )
 
-    def unexpected_conjugacy_expansion(*args, **kwargs):
+    def unexpected_conjugacy_expansion(*args: object, **kwargs: object) -> None:
         raise AssertionError("admission must precede conjugacy expansion")
 
     monkeypatch.setattr(

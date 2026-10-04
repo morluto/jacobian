@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from itertools import product
 
 import pytest
@@ -28,7 +29,9 @@ def _manual_support(net: PetriNet, places: tuple[int, ...]) -> tuple[bool, bool]
     return producers <= consumers, consumers <= producers
 
 
-def _reachable_prefixes(net: PetriNet, initial: tuple[int, ...], depth: int):
+def _reachable_prefixes(
+    net: PetriNet, initial: tuple[int, ...], depth: int
+) -> Iterator[tuple[int, ...]]:
     frontier = {initial}
     yield initial
     for _ in range(depth):

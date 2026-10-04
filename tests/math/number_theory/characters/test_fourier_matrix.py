@@ -1,4 +1,5 @@
 from itertools import product
+from typing import NoReturn
 
 import pytest
 from sympy import Poly, cyclotomic_poly, symbols
@@ -15,6 +16,7 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterFourierMatrixRequest,
 )
 from jacobian.math.number_theory.characters._tools import TOOLS
+from jacobian.math.number_theory.characters.values import DirichletCharacterGroup
 
 
 def _reduce_root_sum(exponents: list[int], order: int) -> Poly:
@@ -26,7 +28,9 @@ def _reduce_root_sum(exponents: list[int], order: int) -> Poly:
     )
 
 
-def _direct_unit_coordinates(group, residue: int) -> tuple[int, ...]:
+def _direct_unit_coordinates(
+    group: DirichletCharacterGroup, residue: int
+) -> tuple[int, ...]:
     for coordinates in product(*(range(order) for order in group.generator_orders)):
         candidate = 1 % group.modulus
         for generator, coordinate in zip(group.generators, coordinates, strict=True):
@@ -38,7 +42,9 @@ def _direct_unit_coordinates(group, residue: int) -> tuple[int, ...]:
     raise AssertionError("the declared generators did not produce a unit")
 
 
-def test_complete_fourier_axes_and_entries_match_independent_small_group_enumeration():
+def test_complete_fourier_axes_and_entries_match_independent_small_group_enumeration() -> (
+    None
+):
     for modulus in (1, 3, 5, 7, 8, 12):
         group = character_group(modulus)
         matrix = dirichlet_character_fourier_matrix(group)
@@ -69,7 +75,7 @@ def test_complete_fourier_axes_and_entries_match_independent_small_group_enumera
         assert matrix.entries == expected
 
 
-def test_complete_matrix_has_exact_both_sided_orthogonality():
+def test_complete_matrix_has_exact_both_sided_orthogonality() -> None:
     for modulus in (1, 3, 5, 7, 8, 12):
         matrix = dirichlet_character_fourier_matrix(character_group(modulus))
         count = len(matrix.unit_residues)
@@ -95,7 +101,7 @@ def test_complete_matrix_has_exact_both_sided_orthogonality():
             )
 
 
-def test_fourier_matrix_roundtrips_with_parent_and_axes():
+def test_fourier_matrix_roundtrips_with_parent_and_axes() -> None:
     matrix = dirichlet_character_fourier_matrix(character_group(5))
     decoded = DirichletCharacterFourierMatrix.model_validate_json(
         encode_strict_json(matrix.model_dump(mode="json"))
@@ -103,11 +109,15 @@ def test_fourier_matrix_roundtrips_with_parent_and_axes():
     assert decoded == matrix
 
 
-def test_fourier_matrix_rejects_excess_work_before_matrix_construction(monkeypatch):
+def test_fourier_matrix_rejects_excess_work_before_matrix_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     group = character_group(5)
     monkeypatch.setattr(operations, "MAX_CHARACTER_ORTHOGONALITY_WORK", 1)
 
-    def unexpected_construction(cls, **fields):
+    def unexpected_construction(
+        cls: type[DirichletCharacterFourierMatrix], /, **fields: object
+    ) -> NoReturn:
         raise AssertionError("matrix construction must follow complete admission")
 
     monkeypatch.setattr(
@@ -122,7 +132,7 @@ def test_fourier_matrix_rejects_excess_work_before_matrix_construction(monkeypat
     )
 
 
-def test_fourier_matrix_catalog_contract():
+def test_fourier_matrix_catalog_contract() -> None:
     tool = next(
         tool
         for tool in TOOLS

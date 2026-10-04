@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from math import factorial
 
 import pytest
@@ -27,7 +28,7 @@ def _hook_formula(parts: tuple[int, ...]) -> int:
     return factorial(size) // hook_product
 
 
-def _partitions(n: int, maximum: int | None = None):
+def _partitions(n: int, maximum: int | None = None) -> Iterator[tuple[int, ...]]:
     if n == 0:
         yield ()
         return

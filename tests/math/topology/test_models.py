@@ -131,10 +131,10 @@ def test_canonicalization_reuses_materialized_face_closure(
     assert calls == []
 
 
-def _rational_rank(rows: tuple[tuple[str, ...], ...]) -> int:
+def _rational_rank(rows: tuple[tuple[int | Fraction, ...], ...]) -> int:
     """Small independent Gaussian rank oracle for topology fixtures."""
 
-    matrix = [[Fraction(int(value)) for value in row] for row in rows]
+    matrix = [[Fraction(value) for value in row] for row in rows]
     if not matrix:
         return 0
     pivot_row = 0

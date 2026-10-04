@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -49,7 +51,7 @@ def _rf_polynomial(terms: tuple[tuple[int, int], ...]) -> RationalFunction:
 def _rational_rf(
     numerator: tuple[tuple[int, int], ...], denominator: tuple[tuple[int, int], ...]
 ) -> RationalFunction:
-    def _part(terms: tuple[tuple[int, int], ...]) -> dict:
+    def _part(terms: tuple[tuple[int, int], ...]) -> dict[str, object]:
         return {
             "terms": [
                 {"coefficient": {"num": coefficient, "den": 1}, "exponents": [degree]}
@@ -101,7 +103,12 @@ def test_binomial_power_matches_independent_dictionary_oracle_and_prefix_action(
     }
     assert observed == oracle == {0: 1, 1: 3, 2: 3, 3: 1}
 
-    geometric = FiniteRationalSequence(values=(1, 2, 4, 8, 16, 32))
+    geometric = FiniteRationalSequence(
+        values=tuple(
+            CanonicalRational.from_fraction(Fraction(value))
+            for value in (1, 2, 4, 8, 16, 32)
+        )
+    )
     action = shift_operator_apply_to_sequence_prefix(result.power, 0, geometric)
     assert [row.residual.as_fraction() for row in action.residuals] == [
         Fraction(27 * 2**index) for index in range(3)
@@ -167,7 +174,9 @@ def test_rational_function_coefficients_require_a_proved_whole_power_envelope() 
     )
 
 
-def test_later_degree_rejection_precedes_any_product_expansion(monkeypatch) -> None:
+def test_later_degree_rejection_precedes_any_product_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     base = ShiftOreOperator.model_validate(
         {
             "variable": "n",
@@ -178,7 +187,7 @@ def test_later_degree_rejection_precedes_any_product_expansion(monkeypatch) -> N
         }
     )
 
-    def forbidden_multiply(*_args, **_kwargs):
+    def forbidden_multiply(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("power admission must finish before multiplication")
 
     monkeypatch.setattr(ore_operations, "shift_operator_multiply", forbidden_multiply)
@@ -186,11 +195,13 @@ def test_later_degree_rejection_precedes_any_product_expansion(monkeypatch) -> N
         shift_operator_power(base, 3)
 
 
-def test_final_power_digit_bound_matches_rational_function_carrier(monkeypatch) -> None:
+def test_final_power_digit_bound_matches_rational_function_carrier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     coefficient = 10**64 - 1
     base = _operator((0, coefficient), (1, coefficient))
 
-    def forbidden_multiply(*_args, **_kwargs):
+    def forbidden_multiply(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("final power admission must precede multiplication")
 
     monkeypatch.setattr(ore_operations, "shift_operator_multiply", forbidden_multiply)

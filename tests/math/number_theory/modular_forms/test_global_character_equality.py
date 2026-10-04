@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from itertools import product
 from math import gcd
+from typing import Literal
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import basis_id as typed_basis_id
+from tests.math.number_theory.modular_forms._typing import rational
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import current_request_execution
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -18,6 +22,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_coordinates_q_expansion,
 )
@@ -40,7 +45,7 @@ _SOURCE_FIELD = RationalCyclotomicField(order=6)
 _TARGET_FIELD = RationalCyclotomicField(order=12)
 
 
-def _inflated_character(level: int, coordinate: int):
+def _inflated_character(level: int, coordinate: int) -> DirichletCharacter:
     source = dirichlet_character(character_group(13), (coordinate,))
     target_group = character_group(level)
     for coordinates in product(
@@ -57,7 +62,12 @@ def _inflated_character(level: int, coordinate: int):
     raise AssertionError("character inflation fixture was not found")
 
 
-def _space(level: int, coordinate: int = 4, kind: str = "M", weight: int = 2):
+def _space(
+    level: int,
+    coordinate: int = 4,
+    kind: Literal["M", "S"] = "M",
+    weight: int = 2,
+) -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
         weight=weight,
@@ -67,17 +77,17 @@ def _space(level: int, coordinate: int = 4, kind: str = "M", weight: int = 2):
     )
 
 
-def _element(constant: int = 0, zeta: int = 0):
+def _element(constant: int = 0, zeta: int = 0) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=_SOURCE_FIELD,
         coefficients_ascending=(
-            {"num": constant, "den": 1},
-            {"num": zeta, "den": 1},
+            CanonicalRational(num=constant, den=1),
+            CanonicalRational(num=zeta, den=1),
         ),
     )
 
 
-def _form(space: ModularFormSpace, first_coordinate: int = 0):
+def _form(space: ModularFormSpace, first_coordinate: int = 0) -> ModularFormCoordinates:
     from jacobian.math.number_theory.modular_forms.character_coordinates import (
         _admit_coordinate_space,
     )
@@ -90,12 +100,12 @@ def _form(space: ModularFormSpace, first_coordinate: int = 0):
     )
     return ModularFormCoordinates(
         space=space,
-        basis_id=context.basis_id,
+        basis_id=typed_basis_id(context.basis_id),
         coordinates=coordinates,
     )
 
 
-def _basis_form(space: ModularFormSpace, basis_index: int):
+def _basis_form(space: ModularFormSpace, basis_index: int) -> ModularFormCoordinates:
     from jacobian.math.number_theory.modular_forms.character_coordinates import (
         _admit_coordinate_space,
     )
@@ -104,19 +114,19 @@ def _basis_form(space: ModularFormSpace, basis_index: int):
     assert 0 <= basis_index < context.dimension
     return ModularFormCoordinates(
         space=space,
-        basis_id=context.basis_id,
+        basis_id=typed_basis_id(context.basis_id),
         coordinates=tuple(
             _element(int(index == basis_index)) for index in range(context.dimension)
         ),
     )
 
 
-def _embedding():
+def _embedding() -> CyclotomicFieldEmbedding:
     # The inclusion Q(zeta_6) -> Q(zeta_12) sends zeta_6 to zeta_12^2.
     image = RationalCyclotomicElement(
         field=_TARGET_FIELD,
         coefficients_ascending=tuple(
-            {"num": int(index == 2), "den": 1} for index in range(4)
+            CanonicalRational(num=int(index == 2), den=1) for index in range(4)
         ),
     )
     return CyclotomicFieldEmbedding(
@@ -124,12 +134,12 @@ def _embedding():
     )
 
 
-def _conjugate_embedding():
+def _conjugate_embedding() -> CyclotomicFieldEmbedding:
     # zeta_6 maps to zeta_12^-2 = 1 - zeta_12^2.
     image = RationalCyclotomicElement(
         field=_TARGET_FIELD,
         coefficients_ascending=tuple(
-            {"num": (1 if index == 0 else -1 if index == 2 else 0), "den": 1}
+            CanonicalRational(num=(1 if index == 0 else -1 if index == 2 else 0), den=1)
             for index in range(4)
         ),
     )
@@ -138,7 +148,9 @@ def _conjugate_embedding():
     )
 
 
-def test_embedding_maps_large_rational_coordinate_without_generic_product_bound():
+def test_embedding_maps_large_rational_coordinate_without_generic_product_bound() -> (
+    None
+):
     from fractions import Fraction
 
     from jacobian._exact import CanonicalRational
@@ -152,14 +164,14 @@ def test_embedding_maps_large_rational_coordinate_without_generic_product_bound(
     )
     mapped = _map_element(value, _embedding().generator_image, _TARGET_FIELD)
 
-    assert mapped.coefficients_ascending[0].as_fraction() == Fraction(10**25)
+    assert rational(mapped.coefficients_ascending[0]).as_fraction() == Fraction(10**25)
     assert all(
-        coefficient.as_fraction() == 0
+        rational(coefficient).as_fraction() == 0
         for coefficient in mapped.coefficients_ascending[1:]
     )
 
 
-def test_global_equality_compares_nonzero_cross_embeddings():
+def test_global_equality_compares_nonzero_cross_embeddings() -> None:
     # Characters 2 and 10 are Galois conjugate. Mapping their generators by
     # opposite embeddings gives the same common Nebentypus and the same form.
     left = _basis_form(_space(13, 2, kind="S"), basis_index=0)
@@ -228,12 +240,18 @@ def test_direct_native_comparison_shares_one_execution_envelope(
     right = _basis_form(_space(13, 10, kind="S"), basis_index=0)
     executions = []
 
-    def record_execution(_form, _context, _image, target, precision):
+    def record_execution(
+        _form: ModularFormCoordinates,
+        _context: object,
+        _image: RationalCyclotomicElement,
+        target: RationalCyclotomicField,
+        precision: int,
+    ) -> tuple[RationalCyclotomicElement, ...]:
         executions.append(current_request_execution())
         zero = RationalCyclotomicElement(
             field=target,
             coefficients_ascending=tuple(
-                {"num": 0, "den": 1} for _ in range(target.degree)
+                CanonicalRational(num=0, den=1) for _ in range(target.degree)
             ),
         )
         return (zero,) * precision
@@ -251,7 +269,7 @@ def test_direct_native_comparison_shares_one_execution_envelope(
     assert executions[0] is not None and executions[0] is executions[1]
 
 
-def test_global_equality_rejects_invalid_native_argument_types():
+def test_global_equality_rejects_invalid_native_argument_types() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
     valid = _form(_space(13, 4, kind="S"))
@@ -269,7 +287,7 @@ def test_global_equality_rejects_invalid_native_argument_types():
         )
 
 
-def test_global_equality_rejects_forged_native_arguments_as_domain_errors():
+def test_global_equality_rejects_forged_native_arguments_as_domain_errors() -> None:
     valid = _form(_space(13, 4, kind="S"))
     forged_form = ModularFormCoordinates.model_construct()
     forged_embedding = CyclotomicFieldEmbedding.model_construct()
@@ -287,7 +305,7 @@ def test_global_equality_rejects_forged_native_arguments_as_domain_errors():
         )
 
 
-def test_global_equality_handles_zero_spaces_and_unequal_levels():
+def test_global_equality_handles_zero_spaces_and_unequal_levels() -> None:
     zero_left = _form(_space(13, 4, kind="S"))
     zero_right = _form(_space(13, 8, kind="S"))
     assert not zero_left.coordinates and not zero_right.coordinates
@@ -307,7 +325,7 @@ def test_global_equality_handles_zero_spaces_and_unequal_levels():
     )
 
 
-def test_global_equality_reaches_gamma1_78_sturm_boundary():
+def test_global_equality_reaches_gamma1_78_sturm_boundary() -> None:
     # [SL2(Z):Gamma1(78)] = 4032, hence weight two needs 673 coefficients.
     # This exercises the high-precision worker lane and compares nonzero forms.
     left = _form(_space(26, 4), first_coordinate=1)

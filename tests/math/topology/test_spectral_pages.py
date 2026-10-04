@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_SPECTRAL_PAGE,
     AssociatedGradedResult,
@@ -30,8 +31,11 @@ from jacobian.math.topology.chain_complexes.values import (
 OPERATION_ID = "homological.spectral_sequence.page.compute"
 
 
-def _tool():
-    return next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+def _tool() -> MathTool[SpectralPageRequest, SpectralPageResult]:
+    return cast(
+        MathTool[SpectralPageRequest, SpectralPageResult],
+        next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID),
+    )
 
 
 def _level(*degree_vectors: tuple[tuple[int | Fraction, ...], ...]) -> FiltrationLevel:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian.math.geometry.crystallographic.extensions._models import (
+    CrystallographicAffineRealization,
     FiniteLatticeExtension,
 )
 from jacobian.math.geometry.crystallographic.extensions.operations import (
@@ -53,7 +54,9 @@ def _translation_extension() -> FiniteLatticeExtension:
     )
 
 
-def _shift(result, element: int) -> tuple[Fraction, ...]:
+def _shift(
+    result: CrystallographicAffineRealization, element: int
+) -> tuple[Fraction, ...]:
     return tuple(
         value.as_fraction() for value in result.section_maps[element].section_shift
     )

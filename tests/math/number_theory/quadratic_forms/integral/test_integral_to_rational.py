@@ -24,9 +24,14 @@ from jacobian.math.number_theory.quadratic_forms.integral import (
     IntegralQuadraticForm,
     integral_form_to_rational,
 )
+from jacobian.math.number_theory.quadratic_forms.integral._models import (
+    IntegralQuadraticCrossTerm,
+)
 
 
-def _rational_vector(axis: tuple[str, ...], values: tuple[int, ...]):
+def _rational_vector(
+    axis: tuple[str, ...], values: tuple[int, ...]
+) -> RationalCoordinateVector:
     return RationalCoordinateVector(
         axis=axis,
         coordinates=tuple(
@@ -39,7 +44,7 @@ def test_zz_inclusion_round_trips_and_composes_with_exact_box_profile() -> None:
     source = IntegralQuadraticForm(
         axis=("u", "v"),
         diagonal_coefficients=(2, 0),
-        cross_terms=({"left": 0, "right": 1, "coefficient": 3},),
+        cross_terms=(IntegralQuadraticCrossTerm(left=0, right=1, coefficient=3),),
     )
     inclusion = integral_form_to_rational(source)
 
@@ -110,7 +115,9 @@ def test_inclusion_result_is_bound_to_source_and_native_input_is_revalidated() -
     ],
 )
 def test_empty_zero_and_degenerate_forms_keep_their_parent_and_axis(
-    axis, diagonal, cross_terms
+    axis: tuple[str, ...],
+    diagonal: tuple[int, ...],
+    cross_terms: tuple[IntegralQuadraticCrossTerm, ...],
 ) -> None:
     form = IntegralQuadraticForm(
         axis=axis,
@@ -148,7 +155,7 @@ def test_maximal_admissible_support_is_converted() -> None:
         axis=axis,
         diagonal_coefficients=(0,) * 128,
         cross_terms=tuple(
-            {"left": left, "right": right, "coefficient": 1}
+            IntegralQuadraticCrossTerm(left=left, right=right, coefficient=1)
             for left, right in pairs[: 2_048 - 128]
         ),
     )

@@ -15,9 +15,12 @@ from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character_orthogonality_over_characters,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacterGroup
 
 
-def _direct_cyclotomic_sum(group, left: int, right: int) -> int:
+def _direct_cyclotomic_sum(
+    group: DirichletCharacterGroup, left: int, right: int
+) -> int:
     """Brute-force every dual coordinate and reduce its exact root sum."""
     modulus = group.modulus
     left_residue = left % modulus

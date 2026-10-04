@@ -334,9 +334,12 @@ def test_partition_permutation_requires_an_explicit_axis_change() -> None:
         exc_info.value.errors()[0]["type"]
         == "graph.bipartite_factor_left_axis_must_be_0_len"
     )
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_exc_info:
         bipartite_degree_constrained_factor(graph, (1, 0), (2, 3), (2, 0, 1, 1))
-    assert exc_info.value.errors()[0]["type"] == "graph.bipartite_factor.partition_axis"
+    assert (
+        domain_exc_info.value.errors()[0]["type"]
+        == "graph.bipartite_factor.partition_axis"
+    )
 
 
 def test_serialized_factor_claim_rejects_misaligned_requirement_axes() -> None:

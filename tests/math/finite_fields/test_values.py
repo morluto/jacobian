@@ -227,10 +227,10 @@ def test_presentation_rejects_reducible_or_noncanonical_moduli() -> None:
         exc_info.value.errors()[0]["type"]
         == "finite_field.modulus_irreducible_over_prime_field"
     )
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as value_error:
         FiniteFieldPresentation(characteristic=2, modulus_coefficients=(1, 3, 1))
     assert (
-        exc_info.value.errors()[0]["type"]
+        value_error.value.errors()[0]["type"]
         == "finite_field.modulus_coefficients_canonical_field_residues"
     )
 

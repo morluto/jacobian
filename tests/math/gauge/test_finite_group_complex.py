@@ -143,9 +143,11 @@ def test_open_or_foreign_face_boundary_is_rejected() -> None:
             ),
         ),
     )
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(ValidationError) as validation_error:
         FiniteGroupGaugeComplex.model_validate(foreign.model_dump())
-    assert exc_info.value.errors()[0]["type"] == "lattice_gauge.complex_face_edge"
+    assert (
+        validation_error.value.errors()[0]["type"] == "lattice_gauge.complex_face_edge"
+    )
 
 
 def test_aggregate_face_growth_is_rejected_before_nested_value_parsing() -> None:

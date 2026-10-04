@@ -118,9 +118,12 @@ def _replay_quadratic(
     entries: tuple[tuple[Fraction, ...], ...], point: tuple[Fraction, ...]
 ) -> Fraction:
     return sum(
-        entries[i][j] * point[i] * point[j]
-        for i in range(len(point))
-        for j in range(len(point))
+        (
+            entries[i][j] * point[i] * point[j]
+            for i in range(len(point))
+            for j in range(len(point))
+        ),
+        Fraction(0),
     )
 
 

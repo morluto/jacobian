@@ -4,16 +4,19 @@ import json
 from fractions import Fraction
 from itertools import product
 from math import gcd
+from typing import cast
 
 import pytest
 
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.affine_semigroups import AffineConfiguration, hilbert_basis
 from jacobian.math.affine_semigroups.semigroup import (
     MAX_HILBERT_BASIS_DETERMINANT,
+    AffineHilbertBasis,
 )
 from jacobian.math.affine_semigroups.semigroup_models import (
     AffineHilbertBasisRequest,
@@ -152,10 +155,13 @@ def test_nonpointed_or_degenerate_configurations_are_domain_errors(
 
 
 def test_tool_example_and_result_round_trip() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "affine_semigroup.hilbert_basis.compute"
+    tool = cast(
+        MathTool[AffineHilbertBasisRequest, AffineHilbertBasis],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == "affine_semigroup.hilbert_basis.compute"
+        ),
     )
     request = AffineHilbertBasisRequest.model_validate_json(
         json.dumps(tool.examples[0].input)

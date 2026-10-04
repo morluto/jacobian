@@ -3,6 +3,7 @@
 import json
 import time
 from threading import Event
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -494,8 +495,13 @@ def test_mixed_blocks_keep_exact_multipartite_bound() -> None:
     lefts = tuple(f"a{index}" for index in range(11))
     rights = tuple(f"b{index}" for index in range(11))
     pentagon = tuple(f"c{index}" for index in range(5))
-    edges = tuple((a, b) for a in lefts for b in rights) + tuple(
-        tuple(sorted((pentagon[index], pentagon[(index + 1) % 5])))
+    edges: tuple[tuple[str, str], ...] = tuple(
+        (a, b) for a in lefts for b in rights
+    ) + tuple(
+        (
+            min(pentagon[index], pentagon[(index + 1) % 5]),
+            max(pentagon[index], pentagon[(index + 1) % 5]),
+        )
         for index in range(5)
     )
     graph = SimpleUndirectedGraph(vertices=lefts + rights + pentagon, edges=edges)
@@ -547,8 +553,8 @@ def test_exact_chordless_four_cycle_block_charges_traversal_work() -> None:
     parts = [left_pair, right_pair, *singletons]
     vertices = tuple(vertex for part in parts for vertex in part)
     part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
-    edges = tuple(
-        tuple(sorted((first, second)))
+    edges: tuple[tuple[str, str], ...] = tuple(
+        (min(first, second), max(first, second))
         for index, first in enumerate(vertices)
         for second in vertices[index + 1 :]
         if part_of[first] != part_of[second]
@@ -564,8 +570,8 @@ def test_dominant_multipartite_part_makes_long_cycles_empty() -> None:
     parts = [tuple(f"p{index}" for index in range(9)), ("p9",), ("p10",)]
     vertices = tuple(vertex for part in parts for vertex in part)
     part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
-    edges = tuple(
-        tuple(sorted((first, second)))
+    edges: tuple[tuple[str, str], ...] = tuple(
+        (min(first, second), max(first, second))
         for index, first in enumerate(vertices)
         for second in vertices[index + 1 :]
         if part_of[first] != part_of[second]
@@ -753,9 +759,9 @@ def test_oversized_label_rejects_before_full_string_scans(
     scanned: list[int] = []
     real_is_normalized = unicodedata.is_normalized
 
-    def spy(value: str) -> bool:
+    def spy(form: Literal["NFC", "NFD", "NFKC", "NFKD"], value: str) -> bool:
         scanned.append(len(value))
-        return real_is_normalized(value)
+        return real_is_normalized(form, value)
 
     monkeypatch.setattr(unicodedata, "is_normalized", spy)
     oversized = "x" * (100_000_000 // 2 + 1)

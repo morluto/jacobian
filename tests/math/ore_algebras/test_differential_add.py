@@ -78,7 +78,9 @@ def _rf_eval(value: RationalFunction, at: Fraction) -> Fraction:
     return _poly_eval(numerator, at) / _poly_eval(denominator, at)
 
 
-def _poly_derivative(terms: tuple[tuple[int, Fraction], ...]):
+def _poly_derivative(
+    terms: tuple[tuple[int, Fraction], ...],
+) -> tuple[tuple[int, Fraction], ...]:
     return tuple(
         (exponent - 1, coefficient * exponent)
         for exponent, coefficient in terms
@@ -86,7 +88,10 @@ def _poly_derivative(terms: tuple[tuple[int, Fraction], ...]):
     )
 
 
-def _poly_mul(left, right):
+def _poly_mul(
+    left: tuple[tuple[int, Fraction], ...],
+    right: tuple[tuple[int, Fraction], ...],
+) -> tuple[tuple[int, Fraction], ...]:
     result: dict[int, Fraction] = {}
     for left_exp, left_value in left:
         for right_exp, right_value in right:
@@ -97,7 +102,10 @@ def _poly_mul(left, right):
     return tuple((exponent, value) for exponent, value in result.items() if value)
 
 
-def _poly_sub(left, right):
+def _poly_sub(
+    left: tuple[tuple[int, Fraction], ...],
+    right: tuple[tuple[int, Fraction], ...],
+) -> tuple[tuple[int, Fraction], ...]:
     result = dict(left)
     for exponent, value in right:
         result[exponent] = result.get(exponent, Fraction(0)) - value

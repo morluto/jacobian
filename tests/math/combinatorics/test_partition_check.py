@@ -19,7 +19,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartit
 
 
 def test_partition_check_returns_canonical_value_and_ferrers_data() -> None:
-    result = check_partition(PartitionCheckRequest(parts=[4, 2, 1]))
+    result = check_partition(PartitionCheckRequest(parts=(4, 2, 1)))
 
     assert isinstance(result.outcome, PartitionFound)
     assert result.outcome.partition == IntegerPartition(parts=(4, 2, 1))
@@ -38,7 +38,7 @@ def test_partition_check_returns_canonical_value_and_ferrers_data() -> None:
 
 
 def test_empty_sequence_is_the_partition_of_zero() -> None:
-    result = check_partition(PartitionCheckRequest(parts=[]))
+    result = check_partition(PartitionCheckRequest(parts=()))
 
     assert isinstance(result.outcome, PartitionFound)
     assert result.outcome.partition.parts == ()
@@ -48,7 +48,9 @@ def test_empty_sequence_is_the_partition_of_zero() -> None:
 
 
 @pytest.mark.parametrize("cell", [(0, 1), (1, -1), (501, 1), (1, 501)])
-def test_partition_found_rejects_cells_outside_one_based_bounds(cell) -> None:
+def test_partition_found_rejects_cells_outside_one_based_bounds(
+    cell: tuple[int, int],
+) -> None:
     with pytest.raises(ValidationError):
         PartitionFound(
             partition=IntegerPartition(parts=(1,)),
@@ -89,12 +91,14 @@ def test_rejection_round_trip_preserves_its_authored_obstruction() -> None:
     result = check_partition(PartitionCheckRequest(parts=(3, 4, 0)))
     assert isinstance(result.outcome, PartitionRejected)
     decoded = type(result).model_validate_json(result.model_dump_json())
+    assert isinstance(decoded.outcome, PartitionRejected)
     assert decoded == result
     assert decoded.outcome.parts == (3, 4, 0)
 
     forged = result.model_dump(mode="json")
     forged["outcome"]["parts"] = [3, 1]
     decoded_forged_parts = type(result).model_validate(forged)
+    assert isinstance(decoded_forged_parts.outcome, PartitionRejected)
     assert decoded_forged_parts.outcome.parts == (3, 1)
 
     wrong_first_obstruction = result.model_dump(mode="json")
@@ -106,15 +110,16 @@ def test_rejection_round_trip_preserves_its_authored_obstruction() -> None:
     decoded_obstruction = type(result).model_validate_json(
         json.dumps(wrong_first_obstruction)
     )
+    assert isinstance(decoded_obstruction.outcome, PartitionRejected)
     assert decoded_obstruction.outcome.obstruction == NonpositivePartObstruction(
         index=2, value=0
     )
 
-    decoded = PartitionRejected(
+    rejected = PartitionRejected(
         parts=(3, 4, 0),
         obstruction=NonpositivePartObstruction(index=2, value=0),
     )
-    assert decoded.obstruction.index == 2
+    assert rejected.obstruction.index == 2
 
 
 def _first_obstruction(parts: tuple[int, ...]) -> tuple[str, int, int | None]:
@@ -148,14 +153,14 @@ def test_small_candidate_sequences_match_independent_classifier() -> None:
 
 
 def test_raw_candidate_is_bounded_before_request_model_construction() -> None:
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(ValidationError) as candidate_error:
         PartitionCheckRequest.model_validate({"parts": [1] * 501})
-    assert exc_info.value.errors()[0]["type"] == (
+    assert candidate_error.value.errors()[0]["type"] == (
         "combinatorics.partition_candidate_length"
     )
 
     with pytest.raises(ValidationError):
-        PartitionCheckRequest(parts=("3",))
+        PartitionCheckRequest.model_validate({"parts": ["3"]})
 
     result = check_partition(PartitionCheckRequest(parts=(501, 1, 0)))
     assert isinstance(result.outcome, PartitionRejected)
@@ -163,9 +168,9 @@ def test_raw_candidate_is_bounded_before_request_model_construction() -> None:
 
     with pytest.raises(ValidationError):
         PartitionCheckRequest(parts=(2**53,))
-    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+    with pytest.raises(OperationResourceAdmissionError) as admission_error:
         check_partition(PartitionCheckRequest(parts=(501,)))
-    assert exc_info.value.errors()[0]["type"] == (
+    assert admission_error.value.errors()[0]["type"] == (
         "combinatorics.partition_candidate_size"
     )
 

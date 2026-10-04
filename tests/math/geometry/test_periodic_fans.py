@@ -155,7 +155,7 @@ def _closed_segments_meet(
 ) -> bool:
     # Exact separating-axis test for closed convex lattice polygons: they fail
     # to meet iff some boundary-edge normal separates their projections.
-    axes = []
+    axes: list[tuple[int, int]] = []
     for polygon in (first, second):
         size = len(polygon)
         axes.extend(

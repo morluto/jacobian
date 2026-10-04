@@ -26,30 +26,36 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 )
 
 
-def _form(axis, diagonal, crosses=()):
+def _form(
+    axis: tuple[str, ...],
+    diagonal: tuple[int | Fraction, ...],
+    crosses: tuple[tuple[int, int, int], ...] = (),
+) -> RationalQuadraticForm:
     return RationalQuadraticForm(
         axis=axis,
         diagonal_coefficients=tuple(
-            CanonicalRational.from_fraction(value) for value in diagonal
+            CanonicalRational.from_fraction(Fraction(value)) for value in diagonal
         ),
         cross_terms=tuple(
             QuadraticCrossTerm(
                 left=i,
                 right=j,
-                coefficient=CanonicalRational.from_fraction(value),
+                coefficient=CanonicalRational.from_fraction(Fraction(value)),
             )
             for i, j, value in crosses
         ),
     )
 
 
-def test_native_boundary_rejects_negative_radius_even_for_zero_dimensional_form():
+def test_native_boundary_rejects_negative_radius_even_for_zero_dimensional_form() -> (
+    None
+):
     empty = _form((), ())
     with pytest.raises(OperationDomainValidationError):
         finite_box_value_profile(empty, -1)
 
 
-def test_finite_box_profile_matches_independent_polar_matrix_oracle():
+def test_finite_box_profile_matches_independent_polar_matrix_oracle() -> None:
     form = _form(("u", "v", "w"), (2, -1, 0), ((0, 1, 3), (1, 2, -2)))
     radius = 2
     result = finite_box_value_profile(form, radius)
@@ -57,7 +63,7 @@ def test_finite_box_profile_matches_independent_polar_matrix_oracle():
     # Q(x)=x^T B_Q x/2, where B_Q has diagonal 2*a_i and off-diagonal
     # polynomial cross coefficients. This independent oracle uses matrix form.
     polar = ((4, 3, 0), (3, -2, -2), (0, -2, 0))
-    expected = Counter()
+    expected: Counter[int] = Counter()
     for vector in product(range(-radius, radius + 1), repeat=3):
         doubled = sum(
             vector[i] * polar[i][j] * vector[j] for i in range(3) for j in range(3)
@@ -74,7 +80,7 @@ def test_finite_box_profile_matches_independent_polar_matrix_oracle():
     assert result.maximum_value == max(expected)
 
 
-def test_zero_dimensional_and_radius_zero_profiles_are_complete():
+def test_zero_dimensional_and_radius_zero_profiles_are_complete() -> None:
     empty = _form((), ())
     result = finite_box_value_profile(empty, 0)
     assert result.vector_count == 1
@@ -87,7 +93,7 @@ def test_zero_dimensional_and_radius_zero_profiles_are_complete():
     assert origin_only.coordinate_bounds == ((0, 0),)
 
 
-def test_nonintegral_form_is_rejected_before_enumeration():
+def test_nonintegral_form_is_rejected_before_enumeration() -> None:
     form = _form(("x",), (Fraction(1, 2),))
     with pytest.raises(OperationDomainValidationError) as exc_info:
         finite_box_value_profile(form, 1)
@@ -97,7 +103,7 @@ def test_nonintegral_form_is_rejected_before_enumeration():
     )
 
 
-def test_box_vector_count_is_admitted_before_evaluation():
+def test_box_vector_count_is_admitted_before_evaluation() -> None:
     form = _form(("x", "y", "z", "w"), (1, 1, 1, 1))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         finite_box_value_profile(form, 8)
@@ -106,7 +112,7 @@ def test_box_vector_count_is_admitted_before_evaluation():
     )
 
 
-def test_box_output_digit_envelope_is_admitted_before_evaluation():
+def test_box_output_digit_envelope_is_admitted_before_evaluation() -> None:
     # A dense box whose value count fits, but whose tallest coefficients make
     # the aggregate profile digits exceed the output envelope before any
     # vector is evaluated.
@@ -119,7 +125,7 @@ def test_box_output_digit_envelope_is_admitted_before_evaluation():
     )
 
 
-def test_profile_values_are_exact_decimal_integers_over_json():
+def test_profile_values_are_exact_decimal_integers_over_json() -> None:
     # Q(x) = 10^20 * x^2 at radius 1 returns values far outside JavaScript's
     # safe-integer range; the canonical JSON transport must carry them as
     # exact decimal strings that round-trip without rounding.
@@ -134,7 +140,7 @@ def test_profile_values_are_exact_decimal_integers_over_json():
     assert restored.rows[-1].value == tall
 
 
-def test_incomplete_profile_histograms_are_rejected_on_validation():
+def test_incomplete_profile_histograms_are_rejected_on_validation() -> None:
     # The declared box [-1,1] contains three vectors, so a one-row profile
     # covering only one vector is not a complete FiniteBoxProfileResult.
     form = _form(("x",), (1,))

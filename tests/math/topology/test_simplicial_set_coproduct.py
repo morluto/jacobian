@@ -97,7 +97,7 @@ def test_coproduct_inclusions_are_natural_and_compose() -> None:
 
 
 def test_coproduct_rejects_level_overflow_before_expansion() -> None:
-    def discrete(prefix: str, size: int):
+    def discrete(prefix: str, size: int) -> FiniteTruncatedSimplicialSet:
         labels = tuple(f"{prefix}{i}" for i in range(size))
         identity = tuple(range(size))
         result = from_tables(

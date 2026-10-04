@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
@@ -19,6 +20,20 @@ from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
 )
 from jacobian.math.number_theory.modular_forms.values import ModularFormSpace
+
+
+def _unit_rows(payload: dict[str, object]) -> tuple[list[int], list[list[int]]]:
+    character = payload["character"]
+    assert isinstance(character, dict)
+    residues = character["unit_residues"]
+    coordinates = character["unit_coordinates"]
+    assert isinstance(residues, list) and all(type(value) is int for value in residues)
+    assert isinstance(coordinates, list)
+    assert all(
+        isinstance(row, list) and all(type(value) is int for value in row)
+        for row in coordinates
+    )
+    return cast(list[int], residues), cast(list[list[int]], coordinates)
 
 
 class _FakePariGroup:
@@ -110,11 +125,8 @@ def test_pari_standard_vector_agrees_on_every_unit_without_ordering_assumption()
     assert group is fake_pari.group
     assert character_vector == (10,)
     assert character_order == 6
-    for residue, jacobian_row in zip(
-        payload["character"]["unit_residues"],
-        payload["character"]["unit_coordinates"],
-        strict=True,
-    ):
+    residues, coordinates = _unit_rows(payload)
+    for residue, jacobian_row in zip(residues, coordinates, strict=True):
         jacobian_value = Fraction(2 * jacobian_row[0], 12) % 1
         pari_value = Fraction(10 * fake_pari.znlog(residue, group)[0], 12) % 1
         assert pari_value == jacobian_value
@@ -133,13 +145,8 @@ def test_live_cypari_standard_vector_and_every_unit_agreement() -> None:
     assert tuple(int(value) for value in group[1][1]) == (12,)
     assert tuple(int(value) for value in character_vector) == (2,)
     assert character_order == 6
-    unit_rows = dict(
-        zip(
-            payload["character"]["unit_residues"],
-            payload["character"]["unit_coordinates"],
-            strict=True,
-        )
-    )
+    residues, coordinates = _unit_rows(payload)
+    unit_rows = dict(zip(residues, coordinates, strict=True))
     for residue, row in unit_rows.items():
         assert cypari.pari.chareval(group, character_vector, residue) == (
             Fraction(2 * row[0], 12) % 1

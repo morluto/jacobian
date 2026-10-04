@@ -6,6 +6,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import cyclotomic
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -56,7 +57,10 @@ def test_scalar_extension_and_q_expansion_preserve_exact_parent() -> None:
         coefficient_domain=field,
     )
     assert extended.basis_id == BASIS_ID
-    assert _field_coordinates(extended.coordinates[0]) == (Fraction(2), Fraction(0))
+    assert _field_coordinates(cyclotomic(extended.coordinates[0])) == (
+        Fraction(2),
+        Fraction(0),
+    )
     assert (
         ModularFormCoordinates.model_validate_json(extended.model_dump_json())
         == extended

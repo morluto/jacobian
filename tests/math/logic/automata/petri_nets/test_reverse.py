@@ -14,7 +14,9 @@ from jacobian.math.logic.automata.petri_nets.operations import reverse_petri_net
 from jacobian.math.logic.automata.petri_nets.values import PetriNet
 
 
-def _matrix(values: tuple[int, ...], places: int, transitions: int):
+def _matrix(
+    values: tuple[int, ...], places: int, transitions: int
+) -> tuple[tuple[int, ...], ...]:
     return tuple(
         tuple(values[p * transitions + t] for t in range(transitions))
         for p in range(places)

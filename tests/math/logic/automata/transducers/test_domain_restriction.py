@@ -16,6 +16,8 @@ from jacobian.math.logic.automata.transducers.domain_restriction._models import 
 )
 from jacobian.math.logic.automata.transducers.values import (
     FiniteAlphabet,
+    SubseqFinalOutput,
+    SubseqTransition,
     SubsequentialTransducer,
 )
 from jacobian.math.logic.languages.regular.values import DFA, DFATransition
@@ -32,8 +34,10 @@ def _parity_machine() -> tuple[SubsequentialTransducer, DFA]:
         output_alphabet=alphabet,
         state_count=1,
         initial_state=0,
-        transitions=({"source": 0, "input_symbol": 0, "target": 0, "output": (0,)},),
-        final_outputs=({"state": 0, "output": ()},),
+        transitions=(
+            SubseqTransition(source=0, input_symbol=0, target=0, output=(0,)),
+        ),
+        final_outputs=(SubseqFinalOutput(state=0, output=()),),
     )
     dfa = DFA(
         state_count=2,
@@ -115,8 +119,10 @@ def test_restriction_preserves_partial_domain_and_final_output() -> None:
         output_alphabet=alphabet,
         state_count=2,
         initial_state=0,
-        transitions=({"source": 0, "input_symbol": 0, "target": 1, "output": (1,)},),
-        final_outputs=({"state": 1, "output": (0,)},),
+        transitions=(
+            SubseqTransition(source=0, input_symbol=0, target=1, output=(1,)),
+        ),
+        final_outputs=(SubseqFinalOutput(state=1, output=(0,)),),
     )
     all_words = DFA(
         state_count=1,
@@ -164,10 +170,12 @@ def test_product_larger_than_result_carrier_is_refused_exactly() -> None:
         state_count=9,
         initial_state=0,
         transitions=tuple(
-            {"source": state, "input_symbol": 0, "target": (state + 1) % 9}
+            SubseqTransition(source=state, input_symbol=0, target=(state + 1) % 9)
             for state in range(9)
         ),
-        final_outputs=tuple({"state": state, "output": ()} for state in range(9)),
+        final_outputs=tuple(
+            SubseqFinalOutput(state=state, output=()) for state in range(9)
+        ),
     )
     dfa = DFA(
         state_count=8,

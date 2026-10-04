@@ -1,8 +1,10 @@
 """Exact prime-to-level Hecke action on the Gamma0(3) basis."""
 
 from fractions import Fraction
+from typing import Literal
 
 import pytest
+from tests.math.number_theory.modular_forms._typing import rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -17,7 +19,9 @@ from jacobian.math.number_theory.modular_forms import (
     modular_form_coordinates_q_expansion,
 )
 
-BASIS_ID = "gamma0-three-weight-2-4-6-hypersurface-v1"
+BASIS_ID: Literal["gamma0-three-weight-2-4-6-hypersurface-v1"] = (
+    "gamma0-three-weight-2-4-6-hypersurface-v1"
+)
 
 
 def _form(weight: int, coordinates: tuple[int, ...]) -> ModularFormCoordinates:
@@ -47,14 +51,16 @@ def _hecke_t2_coefficients(
 
 def test_t2_acts_exactly_on_gamma0_three_weights_two_and_four() -> None:
     weight_two = modular_form_coordinates_hecke(_form(2, (1,)), 2)
-    assert tuple(c.as_fraction() for c in weight_two.coordinates) == (Fraction(3),)
+    assert tuple(rational(c).as_fraction() for c in weight_two.coordinates) == (
+        Fraction(3),
+    )
 
     for coordinates in ((1, 0), (0, 1), (3, -2)):
         source = _form(4, coordinates)
         image = modular_form_coordinates_hecke(source, 2)
         assert image.space == source.space
         assert image.basis_id == BASIS_ID
-        assert tuple(c.as_fraction() for c in image.coordinates) == tuple(
+        assert tuple(rational(c).as_fraction() for c in image.coordinates) == tuple(
             Fraction(9 * value) for value in coordinates
         )
 
@@ -87,7 +93,10 @@ def test_t2_coordinate_reconstruction_matches_direct_coefficients_at_weight_40()
         for index in range(source_order)
     )
     expected = _hecke_t2_coefficients(source_coefficients, weight, sturm_bound + 1)
-    assert tuple(c.as_fraction() for c in prefix.q_expansion.coefficients) == expected
+    assert (
+        tuple(rational(c).as_fraction() for c in prefix.q_expansion.coefficients)
+        == expected
+    )
 
 
 def test_gamma0_three_hecke_rejects_level_dividing_index_and_growth() -> None:

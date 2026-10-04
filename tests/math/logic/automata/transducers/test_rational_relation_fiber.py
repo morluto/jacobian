@@ -161,7 +161,7 @@ def test_input_word_is_bound_to_relation_input_alphabet() -> None:
         == "finite_state_transducer.relation_fiber_input_word"
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        rational_relation_outputs_for_input(relation, (True,))  # type: ignore[arg-type]
+        rational_relation_outputs_for_input(relation, (True,))
     assert (
         exc_info.value.errors()[0]["type"]
         == "finite_state_transducer.relation_fiber_input_word"
@@ -185,10 +185,12 @@ def test_output_parent_is_required_for_regular_language_composition() -> None:
     )
 
 
-def test_work_admission_precedes_input_pattern_matching(monkeypatch) -> None:
+def test_work_admission_precedes_input_pattern_matching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     relation = _finite_relation()
 
-    def forbidden(*_args):
+    def forbidden(*_args: object) -> None:
         raise AssertionError("pattern matching began before admission")
 
     monkeypatch.setattr(operations, "MAX_RATIONAL_FIBER_WORK", 0)
@@ -197,10 +199,12 @@ def test_work_admission_precedes_input_pattern_matching(monkeypatch) -> None:
         rational_relation_outputs_for_input(relation, (0, 1))
 
 
-def test_output_growth_admission_precedes_product_construction(monkeypatch) -> None:
+def test_output_growth_admission_precedes_product_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     relation = _finite_relation()
 
-    def forbidden(*_args):
+    def forbidden(*_args: object) -> None:
         raise AssertionError("product construction began before output admission")
 
     monkeypatch.setattr(operations, "MAX_NFA_TRANSITIONS", 0)

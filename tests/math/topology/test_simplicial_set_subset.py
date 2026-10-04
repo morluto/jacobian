@@ -10,6 +10,7 @@ from jacobian.math.topology.simplicial_sets import (
     simplicial_subset,
     standard_simplex,
 )
+from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialMapCompositionRequest,
     compose_simplicial_maps,
@@ -17,7 +18,7 @@ from jacobian.math.topology.simplicial_sets.maps import (
 )
 
 
-def _delta_one_prefix():
+def _delta_one_prefix() -> FiniteTruncatedSimplicialSet:
     return standard_simplex(1, 2)
 
 

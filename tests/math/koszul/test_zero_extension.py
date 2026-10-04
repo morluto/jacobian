@@ -1,7 +1,9 @@
 """Exact chain splitting for a zero appended to a Koszul sequence."""
 
 import json
+from collections.abc import Mapping
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 
@@ -12,7 +14,10 @@ from jacobian.math.koszul._tools import TOOLS
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
+    ModuleDifferential,
+    ModuleKoszulComplex,
     ModuleKoszulRequest,
+    ModuleKoszulZeroExtension,
     ModuleKoszulZeroExtensionRequest,
 )
 from jacobian.math.koszul.module_operations import (
@@ -25,7 +30,7 @@ def q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _source(sequence):
+def _source(sequence: tuple[tuple[CanonicalRational, ...], ...]) -> ModuleKoszulComplex:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
     )
@@ -35,8 +40,10 @@ def _source(sequence):
     )
 
 
-def _apply(mapping, vector):
-    result = {}
+def _apply(
+    mapping: ModuleDifferential, vector: Mapping[int, Fraction]
+) -> dict[int, Fraction]:
+    result: dict[int, Fraction] = {}
     for row, column, coefficient in mapping.entries:
         value = Fraction(coefficient.num, coefficient.den) * vector.get(
             column, Fraction(0)
@@ -46,12 +53,12 @@ def _apply(mapping, vector):
     return {index: value for index, value in result.items() if value}
 
 
-def _check_splitting(result):
+def _check_splitting(result: ModuleKoszulZeroExtension) -> None:
     source_length = len(result.source_complex.sequence)
     for degree, size in enumerate(result.target_complex.basis_sizes):
         for column in range(size):
             basis = {column: Fraction(1)}
-            image = {}
+            image: dict[int, Fraction] = {}
             if degree <= source_length:
                 image.update(
                     _apply(
@@ -93,7 +100,7 @@ def _check_splitting(result):
             assert shifted_boundary == expected
 
 
-def test_appending_zero_returns_the_exact_shifted_direct_sum():
+def test_appending_zero_returns_the_exact_shifted_direct_sum() -> None:
     result = module_koszul_append_zero(
         ModuleKoszulZeroExtensionRequest(complex=_source(((q(2),),)))
     )
@@ -106,7 +113,7 @@ def test_appending_zero_returns_the_exact_shifted_direct_sum():
     _check_splitting(result)
 
 
-def test_empty_sequence_and_public_example():
+def test_empty_sequence_and_public_example() -> None:
     empty = module_koszul_append_zero(
         ModuleKoszulZeroExtensionRequest(complex=_source(()))
     )
@@ -121,7 +128,7 @@ def test_empty_sequence_and_public_example():
     _check_splitting(tool.run(request))
 
 
-def test_length_three_uses_lexicographic_wedge_lookup():
+def test_length_three_uses_lexicographic_wedge_lookup() -> None:
     result = module_koszul_append_zero(
         ModuleKoszulZeroExtensionRequest(complex=_source(((q(2),), (q(3),), (q(4),))))
     )
@@ -138,10 +145,12 @@ def test_length_three_uses_lexicographic_wedge_lookup():
     _check_splitting(result)
 
 
-def test_zero_extension_admission_precedes_reconstruction(monkeypatch):
+def test_zero_extension_admission_precedes_reconstruction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _source(((q(1),),))
 
-    def must_not_build(*_args, **_kwargs):
+    def must_not_build(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("complex reconstruction ran before output admission")
 
     monkeypatch.setattr(operations, "_build_module_koszul_complex", must_not_build)

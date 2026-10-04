@@ -70,7 +70,7 @@ def test_request_rejects_vectors_on_a_different_axis() -> None:
     from jacobian.math.lie_algebras._models import LieGeneratedSubalgebraRequest
 
     with pytest.raises(ValidationError) as exc_info:
-        LieGeneratedSubalgebraRequest(algebra=HEISENBERG, generators=[alien])
+        LieGeneratedSubalgebraRequest(algebra=HEISENBERG, generators=(alien,))
     assert (
         exc_info.value.errors()[0]["type"]
         == "lie_algebra.generated_subalgebra_generator_basis"

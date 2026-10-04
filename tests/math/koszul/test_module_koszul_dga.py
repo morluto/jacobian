@@ -1,7 +1,9 @@
 """Exact finite-algebra Koszul DGA products and differential identities."""
 
 import json
+from collections.abc import Mapping
 from fractions import Fraction
+from typing import NoReturn
 
 import pytest
 
@@ -34,7 +36,13 @@ def _dual_numbers() -> FiniteCommutativeAlgebra:
     )
 
 
-def _products(value, degree_left, index_left, degree_right, index_right):
+def _products(
+    value: ModuleKoszulDGA,
+    degree_left: int,
+    index_left: int,
+    degree_right: int,
+    index_right: int,
+) -> dict[int, Fraction]:
     return {
         entry.result_index: entry.coefficient.as_fraction()
         for entry in value.products
@@ -48,7 +56,9 @@ def _products(value, degree_left, index_left, degree_right, index_right):
     }
 
 
-def _differential(value, degree, index):
+def _differential(
+    value: ModuleKoszulDGA, degree: int, index: int
+) -> dict[int, Fraction]:
     if degree == 0:
         return {}
     matrix = value.complex.differentials[degree - 1]
@@ -59,8 +69,14 @@ def _differential(value, degree, index):
     }
 
 
-def _linear_product(value, left_degree, left, right_degree, right):
-    result = {}
+def _linear_product(
+    value: ModuleKoszulDGA,
+    left_degree: int,
+    left: Mapping[int, Fraction],
+    right_degree: int,
+    right: Mapping[int, Fraction],
+) -> dict[int, Fraction]:
+    result: dict[int, Fraction] = {}
     for left_index, left_coefficient in left.items():
         for right_index, right_coefficient in right.items():
             for target, coefficient in _products(
@@ -72,7 +88,7 @@ def _linear_product(value, left_degree, left, right_degree, right):
     return {index: coefficient for index, coefficient in result.items() if coefficient}
 
 
-def _replay_dga_identities(value):
+def _replay_dga_identities(value: ModuleKoszulDGA) -> None:
     basis_sizes = value.complex.basis_sizes
     unit = {
         index: coefficient.as_fraction()
@@ -125,7 +141,7 @@ def _replay_dga_identities(value):
                             assert left_associated == right_associated
 
                     if left_degree + right_degree <= len(value.sequence) + 1:
-                        differential_product = {}
+                        differential_product: dict[int, Fraction] = {}
                         if left_degree + right_degree <= len(value.sequence):
                             for product_index, coefficient in product_xy.items():
                                 for target, differential_coefficient in _differential(
@@ -176,7 +192,7 @@ def _replay_dga_identities(value):
                         }
 
 
-def test_dual_number_koszul_dga_has_exact_product_and_leibniz_identity():
+def test_dual_number_koszul_dga_has_exact_product_and_leibniz_identity() -> None:
     value = dga_operations.module_koszul_dga(
         ModuleKoszulDGARequest(algebra=_dual_numbers(), sequence=((_q(0), _q(1)),))
     )
@@ -187,7 +203,7 @@ def test_dual_number_koszul_dga_has_exact_product_and_leibniz_identity():
     assert ModuleKoszulDGA.model_validate_json(value.model_dump_json()) == value
 
 
-def test_exterior_signs_and_repeated_generators_are_exact():
+def test_exterior_signs_and_repeated_generators_are_exact() -> None:
     rational = FiniteCommutativeAlgebra(
         basis=("1",),
         multiplication=(((_q(1),),),),
@@ -204,7 +220,7 @@ def test_exterior_signs_and_repeated_generators_are_exact():
     _replay_dga_identities(value)
 
 
-def test_two_generator_differential_satisfies_graded_leibniz_at_top_degree():
+def test_two_generator_differential_satisfies_graded_leibniz_at_top_degree() -> None:
     rational = FiniteCommutativeAlgebra(
         basis=("1",),
         multiplication=(((_q(1),),),),
@@ -220,7 +236,7 @@ def test_two_generator_differential_satisfies_graded_leibniz_at_top_degree():
     _replay_dga_identities(value)
 
 
-def test_missing_or_false_unit_is_rejected():
+def test_missing_or_false_unit_is_rejected() -> None:
     nonunital = FiniteCommutativeAlgebra(
         basis=("e",), multiplication=(((_q(0),),),), unit=None
     )
@@ -240,8 +256,10 @@ def test_missing_or_false_unit_is_rejected():
     assert invalid.value.errors()[0]["type"] == "koszul.module.dga_invalid_unit"
 
 
-def test_output_budget_rejects_before_complex_expansion(monkeypatch):
-    def fail_if_built(_request):
+def test_output_budget_rejects_before_complex_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_built(_request: object) -> NoReturn:
         raise AssertionError("chain construction ran before DGA admission")
 
     monkeypatch.setattr(dga_operations, "_build_module_koszul_complex", fail_if_built)
@@ -253,7 +271,7 @@ def test_output_budget_rejects_before_complex_expansion(monkeypatch):
     assert caught.value.errors()[0]["type"] == "koszul.module.dga_output_budget"
 
 
-def test_published_operation_runs_its_example():
+def test_published_operation_runs_its_example() -> None:
     tool = next(
         tool for tool in TOOLS if tool.operation_id == "homological.koszul.dga.compute"
     )

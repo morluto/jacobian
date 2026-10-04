@@ -31,7 +31,9 @@ from jacobian.math.groups.root_systems.operations import (
         ),
     ],
 )
-def test_irreducible_exponents_match_independent_classical_values(matrix, expected):
+def test_irreducible_exponents_match_independent_classical_values(
+    matrix: tuple[tuple[int, ...], ...], expected: tuple[tuple[int, ...], ...]
+) -> None:
     result = weyl_exponents(CartanMatrix.model_validate(matrix))
     assert tuple(component.exponents for component in result.components) == expected
     assert tuple(len(component.exponents) for component in result.components) == tuple(
@@ -40,7 +42,7 @@ def test_irreducible_exponents_match_independent_classical_values(matrix, expect
     assert WeylExponentsResult.model_validate_json(result.model_dump_json()) == result
 
 
-def test_reducible_exponents_preserve_component_axes_and_multiplicity():
+def test_reducible_exponents_preserve_component_axes_and_multiplicity() -> None:
     a1_plus_a2 = CartanMatrix.model_validate(((2, 0, 0), (0, 2, -1), (0, -1, 2)))
     result = weyl_exponents(a1_plus_a2)
     assert tuple(component.simple_root_indices for component in result.components) == (
@@ -53,7 +55,7 @@ def test_reducible_exponents_preserve_component_axes_and_multiplicity():
     )
 
 
-def test_d4_repeated_exponent_multiset_is_returned_not_rejected():
+def test_d4_repeated_exponent_multiset_is_returned_not_rejected() -> None:
     result = weyl_exponents(cartan_matrix_from_type("D", 4).matrix)
     assert tuple(component.simple_root_indices for component in result.components) == (
         (0, 1, 2, 3),
@@ -64,7 +66,7 @@ def test_d4_repeated_exponent_multiset_is_returned_not_rejected():
     assert WeylExponentsResult.model_validate_json(result.model_dump_json()) == result
 
 
-def test_e8_exponents_are_computed_from_the_full_root_height_profile():
+def test_e8_exponents_are_computed_from_the_full_root_height_profile() -> None:
     e8 = CartanMatrix.model_validate(
         (
             (2, -1, 0, 0, 0, 0, 0, 0),
@@ -80,7 +82,7 @@ def test_e8_exponents_are_computed_from_the_full_root_height_profile():
     assert weyl_exponents(e8).components[0].exponents == (1, 7, 11, 13, 17, 19, 23, 29)
 
 
-def test_public_operation_returns_the_native_exponent_value():
+def test_public_operation_returns_the_native_exponent_value() -> None:
     tool = next(
         tool
         for tool in TOOLS

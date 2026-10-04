@@ -1,12 +1,15 @@
 import itertools
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology.operations import canonicalize
 from jacobian.math.topology.simplicial_sets import (
     complex_conversion,
@@ -15,15 +18,20 @@ from jacobian.math.topology.simplicial_sets import (
 from jacobian.math.topology.simplicial_sets._tools import TOOLS
 from jacobian.math.topology.simplicial_sets.complex_conversion_models import (
     SimplicialComplexPrefixRequest,
+    SimplicialComplexPrefixResult,
 )
 from jacobian.math.topology.simplicial_sets.maps import normalized_chains
 
 
-def _complex(vertices, facets):
+def _complex(
+    vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]
+) -> FiniteSimplicialComplex:
     return canonicalize(vertices, facets).complex
 
 
-def _independent_degree(complex_, degree):
+def _independent_degree(
+    complex_: FiniteSimplicialComplex, degree: int
+) -> set[tuple[int, ...]]:
     vertex_index = {vertex: index for index, vertex in enumerate(complex_.vertices)}
     faces = {
         frozenset(vertex_index[vertex] for vertex in face)
@@ -39,11 +47,11 @@ def _independent_degree(complex_, degree):
     }
 
 
-def _decode(level):
+def _decode(level: tuple[str, ...]) -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(map(int, label.split(","))) for label in level)
 
 
-def test_triangle_complex_prefix_matches_all_monotone_face_tuples():
+def test_triangle_complex_prefix_matches_all_monotone_face_tuples() -> None:
     source = _complex(("a", "b", "c"), (("a", "b", "c"),))
     result = simplicial_set_from_complex(
         SimplicialComplexPrefixRequest(complex=source, max_degree=3)
@@ -77,12 +85,12 @@ def test_triangle_complex_prefix_matches_all_monotone_face_tuples():
     mapped = {
         (entry.dimension, entry.face_index) for entry in result.face_simplex_indices
     }
-    expected = {
+    expected_face_pairs = {
         (dimension, face_index)
         for dimension, level in enumerate(source.faces_by_dimension[:4])
         for face_index, _face in enumerate(level.faces)
     }
-    assert mapped == expected
+    assert mapped == expected_face_pairs
     for entry in result.face_simplex_indices:
         face = source.faces_by_dimension[entry.dimension].faces[entry.face_index]
         labels = value.sets[entry.dimension]
@@ -91,7 +99,7 @@ def test_triangle_complex_prefix_matches_all_monotone_face_tuples():
         )
 
 
-def test_conversion_serializes_and_composes_with_normalized_chains():
+def test_conversion_serializes_and_composes_with_normalized_chains() -> None:
     source = _complex(("a", "b"), (("a", "b"),))
     result = simplicial_set_from_complex(
         SimplicialComplexPrefixRequest(complex=source, max_degree=2)
@@ -107,10 +115,12 @@ def test_conversion_serializes_and_composes_with_normalized_chains():
     )
 
 
-def test_exact_prefix_count_is_admitted_before_materializing_degrees(monkeypatch):
+def test_exact_prefix_count_is_admitted_before_materializing_degrees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _complex(tuple("abcdef"), (tuple("abcdef"),))
 
-    def unexpected(*_args, **_kwargs):
+    def unexpected(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("degree enumeration started before admission")
 
     monkeypatch.setattr(complex_conversion, "_level_labels", unexpected)
@@ -123,10 +133,12 @@ def test_exact_prefix_count_is_admitted_before_materializing_degrees(monkeypatch
     )
 
 
-def test_output_bound_is_checked_before_materializing_degrees(monkeypatch):
+def test_output_bound_is_checked_before_materializing_degrees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = _complex(("a", "b"), (("a", "b"),))
 
-    def unexpected(*_args, **_kwargs):
+    def unexpected(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("degree enumeration started before output admission")
 
     monkeypatch.setattr(complex_conversion, "_level_labels", unexpected)
@@ -140,7 +152,9 @@ def test_output_bound_is_checked_before_materializing_degrees(monkeypatch):
     )
 
 
-def test_prefix_counts_include_degeneracies_but_source_transport_is_degree_limited():
+def test_prefix_counts_include_degeneracies_but_source_transport_is_degree_limited() -> (
+    None
+):
     source = _complex(("a", "b", "c"), (("a", "b", "c"),))
     result = simplicial_set_from_complex(
         SimplicialComplexPrefixRequest(complex=source, max_degree=1)
@@ -150,7 +164,7 @@ def test_prefix_counts_include_degeneracies_but_source_transport_is_degree_limit
     assert {entry.dimension for entry in result.face_simplex_indices} == {0, 1}
 
 
-def test_forged_inconsistent_source_face_closure_is_rejected():
+def test_forged_inconsistent_source_face_closure_is_rejected() -> None:
     source = _complex(("a", "b"), (("a", "b"),))
     forged = source.model_copy(update={"closure_size": 1})
     with pytest.raises((OperationDomainValidationError, ValidationError)):
@@ -159,12 +173,15 @@ def test_forged_inconsistent_source_face_closure_is_rejected():
         )
 
 
-def test_published_catalog_example_executes_through_owner_manifest():
-    operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id
-        == "topology.simplicial_set.from_simplicial_complex.compute"
+def test_published_catalog_example_executes_through_owner_manifest() -> None:
+    operation = cast(
+        MathTool[SimplicialComplexPrefixRequest, SimplicialComplexPrefixResult],
+        next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id
+            == "topology.simplicial_set.from_simplicial_complex.compute"
+        ),
     )
     example = operation.examples[0]
     result = operation.run(operation.request_type.model_validate(example.input))

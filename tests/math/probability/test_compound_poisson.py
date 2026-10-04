@@ -7,6 +7,7 @@ from time import monotonic
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -678,7 +679,7 @@ def test_cumulant_ladder_checkpoints_while_it_runs(
     from jacobian.math.probability import _compound_poisson as compound_module
 
     calls = 0
-    original = compound_module.request_checkpoint
+    original = request_checkpoint
 
     def counted(label: str) -> None:
         nonlocal calls

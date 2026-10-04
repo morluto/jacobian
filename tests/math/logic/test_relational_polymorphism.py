@@ -1,7 +1,9 @@
 """Exact finite-operation preservation checks and small independent oracle."""
 
 import json
+from collections.abc import Iterator
 from itertools import product
+from typing import NoReturn, cast
 
 import pytest
 from pydantic import ValidationError
@@ -41,13 +43,20 @@ def _binary_structure(mask: int) -> FiniteRelationalStructure:
     )
 
 
-def _candidate_tables(carrier_size: int, arity: int):
+def _candidate_tables(
+    carrier_size: int, arity: int
+) -> Iterator[tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]]:
     domain = tuple(product(range(carrier_size), repeat=arity))
     for values in product(range(carrier_size), repeat=len(domain)):
         yield domain, values
 
 
-def _oracle_preserves(structure, arity, domain, values) -> bool:
+def _oracle_preserves(
+    structure: FiniteRelationalStructure,
+    arity: int,
+    domain: tuple[tuple[int, ...], ...],
+    values: tuple[int, ...],
+) -> bool:
     operation = dict(zip(domain, values, strict=True))
     for relation in structure.relation_tables:
         for rows in product(relation, repeat=arity):
@@ -60,7 +69,7 @@ def _oracle_preserves(structure, arity, domain, values) -> bool:
     return True
 
 
-def test_exhaustive_all_binary_relations_and_binary_operations_match_oracle():
+def test_exhaustive_all_binary_relations_and_binary_operations_match_oracle() -> None:
     for mask in range(16):
         structure = _binary_structure(mask)
         domain, _ = next(_candidate_tables(2, 2))
@@ -87,7 +96,7 @@ def test_exhaustive_all_binary_relations_and_binary_operations_match_oracle():
                 )
 
 
-def test_projection_preserves_relations_and_nullary_truth_is_exact():
+def test_projection_preserves_relations_and_nullary_truth_is_exact() -> None:
     binary_edge = FiniteRelationalStructure(
         carrier_size=2,
         signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
@@ -116,7 +125,7 @@ def test_projection_preserves_relations_and_nullary_truth_is_exact():
     )
 
 
-def test_empty_carrier_has_the_unique_empty_operation_table():
+def test_empty_carrier_has_the_unique_empty_operation_table() -> None:
     source = FiniteRelationalStructure(carrier_size=0)
     result = check_polymorphism(source, 3, ())
     assert result.status is RelationalPolymorphismStatus.POLYMORPHISM
@@ -124,7 +133,7 @@ def test_empty_carrier_has_the_unique_empty_operation_table():
     assert result.polymorphism.operation_table == ()
 
 
-def test_operation_table_axis_and_values_are_checked():
+def test_operation_table_axis_and_values_are_checked() -> None:
     source = FiniteRelationalStructure(carrier_size=2)
     with pytest.raises(ValidationError):
         RelationalPolymorphismRequest(source=source, arity=2, operation_table=(0, 1))
@@ -139,14 +148,16 @@ def test_operation_table_axis_and_values_are_checked():
     assert MAX_RELATIONAL_OPERATION_TABLE_CELLS == 16_384
 
 
-def test_relation_product_bound_is_checked_before_tuple_expansion(monkeypatch):
+def test_relation_product_bound_is_checked_before_tuple_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = FiniteRelationalStructure(
         carrier_size=2,
         signature=(FiniteRelationSymbol(symbol_id="R", arity=2),),
         relation_tables=(tuple(product(range(2), repeat=2)),),
     )
 
-    def expansion_must_not_start(*_args, **_kwargs):
+    def expansion_must_not_start(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("relation products expanded before admission")
 
     monkeypatch.setattr(operations, "product", expansion_must_not_start)
@@ -158,7 +169,9 @@ def test_relation_product_bound_is_checked_before_tuple_expansion(monkeypatch):
     assert MAX_POLYMORPHISM_COORDINATE_WORK < 4**8 * 2 * 8
 
 
-def test_full_relation_product_bound_rejects_before_expansion(monkeypatch):
+def test_full_relation_product_bound_rejects_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = FiniteRelationalStructure(
         carrier_size=2,
         signature=tuple(
@@ -167,7 +180,7 @@ def test_full_relation_product_bound_rejects_before_expansion(monkeypatch):
         relation_tables=(tuple(product(range(2), repeat=2)),) * 2,
     )
 
-    def expansion_must_not_start(*_args, **_kwargs):
+    def expansion_must_not_start(*_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("relation products expanded before admission")
 
     monkeypatch.setattr(operations, "product", expansion_must_not_start)
@@ -191,14 +204,14 @@ def test_native_kernel_rejects_malformed_operation_tables() -> None:
         check_polymorphism(source, 1, (0, 2))
     assert value.value.errors()[0]["type"] == "relational.polymorphism.table_value"
     with pytest.raises(OperationDomainValidationError) as shape:
-        check_polymorphism(source, 1, 0)
+        check_polymorphism(source, 1, cast(tuple[int, ...], 0))
     assert shape.value.errors()[0]["type"] == "relational.polymorphism.table_shape"
     with pytest.raises(OperationDomainValidationError) as arity:
         check_polymorphism(source, True, (0, 1))
     assert arity.value.errors()[0]["type"] == "relational.polymorphism.arity"
 
 
-def _witnessed_failure():
+def _witnessed_failure() -> RelationalPolymorphismCheckResult:
     source = FiniteRelationalStructure(
         carrier_size=2,
         signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),

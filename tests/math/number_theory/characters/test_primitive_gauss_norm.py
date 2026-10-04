@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from sympy import I, Rational, exp, pi, to_number_field
 
@@ -21,8 +23,10 @@ from jacobian.math.number_theory.characters.operations import (
     ),
 )
 def test_primitive_gauss_norm_matches_independent_complex_norm(
-    modulus, coordinates, values
-):
+    modulus: int,
+    coordinates: tuple[int, ...],
+    values: dict[int, Any],
+) -> None:
     character = dirichlet_character(character_group(modulus), coordinates)
     primitive = dirichlet_character_conductor(character).primitive_character
     result = dirichlet_character_primitive_gauss_norm(primitive)
@@ -43,7 +47,7 @@ def test_primitive_gauss_norm_matches_independent_complex_norm(
     assert to_number_field(tau * tau.conjugate() - modulus, zeta).as_expr() == 0
 
 
-def test_primitive_gauss_norm_rejects_imprimitive_character():
+def test_primitive_gauss_norm_rejects_imprimitive_character() -> None:
     principal = dirichlet_character(character_group(5), (0,))
     claimed_primitive = PrimitiveDirichletCharacter(character=principal, conductor=5)
     with pytest.raises(OperationDomainValidationError) as error:
@@ -53,7 +57,7 @@ def test_primitive_gauss_norm_rejects_imprimitive_character():
     )
 
 
-def test_primitive_gauss_norm_revalidates_constructed_carrier():
+def test_primitive_gauss_norm_revalidates_constructed_carrier() -> None:
     principal = dirichlet_character(character_group(5), (0,))
     forged = PrimitiveDirichletCharacter.model_construct(
         character=principal, conductor=1
@@ -66,7 +70,7 @@ def test_primitive_gauss_norm_revalidates_constructed_carrier():
     )
 
 
-def test_primitive_gauss_norm_is_discoverable_and_runs_from_its_typed_request():
+def test_primitive_gauss_norm_is_discoverable_and_runs_from_its_typed_request() -> None:
     tool = next(
         item
         for item in TOOLS

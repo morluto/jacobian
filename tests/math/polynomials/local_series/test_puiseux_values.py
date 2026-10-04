@@ -1,6 +1,7 @@
 """Exact rational-exponent local-series carrier contracts."""
 
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -55,7 +56,9 @@ def test_mixed_half_and_third_exponents_require_ramification_six() -> None:
         },
     ],
 )
-def test_puiseux_window_rejects_inconsistent_lattice_and_support(changes: dict) -> None:
+def test_puiseux_window_rejects_inconsistent_lattice_and_support(
+    changes: dict[str, Any],
+) -> None:
     values = {
         "valuation_lower": q(0),
         "precision": q(3),
@@ -64,7 +67,7 @@ def test_puiseux_window_rejects_inconsistent_lattice_and_support(changes: dict) 
     }
     values.update(changes)
     with pytest.raises(ValidationError):
-        TruncatedPuiseuxWindow(**values)
+        TruncatedPuiseuxWindow.model_validate(values)
 
 
 def test_zero_puiseux_prefix_is_distinct_from_an_infinite_zero_claim() -> None:

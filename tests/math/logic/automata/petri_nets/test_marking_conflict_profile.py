@@ -14,7 +14,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
 from jacobian.math.logic.automata.petri_nets.operations import marking_conflict_profile
 
 
-def test_pairwise_profile_matches_direct_aggregate_enabling_oracle():
+def test_pairwise_profile_matches_direct_aggregate_enabling_oracle() -> None:
     # Exhaust small weighted nets and markings; the oracle checks each
     # transition alone and each distinct pair from the defining Pre inequality.
     for pre_entries in product(range(2), repeat=4):
@@ -48,7 +48,7 @@ def test_pairwise_profile_matches_direct_aggregate_enabling_oracle():
             )
 
 
-def test_profile_is_source_bound_and_round_trips():
+def test_profile_is_source_bound_and_round_trips() -> None:
     net = PetriNet(
         place_count=1,
         transition_count=3,
@@ -63,7 +63,7 @@ def test_profile_is_source_bound_and_round_trips():
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_forged_pair_families_are_rejected_before_pair_partition_work():
+def test_forged_pair_families_are_rejected_before_pair_partition_work() -> None:
     net = PetriNet(
         place_count=0,
         transition_count=64,
@@ -94,7 +94,7 @@ def test_forged_pair_families_are_rejected_before_pair_partition_work():
     assert exc_info.value.errors()[0]["type"] == "too_long"
 
 
-def test_profile_result_size_is_admitted_before_pair_materialization():
+def test_profile_result_size_is_admitted_before_pair_materialization() -> None:
     net = PetriNet(
         place_count=1,
         transition_count=1,

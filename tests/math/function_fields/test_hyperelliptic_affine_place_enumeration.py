@@ -28,7 +28,7 @@ def _field() -> FiniteFunctionField:
     )
 
 
-def test_enumeration_is_complete_canonical_and_composes_with_valuation():
+def test_enumeration_is_complete_canonical_and_composes_with_valuation() -> None:
     field = _field()
     result = enumerate_hyperelliptic_affine_places(field)
     coordinates = tuple((place.x, place.y) for place in result.places)
@@ -84,7 +84,7 @@ def test_non_squarefree_model_is_rejected_by_shape_recognition() -> None:
     )
 
 
-def test_every_enumerated_place_is_accepted_by_existing_valuation():
+def test_every_enumerated_place_is_accepted_by_existing_valuation() -> None:
     from jacobian.math.function_fields._models import FiniteFunctionFieldElement
     from jacobian.math.function_fields.operations import (
         function_field_hyperelliptic_affine_valuation,
@@ -101,7 +101,7 @@ def test_every_enumerated_place_is_accepted_by_existing_valuation():
         assert result.valuation.value == 0
 
 
-def test_enumeration_accepts_the_maximum_admitted_prime_characteristic():
+def test_enumeration_accepts_the_maximum_admitted_prime_characteristic() -> None:
     prime = 257
 
     def rational(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:
@@ -130,7 +130,7 @@ def test_enumeration_accepts_the_maximum_admitted_prime_characteristic():
     )
 
 
-def test_intrinsic_output_cardinality_accepts_maximum_supported_field_shape():
+def test_intrinsic_output_cardinality_accepts_maximum_supported_field_shape() -> None:
     prime = 257
 
     def rational(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:

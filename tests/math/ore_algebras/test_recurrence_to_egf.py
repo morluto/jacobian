@@ -1,5 +1,6 @@
 import json
 from fractions import Fraction
+from typing import Any
 
 import pytest
 import sympy as sp
@@ -8,13 +9,17 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.ore_algebras.recurrence_to_egf._models import (
+    RecurrenceEGFEquation,
+)
 from jacobian.math.ore_algebras.recurrence_to_egf._tools import TOOLS
 from jacobian.math.ore_algebras.recurrence_to_egf.operations import (
     polynomial_recurrence_to_egf_equation,
 )
+from jacobian.math.polynomials.values import RationalFunction
 
 
-def _rf(terms: list[tuple[int, int]], variable: str = "n") -> dict:
+def _rf(terms: list[tuple[int, int]], variable: str = "n") -> dict[str, Any]:
     return {
         "domain": "QQ",
         "variables": [variable],
@@ -31,7 +36,7 @@ def _rf(terms: list[tuple[int, int]], variable: str = "n") -> dict:
     }
 
 
-def _recurrence(*terms: tuple[int, list[tuple[int, int]]]) -> dict:
+def _recurrence(*terms: tuple[int, list[tuple[int, int]]]) -> dict[str, Any]:
     return {
         "variable": "n",
         "terms": [
@@ -41,21 +46,23 @@ def _recurrence(*terms: tuple[int, list[tuple[int, int]]]) -> dict:
     }
 
 
-def _polynomial(coefficient) -> dict[int, Fraction]:
+def _polynomial(coefficient: RationalFunction) -> dict[int, Fraction]:
     return {
         term.exponents[0]: term.coefficient.as_fraction()
         for term in coefficient.numerator.terms
     }
 
 
-def _as_sympy_polynomial(coefficient, variable):
+def _as_sympy_polynomial(coefficient: RationalFunction, variable: sp.Symbol) -> sp.Expr:
     return sum(
         sp.Rational(value.numerator, value.denominator) * variable**degree
         for degree, value in _polynomial(coefficient).items()
     )
 
 
-def _apply_operator(result, function, x):
+def _apply_operator(
+    result: RecurrenceEGFEquation, function: sp.Expr, x: sp.Symbol
+) -> sp.Expr:
     return sum(
         _as_sympy_polynomial(term.coefficient, x) * sp.diff(function, x, term.order)
         for term in result.differential_operator.terms

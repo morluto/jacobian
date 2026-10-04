@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from fractions import Fraction
 
 import pytest
@@ -131,29 +132,39 @@ def test_native_twist_rejects_a_non_arithmetic_function_value() -> None:
     )
 
 
-class _NonIterableTuple(tuple):
-    def __iter__(self):
+class _NonIterableTuple(tuple[object, ...]):
+    def __iter__(self) -> Iterator[object]:
         raise AssertionError("oversized source was traversed before its bound")
 
 
 @pytest.mark.parametrize(
-    ("carrier", "limit", "fields"),
+    ("carrier", "limit", "inverse"),
     [
         (
             MobiusTransformResult,
             MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
-            {"inverse": False},
+            False,
         ),
-        (DirichletInverseResult, MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH, {}),
-        (SummatoryFunctionResult, MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH, {}),
+        (DirichletInverseResult, MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH, False),
+        (SummatoryFunctionResult, MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH, False),
     ],
 )
 def test_oversized_result_prefix_is_rejected_before_revalidation(
-    carrier, limit: int, fields: dict[str, object]
+    carrier: type[MobiusTransformResult]
+    | type[DirichletInverseResult]
+    | type[SummatoryFunctionResult],
+    limit: int,
+    inverse: bool,
 ) -> None:
     value = _rational(1)
     values = _NonIterableTuple([value] * (limit + 1))
-    function = carrier.model_construct(values=values, length=limit + 1, **fields)
+    function: MobiusTransformResult | DirichletInverseResult | SummatoryFunctionResult
+    if carrier is MobiusTransformResult:
+        function = carrier.model_construct(
+            values=values, length=limit + 1, inverse=inverse
+        )
+    else:
+        function = carrier.model_construct(values=values, length=limit + 1)
     character = DirichletCharacter(group=character_group(3), coordinates=(1,))
 
     with pytest.raises(OperationResourceAdmissionError) as error:

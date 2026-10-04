@@ -162,12 +162,12 @@ class TestVertexOccurrences:
             exc_info.value.errors()[0]["type"]
             == "graph.tree_decomposition.vertex_occurrences.vertex_bound"
         )
-        with pytest.raises(OperationDomainValidationError) as exc_info:
+        with pytest.raises(OperationDomainValidationError) as domain_exc_info:
             compute_vertex_occurrences(
                 VertexOccurrencesRequest.model_construct(decomposition=oversized)
             )
         assert (
-            exc_info.value.errors()[0]["type"]
+            domain_exc_info.value.errors()[0]["type"]
             == "graph.tree_decomposition.vertex_occurrences.vertex_bound"
         )
 

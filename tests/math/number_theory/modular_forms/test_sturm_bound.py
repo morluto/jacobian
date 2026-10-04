@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pytest
 
 from jacobian.catalog.models import (
@@ -31,11 +33,11 @@ _STURM_TOOL = next(
 )
 
 
-def _space(level: int, weight: int, kind: str = "M") -> ModularFormSpace:
+def _space(level: int, weight: int, kind: Literal["M", "S"] = "M") -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
         weight=weight,
-        kind=kind,  # type: ignore[arg-type]
+        kind=kind,
     )
 
 
@@ -64,7 +66,9 @@ def test_public_sturm_operation_matches_exact_gamma0_convention(
     assert expected_index == index
     assert determining_terms == bound + 1
 
-    request = SturmBoundRequest(space=_space(level, weight).model_dump())
+    request = SturmBoundRequest.model_validate(
+        {"space": _space(level, weight).model_dump()}
+    )
     result = _STURM_TOOL.run(request)
 
     assert result.space == request.space
@@ -77,19 +81,21 @@ def test_public_sturm_operation_preserves_supported_character_parent() -> None:
         level=4,
         weight=3,
         kind="M",
-        character={
-            "group": {
-                "modulus": 4,
-                "unit_residues": [1, 3],
-                "character_count": 2,
-                "invariant_factors": [2],
-                "generators": [3],
-                "generator_orders": [2],
-                "unit_coordinates": [[0], [1]],
-                "exponent": 2,
-            },
-            "coordinates": [1],
-        },
+        character=DirichletCharacter.model_validate(
+            {
+                "group": {
+                    "modulus": 4,
+                    "unit_residues": [1, 3],
+                    "character_count": 2,
+                    "invariant_factors": [2],
+                    "generators": [3],
+                    "generator_orders": [2],
+                    "unit_coordinates": [[0], [1]],
+                    "exponent": 2,
+                },
+                "coordinates": [1],
+            }
+        ),
     )
     request = SturmBoundRequest(space=space)
     result = _STURM_TOOL.run(request)

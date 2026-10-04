@@ -352,7 +352,7 @@ def test_form_rejects_unsorted_or_mismatched_components() -> None:
             ((0,), _poly((1, (0, 0)))),
         )
     assert exc_info.value.errors()[0]["type"] == "differential_form.component_order"
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as domain_error:
         wedge(
             _form(0, ((), _poly((1, (0, 0))))),
             PolynomialDifferentialForm(
@@ -361,7 +361,7 @@ def test_form_rejects_unsorted_or_mismatched_components() -> None:
                 components=(),
             ),
         )
-    assert exc_info.value.errors()[0]["type"] == "differential_form.variable_axis"
+    assert domain_error.value.errors()[0]["type"] == "differential_form.variable_axis"
 
 
 def test_duplicate_differential_indices_are_rejected() -> None:

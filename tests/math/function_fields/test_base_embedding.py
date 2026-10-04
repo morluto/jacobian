@@ -24,7 +24,9 @@ from jacobian.math.function_fields.operations import (
 )
 
 
-def _rf(numerator: tuple[int, ...], denominator: tuple[int, ...] = (1,)):
+def _rf(
+    numerator: tuple[int, ...], denominator: tuple[int, ...] = (1,)
+) -> PrimeFieldRationalFunction:
     return PrimeFieldRationalFunction(
         numerator=PrimeFieldPolynomial(characteristic=2, coefficients=numerator),
         denominator=PrimeFieldPolynomial(characteristic=2, coefficients=denominator),

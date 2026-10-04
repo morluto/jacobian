@@ -48,7 +48,9 @@ def _accepted_pairs(
         outgoing[edge.source].append(edge)
     dfa_edges = {(edge.source, edge.symbol): edge.target for edge in dfa.transitions}
     for initial in relation.initial_states:
-        pending = [(initial, (), ())]
+        pending: list[tuple[int, tuple[int, ...], tuple[int, ...]]] = [
+            (initial, (), ())
+        ]
         while pending:
             state, input_word, output_word = pending.pop()
             if state in relation.accepting_states:

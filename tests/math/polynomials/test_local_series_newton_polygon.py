@@ -1,7 +1,9 @@
 from fractions import Fraction
+from typing import Any
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -23,10 +25,10 @@ def _series(lower: int, *coefficients: tuple[int, int]) -> TruncatedLaurentWindo
     return TruncatedLaurentWindow(
         variable="t",
         place="FINITE",
-        center={"num": 0, "den": 1},
+        center=CanonicalRational(num=0, den=1),
         valuation_lower=lower,
         precision=lower + len(coefficients),
-        coefficients=tuple({"num": n, "den": d} for n, d in coefficients),
+        coefficients=tuple(CanonicalRational(num=n, den=d) for n, d in coefficients),
     )
 
 
@@ -36,7 +38,7 @@ def _polynomial(
     return LocalPolynomialInSeries(
         variable="t",
         place="FINITE",
-        center={"num": 0, "den": 1},
+        center=CanonicalRational(num=0, den=1),
         coefficients=tuple(
             LocalPolynomialCoefficient(y_degree=degree, series=series)
             for degree, series in rows
@@ -73,7 +75,9 @@ def test_newton_polygon_exact_edges_and_collinear_source_degree() -> None:
 def test_exact_zero_and_empty_polynomial() -> None:
     result = local_polynomial_newton_polygon(_polynomial([(0, None), (2, None)]))
     assert result.coefficient_valuations == ((0, None), (2, None))
-    assert result.points == result.vertices == result.edges == ()
+    assert result.points == ()
+    assert result.vertices == ()
+    assert result.edges == ()
     empty = local_polynomial_newton_polygon(_polynomial([]))
     assert empty.vertices == ()
 
@@ -94,10 +98,10 @@ def test_mismatched_local_parent_is_rejected() -> None:
                     TruncatedLaurentWindow(
                         variable="s",
                         place="FINITE",
-                        center={"num": 0, "den": 1},
+                        center=CanonicalRational(num=0, den=1),
                         valuation_lower=0,
                         precision=1,
-                        coefficients=({"num": 1, "den": 1},),
+                        coefficients=(CanonicalRational(num=1, den=1),),
                     ),
                 )
             ]
@@ -150,7 +154,7 @@ def test_edge_characteristic_polynomial_transports_exact_leading_coefficients() 
 
 
 @pytest.mark.parametrize("edge_index", [-1, True, 0.5])
-def test_edge_characteristic_rejects_invalid_native_edge_index(edge_index):
+def test_edge_characteristic_rejects_invalid_native_edge_index(edge_index: Any) -> None:
     request = NewtonEdgeCharacteristicRequest.model_construct(
         polynomial=_polynomial([(0, _series(1, (1, 1)))]), edge_index=edge_index
     )
@@ -195,7 +199,9 @@ def test_edge_characteristic_rejects_nonexistent_edge() -> None:
         (-1, ("rational_pair", -1, 1)),
     ],
 )
-def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
+def test_quadratic_newton_edge_roots_are_exact(
+    constant: int, expected: tuple[Any, ...]
+) -> None:
     result = newton_edge_characteristic_roots(
         NewtonEdgeCharacteristicRequest(
             polynomial=_polynomial(
@@ -210,30 +216,37 @@ def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
     assert result.characteristic.characteristic_polynomial.variables == ("c",)
     if expected[0] == "real":
         assert len(result.roots) == 2
-        assert all(isinstance(root.value, RealAlgebraicValue) for root in result.roots)
-        assert [
-            (root.value.polynomial, root.value.real_root_index) for root in result.roots
-        ] == [
+        real_roots: list[RealAlgebraicValue] = []
+        for root in result.roots:
+            if isinstance(root.value, RealAlgebraicValue):
+                real_roots.append(root.value)
+        assert len(real_roots) == 2
+        assert [(root.polynomial, root.real_root_index) for root in real_roots] == [
             (expected[1], 0),
             (expected[1], 1),
         ]
         # Independent substitution oracle: the selected roots have exact square 2.
-        assert all(root.value.polynomial == (1, 0, -2) for root in result.roots)
+        assert all(root.polynomial == (1, 0, -2) for root in real_roots)
     elif expected[0] == "complex":
         assert len(result.roots) == 2
-        assert all(
-            isinstance(root.value, ComplexAlgebraicValue) for root in result.roots
-        )
-        assert [
-            (root.value.polynomial, root.value.root_index) for root in result.roots
-        ] == [
+        complex_roots: list[ComplexAlgebraicValue] = []
+        for root in result.roots:
+            if isinstance(root.value, ComplexAlgebraicValue):
+                complex_roots.append(root.value)
+        assert len(complex_roots) == 2
+        assert [(root.polynomial, root.root_index) for root in complex_roots] == [
             (expected[1], 0),
             (expected[1], 1),
         ]
-        assert all(root.value.polynomial == (1, 0, 2) for root in result.roots)
+        assert all(root.polynomial == (1, 0, 2) for root in complex_roots)
     else:
         assert len(result.roots) == 2
-        assert [root.value.as_fraction() for root in result.roots] == [
+        rational_roots: list[CanonicalRational] = []
+        for root in result.roots:
+            if isinstance(root.value, CanonicalRational):
+                rational_roots.append(root.value)
+        assert len(rational_roots) == 2
+        assert [root.as_fraction() for root in rational_roots] == [
             Fraction(-1),
             Fraction(1),
         ]
@@ -269,6 +282,7 @@ def test_newton_edge_roots_cover_linear_and_repeated_rational_roots() -> None:
         )
     )
     assert len(linear.roots) == 1
+    assert isinstance(linear.roots[0].value, CanonicalRational)
     assert linear.roots[0].value.as_fraction() == Fraction(2)
     assert linear.roots[0].multiplicity == 1
 
@@ -285,5 +299,6 @@ def test_newton_edge_roots_cover_linear_and_repeated_rational_roots() -> None:
         )
     )
     assert len(repeated.roots) == 1
+    assert isinstance(repeated.roots[0].value, CanonicalRational)
     assert repeated.roots[0].value.as_fraction() == Fraction(1)
     assert repeated.roots[0].multiplicity == 2

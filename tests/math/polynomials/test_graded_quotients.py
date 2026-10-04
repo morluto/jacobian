@@ -1110,12 +1110,16 @@ def test_request_models_document_structural_preconditions() -> None:
         HilbertSeriesRequest,
         HilbertPolynomialRequest,
     ):
-        description = model.model_fields["ideal"].description.lower()
+        description = model.model_fields["ideal"].description
+        assert description is not None
+        description = description.lower()
         assert "homogeneous ideal over qq" in description
         assert "share the source ring" in description
     standard_description = StandardMonomialsRequest.model_fields[
         "initial_ideal"
-    ].description.lower()
+    ].description
+    assert standard_description is not None
+    standard_description = standard_description.lower()
     assert "monomial ideal" in standard_description
     assert "unit monomials" in standard_description
 

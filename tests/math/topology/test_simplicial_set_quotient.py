@@ -1,5 +1,7 @@
 """Exact behavior for finite simplicial-set congruence quotients."""
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -25,7 +27,9 @@ from jacobian.math.topology.simplicial_sets.quotient_tools import (
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 
-def _apply_request(request: SimplicialSetQuotientRequest):
+def _apply_request(
+    request: SimplicialSetQuotientRequest,
+) -> SimplicialSetQuotientResult:
     return simplicial_set_quotient(request.simplicial_set, request.degree_class_ids)
 
 
@@ -127,7 +131,7 @@ def test_class_labels_are_independent_of_the_simplex_count() -> None:
     assert result.quotient_map.maps[0] == (0, 0)
 
     with pytest.raises(OperationDomainValidationError):
-        simplicial_set_quotient(None, ())
+        simplicial_set_quotient(cast(FiniteTruncatedSimplicialSet, None), ())
 
 
 def test_class_labels_use_the_lossless_json_transport_envelope() -> None:

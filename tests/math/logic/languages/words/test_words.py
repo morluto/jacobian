@@ -338,20 +338,26 @@ def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None
 
     above_limit = _substitution((("0",) * 5_001, ("1",) * 5_000))
     request = SubstitutionDependencyGraphRequest(substitution=above_limit)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as compute_error:
         compute_substitution_dependency_graph(request)
-    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
+    assert (
+        compute_error.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
+    )
     graph = SubstitutionDependencyGraph(substitution=above_limit, edges=())
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValueError) as native_graph_error:
         substitution_dependency_graph(above_limit)
-    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
+    assert error_code(native_graph_error.value) == "words.dependency_occurrence_budget"
     profile_request = SubstitutionPrimitivityProfileRequest(dependency_graph=graph)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
+    with pytest.raises(OperationDomainValidationError) as profile_error:
         compute_substitution_primitivity_profile(profile_request)
-    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
-    with pytest.raises(ValueError) as exc_info:
+    assert (
+        profile_error.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
+    )
+    with pytest.raises(ValueError) as native_profile_error:
         substitution_primitivity_profile(graph)
-    assert exc_info.value.errors()[0]["type"] == "words.dependency_occurrence_budget"
+    assert (
+        error_code(native_profile_error.value) == "words.dependency_occurrence_budget"
+    )
 
 
 def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> None:

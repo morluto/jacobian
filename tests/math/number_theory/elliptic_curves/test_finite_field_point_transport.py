@@ -92,14 +92,15 @@ def test_transport_is_bijective_on_complete_f5_point_sets() -> None:
         result = transport_point(isomorphism, source_point)
         assert result.source_point.curve == source_curve
         assert result.target_point.curve == target_curve
-        actual = (
-            None
-            if result.target_point.at_infinity
-            else (
+        if result.target_point.at_infinity:
+            actual = None
+        else:
+            assert result.target_point.x is not None
+            assert result.target_point.y is not None
+            actual = (
                 result.target_point.x.coordinates[0],
                 result.target_point.y.coordinates[0],
             )
-        )
         assert actual == expected
 
 

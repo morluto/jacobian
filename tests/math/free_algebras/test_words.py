@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -170,8 +171,11 @@ def test_prefix_suffix_families_include_endpoints_and_reconstruct() -> None:
     assert suffixes.splits[-1].suffix_letters == ()
     for split in prefixes.splits:
         assert split.prefix_letters + split.completing_suffix_letters == source.letters
-    for split in suffixes.splits:
-        assert split.completing_prefix_letters + split.suffix_letters == source.letters
+    for suffix_split in suffixes.splits:
+        assert (
+            suffix_split.completing_prefix_letters + suffix_split.suffix_letters
+            == source.letters
+        )
 
 
 def test_factors_are_distinct_and_include_all_occurrence_positions() -> None:
@@ -188,12 +192,16 @@ def test_factors_are_distinct_and_include_all_occurrence_positions() -> None:
     assert actual[()] == tuple(range(len(source.letters) + 1))
 
 
-def _brute_force_ambiguities(left: tuple[str, ...], right: tuple[str, ...]):
+def _brute_force_ambiguities(
+    left: tuple[str, ...], right: tuple[str, ...]
+) -> set[tuple[tuple[str, ...], int, int, Literal["INCLUSION", "OVERLAP"]]]:
     """Enumerate candidate common words and occurrence offsets independently."""
 
     if not left or not right:
         return set()
-    output = set()
+    output: set[tuple[tuple[str, ...], int, int, Literal["INCLUSION", "OVERLAP"]]] = (
+        set()
+    )
     for common_length in range(max(len(left), len(right)), len(left) + len(right)):
         for common in itertools.product(("a", "b"), repeat=common_length):
             for left_start in range(common_length - len(left) + 1):

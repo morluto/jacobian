@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.number_theory.quadratic_forms.integral._models import (
+    IntegralQuadraticCrossTerm,
     IntegralQuadraticForm,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.unimodular._models import (
@@ -67,7 +68,7 @@ def test_unimodular_shear_preserves_form_by_exact_coordinate_transport() -> None
     source = IntegralQuadraticForm(
         axis=("x", "y"),
         diagonal_coefficients=(1, 2),
-        cross_terms=({"left": 0, "right": 1, "coefficient": 3},),
+        cross_terms=(IntegralQuadraticCrossTerm(left=0, right=1, coefficient=3),),
     )
     result = unimodular_change(*_request(source, ((1, 1), (0, 1)), ("u", "v")))
 
@@ -112,8 +113,8 @@ def test_three_dimensional_row_swap_and_shear() -> None:
         axis=("x", "y", "z"),
         diagonal_coefficients=(2, 3, 5),
         cross_terms=(
-            {"left": 0, "right": 1, "coefficient": 1},
-            {"left": 1, "right": 2, "coefficient": -2},
+            IntegralQuadraticCrossTerm(left=0, right=1, coefficient=1),
+            IntegralQuadraticCrossTerm(left=1, right=2, coefficient=-2),
         ),
     )
     matrix = ((0, 1, 0), (1, 0, 1), (0, 1, 1))
@@ -148,7 +149,7 @@ def test_all_small_two_by_two_determinants_match_independent_formula() -> None:
     source = IntegralQuadraticForm(
         axis=("x", "y"),
         diagonal_coefficients=(1, 3),
-        cross_terms=({"left": 0, "right": 1, "coefficient": 1},),
+        cross_terms=(IntegralQuadraticCrossTerm(left=0, right=1, coefficient=1),),
     )
     for entries in itertools.product(range(-1, 2), repeat=4):
         a, b, c, d = entries

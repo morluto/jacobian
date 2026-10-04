@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pytest
 from pydantic import ValidationError
 
@@ -18,12 +20,14 @@ from jacobian.math.number_theory.modular_forms._tools import compute_space_dimen
 from jacobian.math.number_theory.modular_forms.values import ModularFormSpace
 
 
-def _space(weight: int, kind: str = "M", level: int = 1) -> ModularFormSpace:
+def _space(
+    weight: int, kind: Literal["M", "S"] = "M", level: int = 1
+) -> ModularFormSpace:
     return ModularFormSpace(
         group="GAMMA0",
         level=level,
         weight=weight,
-        kind=kind,  # type: ignore[arg-type]
+        kind=kind,
         character="TRIVIAL",
         coefficient_domain="QQ",
     )
@@ -64,7 +68,7 @@ def test_known_level_one_dimensions(weight: int, holomorphic: int, cusp: int) ->
 
 def test_m12_decomposition_and_ingredients() -> None:
     result = compute_space_dimension(
-        SpaceDimensionRequest(space=_space(12, "M").model_dump())
+        SpaceDimensionRequest.model_validate({"space": _space(12, "M").model_dump()})
     )
 
     assert result.dimension == 2
@@ -165,7 +169,9 @@ def test_no_q_coefficients_in_result() -> None:
 def test_native_and_catalog_results_agree() -> None:
     space = _space(4, "M", level=10)
     native = space_dimension(space)
-    catalog = compute_space_dimension(SpaceDimensionRequest(space=space.model_dump()))
+    catalog = compute_space_dimension(
+        SpaceDimensionRequest.model_validate({"space": space.model_dump()})
+    )
 
     assert catalog == native
     assert catalog.dimension == 7
@@ -178,10 +184,12 @@ def test_level_above_operation_envelope_rejected() -> None:
     with pytest.raises(OperationDomainValidationError):
         space_dimension(_space(12, "M", level=10_001))
     with pytest.raises(ValidationError):
-        SpaceDimensionRequest(
-            space={
-                **_space(4, "S", level=10_000).model_dump(),
-                "level": 10_001,
+        SpaceDimensionRequest.model_validate(
+            {
+                "space": {
+                    **_space(4, "S", level=10_000).model_dump(),
+                    "level": 10_001,
+                }
             }
         )
 

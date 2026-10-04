@@ -21,6 +21,7 @@ from jacobian.math.combinatorics.matroids.intersection import (
     verify_common_basis_result,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.linear_algebra import rank as pf_rank
 
 
 def _zero_matroid(columns: int) -> LinearMatroid:
@@ -53,12 +54,12 @@ def test_intersection_presolves_large_rank_zero_grounds(
     import jacobian.math.combinatorics.matroids.intersection as intersection
 
     calls = 0
-    original_rank = intersection.pf_rank
+    original_rank = pf_rank
 
-    def count_rank(*args: object, **kwargs: object) -> int:
+    def count_rank(matrix: PrimeFieldMatrix) -> int:
         nonlocal calls
         calls += 1
-        return original_rank(*args, **kwargs)
+        return original_rank(matrix)
 
     monkeypatch.setattr(intersection, "pf_rank", count_rank)
     for columns in (84, 256):
@@ -130,12 +131,12 @@ def test_intersection_accepts_and_rejects_around_the_dense_identity_envelope(
     assert accepted.common_independent == tuple(range(16))
 
     calls = 0
-    original_rank = intersection.pf_rank
+    original_rank = pf_rank
 
-    def count_rank(*args: object, **kwargs: object) -> int:
+    def count_rank(matrix: PrimeFieldMatrix) -> int:
         nonlocal calls
         calls += 1
-        return original_rank(*args, **kwargs)
+        return original_rank(matrix)
 
     monkeypatch.setattr(intersection, "pf_rank", count_rank)
 
@@ -272,12 +273,12 @@ def test_serialized_result_decoding_does_not_replay_computed_ranks(
     first, second = _small_matroids()
     result = matroid_intersection(first, second)
     calls = 0
-    original_rank = intersection.pf_rank
+    original_rank = pf_rank
 
-    def count_rank(*args: object, **kwargs: object) -> int:
+    def count_rank(matrix: PrimeFieldMatrix) -> int:
         nonlocal calls
         calls += 1
-        return original_rank(*args, **kwargs)
+        return original_rank(matrix)
 
     monkeypatch.setattr(intersection, "pf_rank", count_rank)
 

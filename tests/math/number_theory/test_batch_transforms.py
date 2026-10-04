@@ -1,9 +1,11 @@
 from fractions import Fraction
+from typing import cast
 
 import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
+    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
@@ -46,10 +48,13 @@ def test_dense_kempner_prefix_recurrence_is_exact() -> None:
 def _coordinate_hecke(
     form: ModularFormCoordinates, index: int
 ) -> ModularFormCoordinates:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "modular_form.coordinates.hecke.apply"
+    tool = cast(
+        MathTool[ModularFormCoordinatesHeckeRequest, ModularFormCoordinates],
+        next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "modular_form.coordinates.hecke.apply"
+        ),
     )
     return tool.run(ModularFormCoordinatesHeckeRequest(form=form, index=index))
 

@@ -753,7 +753,10 @@ class TestEliminationIdealSemantics:
         ),
         ids=("principal-x", "x2-minus-y2-and-x-plus-y"),
     )
-    def test_zero_elimination_ideal_preserved(self, generators) -> None:
+    def test_zero_elimination_ideal_preserved(
+        self,
+        generators: list[list[tuple[tuple[int, ...], int | Fraction]]],
+    ) -> None:
         """Zero elimination stays zero in the exact surviving ordered ring."""
         result = self._eliminate(generators, ("x",))
         assert result.elimination_ideal is not None

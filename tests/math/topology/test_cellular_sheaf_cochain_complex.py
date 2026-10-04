@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import TYPE_CHECKING
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.topology._models import canonical_complex
@@ -20,12 +21,15 @@ from jacobian.math.topology.cellular_sheaves._models import (
 )
 from jacobian.math.topology.cellular_sheaves._tools import TOOLS
 
+if TYPE_CHECKING:
+    from jacobian.math.topology.cellular_sheaves import FiniteCellularSheaf
+
 
 def _q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _constant_triangle():
+def _constant_triangle() -> FiniteCellularSheaf:
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
     cells = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
     stalks = tuple(SheafStalk(simplex=face, basis=("x",)) for face in cells)
@@ -43,9 +47,17 @@ def _constant_triangle():
     return result.sheaf
 
 
-def _fractions(matrix):
+def _fractions(
+    matrix: tuple[tuple[CanonicalRational | int, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
     return tuple(
-        tuple(Fraction(value.num, value.den) for value in row) for row in matrix
+        tuple(
+            value.as_fraction()
+            if isinstance(value, CanonicalRational)
+            else Fraction(value)
+            for value in row
+        )
+        for row in matrix
     )
 
 

@@ -38,7 +38,9 @@ def _contains(container: CubicalCell, cell: CubicalCell) -> bool:
     )
 
 
-def _from_top_cell_values(request: CubicalTopCellFiltrationRequest):
+def _from_top_cell_values(
+    request: CubicalTopCellFiltrationRequest,
+) -> FilteredCubicalComplexFromTopCells:
     """Call the native top-cell filtration with unpacked domain arguments."""
     return from_top_cell_values(request.cells, request.top_cell_values, request.prime)
 

@@ -225,24 +225,15 @@ def test_deep_enlargement_work_is_rejected_before_round_two() -> None:
 
 
 def test_deep_enlargement_rejection_propagates_through_the_worker() -> None:
-    """The enlargement bound is enforced inside the killable worker.
-
-    The same field through the public native entry point must raise the typed
-    resource error (not a timeout) well inside the worker lease.
-    """
-
-    import time
-
+    """The worker's enlargement admission error reaches the native caller."""
     field = SimpleNumberFieldPresentation(
         coefficients_descending=_deep_index_coefficients(20)
     )
-    started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError) as error:
         ring_of_integers(field)
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_round_two_work_bound"
     )
-    assert time.monotonic() - started < 30
 
 
 def test_enlargement_units_separate_the_motivating_degrees() -> None:

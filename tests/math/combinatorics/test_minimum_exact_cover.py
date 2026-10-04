@@ -471,6 +471,10 @@ def test_secondary_presolve_is_linear_in_source_incidences() -> None:
     started = time.monotonic()
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
+    # The operation runs the linear secondary-item indexing pass before its
+    # combined indexing/search estimate rejects this request. This bound
+    # records the linear pass versus the previous quadratic scan; it does not
+    # assert that admission precedes indexing.
     assert time.monotonic() - started < 1.0
 
 

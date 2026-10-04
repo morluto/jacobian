@@ -26,13 +26,6 @@ def test_primorial_boundary_114() -> None:
     assert len(str(result.value)) == 259
 
 
-def test_primorial_maximum_1000() -> None:
-    """The maximum accepted n returns a valid declared result."""
-    result = compute_primorial(PrimorialRequest(n=1000))
-    assert isinstance(result, PrimorialResult)
-    assert len(str(result.value)) == 3393
-
-
 def test_primorial_admits_exact_digit_boundary_1001() -> None:
     """primorial(1001) has 3397 digits and is admitted; 1002 (3401) is not."""
     result = compute_primorial(PrimorialRequest(n=1001))

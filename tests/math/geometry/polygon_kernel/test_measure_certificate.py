@@ -364,6 +364,9 @@ class TestModelBranches:
             )
         )
         assert forged_claim.kernel_segment_length is not None
+        assert forged_claim.kernel_segment_length.as_fraction() == 5
+        assert forged_claim.kernel_segment_squared_length is not None
+        assert forged_claim.kernel_segment_squared_length.as_fraction() == 25
 
     def test_irrational_segment_length_round_trips(self) -> None:
         # A segment kernel may have an irrational length (endpoints at
@@ -440,6 +443,7 @@ class TestModelBranches:
             )
         )
         assert forged_claim.kernel_measures.perimeter is not None
+        assert forged_claim.kernel_measures.perimeter.as_fraction() == 0
 
     def test_empty_branch_shape(self) -> None:
         result = self._nakano_result()

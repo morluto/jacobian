@@ -1704,7 +1704,6 @@ def test_unexpected_node_field_is_bounded_before_copying() -> None:
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
     assert extra.iterated == 0
-    assert extra.iterated == 0
 
 
 def test_oversized_variable_axis_is_bounded_before_copying() -> None:

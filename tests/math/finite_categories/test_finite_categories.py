@@ -1,5 +1,6 @@
 """Tests for finite category operations."""
 
+import json
 from copy import deepcopy
 from typing import TypedDict
 
@@ -16,9 +17,6 @@ from jacobian.math.finite_categories import (
 )
 from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
-)
-from jacobian.math.finite_categories._product import (
-    _admit_product,
 )
 from jacobian.math.finite_categories._tools import (
     compute_category_product,
@@ -336,7 +334,9 @@ class TestValidation:
 
 
 class TestProduct:
-    def test_product_with_escaped_identifiers_serializes_canonically(self) -> None:
+    def test_product_preserves_escaped_identifiers_through_json_round_trip(
+        self,
+    ) -> None:
         left = FiniteCategory(
             objects=('A"\\é',),
             morphisms=(
@@ -353,8 +353,9 @@ class TestProduct:
 
         result = product(left, right)
 
-        _admit_product(left, right)
-        assert encode_strict_json(result.model_dump(mode="json"))
+        assert result.product.objects == (('A"\\é', "T"),)
+        payload = result.model_dump(mode="json")
+        assert json.loads(encode_strict_json(payload)) == payload
 
     def test_constructs_structural_pairs_componentwise(self) -> None:
         left = FiniteCategory.model_validate(CATEGORY)

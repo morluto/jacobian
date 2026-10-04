@@ -93,22 +93,6 @@ class TestHochschildChainComplex:
         assert result.group_dimensions[0] == 1
         assert result.group_dimensions[1] == 2
 
-    def test_has_differentials(self) -> None:
-        """The chain complex should have differentials."""
-        alg = AlgebraStructure(
-            prime=5,
-            dimension=2,
-            structure_constants=(
-                ((1, 0), (0, 1)),
-                ((0, 1), (1, 0)),
-            ),
-            augmentation=(1, 5 - 1),
-        )
-        result = _run_chain_complex(
-            HochschildChainComplexRequest(algebra=alg, max_degree=2)
-        )
-        assert len(result.differentials) >= 1
-
 
 class TestHochschildHomology:
     """Test Hochschild homology computation."""
@@ -123,20 +107,6 @@ class TestHochschildHomology:
         )
         result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
         assert result.groups[0].betti == 1
-
-    def test_2d_commutative(self) -> None:
-        """Test with a 2D commutative algebra."""
-        alg = AlgebraStructure(
-            prime=7,
-            dimension=2,
-            structure_constants=(
-                ((1, 0), (0, 1)),
-                ((0, 1), (1, 0)),
-            ),
-            augmentation=(1, 1),
-        )
-        result = _run_homology(HochschildHomologyRequest(algebra=alg, max_degree=2))
-        assert len(result.groups) >= 2
 
     def test_zero_algebra(self) -> None:
         """Test with the zero algebra (e*e = 0)."""

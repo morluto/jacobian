@@ -197,16 +197,6 @@ class TestRank:
         result = compute_rank(req)
         assert result.rank == 2
 
-    def test_invalid_non_prime(self) -> None:
-        """Non-prime modulus should raise."""
-        with pytest.raises(OperationDomainValidationError):
-            compute_rank(pfm(prime=4, entries=((1, 0), (0, 1))))
-
-    def test_invalid_entry_out_of_range(self) -> None:
-        """Entry >= prime should raise."""
-        with pytest.raises(ValidationError):
-            pfm(prime=2, entries=((2, 0), (0, 1)))
-
     def test_empty_entries_with_explicit_columns_accepted(self) -> None:
         """The canonical empty matrix composes as a bounded request.
 

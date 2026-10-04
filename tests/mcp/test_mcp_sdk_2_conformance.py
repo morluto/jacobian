@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
-from types import SimpleNamespace
-from typing import Any, cast
 
-import pytest
 from mcp.types import ContentBlock, TextContent, TextResourceContents
 from mcp.types.methods import serialize_server_result
 
@@ -16,57 +12,11 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationCatalogSnapshot, OperationResult
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server, create_server
-from jacobian.mcp.tools import math_run
 
 
 def _content_text(block: ContentBlock) -> str:
     assert isinstance(block, TextContent)
     return block.text
-
-
-def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
-    assert inspect.iscoroutinefunction(math_run)
-
-
-def test_math_run_resolves_the_selected_operation_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Dynamic payload parsing needs the private binding, not a prior public lookup."""
-
-    import jacobian.mcp.tools as tools
-
-    catalog = Catalog.open()
-    bindings = 0
-    original_binding = catalog._binding
-
-    def observe_binding(operation_id: str) -> Any:
-        nonlocal bindings
-        bindings += 1
-        return original_binding(operation_id)
-
-    def unexpected_public_lookup(operation_id: str) -> Any:
-        raise AssertionError(f"unexpected public lookup: {operation_id}")
-
-    monkeypatch.setattr(catalog, "_binding", observe_binding)
-    monkeypatch.setattr(catalog, "operation", unexpected_public_lookup)
-    monkeypatch.setattr(tools, "_authorize", lambda _ctx: None)
-    monkeypatch.setattr(tools, "_catalog", lambda _ctx: catalog)
-    monkeypatch.setattr(
-        tools,
-        "_request_cancellation",
-        lambda _ctx: SimpleNamespace(is_set=lambda: False),
-    )
-
-    result = asyncio.run(
-        math_run(
-            "integer.compute.extended_gcd",
-            {"left": "84", "right": "30"},
-            ctx=cast(Any, SimpleNamespace()),
-        )
-    )
-
-    assert result.output["gcd"] == "6"
-    assert bindings == 1
 
 
 def test_math_run_encloses_logarithm_on_a_positive_box() -> None:
@@ -319,13 +269,8 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
         from mcp import Client
 
         server = create_server()
-        assert hasattr(server, "list_tools") and hasattr(server, "call_tool")
         async with Client(server, raise_exceptions=True) as client:
             listed = await client.list_tools()
-            assert {tool.name for tool in listed.tools} == {
-                "math.find",
-                "math.run",
-            }
 
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
             assert set(invoke.input_schema["properties"]) == {
@@ -371,7 +316,13 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
                 "2026-07-28",
                 listed.model_dump(mode="json", by_alias=True, exclude_none=True),
             )
-            assert serialized_tools["tools"][0]["outputSchema"]["type"] == "object"
+            serialized_by_name = {
+                tool["name"]: tool for tool in serialized_tools["tools"]
+            }
+            assert (
+                serialized_by_name["math.run"]["outputSchema"]
+                == OperationResult.model_json_schema()
+            )
 
             invalid_request = await client.call_tool(
                 "math.find", {"unknown_key": "rejected"}

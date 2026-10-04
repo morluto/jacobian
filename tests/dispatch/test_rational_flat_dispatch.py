@@ -1,4 +1,4 @@
-"""Native and dispatch parity for clause-constrained rational flats."""
+"""Public dispatch boundary for the motivating rational-flat request."""
 
 from tests.support.rational_flats import seven_coordinate_source_problem
 
@@ -6,26 +6,16 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 
 
-def test_dispatch_preserves_the_complete_348_rooted_flat_known_answer() -> None:
+def test_math_run_admits_seven_coordinate_source_problem() -> None:
     problem = seven_coordinate_source_problem()
+    assert len(problem.candidates.vector_labels) == 105
+    assert len(problem.clauses) == 21
 
-    dispatched = invoke_operation(
+    result = invoke_operation(
         "matroid.rational_flat.constrained_orbits.compute",
         {"problem": problem.model_dump(mode="json")},
         Catalog.open(),
     )
 
-    assert dispatched.output["outcome"]["status"] == "COMPLETE_EXACT"
-    rooted_incidence = tuple(
-        representative["orbit_size"]
-        * len(representative["closed_candidate_indices"])
-        // problem.candidates.vector_count
-        for representative in sorted(
-            dispatched.output["outcome"]["representatives"],
-            key=lambda item: item["rank"],
-        )
-    )
-    # Issue #2470's bespoke search reported 36 + 293 = 329 rooted flats.  The
-    # complete orbit-stabilizer result gives all 36 + 312 = 348 instead.
-    assert rooted_incidence == (36, 312)
-    assert sum(rooted_incidence) == 348
+    assert result.output["outcome"]["status"] == "COMPLETE_EXACT"
+    assert result.output["outcome"]["solution_flat_count"] == 2_940

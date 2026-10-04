@@ -1,4 +1,4 @@
-"""Native/catalog parity for rational Laurent multiplication (#3615)."""
+"""Discovery check for rational Laurent multiplication vocabulary (#3615)."""
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchRequest

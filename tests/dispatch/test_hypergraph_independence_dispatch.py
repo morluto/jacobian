@@ -1,23 +1,17 @@
-"""Dispatch execution tests for hypergraph independence-number search."""
+"""Public admission boundary for carrier-sized hypergraph independence input.
+
+The advertised example for ``hypergraph.independence_number.compute`` uses
+three vertices, and the math lane exercises the native kernel directly. Only
+a request that travels the public parsing and result-delivery path at full
+carrier scale pins the accepted boundary: a regression that lowered a limit
+during wire parsing or envelope encoding would leave both other tests green
+while callers could no longer execute a request that previously worked.
+"""
+
+from __future__ import annotations
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
-
-_TRIPLE = {
-    "hypergraph": {
-        "vertices": ["a", "b", "c"],
-        "edges": [["triple", ["a", "b", "c"]]],
-    }
-}
-
-
-def test_math_run_executes_independence_compute() -> None:
-    result = invoke_operation(
-        "hypergraph.independence_number.compute", _TRIPLE, Catalog.open()
-    )
-    assert result.output["status"] == "EXACT"
-    assert result.output["independence_number"] == 2
-    assert result.output["lower_bound"] == result.output["upper_bound"] == 2
 
 
 def test_math_run_admits_carrier_sized_edgeless_source() -> None:

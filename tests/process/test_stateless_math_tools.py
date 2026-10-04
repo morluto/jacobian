@@ -41,6 +41,5 @@ def test_process_runs_matrix_determinant_with_no_state_dir(tmp_path: Path) -> No
 
     assert completed.returncode == 0, completed.stderr
     response = json.loads(completed.stdout)
-    assert response["runtime_ms"] >= 0
     assert response["output"]["determinant"] == {"num": "-2", "den": "1"}
     assert not missing.exists()

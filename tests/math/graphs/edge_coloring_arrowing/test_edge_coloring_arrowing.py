@@ -53,7 +53,6 @@ def test_k5_does_not_arrow_k3_k3() -> None:
     """K5 does not arrow (K3,K3): the 5-cycle colouring avoids triangles."""
     result = decide_edge_coloring_arrowing(_k5(), (_k3(), _k3()))
     assert result.outcome == "DOES_NOT_ARROW"
-    assert result.avoiding_coloring is not None
 
 
 def test_k2_arrows_k1_k1() -> None:

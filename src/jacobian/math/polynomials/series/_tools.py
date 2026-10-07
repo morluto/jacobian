@@ -326,7 +326,9 @@ TOOLS = (
         title="Compose two truncated formal power series",
         description=(
             "Compute the composition F(G(x)) mod x^N.  The inner series G must "
-            "have zero constant term."
+            "have zero constant term. Affine outer series admit order up to "
+            "25280 through bounded linear coefficient products; nonlinear "
+            "outer series retain order 512 and composition-growth admission."
         ),
         request_type=SeriesComposeRequest,
         result_type=SeriesComposeResult,

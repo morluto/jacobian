@@ -317,6 +317,39 @@ test("setup refreshes a selected unmanaged Jacobian registration", async () => {
   }
 });
 
+test("setup rejects ambiguous duplicate JSONC keys before any write", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-duplicate-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const source of [
+      '{"mcpServers":{"jacobian":{"command":"first"},"jacobian":{"command":"effective-old"}}}',
+      '{"mcpServers":{},"mcpServers":{"jacobian":{"command":"effective-old"}}}',
+      '{"mcpServers":{"jacobian":{"command":"first"},"jaco\\u0062ian":{"command":"effective-old"}}}',
+      '{"mcpServers":{},"other":{"setting":1,"setting":2}}',
+    ]) {
+      await writeFile(configPath, source, "utf8");
+
+      const result = runCarrier(["upgrade", "--claude", "--yes", "--json"], env);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /duplicate JSON object key in configuration/);
+      assert.equal(await readFile(configPath, "utf8"), source);
+      await assert.rejects(readFile(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+    }
+    await writeFile(configPath, '{\n// valid JSONC\n"mcpServers":{},"other":{"setting":1},"another":{"setting":2},\n}', "utf8");
+    const accepted = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    const updated = await readFile(configPath, "utf8");
+    assert.match(updated, /\/\/ valid JSONC/);
+    const { parse } = require("jsonc-parser");
+    assert.equal(parse(updated).mcpServers.jacobian.command, "npx");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("setup migrates a Codex inline registration and preserves neighboring tables", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-codex-inline-"));
   try {

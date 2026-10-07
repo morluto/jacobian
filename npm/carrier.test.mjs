@@ -339,6 +339,65 @@ test("setup migrates a Codex inline registration and preserves neighboring table
   }
 });
 
+test("upgrade accepts quoted, spaced, and commented Codex registration headers", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-toml-header-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const registration of [
+      '[mcp_servers."jacobian"]\ncommand="old"\n',
+      "[ 'mcp_servers' . 'jacobian' ] # registration\ncommand='old'\n",
+      '[mcp_servers.jacobian] # registration\r\ncommand="old"\r\n',
+      '["mcp_servers"] # parent\n  "jacobian" = {command="old"}\n',
+    ]) {
+      const neighbor = '\n  [mcp_servers.other] # keep this comment\ncommand = "other"\n';
+      await writeFile(configPath, registration + neighbor, "utf8");
+
+      const result = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+
+      assert.equal(result.status, 0, result.stderr);
+      const updated = await readFile(configPath, "utf8");
+      const parsed = TOML.parse(updated);
+      assert.equal(parsed.mcp_servers.jacobian.command, "npx");
+      assert.equal(parsed.mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+      assert.deepEqual(parsed.mcp_servers.other, { command: "other" });
+      assert.ok(updated.includes(neighbor.trimStart()));
+      const repeated = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+      assert.equal(repeated.status, 0, repeated.stderr);
+      assert.equal(await readFile(configPath, "utf8"), updated);
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup refuses TOML edits that mistake multiline-string text for a table", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-toml-string-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const note of [
+      'note = """\n[mcp_servers.jacobian]\ncommand="text only"\n"""\n',
+      "note = '''\n[mcp_servers.jacobian]\ncommand='text only'\n[elsewhere]\n'''\n",
+    ]) {
+      const source = note + '[mcp_servers."jacobian"] # actual\ncommand="old"\n[mcp_servers.other]\ncommand="other"\n';
+      assert.equal(TOML.parse(source).mcp_servers.jacobian.command, "old");
+      await writeFile(configPath, source, "utf8");
+
+      const result = runCarrier(["setup", "--codex", "--yes", "--json"], env);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Jacobian entry cannot be safely updated/);
+      assert.equal(await readFile(configPath, "utf8"), source);
+      await assert.rejects(readFile(join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("upgrade runs the pinned setup journey", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-"));
   try {

@@ -5,6 +5,7 @@ const { randomBytes } = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const { isDeepStrictEqual } = require("node:util");
 
 const TOML = require("@iarna/toml");
 const { applyEdits, modify, parse, printParseErrorCode } = require("jsonc-parser");
@@ -235,29 +236,57 @@ function tomlBlock(runtime) {
   return `${TOML_MARKER}\n[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(runtime.command)}\nargs = [${args}]\nstartup_timeout_sec = 120\n`;
 }
 
+function tomlTableHeader(keys) {
+  const components = keys.map((key) => `(?:${key}|"${key}"|'${key}')`);
+  return `\\[[ \\t]*${components.join("[ \\t]*\\.[ \\t]*")}[ \\t]*\\][ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n|$)`;
+}
+
 function managedTomlBlock(source) {
   const escapedMarker = TOML_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
-    `(^|\\r?\\n)${escapedMarker}\\r?\\n\\[mcp_servers\\.${SERVER_NAME}\\]\\r?\\n[\\s\\S]*?(?=\\r?\\n\\[|$)`,
+    `(^|\\r?\\n)${escapedMarker}\\r?\\n${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?(?=\\r?\\n[ \\t]*\\[|$)`,
   );
 }
 
 function directTomlEntry(source) {
-  const section = /(^|\r?\n)\[mcp_servers\][ \t]*(?:\r?\n|$)/g.exec(source);
+  const section = new RegExp(`(^|\\r?\\n)[ \\t]*${tomlTableHeader(["mcp_servers"])}`, "g").exec(source);
   if (!section) return null;
   const bodyStart = section.index + section[0].length;
-  const nextSection = /(^|\r?\n)\[[^\r\n]+\][ \t]*(?:\r?\n|$)/g;
+  const nextSection = /(^|\r?\n)[ \t]*\[[^\r\n]+\][ \t]*(?:#[^\r\n]*)?(?:\r?\n|$)/g;
   nextSection.lastIndex = bodyStart;
   const next = nextSection.exec(source);
   const bodyEnd = next ? next.index + next[1].length : source.length;
   const body = source.slice(bodyStart, bodyEnd);
-  const assignment = /^(?:jacobian|"jacobian"|'jacobian')[ \t]*=.*(?:\r?\n|$)/m.exec(body);
+  const assignment = /^[ \t]*(?:jacobian|"jacobian"|'jacobian')[ \t]*=.*(?:\r?\n|$)/m.exec(body);
   if (!assignment) return null;
   return {
     start: bodyStart + assignment.index,
     end: bodyStart + assignment.index + assignment[0].length,
     bodyEnd,
   };
+}
+
+function validateTomlEdit(filePath, root, updated, runtime) {
+  let parsed;
+  try {
+    parsed = TOML.parse(updated);
+  } catch {
+    throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}`);
+  }
+  const expected = {
+    ...root,
+    mcp_servers: {
+      ...root.mcp_servers,
+      [SERVER_NAME]: {
+        command: runtime.command,
+        args: runtime.args,
+        startup_timeout_sec: 120,
+      },
+    },
+  };
+  if (!isDeepStrictEqual(parsed, expected)) {
+    throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}`);
+  }
 }
 
 function planTomlEdit(filePath, original, runtime) {
@@ -274,7 +303,7 @@ function planTomlEdit(filePath, original, runtime) {
   if (current !== undefined) {
     const managedMatch = source.match(expression);
     const table = new RegExp(
-      `(^|\\r?\\n)\\[mcp_servers\\.${SERVER_NAME}\\]\\r?\\n[\\s\\S]*?(?=\\r?\\n\\[|$)`,
+      `(^|\\r?\\n)[ \\t]*${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?(?=\\r?\\n[ \\t]*\\[|$)`,
     );
     const tableMatch = source.match(table);
     const directEntry = directTomlEntry(source);
@@ -283,11 +312,7 @@ function planTomlEdit(filePath, original, runtime) {
       const withoutEntry = `${source.slice(0, directEntry.start)}${source.slice(directEntry.end)}`;
       const insertion = directEntry.bodyEnd - (directEntry.end - directEntry.start);
       const updated = `${withoutEntry.slice(0, insertion)}${block}${withoutEntry.slice(insertion)}`;
-      try {
-        TOML.parse(updated);
-      } catch (error) {
-        throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}: ${error.message}`);
-      }
+      validateTomlEdit(filePath, root, updated, runtime);
       return { action: "update", updated };
     }
     if (!replacement) {
@@ -296,6 +321,7 @@ function planTomlEdit(filePath, original, runtime) {
     const updated =
       source.replace(managedMatch ? expression : table, `${replacement[1]}${block.trimEnd()}`) +
       (source.endsWith("\n") ? "\n" : "");
+    validateTomlEdit(filePath, root, updated, runtime);
     if (updated === source) return { action: "already current", updated: null };
     return { action: "update", updated };
   }
@@ -303,7 +329,9 @@ function planTomlEdit(filePath, original, runtime) {
     throw new SetupError(`mcp_servers must be a table, not an inline value: ${filePath}`);
   }
   const separator = source.length === 0 || source.endsWith("\n") ? "\n" : "\n\n";
-  return { action: current === undefined ? "create" : "update", updated: `${source}${separator}${block}` };
+  const updated = `${source}${separator}${block}`;
+  validateTomlEdit(filePath, root, updated, runtime);
+  return { action: current === undefined ? "create" : "update", updated };
 }
 
 function assertUvAvailable() {

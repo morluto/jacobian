@@ -37,6 +37,8 @@ MAX_POWER_EXPONENT = 1_000
 # producer-to-truncate composition stays closed over every representable
 # expansion.
 MAX_TRUNCATE_SOURCE_ORDER = 25_280
+MAX_LINEAR_SERIES_LIMB_WORK = 1 << 33
+MAX_LINEAR_SERIES_STORAGE_BITS = 1 << 30
 
 CoefficientHeight = RationalHeight | None
 
@@ -658,11 +660,50 @@ def _require_native_pair(
 
 
 def admit_native_add_subtract(left: TruncatedSeries, right: TruncatedSeries) -> None:
-    _require_native_pair(left, right)
+    _admit_linear_series((left, right), addition=True)
+    _require_native_pair(left, right, maximum_order=MAX_TRUNCATE_SOURCE_ORDER)
     for left_value, right_value in zip(
         left.coefficients, right.coefficients, strict=True
     ):
         _require_height(sum_heights((_height(left_value), _height(right_value))), "sum")
+
+
+def _admit_linear_series(
+    sources: tuple[TruncatedSeries, ...], *, addition: bool
+) -> None:
+    from ._unit_bounds import require_series
+
+    for series in sources:
+        require_series(
+            series, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="input"
+        )
+    order = max(series.truncation_order for series in sources)
+    source_bits = max(
+        max(abs(value.num).bit_length(), value.den.bit_length())
+        for series in sources
+        for value in series.coefficients
+    )
+    # A coefficient sum is two rational cross-products and one integer sum.
+    # A derivative is one coefficient times an integer below N. No convolution
+    # or denominator clearing occurs. Bound unreduced arithmetic, canonical
+    # construction/encoding gcds, and retained source/temporary/result scalars.
+    bits = 2 * source_bits + 2 if addition else source_bits + order.bit_length() + 1
+    limbs = (bits + 63) // 64
+    if 128 * order * limbs**2 > MAX_LINEAR_SERIES_LIMB_WORK:
+        raise _resource_error(
+            "linear_work", "linear coefficient work exceeds its envelope"
+        )
+    if 24 * order * bits > MAX_LINEAR_SERIES_STORAGE_BITS:
+        raise _resource_error(
+            "linear_storage", "linear scalar storage exceeds its envelope"
+        )
+
+
+def admit_native_derivative(series: TruncatedSeries) -> None:
+    _admit_linear_series((series,), addition=False)
+    _require_native_input_series(series, maximum_order=MAX_TRUNCATE_SOURCE_ORDER)
+    multiplier = RationalHeight(len(str(max(1, series.truncation_order - 1))), 1)
+    _require_height(_max_height(series.coefficients).product(multiplier), "derivative")
 
 
 def admit_native_multiply(left: TruncatedSeries, right: TruncatedSeries) -> None:
@@ -1003,7 +1044,18 @@ class _SeriesPairRequest(StrictModel):
 
 
 class _SeriesAddSubtractRequest(_SeriesPairRequest):
-    """Pair request admitted through coefficientwise arithmetic bounds."""
+    """Coefficientwise addition/subtraction through source order 25280.
+
+    Sources have 256-digit components; complete unreduced arithmetic, integer
+    payload, and 4096-digit result growth are bounded before the linear kernel.
+    """
+
+    left: TruncatedSeries = Field(
+        description="Left source: order <=25280, components <=256 digits."
+    )
+    right: TruncatedSeries = Field(
+        description="Right source: same axis/order, components <=256 digits."
+    )
 
 
 class _SeriesMultiplyRequest(_SeriesPairRequest):

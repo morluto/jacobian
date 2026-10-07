@@ -91,10 +91,10 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
         validated = operation.result_type.model_validate_json(
             encode_strict_json(serialized)
         )
-        assert validated.model_dump(mode="json") == serialized, (
+        assert validated.model_dump(mode="json", by_alias=True) == serialized, (
             operation_id,
             serialized,
-            validated.model_dump(mode="json"),
+            validated.model_dump(mode="json", by_alias=True),
         )
 
 

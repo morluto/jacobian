@@ -277,7 +277,7 @@ async def math_run(
                     projector=lambda selected_id, result, started: OperationResult(
                         operation_id=selected_id,
                         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-                        output=result.model_dump(mode="json"),
+                        output=result.model_dump(mode="json", by_alias=True),
                     ),
                     cancellation_signal=cancellation,
                     progress_sink=progress_sink,

@@ -10,11 +10,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from fractions import Fraction
+from time import monotonic
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    current_request_execution,
+    execution_deadline,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -54,6 +60,7 @@ from jacobian.math.polynomials.series._models import (
     _height,
     admit_native_add_subtract,
     admit_native_compose,
+    admit_native_derivative,
     admit_native_divide,
     admit_native_from_polynomial,
     admit_native_identity_check,
@@ -157,24 +164,35 @@ def _cauchy_convolve(
 
 def add(left: TruncatedSeries, right: TruncatedSeries) -> SeriesArithmeticResult:
     """Add two series coefficientwise modulo x^N."""
-    _run_admission(lambda: admit_native_add_subtract(left, right))
-    n = left.truncation_order
-    a = _series_fractions(left)
-    b = _series_fractions(right)
-    return SeriesArithmeticResult(
-        result=_series_result(left.variable, n, [a[i] + b[i] for i in range(n)])
-    )
+    return _linear_arithmetic(left, right, subtracting=False)
 
 
 def subtract(left: TruncatedSeries, right: TruncatedSeries) -> SeriesArithmeticResult:
     """Subtract two series coefficientwise modulo x^N."""
+    return _linear_arithmetic(left, right, subtracting=True)
+
+
+def _linear_arithmetic(
+    left: TruncatedSeries, right: TruncatedSeries, *, subtracting: bool
+) -> SeriesArithmeticResult:
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return _linear_arithmetic(left, right, subtracting=subtracting)
+    execution_deadline(60.0)
     _run_admission(lambda: admit_native_add_subtract(left, right))
     n = left.truncation_order
     a = _series_fractions(left)
     b = _series_fractions(right)
-    return SeriesArithmeticResult(
-        result=_series_result(left.variable, n, [a[i] - b[i] for i in range(n)])
+    coefficients: list[Fraction] = []
+    for i in range(n):
+        if i % 256 == 0:
+            request_checkpoint("during linear series arithmetic")
+        coefficients.append(a[i] - b[i] if subtracting else a[i] + b[i])
+    result = SeriesArithmeticResult(
+        result=_series_result(left.variable, n, coefficients)
     )
+    request_checkpoint("after linear series result construction")
+    return result
 
 
 def multiply(left: TruncatedSeries, right: TruncatedSeries) -> SeriesMultiplyResult:
@@ -510,17 +528,27 @@ def derivative(series: TruncatedSeries) -> SeriesDerivativeResult:
 
     Output order convention: max(N-1, 1).
     """
-    _run_admission(lambda: admit_native_from_polynomial(series))
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return derivative(series)
+    execution_deadline(60.0)
+    _run_admission(lambda: admit_native_derivative(series))
     n = series.truncation_order
     a = _series_fractions(series)
     output_order = max(n - 1, 1)
     if n == 1:
         result = [Fraction(0)]
     else:
-        result = [Fraction((i + 1) * a[i + 1]) for i in range(output_order)]
-    return SeriesDerivativeResult(
+        result = []
+        for i in range(output_order):
+            if i % 256 == 0:
+                request_checkpoint("during formal series derivative")
+            result.append((i + 1) * a[i + 1])
+    value = SeriesDerivativeResult(
         result=_series_result(series.variable, output_order, result)
     )
+    request_checkpoint("after formal derivative result construction")
+    return value
 
 
 # ---------------------------------------------------------------------------

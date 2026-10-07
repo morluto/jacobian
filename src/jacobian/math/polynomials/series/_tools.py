@@ -90,7 +90,8 @@ TOOLS = (
         title="Add two truncated formal power series",
         description=(
             "Compute the exact coefficientwise sum of two truncated rational "
-            "formal power series with the same variable and order."
+            "formal power series with the same variable and order through 25280, "
+            "under complete linear work/storage and 256-digit source bounds."
         ),
         request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
@@ -109,7 +110,8 @@ TOOLS = (
         title="Subtract two truncated formal power series",
         description=(
             "Compute the exact coefficientwise difference of two truncated "
-            "rational formal power series with the same variable and order."
+            "rational formal power series with the same variable and order through 25280, "
+            "under complete linear work/storage and 256-digit source bounds."
         ),
         request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
@@ -411,7 +413,8 @@ TOOLS = (
         title="Differentiate a truncated formal power series",
         description=(
             "Compute the exact formal derivative of a truncated rational power "
-            "series, retaining the documented output-order convention."
+            "series through source order 25280 with 256-digit components and bounded "
+            "linear work/storage. Output order is max(N-1,1); components fit 4096 digits."
         ),
         request_type=TruncatedSeries,
         result_type=SeriesDerivativeResult,

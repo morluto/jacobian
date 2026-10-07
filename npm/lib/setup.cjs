@@ -180,14 +180,31 @@ function jsonEntry(client, runtime) {
   return { command: runtime.command, args: runtime.args };
 }
 
+async function resolveFilePath(filePath) {
+  const entry = await fs.lstat(filePath).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!entry) return filePath;
+  try {
+    return await fs.realpath(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT" && entry.isSymbolicLink()) {
+      throw new SetupError(`configuration symbolic link has a missing target: ${filePath}`);
+    }
+    throw error;
+  }
+}
+
 async function readOptional(filePath) {
   try {
-    const stat = await fs.stat(filePath);
+    const selectedPath = await resolveFilePath(filePath);
+    const stat = await fs.stat(selectedPath);
     if (!stat.isFile()) throw new SetupError(`configuration path is not a regular file: ${filePath}`);
     if (stat.size > MAX_CONFIG_BYTES) {
       throw new SetupError(`refusing to read configuration above ${MAX_CONFIG_BYTES} bytes: ${filePath}`);
     }
-    return await fs.readFile(filePath, "utf8");
+    return await fs.readFile(selectedPath, "utf8");
   } catch (error) {
     if (error && error.code === "ENOENT") return null;
     throw error;
@@ -359,10 +376,11 @@ async function buildPlan(clientIds, home, version, force) {
 }
 
 async function writeAtomic(filePath, content) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const temporary = `${filePath}.jacobian-${process.pid}-${randomBytes(6).toString("hex")}.tmp`;
+  const selectedPath = await resolveFilePath(filePath);
+  await fs.mkdir(path.dirname(selectedPath), { recursive: true });
+  const temporary = `${selectedPath}.jacobian-${process.pid}-${randomBytes(6).toString("hex")}.tmp`;
   await fs.writeFile(temporary, content, "utf8");
-  await fs.rename(temporary, filePath);
+  await fs.rename(temporary, selectedPath);
 }
 
 async function restore(filePath, original) {
@@ -378,11 +396,18 @@ async function restore(filePath, original) {
 async function applyPlan(plan) {
   const applied = [];
   const changes = [];
-  const seenPaths = new Set();
+  const seenPaths = new Map();
   for (const entry of plan) {
     for (const change of [entry, entry.skill]) {
-      if (seenPaths.has(change.path)) continue;
-      seenPaths.add(change.path);
+      const selectedPath = await resolveFilePath(change.path);
+      const previous = seenPaths.get(selectedPath);
+      if (previous) {
+        if (previous.original !== change.original || previous.updated !== change.updated) {
+          throw new SetupError(`selected setup entries propose conflicting changes to ${selectedPath}`);
+        }
+        continue;
+      }
+      seenPaths.set(selectedPath, change);
       changes.push(change);
     }
   }

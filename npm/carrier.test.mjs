@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -312,6 +312,120 @@ test("setup refreshes a selected unmanaged Jacobian registration", async () => {
       command: "npx",
       args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
     });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup updates symbolic-link targets without replacing the links", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-symlink-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const target = join(base, "dotfiles", "claude.json");
+    const intermediate = join(env.HOME, "claude-link");
+    const skillPath = join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md");
+    const skillTarget = join(base, "dotfiles", "jacobian-skill.md");
+    await mkdir(dirname(target), { recursive: true });
+    await mkdir(dirname(skillPath), { recursive: true });
+    await writeFile(target, '{"theme":"dark"}', "utf8");
+    await writeFile(skillTarget, "<!-- Managed by Jacobian setup. -->\nold skill\n", "utf8");
+    await symlink(target, intermediate);
+    await symlink("claude-link", configPath);
+    await symlink(skillTarget, skillPath);
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(configPath)).isSymbolicLink());
+    assert.ok((await lstat(intermediate)).isSymbolicLink());
+    assert.ok((await lstat(skillPath)).isSymbolicLink());
+    assert.equal(await readlink(configPath), "claude-link");
+    assert.equal(await readlink(intermediate), target);
+    const updated = JSON.parse(await readFile(target, "utf8"));
+    assert.equal(updated.theme, "dark");
+    assert.equal(updated.mcpServers.jacobian.command, "npx");
+    assert.equal(await readFile(configPath, "utf8"), await readFile(target, "utf8"));
+    assert.match(await readFile(skillTarget, "utf8"), /^---\nname: jacobian-math\n/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup refuses dangling configuration or skill links before any write", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-dangling-link-"));
+  try {
+    for (const kind of ["configuration", "skill"]) {
+      const env = await setupEnvironment(join(base, kind));
+      const configPath = join(env.HOME, ".claude.json");
+      const skillPath = join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md");
+      const link = kind === "configuration" ? configPath : skillPath;
+      await mkdir(dirname(link), { recursive: true });
+      await symlink("missing-target", link);
+
+      const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /symbolic link has a missing target/);
+      assert.ok((await lstat(link)).isSymbolicLink());
+      assert.equal(await readlink(link), "missing-target");
+      const untouched = kind === "configuration" ? skillPath : configPath;
+      await assert.rejects(lstat(untouched), { code: "ENOENT" });
+      await assert.rejects(lstat(join(dirname(link), "missing-target")), { code: "ENOENT" });
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup coalesces identical updates through multiple configuration links", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-shared-target-"));
+  try {
+    const env = await setupEnvironment(base);
+    const target = join(env.HOME, "shared.json");
+    const claude = join(env.HOME, ".claude.json");
+    const cursor = join(env.HOME, ".cursor", "mcp.json");
+    await mkdir(dirname(cursor), { recursive: true });
+    await writeFile(target, '{"theme":"dark"}', "utf8");
+    await symlink("shared.json", claude);
+    await symlink("../shared.json", cursor);
+
+    const result = runCarrier(["setup", "--claude", "--cursor", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(claude)).isSymbolicLink());
+    assert.ok((await lstat(cursor)).isSymbolicLink());
+    assert.equal(JSON.parse(await readFile(target, "utf8")).mcpServers.jacobian.command, "npx");
+    for (const client of JSON.parse(result.stdout).clients) {
+      assert.match(await readFile(client.skill_path, "utf8"), /^---\nname: jacobian-math\n/);
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup refuses conflicting updates to one linked target before any write", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-conflicting-target-"));
+  try {
+    const env = await setupEnvironment(base);
+    const target = join(env.HOME, "shared.json");
+    const claude = join(env.HOME, ".claude.json");
+    const opencode = join(env.HOME, ".config", "opencode", "opencode.json");
+    const source = '{"mcpServers":{},"mcp":{}}';
+    await mkdir(dirname(opencode), { recursive: true });
+    await writeFile(target, source, "utf8");
+    await symlink("shared.json", claude);
+    await symlink("../../shared.json", opencode);
+
+    const result = runCarrier(["setup", "--claude", "--opencode", "--yes", "--json"], env);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /selected setup entries propose conflicting changes/);
+    assert.equal(await readFile(target, "utf8"), source);
+    assert.ok((await lstat(claude)).isSymbolicLink());
+    assert.ok((await lstat(opencode)).isSymbolicLink());
+    await assert.rejects(lstat(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+    await assert.rejects(lstat(join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
   } finally {
     await rm(base, { recursive: true, force: true });
   }

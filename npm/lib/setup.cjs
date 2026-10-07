@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const TOML = require("@iarna/toml");
-const { applyEdits, modify, parse, printParseErrorCode } = require("jsonc-parser");
+const { applyEdits, getNodeValue, modify, parseTree, printParseErrorCode } = require("jsonc-parser");
 
 const SERVER_NAME = "jacobian";
 const MANAGED_SETUP_ARGUMENT = "--managed-by-setup";
@@ -196,12 +196,13 @@ async function readOptional(filePath) {
 
 function parseJson(source, filePath) {
   const errors = [];
-  const value = parse(source, errors, { allowTrailingComma: true, disallowComments: false });
+  const tree = parseTree(source, errors, { allowTrailingComma: true, disallowComments: false });
   if (errors.length > 0) {
     throw new SetupError(
       `invalid JSON configuration at ${filePath}: ${printParseErrorCode(errors[0].error)}`,
     );
   }
+  const value = tree && getNodeValue(tree);
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new SetupError(`top-level JSON configuration must be an object: ${filePath}`);
   }

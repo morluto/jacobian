@@ -317,6 +317,46 @@ test("setup refreshes a selected unmanaged Jacobian registration", async () => {
   }
 });
 
+test("setup reads only authored JSONC object properties", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-own-properties-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const expected = {
+      command: "npx",
+      args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
+    };
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const original of [
+      { ["__proto__"]: { mcpServers: { jacobian: expected } } },
+      { mcpServers: { ["__proto__"]: { jacobian: expected } } },
+      { ["__proto__"]: { mcpServers: "not an authored section" } },
+    ]) {
+      const source = JSON.stringify(original);
+      await writeFile(configPath, source, "utf8");
+
+      const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).clients[0].action, "create");
+      const updated = JSON.parse(await readFile(configPath, "utf8"));
+      assert.ok(Object.hasOwn(updated, "mcpServers"));
+      assert.ok(Object.hasOwn(updated.mcpServers, "jacobian"));
+      assert.deepEqual(updated.mcpServers.jacobian, expected);
+      if (Object.hasOwn(original, "__proto__")) {
+        assert.deepEqual(updated.__proto__, original.__proto__);
+      } else {
+        assert.deepEqual(updated.mcpServers.__proto__, original.mcpServers.__proto__);
+      }
+      const repeated = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+      assert.equal(repeated.status, 0, repeated.stderr);
+      assert.equal(JSON.parse(repeated.stdout).clients[0].action, "already current");
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("setup migrates a Codex inline registration and preserves neighboring tables", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-codex-inline-"));
   try {

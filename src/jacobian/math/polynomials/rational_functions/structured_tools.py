@@ -9,6 +9,7 @@ from .structured_models import (
     LogarithmicDifferentialResult,
     RationalFunctionRequest,
     RationalPrimitiveResult,
+    ResidueAtInfinityRequest,
 )
 from .structured_operations import (
     formal_antiderivative,
@@ -44,7 +45,7 @@ def _g(req: RationalFunctionRequest) -> GlobalResidueResult:
     return global_residues(req.function)
 
 
-def _r(req: RationalFunctionRequest) -> CanonicalRational:
+def _r(req: ResidueAtInfinityRequest) -> CanonicalRational:
     return residue_at_infinity(req.function)
 
 
@@ -104,8 +105,8 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="rational_function.residue_at_infinity.compute",
         title="Compute the residue at infinity",
-        description="Return the exact residue of f(x)dx at infinity using the rational local transform.",
-        request_type=RationalFunctionRequest,
+        description="Return the exact residue of f(x)dx at infinity as minus the x^-1 Laurent coefficient. Admits the full univariate rational presentation carrier through direct proper-fraction extraction or bounded monic remainder arithmetic; finite-pole factorization is unnecessary.",
+        request_type=ResidueAtInfinityRequest,
         result_type=__import__(
             "jacobian._exact", fromlist=["CanonicalRational"]
         ).CanonicalRational,

@@ -26,6 +26,8 @@ MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_REVERSION_INTERMEDIATE_DIGITS = 16_384
 MAX_REVERSION_BACKEND_WORK = 1_000_000_000
 MAX_POWER_EXPONENT = 1_000
+MAX_AFFINE_COMPOSE_LIMB_WORK = 1 << 32
+MAX_AFFINE_COMPOSE_STORAGE_BITS = 1 << 30
 
 # Truncation sources are admitted through the widest carrier canonical
 # values can carry: unit-series operations admit up to order 2048,
@@ -816,12 +818,45 @@ def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None
 
     require_series(outer, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
     require_series(inner, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
-    _require_native_pair(outer, inner)
+    affine_outer = _has_degree_at_most(outer, 1)
+    _require_native_pair(
+        outer,
+        inner,
+        maximum_order=MAX_TRUNCATE_SOURCE_ORDER
+        if affine_outer
+        else MAX_TRUNCATION_ORDER,
+    )
     if inner.coefficients[0].as_fraction() != 0:
         raise _validation_error(
             "composition_nonzero_inner_constant",
             "inner series must have zero constant term for composition with a finite prefix",
         )
+    if affine_outer:
+        # F(G)=a+bG: each nonconstant coefficient is one rational product,
+        # while G(0)=0 makes the constant coefficient exactly a. No powers,
+        # convolution or common-denominator expansion are performed. Products
+        # have at most twice the source width; reduction cannot enlarge them.
+        # Reserve source/temporary/result carriers and construction/encoding
+        # gcds, with a conservative squared-limb charge per coefficient.
+        source_bits = max(
+            max(abs(value.num).bit_length(), value.den.bit_length())
+            for source in (outer, inner)
+            for value in source.coefficients
+        )
+        bits = 2 * source_bits + 2
+        limbs = (bits + 63) // 64
+        if 64 * outer.truncation_order * limbs**2 > MAX_AFFINE_COMPOSE_LIMB_WORK:
+            raise _resource_error(
+                "compose_work", "affine composition exceeds its scalar-work bound"
+            )
+        if 16 * outer.truncation_order * bits > MAX_AFFINE_COMPOSE_STORAGE_BITS:
+            raise _resource_error(
+                "compose_storage",
+                "affine composition exceeds its retained-storage bound",
+            )
+        # With 256-digit sources, products have at most 512-digit components;
+        # the constant term remains a source scalar. Both fit 4096 digits.
+        return
     outer_denominators = {value.den for value in outer.coefficients if value.num}
     inner_denominators = {value.den for value in inner.coefficients if value.num}
     if len(outer_denominators) <= 1 and len(inner_denominators) <= 1:
@@ -1246,8 +1281,20 @@ class SeriesDivideResult(StrictModel):
 
 
 class SeriesComposeRequest(StrictModel):
-    outer: TruncatedSeries
-    inner: TruncatedSeries
+    """Compose equal prefixes with zero inner constant and bounded scalars.
+
+    Affine outer series admit the full order-25280 source envelope through
+    linear coefficient products. Nonlinear outer series retain order 512 and
+    their composition-growth bounds. Sources have 256-digit components and
+    results fit the 4096-digit operation envelope.
+    """
+
+    outer: TruncatedSeries = Field(
+        description="Affine outer series allow order 25280; nonlinear series allow order 512."
+    )
+    inner: TruncatedSeries = Field(
+        description="Same variable and order as outer, with zero constant term."
+    )
 
 
 class SeriesComposeResult(StrictModel):

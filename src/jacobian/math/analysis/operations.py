@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._flint import flint_workprec
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._adaptive_range_enclosure import adaptive_range_enclosure
@@ -154,6 +155,7 @@ def expression_enclosure(
     numerator, denominator = argument.as_integer_ratio()
     with flint_workprec(precision_bits):
         result = _evaluate_expression(expression, arb(fmpq(numerator, denominator)))
+        request_checkpoint("after Arb point evaluation")
         if isinstance(result, _EvaluationFailure):
             return IntervalExpressionEnclosureResult(
                 status=result.value,
@@ -504,6 +506,7 @@ def second_jet_enclosure(
                 for variable, interval in zip(box.variables, box.intervals, strict=True)
             }
             jet = _evaluate_second_jet(expression, variables, len(box.variables))
+            request_checkpoint("after Arb second-jet evaluation")
             if isinstance(jet, _SecondJetEvaluationFailure):
                 raise RuntimeError(
                     "Pinned Arb returned no finite second-order enclosure within "

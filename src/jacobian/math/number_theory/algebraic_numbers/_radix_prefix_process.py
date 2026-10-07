@@ -132,6 +132,8 @@ def run_scaled_integer_part_worker(
                     value, scaled_floor_digit_bound=scaled_floor_digit_bound
                 ),
             )
+    except OperationExecutionTimeoutError:
+        raise
     except OSError as exc:
         raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     if isinstance(outcome, RadixIsolationSuccess):

@@ -40,6 +40,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -384,7 +385,7 @@ def _primitive_descending_integers(
     if integers[0] <= 0:
         return None
     if any(
-        len(str(abs(coefficient))) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+        decimal_digit_width(coefficient) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
         for coefficient in integers
     ):
         return None

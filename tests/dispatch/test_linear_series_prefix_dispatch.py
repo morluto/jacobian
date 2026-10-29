@@ -97,3 +97,40 @@ def test_public_derivative_reuses_actual_inverse_output_and_adds_zero() -> None:
         catalog,
     )
     assert added.output["result"] == result.output["result"]
+
+
+def test_public_linear_consumers_reuse_actual_grown_inverse_coefficients() -> None:
+    height = 10**MAX_RATIONAL_DIGITS - 1
+    catalog = Catalog.open()
+    source = {
+        "variable": "x",
+        "truncation_order": 3,
+        "coefficients": [
+            {"num": "1", "den": "1"},
+            {"num": str(-height), "den": "1"},
+            {"num": "0", "den": "1"},
+        ],
+    }
+    produced = invoke_operation(
+        "formal_series.rational.inverse.compute", source, catalog
+    )
+    derivative_output = invoke_operation(
+        "formal_series.rational.derivative.compute", produced.output["result"], catalog
+    ).output["result"]
+    decoded = TruncatedSeries.model_validate_json(json.dumps(derivative_output))
+    assert [value.as_fraction() for value in decoded.coefficients] == [
+        height,
+        2 * height**2,
+    ]
+    zero = {
+        "variable": "x",
+        "truncation_order": 2,
+        "coefficients": [{"num": "0", "den": "1"}] * 2,
+    }
+    for operation in ("add", "subtract"):
+        result = invoke_operation(
+            f"formal_series.rational.{operation}.compute",
+            {"left": derivative_output, "right": zero},
+            catalog,
+        )
+        assert result.output["result"] == derivative_output

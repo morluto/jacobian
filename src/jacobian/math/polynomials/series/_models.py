@@ -649,6 +649,10 @@ def _require_native_pair(
 ) -> None:
     _require_native_input_series(left, maximum_order=maximum_order)
     _require_native_input_series(right, maximum_order=maximum_order)
+    _require_matching_pair(left, right)
+
+
+def _require_matching_pair(left: TruncatedSeries, right: TruncatedSeries) -> None:
     if left.variable != right.variable:
         raise _validation_error(
             "operand_variable_mismatch", "operands must share the same variable"
@@ -659,12 +663,28 @@ def _require_native_pair(
         )
 
 
-def admit_native_add_subtract(left: TruncatedSeries, right: TruncatedSeries) -> None:
+def admit_native_add_subtract(
+    left: TruncatedSeries, right: TruncatedSeries, *, subtracting: bool = False
+) -> None:
     _admit_linear_series((left, right), addition=True)
-    _require_native_pair(left, right, maximum_order=MAX_TRUNCATE_SOURCE_ORDER)
+    _require_matching_pair(left, right)
+    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
     for left_value, right_value in zip(
         left.coefficients, right.coefficients, strict=True
     ):
+        if not left_value.num or not right_value.num:
+            continue
+        if left_value.den == right_value.den:
+            right_num = -right_value.num if subtracting else right_value.num
+            # With a shared denominator, unlike signs cannot increase height.
+            if (left_value.num < 0) != (right_num < 0):
+                continue
+            if abs(left_value.num) >= ceiling - abs(right_num):
+                raise _resource_error(
+                    "sum_coefficient_growth",
+                    "coefficientwise arithmetic exceeds its result-height bound",
+                )
+            continue
         _require_height(sum_heights((_height(left_value), _height(right_value))), "sum")
 
 
@@ -675,7 +695,7 @@ def _admit_linear_series(
 
     for series in sources:
         require_series(
-            series, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="input"
+            series, maximum_digits=MAX_RESULT_RATIONAL_DIGITS, resource_family="input"
         )
     order = max(series.truncation_order for series in sources)
     source_bits = max(
@@ -701,9 +721,15 @@ def _admit_linear_series(
 
 def admit_native_derivative(series: TruncatedSeries) -> None:
     _admit_linear_series((series,), addition=False)
-    _require_native_input_series(series, maximum_order=MAX_TRUNCATE_SOURCE_ORDER)
-    multiplier = RationalHeight(len(str(max(1, series.truncation_order - 1))), 1)
-    _require_height(_max_height(series.coefficients).product(multiplier), "derivative")
+    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
+    for multiplier, value in enumerate(series.coefficients[1:], start=1):
+        # The existing denominator already fits. This bounds the numerator
+        # before multiplication; any subsequent rational reduction only helps.
+        if abs(value.num) > (ceiling - 1) // multiplier:
+            raise _resource_error(
+                "derivative_coefficient_growth",
+                "derivative exceeds its result-height bound",
+            )
 
 
 def admit_native_multiply(left: TruncatedSeries, right: TruncatedSeries) -> None:
@@ -1046,15 +1072,15 @@ class _SeriesPairRequest(StrictModel):
 class _SeriesAddSubtractRequest(_SeriesPairRequest):
     """Coefficientwise addition/subtraction through source order 25280.
 
-    Sources have 256-digit components; complete unreduced arithmetic, integer
+    Sources may reuse 4096-digit produced components; unreduced arithmetic, integer
     payload, and 4096-digit result growth are bounded before the linear kernel.
     """
 
     left: TruncatedSeries = Field(
-        description="Left source: order <=25280, components <=256 digits."
+        description="Left source: order <=25280, components <=4096 digits, with derived work/storage and result-growth bounds."
     )
     right: TruncatedSeries = Field(
-        description="Right source: same axis/order, components <=256 digits."
+        description="Right source: same axis/order, components <=4096 digits, subject to the shared derived envelope."
     )
 
 

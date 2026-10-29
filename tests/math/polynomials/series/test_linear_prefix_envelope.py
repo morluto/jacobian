@@ -22,6 +22,7 @@ from jacobian.math.polynomials.series import (
 )
 from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
+    MAX_RESULT_RATIONAL_DIGITS,
     MAX_TRUNCATE_SOURCE_ORDER,
     TruncatedSeries,
 )
@@ -67,6 +68,66 @@ def test_derivative_consumes_actual_admitted_inverse_without_rewriting() -> None
     )
     zero = _series([Fraction(0)] * 2047)
     assert add(result, zero).result == result
+
+
+def test_linear_consumers_reuse_grown_inverse_and_sum_coefficients() -> None:
+    source_height = 10**MAX_RATIONAL_DIGITS - 1
+    source = _series([Fraction(1), Fraction(-source_height), Fraction(0)])
+    produced = inverse(source).result
+    decoded = TruncatedSeries.model_validate_json(produced.model_dump_json())
+    assert decoded.coefficients[2].as_fraction() == source_height**2
+    differentiated = derivative(decoded).result
+    assert [value.as_fraction() for value in differentiated.coefficients] == [
+        source_height,
+        2 * source_height**2,
+    ]
+    zero = _series([Fraction(0)] * 2)
+    assert add(differentiated, zero).result == differentiated
+    assert subtract(differentiated, zero).result == differentiated
+
+    left = _series([Fraction(1, source_height)] * 2)
+    right = _series([Fraction(1, source_height - 2)] * 2)
+    summed = add(left, right).result
+    decoded_sum = TruncatedSeries.model_validate_json(summed.model_dump_json())
+    assert derivative(decoded_sum).result.coefficients[0] == summed.coefficients[1]
+
+
+def test_full_result_height_zero_and_shared_denominator_arithmetic() -> None:
+    height = 10 ** (MAX_RESULT_RATIONAL_DIGITS - 1)
+    source = _series([Fraction(0), Fraction(height), Fraction(height)])
+    result = derivative(source).result
+    assert [value.as_fraction() for value in result.coefficients] == [
+        height,
+        2 * height,
+    ]
+    zero = _series([Fraction(0)] * 2)
+    assert add(result, zero).result == result
+    assert subtract(result, result).result == zero
+    assert add(result, result).result.coefficients[1].as_fraction() == 4 * height
+
+
+def test_source_height_and_derived_result_growth_have_distinct_refusals() -> None:
+    limit = 10**MAX_RESULT_RATIONAL_DIGITS
+    with pytest.raises(OperationResourceAdmissionError) as source_error:
+        derivative(_series([Fraction(0), Fraction(limit)]))
+    assert (
+        source_error.value.errors()[0]["type"]
+        == "formal_power_series.input_coefficient"
+    )
+
+    source = _series([Fraction(0), Fraction(0), Fraction(limit - 1)])
+    with pytest.raises(OperationResourceAdmissionError) as derivative_error:
+        derivative(source)
+    assert derivative_error.value.errors()[0]["type"] == (
+        "formal_power_series.derivative_coefficient_growth"
+    )
+    source = _series([Fraction(limit - 1)])
+    with pytest.raises(OperationResourceAdmissionError) as addition_error:
+        add(source, source)
+    assert (
+        addition_error.value.errors()[0]["type"]
+        == "formal_power_series.sum_coefficient_growth"
+    )
 
 
 def test_linear_source_ceiling_remains_bounded() -> None:

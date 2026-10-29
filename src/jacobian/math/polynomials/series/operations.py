@@ -179,7 +179,9 @@ def _linear_arithmetic(
         with request_execution(monotonic()):
             return _linear_arithmetic(left, right, subtracting=subtracting)
     execution_deadline(60.0)
-    _run_admission(lambda: admit_native_add_subtract(left, right))
+    _run_admission(
+        lambda: admit_native_add_subtract(left, right, subtracting=subtracting)
+    )
     n = left.truncation_order
     a = _series_fractions(left)
     b = _series_fractions(right)

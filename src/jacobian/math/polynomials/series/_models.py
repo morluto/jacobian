@@ -670,7 +670,7 @@ def admit_native_add_subtract(
     left: TruncatedSeries, right: TruncatedSeries, *, subtracting: bool = False
 ) -> None:
     _admit_linear_series((left, right), addition=True)
-    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
+    ceiling = _RESULT_BOUND_CAP
     for left_value, right_value in zip(
         left.coefficients, right.coefficients, strict=True
     ):
@@ -681,7 +681,14 @@ def admit_native_add_subtract(
             # With a shared denominator, unlike signs cannot increase height.
             if (left_value.num < 0) != (right_num < 0):
                 continue
-            if abs(left_value.num) >= ceiling - abs(right_num):
+            # A bit bound below the fixed carrier avoids wide threshold
+            # arithmetic for small scalars. Its fallback is charged at the
+            # already-large local candidate width.
+            if max(
+                left_value.num.bit_length(), right_num.bit_length()
+            ) + 1 >= ceiling.bit_length() and abs(left_value.num) >= ceiling - abs(
+                right_num
+            ):
                 raise _resource_error(
                     "sum_coefficient_growth",
                     "coefficientwise arithmetic exceeds its result-height bound",
@@ -773,11 +780,15 @@ def _linear_sum_bits(
 
 def admit_native_derivative(series: TruncatedSeries) -> None:
     _admit_linear_series((series,), addition=False)
-    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
+    ceiling = _RESULT_BOUND_CAP
     for multiplier, value in enumerate(series.coefficients[1:], start=1):
         # The existing denominator already fits. This bounds the numerator
         # before multiplication; any subsequent rational reduction only helps.
-        if abs(value.num) > (ceiling - 1) // multiplier:
+        # Skip fixed-width division when local bits already prove it fits.
+        if (
+            value.num.bit_length() + multiplier.bit_length() >= ceiling.bit_length()
+            and abs(value.num) > (ceiling - 1) // multiplier
+        ):
             raise _resource_error(
                 "derivative_coefficient_growth",
                 "derivative exceeds its result-height bound",

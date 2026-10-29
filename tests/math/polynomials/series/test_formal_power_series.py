@@ -26,6 +26,7 @@ from jacobian.math.polynomials.series import (
 )
 from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
+    MAX_RESULT_RATIONAL_DIGITS,
     MAX_TRUNCATE_SOURCE_ORDER,
     MAX_TRUNCATION_ORDER,
     SeriesInverseRequest,
@@ -159,7 +160,7 @@ def test_inverse_rejects_result_coefficient_growth() -> None:
 def test_input_series_rejects_oversized_coefficients() -> None:
     import pytest
 
-    huge = 10**MAX_RATIONAL_DIGITS
+    huge = 10**MAX_RESULT_RATIONAL_DIGITS
     oversized = TruncatedSeries(
         variable="x",
         truncation_order=1,

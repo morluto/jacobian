@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from functools import partial
+from typing import Annotated, Literal, Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, Tag, WrapValidator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.matrices._analysis_input import AnalysisRationalMatrixInput
+from jacobian.math.matrices._analysis_input import (
+    AnalysisRationalMatrixInput,
+    _exact_real_matrix_branch,
+)
+from jacobian.math.matrices._input_diagnostics import (
+    _matrix_storage_branch,
+    _matrix_union_validation,
+)
 from jacobian.math.matrices.values import (
+    MAX_RATIONAL_MATRIX_AXIS,
     MAX_RATIONAL_MATRIX_ORDER,
     EmbeddedRealSimpleNumberFieldMatrix,
     ExactRealMatrix,
@@ -155,7 +164,20 @@ class SymmetricMatrixRequest(StrictModel):
         }
     )
 
-    matrix: AnalysisRationalMatrixInput | EmbeddedRealSimpleNumberFieldMatrix = Field(
+    matrix: Annotated[
+        Annotated[AnalysisRationalMatrixInput, Tag("rational")]
+        | Annotated[EmbeddedRealSimpleNumberFieldMatrix, Tag("algebraic")],
+        WrapValidator(
+            partial(
+                _matrix_union_validation,
+                branch_for_value=_exact_real_matrix_branch,
+                branch_prefixes={
+                    "rational": "Rational matrix: ",
+                    "algebraic": "Embedded real matrix: ",
+                },
+            )
+        ),
+    ] = Field(
         description=(
             "Canonical materialized matrix over QQ or one selected real simple-"
             "number-field embedding. It must be square and symmetric. The carrier "
@@ -263,7 +285,19 @@ class FarkasCertificateRequest(StrictModel):
     y^T A = 0 and y^T b < 0, proving the system is infeasible.
     """
 
-    constraint_matrix: RationalMatrix | SparseRationalMatrix
+    constraint_matrix: Annotated[
+        Annotated[RationalMatrix, Tag("dense")]
+        | Annotated[SparseRationalMatrix, Tag("sparse")],
+        WrapValidator(
+            partial(
+                _matrix_union_validation,
+                branch_for_value=partial(
+                    _matrix_storage_branch,
+                    maximum_dense_axis=MAX_RATIONAL_MATRIX_AXIS,
+                ),
+            )
+        ),
+    ]
     rhs_vector: tuple[CanonicalRational, ...] = Field(min_length=1)
     multipliers: tuple[CanonicalRational, ...] = Field(min_length=1)
 

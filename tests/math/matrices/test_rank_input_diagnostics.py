@@ -10,12 +10,14 @@ from pydantic import ConfigDict, TypeAdapter, ValidationError, WrapValidator
 from pydantic_core import ErrorDetails, PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.matrices._input_diagnostics import (
+    _matrix_message_context,
+    _matrix_storage_branch,
+    _matrix_union_validation,
+)
 from jacobian.math.matrices._operation_models import (
     MAX_INPUT_SCALAR_DIGITS,
     MatrixRankRequest,
-    _rank_matrix_branch,
-    _rank_matrix_message_context,
-    _rank_matrix_validation,
 )
 from jacobian.math.matrices._rational_input import (
     RationalMatrixInput,
@@ -289,7 +291,7 @@ def test_only_the_owned_leading_union_tag_is_removed(key: str) -> None:
         )
 
     adapter: TypeAdapter[Any] = TypeAdapter(
-        Annotated[Any, WrapValidator(reject), WrapValidator(_rank_matrix_validation)]
+        Annotated[Any, WrapValidator(reject), WrapValidator(_matrix_union_validation)]
     )
     value: dict[str, Any] = {"entries": [[]]}
     with pytest.raises(ValidationError) as rejected:
@@ -321,7 +323,7 @@ def test_custom_error_context_and_rendered_braces_are_preserved(
         )
 
     adapter: TypeAdapter[Any] = TypeAdapter(
-        Annotated[Any, WrapValidator(reject), WrapValidator(_rank_matrix_validation)]
+        Annotated[Any, WrapValidator(reject), WrapValidator(_matrix_union_validation)]
     )
     with pytest.raises(ValidationError) as rejected:
         adapter.validate_python({"entries": [[]]})
@@ -387,13 +389,13 @@ def test_branch_evidence_does_not_inspect_hostile_subclasses_or_scalars() -> Non
         DenseSubclass.model_construct(),
         {"entries": [()] * (MAX_SPARSE_RATIONAL_MATRIX_NONZEROS + 1)},
     ):
-        assert _rank_matrix_branch(value) is None
-    assert _rank_matrix_branch({"entries": [[{"num": 1, "den": 1}]]}) == "dense"
-    assert _rank_matrix_branch({"entries": [{"row": 0}]}) == "sparse"
-    assert _rank_matrix_branch({"entries": [{"column": 0}]}) == "sparse"
-    assert _rank_matrix_branch(RationalMatrix()) == "dense"
+        assert _matrix_storage_branch(value) is None
+    assert _matrix_storage_branch({"entries": [[{"num": 1, "den": 1}]]}) == "dense"
+    assert _matrix_storage_branch({"entries": [{"row": 0}]}) == "sparse"
+    assert _matrix_storage_branch({"entries": [{"column": 0}]}) == "sparse"
+    assert _matrix_storage_branch(RationalMatrix()) == "dense"
     assert (
-        _rank_matrix_branch(SparseRationalMatrix(row_count=0, column_count=0))
+        _matrix_storage_branch(SparseRationalMatrix(row_count=0, column_count=0))
         == "sparse"
     )
 
@@ -408,7 +410,7 @@ def test_custom_error_reusing_native_code_preserves_its_message() -> None:
         )
 
     adapter: TypeAdapter[Any] = TypeAdapter(
-        Annotated[Any, WrapValidator(reject), WrapValidator(_rank_matrix_validation)]
+        Annotated[Any, WrapValidator(reject), WrapValidator(_matrix_union_validation)]
     )
     value: dict[str, Any] = {"entries": [[]]}
     with pytest.raises(ValidationError) as rejected:
@@ -445,7 +447,7 @@ def test_long_custom_messages_without_context_retain_original_error(
         )
 
     adapter: TypeAdapter[Any] = TypeAdapter(
-        Annotated[Any, WrapValidator(reject), WrapValidator(_rank_matrix_validation)]
+        Annotated[Any, WrapValidator(reject), WrapValidator(_matrix_union_validation)]
     )
     value = {"entries": entries}
     with pytest.raises(ValidationError) as rejected:
@@ -488,7 +490,7 @@ def test_context_reconstruction_is_bounded_without_custom_inspection() -> None:
         {"x" * 129: 1},
         {str(index): index for index in range(9)},
     ):
-        assert not _rank_matrix_message_context("invalid matrix", context)
-    assert not _rank_matrix_message_context("x" * 4097, {})
-    assert not _rank_matrix_message_context("x" * 4097, None)
-    assert _rank_matrix_message_context("invalid matrix", {"ge": 0})
+        assert not _matrix_message_context("invalid matrix", context)
+    assert not _matrix_message_context("x" * 4097, {})
+    assert not _matrix_message_context("x" * 4097, None)
+    assert _matrix_message_context("invalid matrix", {"ge": 0})

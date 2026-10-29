@@ -404,6 +404,37 @@ test("setup coalesces identical updates through multiple configuration links", {
   }
 });
 
+test("setup coalesces a missing shared skill through a linked parent directory", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-shared-skill-"));
+  try {
+    const env = await setupEnvironment(base);
+    const sharedSkills = join(env.HOME, ".agents", "skills");
+    const claudeSkills = join(env.HOME, ".claude", "skills");
+    await mkdir(sharedSkills, { recursive: true });
+    await mkdir(dirname(claudeSkills), { recursive: true });
+    await symlink("../.agents/skills", claudeSkills);
+
+    const result = runCarrier(["setup", "--claude", "--codex", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(claudeSkills)).isSymbolicLink());
+    assert.equal(await readlink(claudeSkills), "../.agents/skills");
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(report.clients.map((client) => client.client), ["claude", "codex"]);
+    const skill = await readFile(join(sharedSkills, "jacobian-math", "SKILL.md"), "utf8");
+    assert.match(skill, /^---\nname: jacobian-math\n/);
+    for (const client of report.clients) {
+      assert.equal(await readFile(client.skill_path, "utf8"), skill);
+    }
+    const claude = JSON.parse(await readFile(join(env.HOME, ".claude.json"), "utf8"));
+    assert.equal(claude.mcpServers.jacobian.command, "npx");
+    const codex = TOML.parse(await readFile(join(env.HOME, ".codex", "config.toml"), "utf8"));
+    assert.equal(codex.mcp_servers.jacobian.command, "npx");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("setup refuses conflicting updates to one linked target before any write", { skip: process.platform === "win32" }, async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-conflicting-target-"));
   try {

@@ -185,7 +185,11 @@ async function resolveFilePath(filePath) {
     if (error.code === "ENOENT") return null;
     throw error;
   });
-  if (!entry) return filePath;
+  if (!entry) {
+    const parent = path.dirname(filePath);
+    if (parent === filePath) return filePath;
+    return path.join(await resolveFilePath(parent), path.basename(filePath));
+  }
   try {
     return await fs.realpath(filePath);
   } catch (error) {

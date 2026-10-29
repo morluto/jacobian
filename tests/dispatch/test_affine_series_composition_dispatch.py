@@ -122,3 +122,36 @@ def test_public_affine_identity_reuses_actual_grown_sum_output() -> None:
         catalog,
     )
     assert composed.output["result"] == produced
+
+
+@pytest.mark.parametrize("constant", (False, True))
+def test_public_affine_composition_reuses_actual_sparse_power(constant: bool) -> None:
+    order = 800
+    zero = {"num": "0", "den": "1"}
+    one = {"num": "1", "den": "1"}
+    source = {
+        "variable": "x",
+        "truncation_order": order,
+        "coefficients": [zero, {"num": "10000", "den": "1"}, *([zero] * (order - 2))],
+    }
+    catalog = Catalog.open()
+    produced = invoke_operation(
+        "formal_series.rational.power.compute",
+        {"series": source, "exponent": order - 1},
+        catalog,
+    ).output["result"]
+    decoded = TruncatedSeries.model_validate_json(json.dumps(produced))
+    assert decoded.coefficients[-1].as_fraction() == 10000 ** (order - 1)
+    outer = {
+        "variable": "x",
+        "truncation_order": order,
+        "coefficients": [one, zero] + [zero] * (order - 2)
+        if constant
+        else [zero, one] + [zero] * (order - 2),
+    }
+    result = invoke_operation(
+        "formal_series.rational.compose.compute",
+        {"outer": outer, "inner": produced},
+        catalog,
+    )
+    assert result.output["result"] == (outer if constant else produced)

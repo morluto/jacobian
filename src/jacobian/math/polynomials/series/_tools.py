@@ -90,7 +90,8 @@ TOOLS = (
         title="Add two truncated formal power series",
         description=(
             "Compute the exact coefficientwise sum of two truncated rational "
-            "formal power series with the same variable and order."
+            "formal power series with the same variable and order through 25280, "
+            "under derived linear work/storage and 4096-digit source/result bounds."
         ),
         request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
@@ -109,7 +110,8 @@ TOOLS = (
         title="Subtract two truncated formal power series",
         description=(
             "Compute the exact coefficientwise difference of two truncated "
-            "rational formal power series with the same variable and order."
+            "rational formal power series with the same variable and order through 25280, "
+            "under derived linear work/storage and 4096-digit source/result bounds."
         ),
         request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
@@ -326,7 +328,10 @@ TOOLS = (
         title="Compose two truncated formal power series",
         description=(
             "Compute the composition F(G(x)) mod x^N.  The inner series G must "
-            "have zero constant term."
+            "have zero constant term. Affine outer series admit order up to "
+            "25280 and 4096-digit produced components under derived product, "
+            "work and storage bounds; nonlinear outer series retain order 512 "
+            "and 256-digit source components."
         ),
         request_type=SeriesComposeRequest,
         result_type=SeriesComposeResult,
@@ -411,7 +416,8 @@ TOOLS = (
         title="Differentiate a truncated formal power series",
         description=(
             "Compute the exact formal derivative of a truncated rational power "
-            "series, retaining the documented output-order convention."
+            "series through source order 25280 with 4096-digit source components and bounded "
+            "linear work/storage. Output order is max(N-1,1); components fit 4096 digits."
         ),
         request_type=TruncatedSeries,
         result_type=SeriesDerivativeResult,

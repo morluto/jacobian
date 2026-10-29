@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import combinations
+from re import fullmatch
 
 from pydantic import ValidationError
 
@@ -341,14 +342,25 @@ def _admit_form(
         )
     request_checkpoint("during differential wedge operand admission")
     degree = getattr(value, "degree", None)
-    if not isinstance(degree, int) or degree < 0:
+    if type(degree) is not int or degree < 0:
         raise OperationDomainValidationError(
             location=(*location, "degree"),
             code="differential_form.degree",
             message="wedge operands must have a nonnegative degree",
         )
     variables = getattr(value, "variables", None)
-    if not isinstance(variables, tuple) or len(variables) > MAX_POLYNOMIAL_VARIABLES:
+    _admit_degree(degree)
+    if (
+        not isinstance(variables, tuple)
+        or len(variables) > MAX_POLYNOMIAL_VARIABLES
+        or any(
+            type(name) is not str
+            or len(name) > 32
+            or fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", name) is None
+            for name in variables
+        )
+        or len(set(variables)) != len(variables)
+    ):
         raise OperationDomainValidationError(
             location=(*location, "variables"),
             code="differential_form.variable_axis",

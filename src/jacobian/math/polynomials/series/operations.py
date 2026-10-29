@@ -10,11 +10,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from fractions import Fraction
+from time import monotonic
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    current_request_execution,
+    execution_deadline,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -361,7 +367,11 @@ def _compose_coefficients(
     inner_coefficients = _series_fractions(inner)
     if not any(outer_coefficients[2:]):
         slope = outer_coefficients[1] if n > 1 else Fraction(0)
-        result = [slope * value for value in inner_coefficients]
+        result = []
+        for degree, value in enumerate(inner_coefficients):
+            if degree % 256 == 0:
+                request_checkpoint("during affine series composition")
+            result.append(slope * value)
         result[0] += outer_coefficients[0]
         return result
     inner_power = [Fraction(1)] + [Fraction(0)] * (n - 1)
@@ -390,14 +400,20 @@ def compose(outer: TruncatedSeries, inner: TruncatedSeries) -> SeriesComposeResu
     Composes by iteratively computing G^k (powers) and multiplying by f_k:
     F(G) = sum_{k=0}^{N-1} f_k * G^k mod x^N.
     """
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return compose(outer, inner)
+    execution_deadline(60.0)
     _run_admission(lambda: admit_native_compose(outer, inner))
-    return SeriesComposeResult(
+    result = SeriesComposeResult(
         result=_series_result(
             outer.variable,
             outer.truncation_order,
             _compose_coefficients(outer, inner),
         )
     )
+    request_checkpoint("after exact composition result construction")
+    return result
 
 
 # ---------------------------------------------------------------------------

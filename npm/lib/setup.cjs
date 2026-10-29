@@ -368,13 +368,14 @@ async function writeAtomic(filePath, content) {
     },
   );
   const temporary = `${filePath}.jacobian-${process.pid}-${randomBytes(6).toString("hex")}.tmp`;
+  const temporaryFile = await fs.open(temporary, "wx", originalMode ?? 0o666);
   try {
-    await fs.writeFile(temporary, content, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: originalMode ?? 0o666,
-    });
-    if (originalMode !== null) await fs.chmod(temporary, originalMode);
+    try {
+      await temporaryFile.writeFile(content, "utf8");
+      if (originalMode !== null) await temporaryFile.chmod(originalMode);
+    } finally {
+      await temporaryFile.close();
+    }
     await fs.rename(temporary, filePath);
   } finally {
     await fs.unlink(temporary).catch((error) => {

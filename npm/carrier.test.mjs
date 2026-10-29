@@ -341,6 +341,42 @@ test("setup preserves existing configuration and managed skill permissions", { s
   }
 });
 
+test("setup leaves an existing temporary-name collision untouched", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-temp-collision-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const collisionLog = join(base, "collision-path");
+    const preload = join(base, "fixed-temp-name.cjs");
+    const original = '{"theme":"dark"}';
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, original, "utf8");
+    await writeFile(preload, `
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+crypto.randomBytes = (size) => Buffer.alloc(size);
+const collision = process.env.JACOBIAN_TEST_CONFIG + ".jacobian-" + process.pid + "-000000000000.tmp";
+fs.writeFileSync(collision, "unrelated temporary file", { flag: "wx" });
+fs.writeFileSync(process.env.JACOBIAN_TEST_COLLISION_LOG, collision);
+`, "utf8");
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], {
+      ...env,
+      NODE_OPTIONS: `${env.NODE_OPTIONS || ""} --require=${preload}`,
+      JACOBIAN_TEST_CONFIG: configPath,
+      JACOBIAN_TEST_COLLISION_LOG: collisionLog,
+    });
+
+    assert.equal(result.status, 1);
+    const collision = await readFile(collisionLog, "utf8");
+    assert.equal(await readFile(collision, "utf8"), "unrelated temporary file");
+    assert.equal(await readFile(configPath, "utf8"), original);
+    await assert.rejects(readFile(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("setup migrates a Codex inline registration and preserves neighboring tables", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-codex-inline-"));
   try {

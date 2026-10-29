@@ -132,6 +132,8 @@ def test_full_result_height_zero_and_shared_denominator_arithmetic() -> None:
 
 def test_source_height_and_derived_result_growth_have_distinct_refusals() -> None:
     limit = 10**MAX_RESULT_RATIONAL_DIGITS
+    boundary = _series([Fraction(0), Fraction(limit - 1)])
+    assert derivative(boundary).result.coefficients[0].as_fraction() == limit - 1
     with pytest.raises(OperationResourceAdmissionError) as source_error:
         derivative(_series([Fraction(0), Fraction(limit)]))
     assert (

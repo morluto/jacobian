@@ -875,15 +875,20 @@ def _admit_affine_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> Non
     # Produced prefixes can carry 4096-digit components. Bound each
     # unreduced nonconstant product before multiplication; zero and unit
     # affine maps retain their useful full-height domain.
-    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
+    ceiling = _RESULT_BOUND_CAP
     if outer.truncation_order > 1:
         slope = outer.coefficients[1]
         for value in inner.coefficients[1:]:
             if not slope.num or not value.num:
                 continue
+            # Small products need no division of the fixed carrier ceiling;
+            # near it, the local wide-product charge covers these guards too.
             if (
-                abs(slope.num) > (ceiling - 1) // abs(value.num)
-                or slope.den > (ceiling - 1) // value.den
+                slope.num.bit_length() + value.num.bit_length() >= ceiling.bit_length()
+                and abs(slope.num) > (ceiling - 1) // abs(value.num)
+            ) or (
+                slope.den.bit_length() + value.den.bit_length() >= ceiling.bit_length()
+                and slope.den > (ceiling - 1) // value.den
             ):
                 raise _resource_error(
                     "compose_coefficient_growth",

@@ -15,6 +15,20 @@ class RationalFunctionRequest(StrictModel):
     function: RationalFunction
 
 
+class ResidueAtInfinityRequest(StrictModel):
+    """Extract one Laurent coefficient without factorizing finite poles."""
+
+    function: RationalFunction = Field(
+        description=(
+            "Univariate structurally canonical rational presentation: numerator "
+            "and denominator exponents up to 128 and 128-digit components. "
+            "Proper fractions use their leading coefficients directly; improper "
+            "fractions require admitted exact remainder growth, work and storage. "
+            "Common factor cancellation does not change the residue."
+        )
+    )
+
+
 class LogarithmicDifferentialTerm(StrictModel):
     """A rationally represented dlog row; no analytic log branch is chosen."""
 
@@ -78,5 +92,6 @@ __all__ = [
     "LogarithmicDifferentialTerm",
     "RationalFunctionRequest",
     "RationalPrimitiveResult",
+    "ResidueAtInfinityRequest",
     "ResidueRow",
 ]

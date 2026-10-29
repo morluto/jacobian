@@ -10,7 +10,12 @@ from itertools import pairwise, product
 from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import bind_request_deadline, current_request_execution
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -191,12 +196,18 @@ def _canonical_count(operation: str, n: int, k: int) -> int:
     result = int(digits[:first_width])
     for offset in range(first_width, len(digits), 9):
         result = result * 1_000_000_000 + int(digits[offset : offset + 9])
+    request_checkpoint("after exact count construction")
     return sign * result
 
 
 def canonical_binomial(n: int, k: int) -> int:
     """Return the canonical decimal of ``C(n, k)`` after admission."""
 
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return canonical_binomial(n, k)
+    _bind_counting_deadline()
+    request_checkpoint("before binomial counting")
     first = _bounded_sparse_counting_index(n, name="n")
     second = _bounded_sparse_counting_index(k, name="k")
     if second > first:
@@ -208,6 +219,11 @@ def canonical_binomial(n: int, k: int) -> int:
 def canonical_permutations(n: int, k: int) -> int:
     """Return the canonical decimal of ``P(n, k)`` after admission."""
 
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return canonical_permutations(n, k)
+    _bind_counting_deadline()
+    request_checkpoint("before permutation counting")
     first = _bounded_sparse_counting_index(n, name="n")
     second = _bounded_sparse_counting_index(k, name="k")
     if second > first:
@@ -223,6 +239,11 @@ def canonical_permutations(n: int, k: int) -> int:
 def canonical_compositions(n: int, k: int) -> int:
     """Return the canonical decimal of the composition count after admission."""
 
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return canonical_compositions(n, k)
+    _bind_counting_deadline()
+    request_checkpoint("before composition counting")
     total = _bounded_sparse_counting_index(n, name="n")
     parts = _bounded_sparse_counting_index(k, name="k")
     if total == parts == 0:

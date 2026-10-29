@@ -123,17 +123,9 @@ def rational_primitive(function: RationalFunction) -> RationalPrimitiveResult:
 
 
 def residue_at_infinity(function: RationalFunction) -> CanonicalRational:
-    _admit(function)
-    import sympy as sp
+    from ._residue_infinity import exact_residue_at_infinity
 
-    (x,) = symbols_for_variables(function.variables)
-    t = sp.symbols("t")
-    value = -sp.residue(
-        rational_function_to_sympy(function).subs(x, 1 / t) / t**2, t, 0
-    )
-    return CanonicalRational.from_fraction(
-        Fraction(int(sp.numer(value)), int(sp.denom(value)))
-    )
+    return exact_residue_at_infinity(function)
 
 
 def global_residues(function: RationalFunction) -> GlobalResidueResult:

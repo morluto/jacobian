@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
+from collections.abc import Iterable
 from math import comb, lcm
 from typing import Literal, Self
 
@@ -26,6 +27,8 @@ MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_REVERSION_INTERMEDIATE_DIGITS = 16_384
 MAX_REVERSION_BACKEND_WORK = 1_000_000_000
 MAX_POWER_EXPONENT = 1_000
+MAX_AFFINE_COMPOSE_LIMB_WORK = 1 << 32
+MAX_AFFINE_COMPOSE_STORAGE_BITS = 1 << 30
 
 # Truncation sources are admitted through the widest carrier canonical
 # values can carry: unit-series operations admit up to order 2048,
@@ -37,6 +40,8 @@ MAX_POWER_EXPONENT = 1_000
 # producer-to-truncate composition stays closed over every representable
 # expansion.
 MAX_TRUNCATE_SOURCE_ORDER = 25_280
+MAX_LINEAR_SERIES_LIMB_WORK = 1 << 33
+MAX_LINEAR_SERIES_STORAGE_BITS = 1 << 30
 
 CoefficientHeight = RationalHeight | None
 
@@ -647,6 +652,10 @@ def _require_native_pair(
 ) -> None:
     _require_native_input_series(left, maximum_order=maximum_order)
     _require_native_input_series(right, maximum_order=maximum_order)
+    _require_matching_pair(left, right)
+
+
+def _require_matching_pair(left: TruncatedSeries, right: TruncatedSeries) -> None:
     if left.variable != right.variable:
         raise _validation_error(
             "operand_variable_mismatch", "operands must share the same variable"
@@ -657,12 +666,133 @@ def _require_native_pair(
         )
 
 
-def admit_native_add_subtract(left: TruncatedSeries, right: TruncatedSeries) -> None:
-    _require_native_pair(left, right)
+def admit_native_add_subtract(
+    left: TruncatedSeries, right: TruncatedSeries, *, subtracting: bool = False
+) -> None:
+    _admit_linear_series((left, right), addition=True)
+    ceiling = _RESULT_BOUND_CAP
     for left_value, right_value in zip(
         left.coefficients, right.coefficients, strict=True
     ):
+        if not left_value.num or not right_value.num:
+            continue
+        if left_value.den == right_value.den:
+            right_num = -right_value.num if subtracting else right_value.num
+            # With a shared denominator, unlike signs cannot increase height.
+            if (left_value.num < 0) != (right_num < 0):
+                continue
+            # A bit bound below the fixed carrier avoids wide threshold
+            # arithmetic for small scalars. Its fallback is charged at the
+            # already-large local candidate width.
+            if max(
+                left_value.num.bit_length(), right_num.bit_length()
+            ) + 1 >= ceiling.bit_length() and abs(left_value.num) >= ceiling - abs(
+                right_num
+            ):
+                raise _resource_error(
+                    "sum_coefficient_growth",
+                    "coefficientwise arithmetic exceeds its result-height bound",
+                )
+            continue
         _require_height(sum_heights((_height(left_value), _height(right_value))), "sum")
+
+
+def _admit_linear_series(
+    sources: tuple[TruncatedSeries, ...], *, addition: bool
+) -> None:
+    from ._unit_bounds import require_series
+
+    for series in sources:
+        require_series(
+            series, maximum_digits=MAX_RESULT_RATIONAL_DIGITS, resource_family="input"
+        )
+    # Source recognition, Fraction conversion and retained source scalars are
+    # priced coefficientwise: sparse and gradually growing prefixes do not
+    # repeat their largest scalar at every position. Fixed object counts are
+    # separately bounded by the admitted prefix order.
+    work = 0
+    storage = 0
+    for source in sources:
+        for value in source.coefficients:
+            numerator_bits = max(1, value.num.bit_length())
+            denominator_bits = value.den.bit_length()
+            limbs = (max(numerator_bits, denominator_bits) + 63) // 64
+            work += 32 * limbs**2
+            storage += 4 * (numerator_bits + denominator_bits)
+    widths: Iterable[tuple[int, int]]
+    if addition:
+        _require_matching_pair(sources[0], sources[1])
+        widths = (
+            _linear_sum_bits(left, right)
+            for left, right in zip(
+                sources[0].coefficients, sources[1].coefficients, strict=True
+            )
+        )
+    else:
+        widths = (
+            (
+                max(1, value.num.bit_length()) + multiplier.bit_length(),
+                value.den.bit_length(),
+            )
+            for multiplier, value in enumerate(sources[0].coefficients[1:], start=1)
+        )
+        if sources[0].truncation_order == 1:
+            widths = iter(((1, 1),))
+    # Each raw coefficient bounds its cross products, unreduced sum or integer
+    # multiplier, and every reduced result. Reserve arithmetic plus canonical
+    # construction/encoding at that width, and retained integer/decimal payload
+    # in addition to the source arrays. No common-denominator expansion occurs.
+    for numerator_bits, denominator_bits in widths:
+        limbs = (max(numerator_bits, denominator_bits) + 63) // 64
+        work += 96 * limbs**2
+        storage += 8 * (numerator_bits + denominator_bits)
+    if work > MAX_LINEAR_SERIES_LIMB_WORK:
+        raise _resource_error(
+            "linear_work", "linear coefficient work exceeds its envelope"
+        )
+    if storage > MAX_LINEAR_SERIES_STORAGE_BITS:
+        raise _resource_error(
+            "linear_storage", "linear scalar storage exceeds its envelope"
+        )
+
+
+def _linear_sum_bits(
+    left: CanonicalRational, right: CanonicalRational
+) -> tuple[int, int]:
+    """Bound a single raw sum/difference without computing its value."""
+    if not left.num:
+        return max(1, right.num.bit_length()), right.den.bit_length()
+    if not right.num:
+        return max(1, left.num.bit_length()), left.den.bit_length()
+    if left.den == right.den:
+        return max(
+            left.num.bit_length(), right.num.bit_length()
+        ) + 1, left.den.bit_length()
+    return (
+        max(
+            left.num.bit_length() + right.den.bit_length(),
+            right.num.bit_length() + left.den.bit_length(),
+        )
+        + 1,
+        left.den.bit_length() + right.den.bit_length(),
+    )
+
+
+def admit_native_derivative(series: TruncatedSeries) -> None:
+    _admit_linear_series((series,), addition=False)
+    ceiling = _RESULT_BOUND_CAP
+    for multiplier, value in enumerate(series.coefficients[1:], start=1):
+        # The existing denominator already fits. This bounds the numerator
+        # before multiplication; any subsequent rational reduction only helps.
+        # Skip fixed-width division when local bits already prove it fits.
+        if (
+            value.num.bit_length() + multiplier.bit_length() >= ceiling.bit_length()
+            and abs(value.num) > (ceiling - 1) // multiplier
+        ):
+            raise _resource_error(
+                "derivative_coefficient_growth",
+                "derivative exceeds its result-height bound",
+            )
 
 
 def admit_native_multiply(left: TruncatedSeries, right: TruncatedSeries) -> None:
@@ -811,17 +941,111 @@ def admit_native_divide(
     kernel_envelope(denominator, numerator).checked()
 
 
+def _admit_affine_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
+    # F(G)=a+bG. Source recognition/conversion is charged at each source
+    # coefficient's own width, including coefficients omitted by a zero slope.
+    # Prefix admission separately bounds the number of retained objects.
+    work = 0
+    storage = 0
+    for source in (outer, inner):
+        for value in source.coefficients:
+            numerator_bits = max(1, value.num.bit_length())
+            denominator_bits = value.den.bit_length()
+            limbs = (max(numerator_bits, denominator_bits) + 63) // 64
+            work += 32 * limbs**2
+            storage += 4 * (numerator_bits + denominator_bits)
+    slope = outer.coefficients[1] if outer.truncation_order > 1 else None
+    for index, value in enumerate(inner.coefficients):
+        if slope is not None and (not slope.num or not value.num):
+            # Fraction's zero product can still copy/divide an operand by one
+            # or take gcd(0, denominator). Charge those linear limb scans at
+            # every reuse of a large slope, even though the result is zero.
+            work += 8 * (
+                (
+                    slope.num.bit_length()
+                    + slope.den.bit_length()
+                    + value.num.bit_length()
+                    + value.den.bit_length()
+                    + 63
+                )
+                // 64
+            )
+        if index == 0:
+            # The zero inner constant makes this exactly the outer constant;
+            # two extra bits cover its addition to the zero product.
+            constant = outer.coefficients[0]
+            numerator_bits = max(1, constant.num.bit_length()) + 2
+            denominator_bits = constant.den.bit_length() + 2
+        elif slope is None or not slope.num or not value.num:
+            numerator_bits = denominator_bits = 1
+        else:
+            numerator_bits = slope.num.bit_length() + value.num.bit_length()
+            denominator_bits = slope.den.bit_length() + value.den.bit_length()
+        # Product intermediates bound the reduced result. This reserve covers
+        # multiplication, canonical construction and exact scalar encoding;
+        # no powers, convolution or denominator clearing are performed.
+        limbs = (max(numerator_bits, denominator_bits) + 63) // 64
+        work += 64 * limbs**2
+        storage += 8 * (numerator_bits + denominator_bits)
+    if work > MAX_AFFINE_COMPOSE_LIMB_WORK:
+        raise _resource_error(
+            "compose_work", "affine composition exceeds its scalar-work bound"
+        )
+    if storage > MAX_AFFINE_COMPOSE_STORAGE_BITS:
+        raise _resource_error(
+            "compose_storage",
+            "affine composition exceeds its retained-storage bound",
+        )
+    # Produced prefixes can carry 4096-digit components. Bound each
+    # unreduced nonconstant product before multiplication; zero and unit
+    # affine maps retain their useful full-height domain.
+    ceiling = _RESULT_BOUND_CAP
+    if outer.truncation_order > 1:
+        slope = outer.coefficients[1]
+        for value in inner.coefficients[1:]:
+            if not slope.num or not value.num:
+                continue
+            # Small products need no division of the fixed carrier ceiling;
+            # near it, the local wide-product charge covers these guards too.
+            if (
+                slope.num.bit_length() + value.num.bit_length() >= ceiling.bit_length()
+                and abs(slope.num) > (ceiling - 1) // abs(value.num)
+            ) or (
+                slope.den.bit_length() + value.den.bit_length() >= ceiling.bit_length()
+                and slope.den > (ceiling - 1) // value.den
+            ):
+                raise _resource_error(
+                    "compose_coefficient_growth",
+                    "affine composition exceeds its result-height bound",
+                )
+
+
 def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
     from ._unit_bounds import require_series
 
-    require_series(outer, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
-    require_series(inner, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
-    _require_native_pair(outer, inner)
+    require_series(
+        outer, maximum_digits=MAX_RESULT_RATIONAL_DIGITS, resource_family="compose"
+    )
+    affine_outer = _has_degree_at_most(outer, 1)
+    require_series(
+        inner,
+        maximum_digits=MAX_RESULT_RATIONAL_DIGITS
+        if affine_outer
+        else MAX_RATIONAL_DIGITS,
+        resource_family="compose",
+    )
+    if affine_outer:
+        _require_matching_pair(outer, inner)
+    else:
+        _require_native_pair(outer, inner)
     if inner.coefficients[0].as_fraction() != 0:
         raise _validation_error(
             "composition_nonzero_inner_constant",
             "inner series must have zero constant term for composition with a finite prefix",
         )
+    if affine_outer:
+        _admit_affine_compose(outer, inner)
+        return
     outer_denominators = {value.den for value in outer.coefficients if value.num}
     inner_denominators = {value.den for value in inner.coefficients if value.num}
     if len(outer_denominators) <= 1 and len(inner_denominators) <= 1:
@@ -1003,7 +1227,18 @@ class _SeriesPairRequest(StrictModel):
 
 
 class _SeriesAddSubtractRequest(_SeriesPairRequest):
-    """Pair request admitted through coefficientwise arithmetic bounds."""
+    """Coefficientwise addition/subtraction through source order 25280.
+
+    Sources may reuse 4096-digit produced components; unreduced arithmetic, integer
+    payload, and 4096-digit result growth are bounded before the linear kernel.
+    """
+
+    left: TruncatedSeries = Field(
+        description="Left source: order <=25280, components <=4096 digits, with derived work/storage and result-growth bounds."
+    )
+    right: TruncatedSeries = Field(
+        description="Right source: same axis/order, components <=4096 digits, subject to the shared derived envelope."
+    )
 
 
 class _SeriesMultiplyRequest(_SeriesPairRequest):
@@ -1246,8 +1481,21 @@ class SeriesDivideResult(StrictModel):
 
 
 class SeriesComposeRequest(StrictModel):
-    outer: TruncatedSeries
-    inner: TruncatedSeries
+    """Compose equal prefixes with zero inner constant and bounded scalars.
+
+    Affine outer series admit the full order-25280 source envelope through
+    linear coefficient products. Nonlinear outer series retain order 512 and
+    their composition-growth bounds and 256-digit sources. Affine sources may
+    reuse 4096-digit produced components under derived work/storage and
+    product-growth bounds; results fit the 4096-digit operation envelope.
+    """
+
+    outer: TruncatedSeries = Field(
+        description="Affine outer series allow order 25280 and 4096-digit components under derived bounds; nonlinear series allow order 512 and 256-digit components."
+    )
+    inner: TruncatedSeries = Field(
+        description="Same variable and order as outer, with zero constant term; affine composition admits 4096-digit components when product growth, work and storage fit."
+    )
 
 
 class SeriesComposeResult(StrictModel):

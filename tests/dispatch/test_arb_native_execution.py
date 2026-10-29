@@ -168,3 +168,102 @@ def test_arb_native_and_dispatch_observe_controls_after_actual_evaluation(
 
     assert len(evaluated) == 1
     assert _execution.current_request_execution() is None
+
+
+@pytest.mark.parametrize(
+    "phase", ["point-endpoints", "second-jet-preflight", "second-jet-endpoints"]
+)
+@pytest.mark.parametrize("control", ["timeout", "cancelled", "none"])
+def test_native_enclosure_observes_controls_after_admission_and_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+    control: str,
+) -> None:
+    is_jet = phase != "point-endpoints"
+    domain_unproven = phase == "second-jet-preflight"
+    variable: dict[str, Any] = {"op": "var"}
+    if is_jet:
+        variable["variable"] = "x"
+    expression: dict[str, Any] = {
+        "op": "log" if domain_unproven else "pow",
+        "children": [variable],
+    }
+    if not domain_unproven:
+        expression["exponent"] = 2
+    payload: dict[str, Any] = {"expression": expression, "precision_bits": 128}
+    if is_jet:
+        endpoint = {"num": "-1" if domain_unproven else "1", "den": "1"}
+        payload["box"] = {
+            "variables": ["x"],
+            "intervals": [{"lower": endpoint, "upper": endpoint}],
+        }
+    else:
+        payload["argument"] = {"num": "2", "den": "1"}
+
+    started = time.monotonic()
+    deadline = started + 30
+    clock = [started]
+    cancellation = Event()
+    completed: list[object] = []
+    name = {
+        "point-endpoints": "dyadic_endpoints",
+        "second-jet-preflight": "_preflight_second_jet_expression",
+        "second-jet-endpoints": "_dyadic_closed_interval",
+    }[phase]
+    compute = getattr(operations, name)
+
+    def complete_phase(*args: Any, **kwargs: Any) -> Any:
+        result = compute(*args, **kwargs)
+        completed.append(result)
+        # Preserve real exact admission and Arb endpoint conversion. Only the
+        # caller's controls change at this otherwise unobserved phase boundary.
+        if control == "timeout":
+            clock[0] = deadline + 1
+        elif control == "cancelled":
+            cancellation.set()
+        return result
+
+    monkeypatch.setattr(operations, name, complete_phase)
+    monkeypatch.setattr(_execution, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+    def run() -> (
+        IntervalExpressionEnclosureResult | IntervalExpressionSecondJetEnclosureResult
+    ):
+        if is_jet:
+            jet_request = (
+                IntervalExpressionSecondJetEnclosureRequest.model_validate_json(
+                    json.dumps(payload)
+                )
+            )
+            return second_jet_enclosure(
+                jet_request.expression, jet_request.box, jet_request.precision_bits
+            )
+        point_request = IntervalExpressionEnclosureRequest.model_validate_json(
+            json.dumps(payload)
+        )
+        return expression_enclosure(
+            point_request.expression,
+            point_request.argument,
+            point_request.precision_bits,
+        )
+
+    with request_execution(
+        started, outer_deadline=deadline, cancellation_signal=cancellation
+    ):
+        if control == "none":
+            result = run()
+            assert result.status == (
+                "DOMAIN_UNPROVEN" if domain_unproven else "ENCLOSED"
+            )
+            assert type(result).model_validate_json(result.model_dump_json()) == result
+        else:
+            expected = (
+                OperationExecutionTimeoutError
+                if control == "timeout"
+                else OperationExecutionCancelledError
+            )
+            with pytest.raises(expected):
+                run()
+
+    assert completed
+    assert _execution.current_request_execution() is None

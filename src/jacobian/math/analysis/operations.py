@@ -118,6 +118,7 @@ def expression_enclosure(
     argument: CanonicalRational,
     precision_bits: int,
 ) -> IntervalExpressionEnclosureResult:
+    request_checkpoint("before Arb point admission")
     try:
         require_bounded_rational(
             argument,
@@ -152,12 +153,13 @@ def expression_enclosure(
             )
     from flint import arb, fmpq
 
+    request_checkpoint("after Arb point admission")
     numerator, denominator = argument.as_integer_ratio()
     with flint_workprec(precision_bits):
         result = _evaluate_expression(expression, arb(fmpq(numerator, denominator)))
         request_checkpoint("after Arb point evaluation")
         if isinstance(result, _EvaluationFailure):
-            return IntervalExpressionEnclosureResult(
+            enclosure = IntervalExpressionEnclosureResult(
                 status=result.value,
                 precision_bits=precision_bits,
                 detail=(
@@ -170,12 +172,16 @@ def expression_enclosure(
                     )
                 ),
             )
+            request_checkpoint("after Arb point result construction")
+            return enclosure
         if not result.is_finite():
-            return IntervalExpressionEnclosureResult(
+            enclosure = IntervalExpressionEnclosureResult(
                 status="NONFINITE",
                 precision_bits=precision_bits,
                 detail="Arb returned a non-finite ball.",
             )
+            request_checkpoint("after Arb point result construction")
+            return enclosure
         lower_mantissa, lower_exponent = result.lower().man_exp()
         upper_mantissa, upper_exponent = result.upper().man_exp()
         exact = bool(result.is_exact())
@@ -187,7 +193,7 @@ def expression_enclosure(
         raise RuntimeError(
             "Arb produced finite endpoints outside the interoperable dyadic exponent range"
         )
-    return IntervalExpressionEnclosureResult(
+    enclosure = IntervalExpressionEnclosureResult(
         status="ENCLOSED",
         precision_bits=precision_bits,
         lower=endpoints[0],
@@ -196,6 +202,8 @@ def expression_enclosure(
         exact=exact,
         detail="Arb returned an outward-rounded enclosure with exact dyadic endpoints.",
     )
+    request_checkpoint("after Arb point result construction")
+    return enclosure
 
 
 @dataclass(frozen=True, slots=True)
@@ -442,7 +450,7 @@ def _second_jet_result(
     hessian: tuple[HessianEntryEnclosure, ...] = (),
     domain_failure: IntervalExpressionDomainFailure | None = None,
 ) -> IntervalExpressionSecondJetEnclosureResult:
-    return IntervalExpressionSecondJetEnclosureResult.model_construct(
+    result = IntervalExpressionSecondJetEnclosureResult.model_construct(
         expression=expression,
         box=box,
         precision_bits=precision_bits,
@@ -453,6 +461,8 @@ def _second_jet_result(
         domain_failure=domain_failure,
         detail=detail,
     )
+    request_checkpoint("after Arb second-jet result construction")
+    return result
 
 
 def second_jet_enclosure(
@@ -460,6 +470,7 @@ def second_jet_enclosure(
     box: RationalIntervalBox,
     precision_bits: int,
 ) -> IntervalExpressionSecondJetEnclosureResult:
+    request_checkpoint("before Arb second-jet admission")
     dimension = len(box.variables)
     result_intervals = 1 + dimension + dimension * (dimension + 1) // 2
     if result_intervals > MAX_SECOND_JET_RESULT_INTERVALS:
@@ -486,6 +497,7 @@ def second_jet_enclosure(
             code="analysis.second_jet.intermediate_bound",
             message=str(exc),
         ) from exc
+    request_checkpoint("after exact second-jet admission")
     if isinstance(preflight, IntervalExpressionDomainFailure):
         return _second_jet_result(
             expression,

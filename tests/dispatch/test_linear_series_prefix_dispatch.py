@@ -134,3 +134,46 @@ def test_public_linear_consumers_reuse_actual_grown_inverse_coefficients() -> No
             catalog,
         )
         assert result.output["result"] == derivative_output
+
+
+@pytest.mark.parametrize("producer", ("power", "inverse"))
+def test_public_linear_consumers_reuse_actual_nonuniform_prefixes(
+    producer: str,
+) -> None:
+    order = 800
+    zero = {"num": "0", "den": "1"}
+    source = {
+        "variable": "x",
+        "truncation_order": order,
+        "coefficients": [
+            zero if producer == "power" else {"num": "1", "den": "1"},
+            {"num": "10000" if producer == "power" else "-10000", "den": "1"},
+            *([zero] * (order - 2)),
+        ],
+    }
+    payload = (
+        {"series": source, "exponent": order - 1} if producer == "power" else source
+    )
+    catalog = Catalog.open()
+    produced = invoke_operation(
+        f"formal_series.rational.{producer}.compute", payload, catalog
+    ).output["result"]
+    decoded = TruncatedSeries.model_validate_json(json.dumps(produced))
+    assert decoded.coefficients[-1].as_fraction() == 10000 ** (order - 1)
+    zero_series = {
+        "variable": "x",
+        "truncation_order": order,
+        "coefficients": [zero] * order,
+    }
+    added = invoke_operation(
+        "formal_series.rational.add.compute",
+        {"left": produced, "right": zero_series},
+        catalog,
+    )
+    assert added.output["result"] == produced
+    subtracted = invoke_operation(
+        "formal_series.rational.subtract.compute",
+        {"left": produced, "right": produced},
+        catalog,
+    )
+    assert subtracted.output["result"] == zero_series

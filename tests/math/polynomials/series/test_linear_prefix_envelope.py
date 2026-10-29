@@ -17,6 +17,7 @@ from jacobian.math.polynomials.series import (
     derivative,
     inverse,
     operations,
+    power,
     subtract,
     truncate,
 )
@@ -90,6 +91,29 @@ def test_linear_consumers_reuse_grown_inverse_and_sum_coefficients() -> None:
     summed = add(left, right).result
     decoded_sum = TruncatedSeries.model_validate_json(summed.model_dump_json())
     assert derivative(decoded_sum).result.coefficients[0] == summed.coefficients[1]
+
+
+@pytest.mark.parametrize("producer", ("power", "inverse"))
+def test_linear_consumers_preserve_actual_sparse_and_growing_prefixes(
+    producer: str,
+) -> None:
+    order = 800
+    zero = _series([Fraction(0)] * order)
+    if producer == "power":
+        source = _series([Fraction(0), Fraction(10000)] + [Fraction(0)] * (order - 2))
+        produced = power(source, order - 1).result
+        assert all(not value.num for value in produced.coefficients[:-1])
+        assert produced.coefficients[-1].as_fraction() == 10000 ** (order - 1)
+    else:
+        source = _series([Fraction(1), Fraction(-10000)] + [Fraction(0)] * (order - 2))
+        produced = inverse(source).result
+        assert all(
+            value.as_fraction() == 10000**index
+            for index, value in enumerate(produced.coefficients)
+        )
+    decoded = TruncatedSeries.model_validate_json(produced.model_dump_json())
+    assert add(decoded, zero).result == produced
+    assert subtract(decoded, decoded).result == zero
 
 
 def test_full_result_height_zero_and_shared_denominator_arithmetic() -> None:

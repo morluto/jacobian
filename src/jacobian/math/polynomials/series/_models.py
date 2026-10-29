@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
+from collections.abc import Iterable
 from math import comb, lcm
 from typing import Literal, Self
 
@@ -669,7 +670,6 @@ def admit_native_add_subtract(
     left: TruncatedSeries, right: TruncatedSeries, *, subtracting: bool = False
 ) -> None:
     _admit_linear_series((left, right), addition=True)
-    _require_matching_pair(left, right)
     ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
     for left_value, right_value in zip(
         left.coefficients, right.coefficients, strict=True
@@ -699,26 +699,76 @@ def _admit_linear_series(
         require_series(
             series, maximum_digits=MAX_RESULT_RATIONAL_DIGITS, resource_family="input"
         )
-    order = max(series.truncation_order for series in sources)
-    source_bits = max(
-        max(abs(value.num).bit_length(), value.den.bit_length())
-        for series in sources
-        for value in series.coefficients
-    )
-    # A coefficient sum is two rational cross-products and one integer sum.
-    # A derivative is one coefficient times an integer below N. No convolution
-    # or denominator clearing occurs. Bound unreduced arithmetic, canonical
-    # construction/encoding gcds, and retained source/temporary/result scalars.
-    bits = 2 * source_bits + 2 if addition else source_bits + order.bit_length() + 1
-    limbs = (bits + 63) // 64
-    if 128 * order * limbs**2 > MAX_LINEAR_SERIES_LIMB_WORK:
+    # Source recognition, Fraction conversion and retained source scalars are
+    # priced coefficientwise: sparse and gradually growing prefixes do not
+    # repeat their largest scalar at every position. Fixed object counts are
+    # separately bounded by the admitted prefix order.
+    work = 0
+    storage = 0
+    for source in sources:
+        for value in source.coefficients:
+            numerator_bits = max(1, value.num.bit_length())
+            denominator_bits = value.den.bit_length()
+            limbs = (max(numerator_bits, denominator_bits) + 63) // 64
+            work += 32 * limbs**2
+            storage += 4 * (numerator_bits + denominator_bits)
+    widths: Iterable[tuple[int, int]]
+    if addition:
+        _require_matching_pair(sources[0], sources[1])
+        widths = (
+            _linear_sum_bits(left, right)
+            for left, right in zip(
+                sources[0].coefficients, sources[1].coefficients, strict=True
+            )
+        )
+    else:
+        widths = (
+            (
+                max(1, value.num.bit_length()) + multiplier.bit_length(),
+                value.den.bit_length(),
+            )
+            for multiplier, value in enumerate(sources[0].coefficients[1:], start=1)
+        )
+        if sources[0].truncation_order == 1:
+            widths = iter(((1, 1),))
+    # Each raw coefficient bounds its cross products, unreduced sum or integer
+    # multiplier, and every reduced result. Reserve arithmetic plus canonical
+    # construction/encoding at that width, and retained integer/decimal payload
+    # in addition to the source arrays. No common-denominator expansion occurs.
+    for numerator_bits, denominator_bits in widths:
+        limbs = (max(numerator_bits, denominator_bits) + 63) // 64
+        work += 96 * limbs**2
+        storage += 8 * (numerator_bits + denominator_bits)
+    if work > MAX_LINEAR_SERIES_LIMB_WORK:
         raise _resource_error(
             "linear_work", "linear coefficient work exceeds its envelope"
         )
-    if 24 * order * bits > MAX_LINEAR_SERIES_STORAGE_BITS:
+    if storage > MAX_LINEAR_SERIES_STORAGE_BITS:
         raise _resource_error(
             "linear_storage", "linear scalar storage exceeds its envelope"
         )
+
+
+def _linear_sum_bits(
+    left: CanonicalRational, right: CanonicalRational
+) -> tuple[int, int]:
+    """Bound a single raw sum/difference without computing its value."""
+    if not left.num:
+        return max(1, right.num.bit_length()), right.den.bit_length()
+    if not right.num:
+        return max(1, left.num.bit_length()), left.den.bit_length()
+    if left.den == right.den:
+        return max(
+            left.num.bit_length(), right.num.bit_length()
+        ) + 1, left.den.bit_length()
+    return (
+        max(
+            left.num.bit_length() + right.den.bit_length(),
+            right.num.bit_length() + left.den.bit_length(),
+        )
+        + 1,
+        left.den.bit_length() + right.den.bit_length(),
+    )
 
 
 def admit_native_derivative(series: TruncatedSeries) -> None:

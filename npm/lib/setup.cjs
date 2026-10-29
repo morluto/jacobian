@@ -318,9 +318,11 @@ function planTomlEdit(filePath, original, runtime) {
     if (!replacement) {
       throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}`);
     }
-    const updated =
-      source.replace(managedMatch ? expression : table, `${replacement[1]}${block.trimEnd()}`) +
-      (source.endsWith("\n") ? "\n" : "");
+    const trailingNewlines = replacement[0].match(/(?:\r?\n)*$/)[0];
+    const updated = source.replace(
+      managedMatch ? expression : table,
+      `${replacement[1]}${block.trimEnd()}${trailingNewlines}`,
+    );
     validateTomlEdit(filePath, root, updated, runtime);
     if (updated === source) return { action: "already current", updated: null };
     return { action: "update", updated };

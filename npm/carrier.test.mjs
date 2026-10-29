@@ -363,8 +363,9 @@ test("upgrade accepts quoted, spaced, and commented Codex registration headers",
       assert.equal(parsed.mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
       assert.deepEqual(parsed.mcp_servers.other, { command: "other" });
       assert.ok(updated.includes(neighbor.trimStart()));
-      const repeated = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+      const repeated = runCarrier(["setup", "--codex", "--yes", "--json"], env);
       assert.equal(repeated.status, 0, repeated.stderr);
+      assert.equal(JSON.parse(repeated.stdout).clients[0].action, "already current");
       assert.equal(await readFile(configPath, "utf8"), updated);
     }
   } finally {

@@ -77,3 +77,32 @@ def test_cli_file_payload_computes_the_exact_result(tmp_path: Path) -> None:
         == 6
     )
     assert result.stderr == b""
+
+
+def test_cli_accepts_valid_json_at_the_exact_file_byte_limit(tmp_path: Path) -> None:
+    payload = tmp_path / "boundary.json"
+    source = b'{"left":"84","right":"30"}'
+    limit = CanonicalLimits().max_input_bytes
+    with payload.open("wb") as stream:
+        stream.write(source)
+        stream.write(b" " * (limit - len(source)))
+    result = subprocess.run(
+        [
+            str(Path(sys.executable).parent / "jacobian"),
+            "run",
+            "integer.compute.extended_gcd",
+            "--file",
+            str(payload),
+        ],
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    output = json.loads(result.stdout)["output"]
+    assert int(output["gcd"]) == 6
+    assert (
+        84 * int(output["left_coefficient"]) + 30 * int(output["right_coefficient"])
+        == 6
+    )
+    assert result.stderr == b""

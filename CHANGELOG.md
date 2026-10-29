@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.23.1](https://github.com/morluto/jacobian/compare/jacobian-v0.23.0...jacobian-v0.23.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **cli:** bound file reads before strict JSON admission ([9ea9d67](https://github.com/morluto/jacobian/commit/9ea9d671ca0529c024bcf480666f8121f4bc3868))
+* **coloring:** keep edge repair result decoding structural ([9d6f4a7](https://github.com/morluto/jacobian/commit/9d6f4a789c18b62da3e9eaf678bb1e1dd7f2ea34))
+* **counting:** retain one native deadline across exact count phases ([b2c9698](https://github.com/morluto/jacobian/commit/b2c96982fa4b32ab822ba32e91ed7bec778e53df))
+* **differential-forms:** admit native axes before zero shortcuts ([42622da](https://github.com/morluto/jacobian/commit/42622daedb634743b1772a6540930492bbc86794))
+* **graphs:** keep claim decoding structural ([2865264](https://github.com/morluto/jacobian/commit/2865264f368bc9f5768fa5820c4c6f0091d2a791))
+* **graphs:** validate isomorphism results against source graphs ([ac70652](https://github.com/morluto/jacobian/commit/ac7065296272c4260b51c33d3359a23fedc9e719))
+* integrate the17 verified bug repairs ([733390c](https://github.com/morluto/jacobian/commit/733390cc3d118d79cd9398cc578d3302da1aebea))
+* **interval:** observe controls through enclosure construction ([ec4fcf3](https://github.com/morluto/jacobian/commit/ec4fcf34c59a7cf9c310534a5f62e38c753f4484))
+* **interval:** observe native execution controls after Arb evaluation ([3a52056](https://github.com/morluto/jacobian/commit/3a52056ef33a396911214f7db6de87276db3e941))
+* land verified bug repairs ([#4563](https://github.com/morluto/jacobian/issues/4563)) ([733390c](https://github.com/morluto/jacobian/commit/733390cc3d118d79cd9398cc578d3302da1aebea))
+* **matrices:** preserve caller paths in analysis input errors ([9653462](https://github.com/morluto/jacobian/commit/96534620d4dd3ca52f1eef4b88a20aff41e686fc))
+* **process:** honor cancellation during worker setup ([21d7f15](https://github.com/morluto/jacobian/commit/21d7f150952e9be4b6503f8ac186f055cca29529))
+* **radix:** preserve worker timeout classification ([a772688](https://github.com/morluto/jacobian/commit/a77268826bd9fdff7e9b75ff3eba222734f1450f))
+* repair mathematical result boundaries ([#4565](https://github.com/morluto/jacobian/issues/4565)) ([ea52eb5](https://github.com/morluto/jacobian/commit/ea52eb5a8395fe9dcf4aad3220c6ca62c58ccb89))
+* **residue:** bound infinity extraction independently of finite poles ([a62b645](https://github.com/morluto/jacobian/commit/a62b645cf12bb25a104bb7c2c6d3e0541f1f60af))
+* **residue:** delegate remainders to FLINT and close shortcut deadlines ([0e3b938](https://github.com/morluto/jacobian/commit/0e3b93870d21891e8fceb2871b69fe9a1f45e1a3))
+* **series:** admit bounded affine composition across full prefixes ([392c262](https://github.com/morluto/jacobian/commit/392c262d7c02f87bfa257d8f1a0db7115b747055))
+* **series:** admit bounded grown prefixes in affine composition ([2b1690d](https://github.com/morluto/jacobian/commit/2b1690ddd817c14e1b1e753bbf351537326dcb35))
+* **series:** admit bounded producer heights in linear consumers ([042f0bc](https://github.com/morluto/jacobian/commit/042f0bcf3dd68ee0da191f5caa5319fe2d035fe2))
+* **series:** avoid wide affine guards below the output boundary ([5872b1f](https://github.com/morluto/jacobian/commit/5872b1fb8e57dcb62f10c30098982d6b9116d98f))
+* **series:** close linear prefix arithmetic over admitted outputs ([2574cea](https://github.com/morluto/jacobian/commit/2574cea228fdbdd42ba3b87262acaa3a4b9985eb))
+* **series:** keep linear admission guards proportional to scalar width ([1162efd](https://github.com/morluto/jacobian/commit/1162efddc99de9ad9f43f6711ae73af2834b860f))
+* **series:** price affine prefixes from local operand widths ([8d0dab1](https://github.com/morluto/jacobian/commit/8d0dab1a45bbf225ddb79d4c4092a0f4b835c8ca))
+* **series:** price linear prefixes by coefficient-local scalar growth ([311a222](https://github.com/morluto/jacobian/commit/311a2222ff5844a831e81e5685f5ddb51bbf0416))
+* **setup:** clean up only temporary files we created ([a19ee79](https://github.com/morluto/jacobian/commit/a19ee7960f5a39d1a236bac8e8637ee0f3e944ce))
+* **setup:** keep repeated TOML registration updates idempotent ([fa72f7c](https://github.com/morluto/jacobian/commit/fa72f7ced588fb900e393600a61da598faa6634e))
+* **setup:** preserve permissions during atomic configuration updates ([86fcd7c](https://github.com/morluto/jacobian/commit/86fcd7c4922be19187765a2b5769e6579793e8b9))
+* **setup:** read JSONC registrations from own properties ([1d07545](https://github.com/morluto/jacobian/commit/1d075457c6ef823ea7c3e74c5c388c1be38770e6))
+* **setup:** reject ambiguous duplicate JSONC keys ([6a7c6f4](https://github.com/morluto/jacobian/commit/6a7c6f487ed63f24b292d4c5b49abdbad0eb8c6b))
+* **setup:** resolve missing files through linked parent directories ([5842625](https://github.com/morluto/jacobian/commit/5842625d6689ab34a80976fa14283125f8ce744d))
+* **setup:** update linked config targets without replacing symlinks ([21bce95](https://github.com/morluto/jacobian/commit/21bce95d04e775d56a75ed844436497703cad797))
+* **setup:** update quoted TOML headers without altering other settings ([2b58ecb](https://github.com/morluto/jacobian/commit/2b58ecb2666b4c7208390bff73fada3ea5858849))
+* **transport:** serialize declared operation result aliases consistently ([fd01f66](https://github.com/morluto/jacobian/commit/fd01f663de56e6a2da39e652c3d52ad5b1b6a158))
+* **unit-circle:** bound rational Cayley growth and reported enclosures ([b3f0ff3](https://github.com/morluto/jacobian/commit/b3f0ff343fcf257d73904792be77b71a3a140420))
+* **unit-circle:** keep the sup-norm height fallback total ([526716b](https://github.com/morluto/jacobian/commit/526716beb7d69b8dfe51e261b60fd2edc51bf179))
+
 ## [0.23.0](https://github.com/morluto/jacobian/compare/jacobian-v0.22.0...jacobian-v0.23.0) (2026-10-03)
 
 

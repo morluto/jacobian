@@ -10,7 +10,7 @@ import typer
 from typer import _click
 from typer.core import TyperGroup
 
-from jacobian.canonical import CanonicalizationError, loads_strict_json
+from jacobian.canonical import CanonicalizationError, CanonicalLimits, loads_strict_json
 
 
 class _InvalidArgumentError(ValueError):
@@ -105,7 +105,8 @@ def run_operation(
     if json_payload is not None:
         source = json_payload
     elif file is not None:
-        source = file.read_bytes()
+        with file.open("rb") as stream:
+            source = stream.read(CanonicalLimits().max_input_bytes + 1)
     else:
         raise _InvalidArgumentError("pass exactly one of --json or --file")
     payload = loads_strict_json(source)

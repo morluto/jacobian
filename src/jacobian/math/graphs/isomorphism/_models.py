@@ -15,6 +15,8 @@ from jacobian.math.graphs.values import (
     GraphVertexLabel,
 )
 
+_MAX_ISOMORPHISM_VERTICES = 64
+
 
 class SimpleGraph(StrictModel):
     """A simple graph (no parallel edges, no self-loops) for isomorphism.
@@ -24,7 +26,7 @@ class SimpleGraph(StrictModel):
     edge so ``(u, v)`` and ``(v, u)`` describe the same adjacency.
     """
 
-    vertex_count: int = Field(ge=1, le=64)
+    vertex_count: int = Field(ge=1, le=_MAX_ISOMORPHISM_VERTICES)
     directed: bool = False
     edges: tuple[tuple[int, int], ...] = Field(default=(), max_length=512)
 
@@ -68,8 +70,8 @@ class GraphIsomorphismRequest(StrictModel):
 class VertexMappingPair(StrictModel):
     """One ``(from_vertex, to_vertex)`` entry in an isomorphism witness."""
 
-    from_vertex: int = Field(ge=0, le=63)
-    to_vertex: int = Field(ge=0, le=63)
+    from_vertex: int = Field(ge=0, le=_MAX_ISOMORPHISM_VERTICES - 1)
+    to_vertex: int = Field(ge=0, le=_MAX_ISOMORPHISM_VERTICES - 1)
 
 
 class GraphIsomorphismResult(StrictModel):
@@ -77,20 +79,48 @@ class GraphIsomorphismResult(StrictModel):
 
     When ``status`` is ``ISOMORPHIC`` the ``vertex_mapping`` field carries an
     explicit bijection as a list of ``(from_vertex, to_vertex)`` pairs.
-    ``NOT_ISOMORPHIC`` carries no mapping.
+    ``NOT_ISOMORPHIC`` carries no mapping. Parsing checks source and witness
+    structure; the explicit verifier checks adjacency preservation for an
+    independently supplied positive claim.
     """
 
     graph_a: SimpleGraph
     graph_b: SimpleGraph
     status: Literal["ISOMORPHIC", "NOT_ISOMORPHIC"]
-    vertex_mapping: tuple[VertexMappingPair, ...] = Field(default=())
+    vertex_mapping: tuple[VertexMappingPair, ...] = Field(
+        default=(), max_length=_MAX_ISOMORPHISM_VERTICES
+    )
 
     @model_validator(mode="after")
     def bind_mapping_to_status(self) -> Self:
-        if self.status != "ISOMORPHIC" and self.vertex_mapping:
+        if (
+            self.graph_a.vertex_count != self.graph_b.vertex_count
+            or self.graph_a.directed != self.graph_b.directed
+        ):
             raise PydanticCustomError(
-                "graph.nonisomorphic_result_has_mapping",
-                "only an ISOMORPHIC result may carry a vertex mapping",
+                "graph.result_graphs_must_share_vertex_count_and_directedness",
+                "a graph isomorphism result must bind graphs of equal vertex "
+                "count and directedness",
+            )
+        if self.status != "ISOMORPHIC":
+            if self.vertex_mapping:
+                raise PydanticCustomError(
+                    "graph.nonisomorphic_result_has_mapping",
+                    "only an ISOMORPHIC result may carry a vertex mapping",
+                )
+            return self
+        sources = {pair.from_vertex for pair in self.vertex_mapping}
+        targets = {pair.to_vertex for pair in self.vertex_mapping}
+        if (
+            len(sources) != len(self.vertex_mapping)
+            or len(targets) != len(self.vertex_mapping)
+            or sources != set(range(self.graph_a.vertex_count))
+            or targets != set(range(self.graph_b.vertex_count))
+        ):
+            raise PydanticCustomError(
+                "graph.isomorphic_result_mapping_must_be_total_bijection",
+                "an ISOMORPHIC result must carry a total bijection between "
+                "the source graphs' vertices",
             )
         return self
 

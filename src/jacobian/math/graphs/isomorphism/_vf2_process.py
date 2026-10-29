@@ -40,6 +40,35 @@ _VF2_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _VF2_FILE_SIZE_BYTES = 1024 * 1024
 
 
+def _is_isomorphism_mapping(
+    graph_a: SimpleGraph,
+    graph_b: SimpleGraph,
+    mapping: tuple[VertexMappingPair, ...],
+) -> bool:
+    """Check the bounded defining relation without searching for a witness."""
+
+    if len(mapping) != graph_a.vertex_count:
+        return False
+    forward = {pair.from_vertex: pair.to_vertex for pair in mapping}
+    if set(forward) != set(range(graph_a.vertex_count)):
+        return False
+    if set(forward.values()) != set(range(graph_b.vertex_count)):
+        return False
+    edges_b = {
+        edge if graph_b.directed else (min(edge), max(edge)) for edge in graph_b.edges
+    }
+    mapped_edges = {
+        (forward[source], forward[target])
+        if graph_a.directed
+        else (
+            min(forward[source], forward[target]),
+            max(forward[source], forward[target]),
+        )
+        for source, target in graph_a.edges
+    }
+    return mapped_edges == edges_b
+
+
 def _admit_graph_isomorphism(request: GraphIsomorphismRequest) -> None:
     """Admit the cross-graph domain required by the VF2 kernel."""
 
@@ -225,19 +254,14 @@ def _vertex_mapping(
         range(graph_b.vertex_count)
     ):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    forward = dict(pairs)
-    edges_b = {
-        edge if graph_b.directed else tuple(sorted(edge)) for edge in graph_b.edges
-    }
-    if {
-        (forward[source], forward[target])
-        if graph_a.directed
-        else tuple(sorted((forward[source], forward[target])))
-        for source, target in graph_a.edges
-    } != edges_b:
+    witness = tuple(
+        VertexMappingPair(from_vertex=source, to_vertex=target)
+        for source, target in pairs
+    )
+    if not _is_isomorphism_mapping(graph_a, graph_b, witness):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     request_checkpoint("after graph isomorphism response validation")
-    return [VertexMappingPair(from_vertex=src, to_vertex=dst) for src, dst in pairs]
+    return list(witness)
 
 
 def decide_graph_isomorphism(
@@ -276,25 +300,7 @@ def verify_graph_isomorphism(claim: GraphIsomorphismResult) -> bool:
         return False
     if claim.status != "ISOMORPHIC":
         return False
-    mapping = tuple((item.from_vertex, item.to_vertex) for item in claim.vertex_mapping)
-    if len(mapping) != claim.graph_a.vertex_count:
-        return False
-    if {source for source, _ in mapping} != set(range(claim.graph_a.vertex_count)):
-        return False
-    if {target for _, target in mapping} != set(range(claim.graph_b.vertex_count)):
-        return False
-    forward = dict(mapping)
-    mapped_edges = {
-        (forward[source], forward[target])
-        if claim.graph_a.directed
-        else tuple(sorted((forward[source], forward[target])))
-        for source, target in claim.graph_a.edges
-    }
-    target_edges = {
-        edge if claim.graph_b.directed else tuple(sorted(edge))
-        for edge in claim.graph_b.edges
-    }
-    return mapped_edges == target_edges
+    return _is_isomorphism_mapping(claim.graph_a, claim.graph_b, claim.vertex_mapping)
 
 
 def compute_colored_graph_canonicalization(

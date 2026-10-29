@@ -108,10 +108,140 @@ def test_serialized_isomorphism_claim_is_verified_against_its_graphs() -> None:
     assert verify_graph_isomorphism(
         GraphIsomorphismResult.model_validate_json(result.model_dump_json())
     )
+    # A tampered witness must fail typed result validation itself, not only
+    # the optional verifier.
     payload = result.model_dump(mode="json")
     payload["vertex_mapping"][1]["to_vertex"] = 0
-    assert not verify_graph_isomorphism(
+    with pytest.raises(ValidationError):
         GraphIsomorphismResult.model_validate_json(json.dumps(payload))
+    # A claim built without validation still fails the explicit verifier.
+    assert not verify_graph_isomorphism(
+        result.model_copy(update={"vertex_mapping": result.vertex_mapping[:1]})
+    )
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        pytest.param([], id="empty"),
+        pytest.param(
+            [
+                {"from_vertex": 0, "to_vertex": 0},
+                {"from_vertex": 0, "to_vertex": 1},
+                {"from_vertex": 2, "to_vertex": 2},
+            ],
+            id="duplicate-source",
+        ),
+        pytest.param(
+            [
+                {"from_vertex": 0, "to_vertex": 0},
+                {"from_vertex": 1, "to_vertex": 0},
+                {"from_vertex": 2, "to_vertex": 2},
+            ],
+            id="duplicate-target",
+        ),
+        pytest.param(
+            [
+                {"from_vertex": 0, "to_vertex": 0},
+                {"from_vertex": 1, "to_vertex": 1},
+            ],
+            id="missing-vertex",
+        ),
+    ],
+)
+def test_isomorphic_result_rejects_invalid_mapping(
+    mapping: list[dict[str, int]],
+) -> None:
+    with pytest.raises(ValidationError) as error:
+        GraphIsomorphismResult.model_validate(
+            {
+                "graph_a": {
+                    "vertex_count": 3,
+                    "edges": [(0, 1), (1, 2)],
+                },
+                "graph_b": {
+                    "vertex_count": 3,
+                    "edges": [(0, 1), (1, 2)],
+                },
+                "status": "ISOMORPHIC",
+                "vertex_mapping": mapping,
+            }
+        )
+    assert (
+        error.value.errors()[0]["type"]
+        == "graph.isomorphic_result_mapping_must_be_total_bijection"
+    )
+
+
+def test_isomorphic_result_accepts_any_total_bijection_order() -> None:
+    result = GraphIsomorphismResult.model_validate(
+        {
+            "graph_a": {"vertex_count": 3, "edges": [(0, 1), (1, 2)]},
+            "graph_b": {"vertex_count": 3, "edges": [(0, 1), (1, 2)]},
+            "status": "ISOMORPHIC",
+            "vertex_mapping": [
+                {"from_vertex": 1, "to_vertex": 1},
+                {"from_vertex": 0, "to_vertex": 0},
+                {"from_vertex": 2, "to_vertex": 2},
+            ],
+        }
+    )
+    assert verify_graph_isomorphism(result)
+
+
+def test_directed_mapping_must_preserve_edge_orientation() -> None:
+    payload = {
+        "graph_a": {"vertex_count": 2, "directed": True, "edges": [(0, 1)]},
+        "graph_b": {"vertex_count": 2, "directed": True, "edges": [(0, 1)]},
+        "status": "ISOMORPHIC",
+    }
+    identity = GraphIsomorphismResult.model_validate(
+        {
+            **payload,
+            "vertex_mapping": [
+                {"from_vertex": 0, "to_vertex": 0},
+                {"from_vertex": 1, "to_vertex": 1},
+            ],
+        }
+    )
+    assert verify_graph_isomorphism(identity)
+    # A false relation with valid shape parses; only the explicit verifier
+    # evaluates adjacency. Decoding must not replay the defining relation.
+    swapped = GraphIsomorphismResult.model_validate_json(
+        json.dumps(
+            {
+                **payload,
+                "vertex_mapping": [
+                    {"from_vertex": 0, "to_vertex": 1},
+                    {"from_vertex": 1, "to_vertex": 0},
+                ],
+            }
+        )
+    )
+    assert not verify_graph_isomorphism(swapped)
+
+
+@pytest.mark.parametrize(
+    "graph_b",
+    [
+        {"vertex_count": 2, "edges": []},
+        {"vertex_count": 3, "directed": True, "edges": [(0, 1)]},
+    ],
+)
+def test_isomorphism_result_rejects_mismatched_graph_pair(
+    graph_b: dict[str, Any],
+) -> None:
+    with pytest.raises(ValidationError) as error:
+        GraphIsomorphismResult.model_validate(
+            {
+                "graph_a": {"vertex_count": 3, "edges": [(0, 1)]},
+                "graph_b": graph_b,
+                "status": "NOT_ISOMORPHIC",
+            }
+        )
+    assert (
+        error.value.errors()[0]["type"]
+        == "graph.result_graphs_must_share_vertex_count_and_directedness"
     )
 
 

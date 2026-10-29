@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const TOML = require("@iarna/toml");
-const { applyEdits, modify, parse, printParseErrorCode } = require("jsonc-parser");
+const { applyEdits, modify, parse, printParseErrorCode, visit } = require("jsonc-parser");
 
 const SERVER_NAME = "jacobian";
 const MANAGED_SETUP_ARGUMENT = "--managed-by-setup";
@@ -205,6 +205,18 @@ function parseJson(source, filePath) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new SetupError(`top-level JSON configuration must be an object: ${filePath}`);
   }
+  const objectKeys = [];
+  visit(source, {
+    onObjectBegin: () => objectKeys.push(new Set()),
+    onObjectProperty: (name) => {
+      const keys = objectKeys[objectKeys.length - 1];
+      if (keys.has(name)) {
+        throw new SetupError(`duplicate JSON object key in configuration at ${filePath}`);
+      }
+      keys.add(name);
+    },
+    onObjectEnd: () => objectKeys.pop(),
+  }, { allowTrailingComma: true, disallowComments: false });
   return value;
 }
 

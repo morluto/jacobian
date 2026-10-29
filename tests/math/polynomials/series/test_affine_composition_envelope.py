@@ -6,9 +6,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.polynomials.series import compose, truncate
+from jacobian.math.polynomials.series import add, compose, truncate
 from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
+    MAX_RESULT_RATIONAL_DIGITS,
     MAX_TRUNCATE_SOURCE_ORDER,
     MAX_TRUNCATION_ORDER,
     TruncatedSeries,
@@ -67,6 +68,44 @@ def test_nonlinear_composition_keeps_its_existing_order_boundary() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         compose(outer, inner)
     assert error.value.errors()[0]["type"] == "formal_power_series.input_order"
+
+
+def test_affine_composition_consumes_actual_grown_sum_unchanged() -> None:
+    height = 10**MAX_RATIONAL_DIGITS - 1
+    left = _series("x", [Fraction(0), Fraction(1, height), Fraction(1, height)])
+    right = _series(
+        "x", [Fraction(0), Fraction(1, height - 2), Fraction(1, height - 2)]
+    )
+    produced = add(left, right).result
+    decoded = TruncatedSeries.model_validate_json(produced.model_dump_json())
+    identity = _series("x", [Fraction(0), Fraction(1), Fraction(0)])
+    assert compose(identity, decoded).result == produced
+
+
+def test_affine_full_height_sources_have_derived_output_admission() -> None:
+    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
+    value = Fraction(ceiling // 10)
+    outer = _series("x", [Fraction(0), Fraction(2), Fraction(0)])
+    inner = _series("x", [Fraction(0), value, value])
+    result = compose(outer, inner).result
+    assert [v.as_fraction() for v in result.coefficients] == [0, 2 * value, 2 * value]
+    assert TruncatedSeries.model_validate_json(result.model_dump_json()) == result
+
+    oversized = _series("x", [Fraction(0), Fraction(ceiling), Fraction(0)])
+    with pytest.raises(OperationResourceAdmissionError) as source_error:
+        compose(outer, oversized)
+    assert (
+        source_error.value.errors()[0]["type"]
+        == "formal_power_series.compose_coefficient"
+    )
+
+    full = _series("x", [Fraction(0), Fraction(ceiling - 1), Fraction(0)])
+    with pytest.raises(OperationResourceAdmissionError) as growth_error:
+        compose(outer, full)
+    assert (
+        growth_error.value.errors()[0]["type"]
+        == "formal_power_series.compose_coefficient_growth"
+    )
 
 
 def test_native_affine_kernel_enforces_its_clock_without_dispatch(

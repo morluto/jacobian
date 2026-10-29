@@ -649,6 +649,10 @@ def _require_native_pair(
 ) -> None:
     _require_native_input_series(left, maximum_order=maximum_order)
     _require_native_input_series(right, maximum_order=maximum_order)
+    _require_matching_pair(left, right)
+
+
+def _require_matching_pair(left: TruncatedSeries, right: TruncatedSeries) -> None:
     if left.variable != right.variable:
         raise _validation_error(
             "operand_variable_mismatch", "operands must share the same variable"
@@ -813,49 +817,73 @@ def admit_native_divide(
     kernel_envelope(denominator, numerator).checked()
 
 
+def _admit_affine_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
+    # F(G)=a+bG: each nonconstant coefficient is one rational product,
+    # while G(0)=0 makes the constant coefficient exactly a. No powers,
+    # convolution or common-denominator expansion are performed. Products
+    # have at most twice the source width; reduction cannot enlarge them.
+    # Reserve source/temporary/result carriers and construction/encoding
+    # gcds, with a conservative squared-limb charge per coefficient.
+    source_bits = max(
+        max(abs(value.num).bit_length(), value.den.bit_length())
+        for source in (outer, inner)
+        for value in source.coefficients
+    )
+    bits = 2 * source_bits + 2
+    limbs = (bits + 63) // 64
+    if 64 * outer.truncation_order * limbs**2 > MAX_AFFINE_COMPOSE_LIMB_WORK:
+        raise _resource_error(
+            "compose_work", "affine composition exceeds its scalar-work bound"
+        )
+    if 16 * outer.truncation_order * bits > MAX_AFFINE_COMPOSE_STORAGE_BITS:
+        raise _resource_error(
+            "compose_storage",
+            "affine composition exceeds its retained-storage bound",
+        )
+    # Produced prefixes can carry 4096-digit components. Bound each
+    # unreduced nonconstant product before multiplication; zero and unit
+    # affine maps retain their useful full-height domain.
+    ceiling = 10**MAX_RESULT_RATIONAL_DIGITS
+    if outer.truncation_order > 1:
+        slope = outer.coefficients[1]
+        for value in inner.coefficients[1:]:
+            if not slope.num or not value.num:
+                continue
+            if (
+                abs(slope.num) > (ceiling - 1) // abs(value.num)
+                or slope.den > (ceiling - 1) // value.den
+            ):
+                raise _resource_error(
+                    "compose_coefficient_growth",
+                    "affine composition exceeds its result-height bound",
+                )
+
+
 def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None:
     from ._unit_bounds import require_series
 
-    require_series(outer, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
-    require_series(inner, maximum_digits=MAX_RATIONAL_DIGITS, resource_family="compose")
-    affine_outer = _has_degree_at_most(outer, 1)
-    _require_native_pair(
-        outer,
-        inner,
-        maximum_order=MAX_TRUNCATE_SOURCE_ORDER
-        if affine_outer
-        else MAX_TRUNCATION_ORDER,
+    require_series(
+        outer, maximum_digits=MAX_RESULT_RATIONAL_DIGITS, resource_family="compose"
     )
+    affine_outer = _has_degree_at_most(outer, 1)
+    require_series(
+        inner,
+        maximum_digits=MAX_RESULT_RATIONAL_DIGITS
+        if affine_outer
+        else MAX_RATIONAL_DIGITS,
+        resource_family="compose",
+    )
+    if affine_outer:
+        _require_matching_pair(outer, inner)
+    else:
+        _require_native_pair(outer, inner)
     if inner.coefficients[0].as_fraction() != 0:
         raise _validation_error(
             "composition_nonzero_inner_constant",
             "inner series must have zero constant term for composition with a finite prefix",
         )
     if affine_outer:
-        # F(G)=a+bG: each nonconstant coefficient is one rational product,
-        # while G(0)=0 makes the constant coefficient exactly a. No powers,
-        # convolution or common-denominator expansion are performed. Products
-        # have at most twice the source width; reduction cannot enlarge them.
-        # Reserve source/temporary/result carriers and construction/encoding
-        # gcds, with a conservative squared-limb charge per coefficient.
-        source_bits = max(
-            max(abs(value.num).bit_length(), value.den.bit_length())
-            for source in (outer, inner)
-            for value in source.coefficients
-        )
-        bits = 2 * source_bits + 2
-        limbs = (bits + 63) // 64
-        if 64 * outer.truncation_order * limbs**2 > MAX_AFFINE_COMPOSE_LIMB_WORK:
-            raise _resource_error(
-                "compose_work", "affine composition exceeds its scalar-work bound"
-            )
-        if 16 * outer.truncation_order * bits > MAX_AFFINE_COMPOSE_STORAGE_BITS:
-            raise _resource_error(
-                "compose_storage",
-                "affine composition exceeds its retained-storage bound",
-            )
-        # With 256-digit sources, products have at most 512-digit components;
-        # the constant term remains a source scalar. Both fit 4096 digits.
+        _admit_affine_compose(outer, inner)
         return
     outer_denominators = {value.den for value in outer.coefficients if value.num}
     inner_denominators = {value.den for value in inner.coefficients if value.num}
@@ -1285,15 +1313,16 @@ class SeriesComposeRequest(StrictModel):
 
     Affine outer series admit the full order-25280 source envelope through
     linear coefficient products. Nonlinear outer series retain order 512 and
-    their composition-growth bounds. Sources have 256-digit components and
-    results fit the 4096-digit operation envelope.
+    their composition-growth bounds and 256-digit sources. Affine sources may
+    reuse 4096-digit produced components under derived work/storage and
+    product-growth bounds; results fit the 4096-digit operation envelope.
     """
 
     outer: TruncatedSeries = Field(
-        description="Affine outer series allow order 25280; nonlinear series allow order 512."
+        description="Affine outer series allow order 25280 and 4096-digit components under derived bounds; nonlinear series allow order 512 and 256-digit components."
     )
     inner: TruncatedSeries = Field(
-        description="Same variable and order as outer, with zero constant term."
+        description="Same variable and order as outer, with zero constant term; affine composition admits 4096-digit components when product growth, work and storage fit."
     )
 
 

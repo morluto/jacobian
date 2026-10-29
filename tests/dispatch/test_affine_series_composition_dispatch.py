@@ -92,3 +92,33 @@ def test_public_nonlinear_composition_retains_the_original_boundary() -> None:
             Catalog.open(),
         )
     assert error.value.errors()[0]["type"] == "formal_power_series.input_order"
+
+
+def test_public_affine_identity_reuses_actual_grown_sum_output() -> None:
+    height = 10**MAX_RATIONAL_DIGITS - 1
+    zero = {"num": "0", "den": "1"}
+
+    def source(denominator: int) -> dict[str, object]:
+        return {
+            "variable": "x",
+            "truncation_order": 3,
+            "coefficients": [zero, *([{"num": "1", "den": str(denominator)}] * 2)],
+        }
+
+    catalog = Catalog.open()
+    produced = invoke_operation(
+        "formal_series.rational.add.compute",
+        {"left": source(height), "right": source(height - 2)},
+        catalog,
+    ).output["result"]
+    identity = {
+        "variable": "x",
+        "truncation_order": 3,
+        "coefficients": [zero, {"num": "1", "den": "1"}, zero],
+    }
+    composed = invoke_operation(
+        "formal_series.rational.compose.compute",
+        {"outer": identity, "inner": produced},
+        catalog,
+    )
+    assert composed.output["result"] == produced

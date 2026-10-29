@@ -114,6 +114,9 @@ def test_affine_full_height_sources_have_derived_output_admission() -> None:
     )
 
     full = _series("x", [Fraction(0), Fraction(ceiling - 1), Fraction(0)])
+    identity = _series("x", [Fraction(0), Fraction(1), Fraction(0)])
+    accepted = compose(identity, full).result
+    assert TruncatedSeries.model_validate_json(accepted.model_dump_json()) == full
     with pytest.raises(OperationResourceAdmissionError) as growth_error:
         compose(outer, full)
     assert (

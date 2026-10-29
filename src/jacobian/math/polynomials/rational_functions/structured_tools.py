@@ -107,9 +107,7 @@ TOOLS: MathTools = (
         title="Compute the residue at infinity",
         description="Return the exact residue of f(x)dx at infinity as minus the x^-1 Laurent coefficient. Admits the full univariate rational presentation carrier through direct proper-fraction extraction or bounded monic remainder arithmetic; finite-pole factorization is unnecessary.",
         request_type=ResidueAtInfinityRequest,
-        result_type=__import__(
-            "jacobian._exact", fromlist=["CanonicalRational"]
-        ).CanonicalRational,
+        result_type=CanonicalRational,
         run=_r,
         tags=("rational-function", "residue", "infinity"),
         examples=(

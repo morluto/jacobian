@@ -9,6 +9,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
     current_request_execution,
     execution_deadline,
     request_checkpoint,
@@ -28,7 +32,7 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_RESIDUE_PRIVATE_BITS = 262_144
-MAX_RESIDUE_LIMB_WORK = 1 << 37
+MAX_RESIDUE_LIMB_WORK = 1 << 38
 MAX_RESIDUE_STORAGE_BITS = 1 << 29
 RESIDUE_WALL_SECONDS = 60.0
 _SCALAR_LIMIT = 10**MAX_CANONICAL_RATIONAL_DIGITS
@@ -128,17 +132,18 @@ def _admit_division(function: RationalFunction, steps: int) -> None:
     """Prove all monic long-division updates before extracting a coefficient.
 
     For A=L*N and B=M*D integral, LC(B)=M. After j leading-term
-    eliminations, every partial remainder coefficient has denominator dividing
-    L*M**j and common numerator height at most H*C**j, where
-    H=max|A_i| and C=M+max|nonleading B_i|. Reduction cannot enlarge these
-    common bounds. Unreduced Fraction products/additions fit twice the larger
-    scalar width; sparse updates and gcds receive a squared-limb work charge.
+    eliminations, the remainder has denominator dividing L*M**j and common
+    numerator l1 norm at most H*C**j, where H=sum|A_i| and
+    C=M+sum|nonleading B_i|. These bounds also cover the coefficient products
+    and sums in FLINT's integer pseudo-division. Reduction cannot enlarge the
+    bounds. Unreduced products/additions fit twice the larger scalar width;
+    polynomial updates and gcds receive a squared-limb work charge.
     """
     budget = _Budget()
     left_den, left = _clear(function.numerator.terms, budget)
     right_den, right = _clear(function.denominator.terms, budget)
-    height = max(left)
-    growth = right_den + max(right[1:], default=0)
+    height = sum(left)
+    growth = right_den + sum(right[1:])
     denominator = left_den
     for _ in range(steps):
         height = budget.multiply(height, growth)
@@ -147,13 +152,51 @@ def _admit_division(function: RationalFunction, steps: int) -> None:
             _resource("coefficient_height")
     bits = 2 * max(height.bit_length(), denominator.bit_length()) + 4
     # Include structural/scalar admission, source construction, elimination,
-    # result construction, and exact encoding. No quotient is retained.
+    # result construction, and exact encoding. FLINT's remainder implementation
+    # uses pseudo-division with a temporary quotient and dense scratch arrays.
     cells = function.numerator.terms[0].exponents[0] + 1
     operations = 64 * (cells + len(function.denominator.terms))
     operations += 16 * steps * len(function.denominator.terms)
     budget.charge(operations, bits)
     if 16 * cells * bits > MAX_RESIDUE_STORAGE_BITS:
         _resource("storage")
+
+
+def _remainder_coefficient(source: RationalFunction, target: int) -> Fraction:
+    """Extract a coefficient of FLINT's exact remainder over QQ[x].
+
+    python-flint 0.9 exposes fmpq_poly remainder for a nonzero rational
+    denominator. Owner admission has already bounded both dense inputs,
+    denominator clearing and pseudo-division growth. FLINT 3.6 performs
+    integer pseudo-division followed by rational canonicalization; the l1
+    envelope above covers its intermediate polynomial products and scratch.
+    """
+    try:
+        from flint import fmpq, fmpq_poly
+
+        inputs = []
+        for terms in (source.numerator.terms, source.denominator.terms):
+            coefficients = [fmpq(0)] * (terms[0].exponents[0] + 1)
+            for term in terms:
+                coefficients[term.exponents[0]] = fmpq(
+                    term.coefficient.num, term.coefficient.den
+                )
+            inputs.append(fmpq_poly(coefficients))
+        request_checkpoint("before FLINT infinity-residue remainder")
+        remainder = inputs[0] % inputs[1]
+        request_checkpoint("after FLINT infinity-residue remainder")
+        value = remainder[target]
+        return Fraction(int(value.p), int(value.q))
+    except (
+        OperationBackendError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
+        raise
+    except ImportError as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
 def exact_residue_at_infinity(function: RationalFunction) -> CanonicalRational:
@@ -167,10 +210,9 @@ def exact_residue_at_infinity(function: RationalFunction) -> CanonicalRational:
     numerator, denominator = source.numerator.terms, source.denominator.terms
     degree = denominator[0].exponents[0]
     if not numerator or degree == 0:
-        return CanonicalRational(num=0, den=1)
-    target = degree - 1
-    highest = numerator[0].exponents[0]
-    if highest < degree:
+        coefficient = Fraction(0)
+    elif numerator[0].exponents[0] < degree:
+        target = degree - 1
         coefficient = next(
             (
                 term.coefficient.as_fraction()
@@ -179,32 +221,10 @@ def exact_residue_at_infinity(function: RationalFunction) -> CanonicalRational:
             ),
             Fraction(0),
         )
-        return CanonicalRational.from_fraction(-coefficient)
-    _admit_division(source, highest - degree + 1)
-    remainder = {
-        term.exponents[0]: term.coefficient.as_fraction()
-        for term in numerator
-        if term.exponents[0] >= target
-    }
-    tail = tuple(
-        (term.exponents[0], term.coefficient.as_fraction()) for term in denominator[1:]
-    )
-    for exponent in range(highest, degree - 1, -1):
-        request_checkpoint("during infinity-residue long division")
-        leading = remainder.pop(exponent, Fraction(0))
-        if not leading:
-            continue
-        for power, coefficient in tail:
-            index = exponent - degree + power
-            # Lower terms can never affect this or any later leading term,
-            # nor the target coefficient, so do not construct them.
-            if index < target:
-                continue
-            value = remainder.get(index, Fraction(0)) - leading * coefficient
-            if value:
-                remainder[index] = value
-            else:
-                remainder.pop(index, None)
-    result = CanonicalRational.from_fraction(-remainder.get(target, Fraction(0)))
+    else:
+        highest = numerator[0].exponents[0]
+        _admit_division(source, highest - degree + 1)
+        coefficient = _remainder_coefficient(source, degree - 1)
+    result = CanonicalRational.from_fraction(-coefficient)
     request_checkpoint("after infinity-residue result construction")
     return result

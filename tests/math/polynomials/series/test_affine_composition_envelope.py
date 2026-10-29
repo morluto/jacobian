@@ -6,7 +6,7 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.polynomials.series import add, compose, truncate
+from jacobian.math.polynomials.series import add, compose, power, truncate
 from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
     MAX_RESULT_RATIONAL_DIGITS,
@@ -80,6 +80,20 @@ def test_affine_composition_consumes_actual_grown_sum_unchanged() -> None:
     decoded = TruncatedSeries.model_validate_json(produced.model_dump_json())
     identity = _series("x", [Fraction(0), Fraction(1), Fraction(0)])
     assert compose(identity, decoded).result == produced
+
+
+@pytest.mark.parametrize("constant", (False, True))
+def test_affine_composition_reuses_actual_sparse_high_power(constant: bool) -> None:
+    order = 800
+    source = _series("x", [Fraction(0), Fraction(10000)] + [Fraction(0)] * (order - 2))
+    produced = power(source, order - 1).result
+    assert all(not value.num for value in produced.coefficients[:-1])
+    assert produced.coefficients[-1].as_fraction() == 10000 ** (order - 1)
+    decoded = TruncatedSeries.model_validate_json(produced.model_dump_json())
+    values = [Fraction(1), Fraction(0)] if constant else [Fraction(0), Fraction(1)]
+    outer = _series("x", values + [Fraction(0)] * (order - 2))
+    result = compose(outer, decoded).result
+    assert result == (outer if constant else produced)
 
 
 def test_affine_full_height_sources_have_derived_output_admission() -> None:

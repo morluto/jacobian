@@ -426,11 +426,16 @@ class _CheckedPrecoloringEdgeRepairContext(_PrecoloringEdgeRepairContext):
 
 
 class PrecoloringEdgeRepairResult(_PrecoloringEdgeRepairContext):
-    """One exact minimum edge-repair optimum and its total coloring witness."""
+    """One exact minimum edge-repair optimum and its total coloring witness.
 
-    repaired_edge_count: int
+    The producing kernel establishes optimality and the monochromatic-edge
+    relation. Parsing retains bounded witness structure and source context;
+    it does not establish a caller-authored repair claim.
+    """
+
+    repaired_edge_count: int = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
     coloring: VertexColoringAssignment
-    repaired_edge_indices: tuple[int, ...]
+    repaired_edge_indices: tuple[int, ...] = Field(max_length=MAX_EDGE_COLORING_EDGES)
 
     @model_validator(mode="after")
     def bind_optimum_witness(self) -> Self:
@@ -438,6 +443,11 @@ class PrecoloringEdgeRepairResult(_PrecoloringEdgeRepairContext):
             raise PydanticCustomError(
                 "graph.precoloring_repair_count_must_match_indices",
                 "repaired_edge_count must equal repaired_edge_indices length",
+            )
+        if len(set(self.repaired_edge_indices)) != len(self.repaired_edge_indices):
+            raise PydanticCustomError(
+                "graph.precoloring_repaired_edges_must_be_unique",
+                "repaired_edge_indices must be unique",
             )
         if tuple(sorted(self.repaired_edge_indices)) != self.repaired_edge_indices:
             raise PydanticCustomError(
@@ -453,12 +463,6 @@ class PrecoloringEdgeRepairResult(_PrecoloringEdgeRepairContext):
                 "repaired_edge_indices must use the source edge axis",
             )
         self._require_coloring_context(self.coloring)
-        monochromatic = _monochromatic_edge_indices(self.graph, self.coloring.coloring)
-        if monochromatic != self.repaired_edge_indices:
-            raise PydanticCustomError(
-                "graph.precoloring_repaired_edges_must_be_monochromatic",
-                "repaired edges must be exactly the monochromatic edges",
-            )
         return self
 
     @classmethod
@@ -477,7 +481,8 @@ class PrecoloringEdgeRepairResult(_PrecoloringEdgeRepairContext):
         shared context still checks all field bounds, the total assignment,
         source/palette binding, and the fixed-color extension. Only the sorted,
         source-bound repaired indices and their count are trusted here because
-        this factory derives them. Public parsing always replays that relation.
+        this factory derives them. Public parsing retains their structural
+        shape and source references without deriving the relation again.
         """
 
         context = _CheckedPrecoloringEdgeRepairContext(

@@ -20,7 +20,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
@@ -33,24 +33,38 @@ from jacobian.math.number_theory.number_fields import GaussianRational
 # is performed on that derivative numerator, so the number of real critical
 # points is bounded by its degree.  The degree limit keeps the pairwise exact
 # comparison ledger and the resultant-based value identification inside the
-# measured envelope of the fixed SymPy backend.
+# degree/height envelope of maintained FLINT elimination/factorization and
+# SymPy real-root isolation.
 MAX_SUP_NORM_DEGREE = 8
 MAX_SUP_NORM_TERMS = MAX_SUP_NORM_DEGREE + 1
 MAX_SUP_NORM_INPUT_COMPONENT_DIGITS = 32
 MAX_SUP_NORM_NUMERATOR_DEGREE = 2 * MAX_SUP_NORM_DEGREE
 MAX_SUP_NORM_DERIVATIVE_DEGREE = 2 * MAX_SUP_NORM_DEGREE + 1
 MAX_SUP_NORM_CRITICAL_ROOTS = MAX_SUP_NORM_DERIVATIVE_DEGREE
-MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS = 512
+# Raw Cayley expansion uses a common denominator squared. Its derivative
+# cancels every diagonal scalar square and needs each input denominator only
+# once. The denominator-aware admission proves these separate height bounds.
+MAX_SUP_NORM_TRANSFORM_COMPONENT_DIGITS = 1_216
+MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS = 640
+MAX_SUP_NORM_RESULTANT_COMPONENT_DIGITS = 32_768
+MAX_SUP_NORM_PARAMETER_COMPONENT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
+# A 10000-place outward grid is finer than the derivative root separation.
+MAX_SUP_NORM_PARAMETER_DECIMAL_PLACES = 10_000
 # One comparison ledger entry per distinct critical value plus the z=-1
 # endpoint; this is the complete pairwise comparison budget.
 MAX_SUP_NORM_COMPARISONS = (
     (MAX_SUP_NORM_CRITICAL_ROOTS + 1) * (MAX_SUP_NORM_CRITICAL_ROOTS + 2)
 ) // 2
+# Nonsingleton reported value/image intervals use an outward decimal grid;
+# exact rational singletons retain their separately bounded source heights.
 MAX_SUP_NORM_ENCLOSURE_COMPONENT_DIGITS = 256
-MAX_SUP_NORM_CERTIFICATE_BYTES = 262_144
-# Deliberately conservative isolation/resultant work proxy over the fixed
-# exact backend: ``(derivative_degree + 1)**3 * (derived_digits + 64)``.
-MAX_SUP_NORM_ISOLATION_WORK = 3_000_000
+MAX_SUP_NORM_CERTIFICATE_SCALAR_DIGITS = 1 << 22
+MAX_SUP_NORM_TRANSFORM_WORK = 8_000_000
+MAX_SUP_NORM_ISOLATION_WORK = 160_000_000
+MAX_SUP_NORM_RESULTANT_WORK = 1 << 46
+MAX_SUP_NORM_FACTOR_WORK = 1 << 58
+MAX_SUP_NORM_VALUE_ANALYSIS_WORK = 1 << 58
+MAX_SUP_NORM_POSTPROCESSING_WORK = 1 << 55
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -106,7 +120,14 @@ class GaussianRationalPolynomial(StrictModel):
 class UnitCircleSupNormSquaredRequest(StrictModel):
     """One bounded Gaussian-rational polynomial in ``z``."""
 
-    polynomial: GaussianRationalPolynomial
+    polynomial: GaussianRationalPolynomial = Field(
+        description=(
+            "Polynomial of degree at most 8 with numerator/denominator "
+            "components of at most 32 decimal digits. Admission separately "
+            "bounds denominator-aware Cayley expansion, real-root isolation, "
+            "resultants, factors, and retained exact scalars."
+        )
+    )
 
 
 class UnitCircleCriticalPoint(StrictModel):
@@ -210,17 +231,26 @@ class UnitCircleSupNormSquaredResult(StrictModel):
 
 
 __all__ = [
-    "MAX_SUP_NORM_CERTIFICATE_BYTES",
+    "MAX_SUP_NORM_CERTIFICATE_SCALAR_DIGITS",
     "MAX_SUP_NORM_COMPARISONS",
     "MAX_SUP_NORM_CRITICAL_ROOTS",
     "MAX_SUP_NORM_DEGREE",
     "MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS",
     "MAX_SUP_NORM_DERIVATIVE_DEGREE",
     "MAX_SUP_NORM_ENCLOSURE_COMPONENT_DIGITS",
+    "MAX_SUP_NORM_FACTOR_WORK",
     "MAX_SUP_NORM_INPUT_COMPONENT_DIGITS",
     "MAX_SUP_NORM_ISOLATION_WORK",
     "MAX_SUP_NORM_NUMERATOR_DEGREE",
+    "MAX_SUP_NORM_PARAMETER_COMPONENT_DIGITS",
+    "MAX_SUP_NORM_PARAMETER_DECIMAL_PLACES",
+    "MAX_SUP_NORM_POSTPROCESSING_WORK",
+    "MAX_SUP_NORM_RESULTANT_COMPONENT_DIGITS",
+    "MAX_SUP_NORM_RESULTANT_WORK",
     "MAX_SUP_NORM_TERMS",
+    "MAX_SUP_NORM_TRANSFORM_COMPONENT_DIGITS",
+    "MAX_SUP_NORM_TRANSFORM_WORK",
+    "MAX_SUP_NORM_VALUE_ANALYSIS_WORK",
     "GaussianRationalPolynomial",
     "GaussianRationalPolynomialTerm",
     "UnitCircleCriticalPoint",

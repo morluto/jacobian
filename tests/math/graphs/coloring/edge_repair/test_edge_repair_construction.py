@@ -1,8 +1,12 @@
-"""Trusted repair construction scans once while caller claims remain checked."""
+"""Trusted repair construction scans once; parsing retains structural checks."""
 
 import json
+import sys
+from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from itertools import combinations
-from typing import Any
+from types import FrameType
 
 import pytest
 from pydantic import ValidationError
@@ -16,9 +20,31 @@ from jacobian.math.graphs.coloring._models import (
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
+@contextmanager
+def _repair_calls() -> Iterator[Counter[str]]:
+    """Observe real producer work without replacing mathematics or validators."""
+
+    calls: Counter[str] = Counter()
+    functions = {
+        _models._monochromatic_edge_indices.__code__: "scans",
+        run_coloring_worker.__code__: "solves",
+    }
+
+    def profile(frame: FrameType, event: str, _argument: object) -> None:
+        if event == "call" and (name := functions.get(frame.f_code)) is not None:
+            calls[name] += 1
+
+    previous = sys.getprofile()
+    sys.setprofile(profile)
+    try:
+        yield calls
+    finally:
+        sys.setprofile(previous)
+
+
 @pytest.mark.parametrize("kind", ["empty", "isolated", "forced", "complete"])
-def test_repair_construction_scans_once_and_decoding_replays_the_relation(
-    kind: str, monkeypatch: pytest.MonkeyPatch
+def test_repair_construction_scans_once_and_decoding_keeps_the_relation_structural(
+    kind: str,
 ) -> None:
     graph = IndexedSimpleUndirectedGraph(
         vertex_count=0 if kind == "empty" else 4,
@@ -30,26 +56,8 @@ def test_repair_construction_scans_once_and_decoding_replays_the_relation(
     )
     fixed = () if kind == "empty" else ((0, 0), (1, 0), (2, 1), (3, 2))
     expected = (0,) if graph.edges else ()
-    real_scan = _models._monochromatic_edge_indices
-    real_worker = run_coloring_worker
-    scans = 0
-    solves = 0
-
-    def tracked_scan(
-        source: IndexedSimpleUndirectedGraph, coloring: tuple[int, ...]
-    ) -> tuple[int, ...]:
-        nonlocal scans
-        scans += 1
-        return real_scan(source, coloring)
-
-    def tracked_worker(*args: Any, **kwargs: Any) -> Any:
-        nonlocal solves
-        solves += 1
-        return real_worker(*args, **kwargs)
-
-    monkeypatch.setattr(_models, "_monochromatic_edge_indices", tracked_scan)
-    monkeypatch.setattr(operations, "run_coloring_worker", tracked_worker)
-    result = operations.precoloring_edge_repair(graph, 3, fixed, 100_000)
+    with _repair_calls() as producer_calls:
+        result = operations.precoloring_edge_repair(graph, 3, fixed, 100_000)
     assert type(result) is PrecoloringEdgeRepairResult
     assert type(result.coloring) is VertexColoringAssignment
     assert result.graph is graph
@@ -57,13 +65,16 @@ def test_repair_construction_scans_once_and_decoding_replays_the_relation(
     assert result.coloring.coloring == tuple(color for _, color in fixed)
     assert result.repaired_edge_indices == expected
     assert result.repaired_edge_count == len(expected)
-    assert scans == 1
-    assert solves == bool(graph.edges)
+    assert producer_calls["scans"] == 1
+    assert producer_calls["solves"] == bool(graph.edges)
 
-    decoded = PrecoloringEdgeRepairResult.model_validate_json(result.model_dump_json())
+    with _repair_calls() as decode_calls:
+        decoded = PrecoloringEdgeRepairResult.model_validate_json(
+            result.model_dump_json()
+        )
     assert decoded == result
-    assert scans == 2
-    assert solves == bool(graph.edges)
+    assert decode_calls["scans"] == 0
+    assert decode_calls["solves"] == 0
 
 
 @pytest.fixture(scope="module")
@@ -84,11 +95,9 @@ def repair_result() -> PrecoloringEdgeRepairResult:
         ("count", "graph.precoloring_repair_count_must_match_indices"),
         ("order", "graph.precoloring_repaired_edges_must_be_sorted"),
         ("index_range", "graph.precoloring_repaired_edges_must_be_source_bound"),
-        ("wrong_edges", "graph.precoloring_repaired_edges_must_be_monochromatic"),
-        ("duplicate_edges", "graph.precoloring_repaired_edges_must_be_monochromatic"),
+        ("duplicate_edges", "graph.precoloring_repaired_edges_must_be_unique"),
         ("source", "graph.precoloring_witness_must_bind_source_and_palette"),
         ("palette", "graph.precoloring_witness_must_bind_source_and_palette"),
-        ("bound_source", "graph.precoloring_repaired_edges_must_be_monochromatic"),
         (
             "fixed_duplicate",
             "graph.precoloring_fixed_colors_must_assign_one_color_per_vertex",
@@ -103,7 +112,7 @@ def repair_result() -> PrecoloringEdgeRepairResult:
         ("solver_budget", "less_than_equal"),
     ],
 )
-def test_untrusted_repair_claims_retain_all_context_and_relation_checks(
+def test_untrusted_repair_claims_retain_context_and_structural_checks(
     repair_result: PrecoloringEdgeRepairResult, change: str, code: str
 ) -> None:
     payload = repair_result.model_dump(mode="json")
@@ -113,14 +122,10 @@ def test_untrusted_repair_claims_retain_all_context_and_relation_checks(
         payload.update(repaired_edge_count=2, repaired_edge_indices=[1, 0])
     elif change == "index_range":
         payload["repaired_edge_indices"] = [6]
-    elif change == "wrong_edges":
-        payload["repaired_edge_indices"] = [1]
     elif change == "duplicate_edges":
         payload.update(repaired_edge_count=2, repaired_edge_indices=[0, 0])
-    elif change in {"source", "bound_source"}:
+    elif change == "source":
         payload["graph"]["edges"] = payload["graph"]["edges"][1:]
-        if change == "bound_source":
-            payload["coloring"]["graph"] = payload["graph"]
     elif change == "palette":
         payload["colors"] = 2
     elif change.startswith("fixed_"):
@@ -144,6 +149,29 @@ def test_untrusted_repair_claims_retain_all_context_and_relation_checks(
     assert error.value.errors()[0]["type"] == code
 
 
+@pytest.mark.parametrize("change", ["wrong_edges", "bound_source"])
+def test_semantically_false_repair_relations_parse_without_recomputation(
+    repair_result: PrecoloringEdgeRepairResult, change: str
+) -> None:
+    payload = repair_result.model_dump(mode="json")
+    if change == "wrong_edges":
+        payload["repaired_edge_indices"] = [1]
+    else:
+        payload["graph"]["edges"] = payload["graph"]["edges"][1:]
+        payload["coloring"]["graph"] = payload["graph"]
+    with _repair_calls() as calls:
+        decoded = PrecoloringEdgeRepairResult.model_validate_json(json.dumps(payload))
+    assert calls["scans"] == calls["solves"] == 0
+    # Canonical parsing does not establish a caller-authored mathematical claim.
+    # Check the forged relation independently, rather than adding a replay API.
+    monochromatic = tuple(
+        index
+        for index, (left, right) in enumerate(decoded.graph.edges)
+        if decoded.coloring.coloring[left] == decoded.coloring.coloring[right]
+    )
+    assert decoded.repaired_edge_indices != monochromatic
+
+
 @pytest.mark.parametrize(
     ("coloring", "fixed_colors", "code"),
     [
@@ -162,20 +190,8 @@ def test_checked_factory_rejects_bad_assignments_before_edge_scan(
     coloring: tuple[int, ...],
     fixed_colors: tuple[tuple[int, int], ...],
     code: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    real_scan = _models._monochromatic_edge_indices
-    scans = 0
-
-    def tracked_scan(
-        graph: IndexedSimpleUndirectedGraph, assignment: tuple[int, ...]
-    ) -> tuple[int, ...]:
-        nonlocal scans
-        scans += 1
-        return real_scan(graph, assignment)
-
-    monkeypatch.setattr(_models, "_monochromatic_edge_indices", tracked_scan)
-    with pytest.raises(ValidationError) as error:
+    with _repair_calls() as calls, pytest.raises(ValidationError) as error:
         PrecoloringEdgeRepairResult._from_kernel(
             graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),)),
             colors=2,
@@ -184,4 +200,4 @@ def test_checked_factory_rejects_bad_assignments_before_edge_scan(
             coloring=coloring,
         )
     assert error.value.errors()[0]["type"] == code
-    assert scans == 0
+    assert calls["scans"] == 0

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -312,6 +312,66 @@ test("setup refreshes a selected unmanaged Jacobian registration", async () => {
       command: "npx",
       args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
     });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup preserves existing configuration and managed skill permissions", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-mode-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const skillPath = join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md");
+    await mkdir(dirname(skillPath), { recursive: true });
+    await writeFile(configPath, '{"theme":"dark","mcpServers":{"jacobian":{"command":"old"}}}', "utf8");
+    await writeFile(skillPath, "<!-- Managed by Jacobian setup. -->\nold skill\n", "utf8");
+    await chmod(configPath, 0o600);
+    await chmod(skillPath, 0o640);
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(await readFile(configPath, "utf8")).mcpServers.jacobian.command, "npx");
+    assert.equal((await stat(configPath)).mode & 0o777, 0o600);
+    assert.equal((await stat(skillPath)).mode & 0o777, 0o640);
+    assert.match(await readFile(skillPath, "utf8"), /^---\nname: jacobian-math\n/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup leaves an existing temporary-name collision untouched", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-temp-collision-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const collisionLog = join(base, "collision-path");
+    const preload = join(base, "fixed-temp-name.cjs");
+    const original = '{"theme":"dark"}';
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, original, "utf8");
+    await writeFile(preload, `
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+crypto.randomBytes = (size) => Buffer.alloc(size);
+const collision = process.env.JACOBIAN_TEST_CONFIG + ".jacobian-" + process.pid + "-000000000000.tmp";
+fs.writeFileSync(collision, "unrelated temporary file", { flag: "wx" });
+fs.writeFileSync(process.env.JACOBIAN_TEST_COLLISION_LOG, collision);
+`, "utf8");
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], {
+      ...env,
+      NODE_OPTIONS: `${env.NODE_OPTIONS || ""} --require=${preload}`,
+      JACOBIAN_TEST_CONFIG: configPath,
+      JACOBIAN_TEST_COLLISION_LOG: collisionLog,
+    });
+
+    assert.equal(result.status, 1);
+    const collision = await readFile(collisionLog, "utf8");
+    assert.equal(await readFile(collision, "utf8"), "unrelated temporary file");
+    assert.equal(await readFile(configPath, "utf8"), original);
+    await assert.rejects(readFile(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
   } finally {
     await rm(base, { recursive: true, force: true });
   }

@@ -360,9 +360,28 @@ async function buildPlan(clientIds, home, version, force) {
 
 async function writeAtomic(filePath, content) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const originalMode = await fs.stat(filePath).then(
+    (stat) => stat.mode & 0o777,
+    (error) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    },
+  );
   const temporary = `${filePath}.jacobian-${process.pid}-${randomBytes(6).toString("hex")}.tmp`;
-  await fs.writeFile(temporary, content, "utf8");
-  await fs.rename(temporary, filePath);
+  const temporaryFile = await fs.open(temporary, "wx", originalMode ?? 0o666);
+  try {
+    try {
+      await temporaryFile.writeFile(content, "utf8");
+      if (originalMode !== null) await temporaryFile.chmod(originalMode);
+    } finally {
+      await temporaryFile.close();
+    }
+    await fs.rename(temporary, filePath);
+  } finally {
+    await fs.unlink(temporary).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
 }
 
 async function restore(filePath, original) {

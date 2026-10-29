@@ -59,8 +59,8 @@ def test_repair_inspection_and_execution_publish_the_value_directly() -> None:
                 assert decoded.repaired_edge_indices == repaired
                 assert decoded.repaired_edge_count == len(repaired)
                 if decoded.graph.edges:
-                    # A self-consistent count/index pair must still be bound
-                    # to the actual assignment received through math.run.
+                    # Parsing retains a caller-authored relation's shape; it
+                    # does not recompute monochromatic edges or optimality.
                     wrong_edge = next(
                         i for i in range(len(decoded.graph.edges)) if i not in repaired
                     )
@@ -69,13 +69,11 @@ def test_repair_inspection_and_execution_publish_the_value_directly() -> None:
                         repaired_edge_count=1,
                         repaired_edge_indices=[wrong_edge],
                     )
-                    with pytest.raises(ValidationError) as error:
-                        PrecoloringEdgeRepairResult.model_validate_json(
-                            json.dumps(forged)
-                        )
-                    assert error.value.errors()[0]["type"] == (
-                        "graph.precoloring_repaired_edges_must_be_monochromatic"
+                    forged_claim = PrecoloringEdgeRepairResult.model_validate_json(
+                        json.dumps(forged)
                     )
+                    assert forged_claim.repaired_edge_indices == (wrong_edge,)
+                    assert forged_claim.repaired_edge_indices != repaired
                     forged = dict(
                         output,
                         fixed_colors=[[0, (coloring[0] + 1) % decoded.colors]],

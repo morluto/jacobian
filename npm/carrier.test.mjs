@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -312,6 +312,344 @@ test("setup refreshes a selected unmanaged Jacobian registration", async () => {
       command: "npx",
       args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
     });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup preserves existing configuration and managed skill permissions", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-mode-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const skillPath = join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md");
+    await mkdir(dirname(skillPath), { recursive: true });
+    await writeFile(configPath, '{"theme":"dark","mcpServers":{"jacobian":{"command":"old"}}}', "utf8");
+    await writeFile(skillPath, "<!-- Managed by Jacobian setup. -->\nold skill\n", "utf8");
+    await chmod(configPath, 0o600);
+    await chmod(skillPath, 0o640);
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(await readFile(configPath, "utf8")).mcpServers.jacobian.command, "npx");
+    assert.equal((await stat(configPath)).mode & 0o777, 0o600);
+    assert.equal((await stat(skillPath)).mode & 0o777, 0o640);
+    assert.match(await readFile(skillPath, "utf8"), /^---\nname: jacobian-math\n/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup leaves an existing temporary-name collision untouched", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-temp-collision-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const collisionLog = join(base, "collision-path");
+    const preload = join(base, "fixed-temp-name.cjs");
+    const original = '{"theme":"dark"}';
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, original, "utf8");
+    await writeFile(preload, `
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+crypto.randomBytes = (size) => Buffer.alloc(size);
+const collision = process.env.JACOBIAN_TEST_CONFIG + ".jacobian-" + process.pid + "-000000000000.tmp";
+fs.writeFileSync(collision, "unrelated temporary file", { flag: "wx" });
+fs.writeFileSync(process.env.JACOBIAN_TEST_COLLISION_LOG, collision);
+`, "utf8");
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], {
+      ...env,
+      NODE_OPTIONS: `${env.NODE_OPTIONS || ""} --require=${preload}`,
+      JACOBIAN_TEST_CONFIG: configPath,
+      JACOBIAN_TEST_COLLISION_LOG: collisionLog,
+    });
+
+    assert.equal(result.status, 1);
+    const collision = await readFile(collisionLog, "utf8");
+    assert.equal(await readFile(collision, "utf8"), "unrelated temporary file");
+    assert.equal(await readFile(configPath, "utf8"), original);
+    await assert.rejects(readFile(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup rejects ambiguous duplicate JSONC keys before any write", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-duplicate-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const source of [
+      '{"mcpServers":{"jacobian":{"command":"first"},"jacobian":{"command":"effective-old"}}}',
+      '{"mcpServers":{},"mcpServers":{"jacobian":{"command":"effective-old"}}}',
+      '{"mcpServers":{"jacobian":{"command":"first"},"jaco\\u0062ian":{"command":"effective-old"}}}',
+      '{"mcpServers":{},"other":{"setting":1,"setting":2}}',
+    ]) {
+      await writeFile(configPath, source, "utf8");
+
+      const result = runCarrier(["upgrade", "--claude", "--yes", "--json"], env);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /duplicate JSON object key in configuration/);
+      assert.equal(await readFile(configPath, "utf8"), source);
+      await assert.rejects(readFile(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+    }
+    await writeFile(configPath, '{\n// valid JSONC\n"mcpServers":{},"other":{"setting":1},"another":{"setting":2},\n}', "utf8");
+    const accepted = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    const updated = await readFile(configPath, "utf8");
+    assert.match(updated, /\/\/ valid JSONC/);
+    const { parse } = require("jsonc-parser");
+    assert.equal(parse(updated).mcpServers.jacobian.command, "npx");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("upgrade accepts quoted, spaced, and commented Codex registration headers", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-toml-header-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const registration of [
+      '[mcp_servers."jacobian"]\ncommand="old"\n',
+      "[ 'mcp_servers' . 'jacobian' ] # registration\ncommand='old'\n",
+      '[mcp_servers.jacobian] # registration\r\ncommand="old"\r\n',
+      '["mcp_servers"] # parent\n  "jacobian" = {command="old"}\n',
+    ]) {
+      const neighbor = '\n  [mcp_servers.other] # keep this comment\ncommand = "other"\n';
+      await writeFile(configPath, registration + neighbor, "utf8");
+
+      const result = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+
+      assert.equal(result.status, 0, result.stderr);
+      const updated = await readFile(configPath, "utf8");
+      const parsed = TOML.parse(updated);
+      assert.equal(parsed.mcp_servers.jacobian.command, "npx");
+      assert.equal(parsed.mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+      assert.deepEqual(parsed.mcp_servers.other, { command: "other" });
+      assert.ok(updated.includes(neighbor.trimStart()));
+      const repeated = runCarrier(["setup", "--codex", "--yes", "--json"], env);
+      assert.equal(repeated.status, 0, repeated.stderr);
+      assert.equal(JSON.parse(repeated.stdout).clients[0].action, "already current");
+      assert.equal(await readFile(configPath, "utf8"), updated);
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup refuses TOML edits that mistake multiline-string text for a table", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-toml-string-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const note of [
+      'note = """\n[mcp_servers.jacobian]\ncommand="text only"\n"""\n',
+      "note = '''\n[mcp_servers.jacobian]\ncommand='text only'\n[elsewhere]\n'''\n",
+    ]) {
+      const source = note + '[mcp_servers."jacobian"] # actual\ncommand="old"\n[mcp_servers.other]\ncommand="other"\n';
+      assert.equal(TOML.parse(source).mcp_servers.jacobian.command, "old");
+      await writeFile(configPath, source, "utf8");
+
+      const result = runCarrier(["setup", "--codex", "--yes", "--json"], env);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Jacobian entry cannot be safely updated/);
+      assert.equal(await readFile(configPath, "utf8"), source);
+      await assert.rejects(readFile(join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup reads only authored JSONC object properties", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-own-properties-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const expected = {
+      command: "npx",
+      args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
+    };
+    await mkdir(dirname(configPath), { recursive: true });
+    for (const original of [
+      { ["__proto__"]: { mcpServers: { jacobian: expected } } },
+      { mcpServers: { ["__proto__"]: { jacobian: expected } } },
+      { ["__proto__"]: { mcpServers: "not an authored section" } },
+    ]) {
+      const source = JSON.stringify(original);
+      await writeFile(configPath, source, "utf8");
+
+      const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).clients[0].action, "create");
+      const updated = JSON.parse(await readFile(configPath, "utf8"));
+      assert.ok(Object.hasOwn(updated, "mcpServers"));
+      assert.ok(Object.hasOwn(updated.mcpServers, "jacobian"));
+      assert.deepEqual(updated.mcpServers.jacobian, expected);
+      if (Object.hasOwn(original, "__proto__")) {
+        assert.deepEqual(updated.__proto__, original.__proto__);
+      } else {
+        assert.deepEqual(updated.mcpServers.__proto__, original.mcpServers.__proto__);
+      }
+      const repeated = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+      assert.equal(repeated.status, 0, repeated.stderr);
+      assert.equal(JSON.parse(repeated.stdout).clients[0].action, "already current");
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup updates symbolic-link targets without replacing the links", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-symlink-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const target = join(base, "dotfiles", "claude.json");
+    const intermediate = join(env.HOME, "claude-link");
+    const skillPath = join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md");
+    const skillTarget = join(base, "dotfiles", "jacobian-skill.md");
+    await mkdir(dirname(target), { recursive: true });
+    await mkdir(dirname(skillPath), { recursive: true });
+    await writeFile(target, '{"theme":"dark"}', "utf8");
+    await writeFile(skillTarget, "<!-- Managed by Jacobian setup. -->\nold skill\n", "utf8");
+    await symlink(target, intermediate);
+    await symlink("claude-link", configPath);
+    await symlink(skillTarget, skillPath);
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(configPath)).isSymbolicLink());
+    assert.ok((await lstat(intermediate)).isSymbolicLink());
+    assert.ok((await lstat(skillPath)).isSymbolicLink());
+    assert.equal(await readlink(configPath), "claude-link");
+    assert.equal(await readlink(intermediate), target);
+    const updated = JSON.parse(await readFile(target, "utf8"));
+    assert.equal(updated.theme, "dark");
+    assert.equal(updated.mcpServers.jacobian.command, "npx");
+    assert.equal(await readFile(configPath, "utf8"), await readFile(target, "utf8"));
+    assert.match(await readFile(skillTarget, "utf8"), /^---\nname: jacobian-math\n/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup refuses dangling configuration or skill links before any write", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-dangling-link-"));
+  try {
+    for (const kind of ["configuration", "skill"]) {
+      const env = await setupEnvironment(join(base, kind));
+      const configPath = join(env.HOME, ".claude.json");
+      const skillPath = join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md");
+      const link = kind === "configuration" ? configPath : skillPath;
+      await mkdir(dirname(link), { recursive: true });
+      await symlink("missing-target", link);
+
+      const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /symbolic link has a missing target/);
+      assert.ok((await lstat(link)).isSymbolicLink());
+      assert.equal(await readlink(link), "missing-target");
+      const untouched = kind === "configuration" ? skillPath : configPath;
+      await assert.rejects(lstat(untouched), { code: "ENOENT" });
+      await assert.rejects(lstat(join(dirname(link), "missing-target")), { code: "ENOENT" });
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup coalesces identical updates through multiple configuration links", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-shared-target-"));
+  try {
+    const env = await setupEnvironment(base);
+    const target = join(env.HOME, "shared.json");
+    const claude = join(env.HOME, ".claude.json");
+    const cursor = join(env.HOME, ".cursor", "mcp.json");
+    await mkdir(dirname(cursor), { recursive: true });
+    await writeFile(target, '{"theme":"dark"}', "utf8");
+    await symlink("shared.json", claude);
+    await symlink("../shared.json", cursor);
+
+    const result = runCarrier(["setup", "--claude", "--cursor", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(claude)).isSymbolicLink());
+    assert.ok((await lstat(cursor)).isSymbolicLink());
+    assert.equal(JSON.parse(await readFile(target, "utf8")).mcpServers.jacobian.command, "npx");
+    for (const client of JSON.parse(result.stdout).clients) {
+      assert.match(await readFile(client.skill_path, "utf8"), /^---\nname: jacobian-math\n/);
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup coalesces a missing shared skill through a linked parent directory", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-shared-skill-"));
+  try {
+    const env = await setupEnvironment(base);
+    const sharedSkills = join(env.HOME, ".agents", "skills");
+    const claudeSkills = join(env.HOME, ".claude", "skills");
+    await mkdir(sharedSkills, { recursive: true });
+    await mkdir(dirname(claudeSkills), { recursive: true });
+    await symlink("../.agents/skills", claudeSkills);
+
+    const result = runCarrier(["setup", "--claude", "--codex", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(claudeSkills)).isSymbolicLink());
+    assert.equal(await readlink(claudeSkills), "../.agents/skills");
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(report.clients.map((client) => client.client), ["claude", "codex"]);
+    const skill = await readFile(join(sharedSkills, "jacobian-math", "SKILL.md"), "utf8");
+    assert.match(skill, /^---\nname: jacobian-math\n/);
+    for (const client of report.clients) {
+      assert.equal(await readFile(client.skill_path, "utf8"), skill);
+    }
+    const claude = JSON.parse(await readFile(join(env.HOME, ".claude.json"), "utf8"));
+    assert.equal(claude.mcpServers.jacobian.command, "npx");
+    const codex = TOML.parse(await readFile(join(env.HOME, ".codex", "config.toml"), "utf8"));
+    assert.equal(codex.mcp_servers.jacobian.command, "npx");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup refuses conflicting updates to one linked target before any write", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-conflicting-target-"));
+  try {
+    const env = await setupEnvironment(base);
+    const target = join(env.HOME, "shared.json");
+    const claude = join(env.HOME, ".claude.json");
+    const opencode = join(env.HOME, ".config", "opencode", "opencode.json");
+    const source = '{"mcpServers":{},"mcp":{}}';
+    await mkdir(dirname(opencode), { recursive: true });
+    await writeFile(target, source, "utf8");
+    await symlink("shared.json", claude);
+    await symlink("../../shared.json", opencode);
+
+    const result = runCarrier(["setup", "--claude", "--opencode", "--yes", "--json"], env);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /selected setup entries propose conflicting changes/);
+    assert.equal(await readFile(target, "utf8"), source);
+    assert.ok((await lstat(claude)).isSymbolicLink());
+    assert.ok((await lstat(opencode)).isSymbolicLink());
+    await assert.rejects(lstat(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
+    await assert.rejects(lstat(join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md")), { code: "ENOENT" });
   } finally {
     await rm(base, { recursive: true, force: true });
   }

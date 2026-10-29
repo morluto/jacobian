@@ -35,10 +35,12 @@ from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
+    request_execution,
 )
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
@@ -52,14 +54,24 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
     RealAlgebraicValue,
 )
+from jacobian.math.polynomials.unit_circle._sup_norm_bounds import sup_norm_bounds
 from jacobian.math.polynomials.unit_circle._sup_norm_models import (
-    MAX_SUP_NORM_CERTIFICATE_BYTES,
+    MAX_SUP_NORM_CERTIFICATE_SCALAR_DIGITS,
     MAX_SUP_NORM_COMPARISONS,
     MAX_SUP_NORM_CRITICAL_ROOTS,
     MAX_SUP_NORM_DEGREE,
     MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS,
+    MAX_SUP_NORM_FACTOR_WORK,
     MAX_SUP_NORM_INPUT_COMPONENT_DIGITS,
     MAX_SUP_NORM_ISOLATION_WORK,
+    MAX_SUP_NORM_PARAMETER_COMPONENT_DIGITS,
+    MAX_SUP_NORM_PARAMETER_DECIMAL_PLACES,
+    MAX_SUP_NORM_POSTPROCESSING_WORK,
+    MAX_SUP_NORM_RESULTANT_COMPONENT_DIGITS,
+    MAX_SUP_NORM_RESULTANT_WORK,
+    MAX_SUP_NORM_TRANSFORM_COMPONENT_DIGITS,
+    MAX_SUP_NORM_TRANSFORM_WORK,
+    MAX_SUP_NORM_VALUE_ANALYSIS_WORK,
     GaussianRationalPolynomial,
     UnitCircleCriticalPoint,
     UnitCircleSupNormSquaredResult,
@@ -71,9 +83,11 @@ __all__ = [
 ]
 
 # Rational endpoints of the reported enclosures are refined until the
-# parameter width is below this target, which keeps every enclosure well
-# inside the shared 256-digit canonical-rational envelope.
+# parameter width is below this target. Reported nonsingleton value/image
+# enclosures are compacted outward after exact ordering; root parameters and
+# exact rational singletons retain their own source-derived growth bounds.
 _REFINEMENT_TARGETS = (Fraction(1, 10**40), Fraction(1, 10**70), Fraction(1, 10**100))
+_REPORTING_SCALE = 10**100
 
 
 def _resource(reason: str, message: str) -> OperationResourceAdmissionError:
@@ -89,7 +103,9 @@ def _invalid_backend_output(message: str) -> OperationBackendError:
 
 
 def _digits(value: Fraction) -> int:
-    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return max(
+        decimal_digit_width(value.numerator), decimal_digit_width(value.denominator)
+    )
 
 
 def _interval(lower: Fraction, upper: Fraction) -> RationalIsolatingInterval:
@@ -104,16 +120,78 @@ def _rational_interval(value: Fraction) -> RationalIsolatingInterval:
     return _interval(value, value)
 
 
+def _reported_interval(lower: Fraction, upper: Fraction) -> RationalIsolatingInterval:
+    """Compact a reported enclosure outward, retaining exact singletons.
+
+    Exact comparison uses the original internal intervals. Signed integer
+    floor/ceiling preserve containment, including negative circle coordinates.
+    Keeping singletons preserves the rational-parameter image convention.
+    Parameter widths are below 1. Interval evaluation overestimation is at
+    most 2**(2d) times the Cayley l1 bound, hence value upper < 10**77 for the
+    admitted input frame. 100-place rounding therefore fits 256 digits; the
+    circle images are bounded by 5. Exact singletons have separate bounds.
+    """
+    if lower == upper:
+        return _interval(lower, upper)
+    low_integer = lower.numerator * _REPORTING_SCALE // lower.denominator
+    high_integer = -((-upper.numerator * _REPORTING_SCALE) // upper.denominator)
+    return _interval(
+        Fraction(low_integer, _REPORTING_SCALE),
+        Fraction(high_integer, _REPORTING_SCALE),
+    )
+
+
+def _bounded_parameter_interval(
+    polynomial: Any, lower: Fraction, upper: Fraction
+) -> tuple[Fraction, Fraction]:
+    """Retain one isolated root within the canonical endpoint envelope.
+
+    The primitive squarefree part of the entire derivative has degree <= 16,
+    coefficient l1 (hence l2) norm < 10**647, since it divides the primitive
+    derivative. Thus separation covers
+    roots from different irreducible factors as well.
+    Cauchy bounds root magnitude by 10**648; Mignotte's separation bound
+    n**(-(n+2)/2)*||f||_2**(1-n) is greater than 10**-9716 (the nonzero
+    integer discriminant has magnitude >= 1). See Sasaki--Kako, "An Algebraic
+    Method for Separating Close-root Clusters and the Minimum Root
+    Separation", p.2, https://www.e.ics.nara-wu.ac.jp/~kako/publications/RootSeparation.pdf.
+    Continuation to width <= 10**-10000 and outward rounding on that grid
+    preserves the isolated root, since the new width is at most 3e-10000.
+    Its endpoint components then need fewer than 10650 decimal digits.
+    """
+    if max(_digits(lower), _digits(upper)) <= MAX_SUP_NORM_PARAMETER_COMPONENT_DIGITS:
+        return lower, upper
+    if lower == upper:
+        # Rational roots divide the admitted derivative's constant/leading
+        # coefficients, so an oversized singleton is a backend contract fault.
+        raise _invalid_backend_output("oversized rational critical parameter")
+    scale = 10**MAX_SUP_NORM_PARAMETER_DECIMAL_PLACES
+    refined_lower, refined_upper = polynomial.sqf_part().refine_root(
+        _sympy_rational(lower),
+        _sympy_rational(upper),
+        eps=sympy.Rational(1, scale),
+        fast=True,
+    )
+    request_checkpoint("compacting unit-circle critical parameter")
+    lower = Fraction(int(refined_lower.p), int(refined_lower.q))
+    upper = Fraction(int(refined_upper.p), int(refined_upper.q))
+    if lower == upper:
+        return lower, upper
+    return (
+        Fraction(lower.numerator * scale // lower.denominator, scale),
+        Fraction(-((-upper.numerator * scale) // upper.denominator), scale),
+    )
+
+
 def _admit_sup_norm_polynomial(
     polynomial: GaussianRationalPolynomial,
 ) -> list[tuple[Fraction, Fraction]]:
     """Admit one input and preflight every derived exact-arithmetic bound.
 
-    All limits are computed from the compressed input before any polynomial
-    expansion, root isolation, or resultant construction.  The derived
-    numerator/derivative height is bounded by ``4H + 8n + 32`` decimal
-    digits, which dominates the binomial and product expansion of an ``H``
-    digit, degree ``n`` Gaussian-rational input.
+    Limits are computed before polynomial expansion from the actual scalar
+    denominators, Cayley l1 bounds, diagonal cancellation in the derivative,
+    Sylvester determinants and Mignotte factor bounds. Transformation scratch,
+    derivative isolation, elimination and factoring have separate envelopes.
     """
 
     if not isinstance(polynomial, GaussianRationalPolynomial):
@@ -145,13 +223,6 @@ def _admit_sup_norm_polynomial(
             "input coefficient components exceed the "
             f"{MAX_SUP_NORM_INPUT_COMPONENT_DIGITS}-digit exact-growth bound",
         )
-    derived_digits = 4 * maximum_digits + 8 * degree + 32
-    if derived_digits > MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS:
-        raise _resource(
-            "derived_height_bound",
-            "transformed numerator or derivative exceeds the "
-            f"{MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS}-digit bound",
-        )
     critical_bound = 2 * degree + 1
     if critical_bound > MAX_SUP_NORM_CRITICAL_ROOTS:
         raise _resource(
@@ -164,18 +235,6 @@ def _admit_sup_norm_polynomial(
             "comparison_bound",
             "the critical-value comparison ledger exceeds its work bound",
         )
-    isolation_work = (critical_bound + 1) ** 3 * (derived_digits + 64)
-    if isolation_work > MAX_SUP_NORM_ISOLATION_WORK:
-        raise _resource(
-            "isolation_work_bound",
-            "derived exact isolation work exceeds the measured backend envelope",
-        )
-    certificate_bytes = (critical_bound + 1) * 16 * derived_digits
-    if certificate_bytes > MAX_SUP_NORM_CERTIFICATE_BYTES:
-        raise _resource(
-            "certificate_bound",
-            "the retained critical-point certificate exceeds its byte bound",
-        )
     coefficients: list[tuple[Fraction, Fraction]] = [(Fraction(0), Fraction(0))] * (
         degree + 1
     )
@@ -184,6 +243,47 @@ def _admit_sup_norm_polynomial(
             term.coefficient.real.as_fraction(),
             term.coefficient.imaginary.as_fraction(),
         )
+    bounds = sup_norm_bounds(coefficients)
+    for reason, quantity, limit in (
+        (
+            "derived_height_bound",
+            bounds.transform_digits,
+            MAX_SUP_NORM_TRANSFORM_COMPONENT_DIGITS,
+        ),
+        (
+            "derivative_height_bound",
+            bounds.derivative_digits,
+            MAX_SUP_NORM_DERIVATIVE_COMPONENT_DIGITS,
+        ),
+        (
+            "resultant_height_bound",
+            max(bounds.resultant_digits, bounds.factor_digits),
+            MAX_SUP_NORM_RESULTANT_COMPONENT_DIGITS,
+        ),
+        ("transform_work_bound", bounds.transform_work, MAX_SUP_NORM_TRANSFORM_WORK),
+        ("isolation_work_bound", bounds.isolation_work, MAX_SUP_NORM_ISOLATION_WORK),
+        ("resultant_work_bound", bounds.resultant_work, MAX_SUP_NORM_RESULTANT_WORK),
+        ("factor_work_bound", bounds.factor_work, MAX_SUP_NORM_FACTOR_WORK),
+        (
+            "value_analysis_work_bound",
+            bounds.value_analysis_work,
+            MAX_SUP_NORM_VALUE_ANALYSIS_WORK,
+        ),
+        (
+            "postprocessing_work_bound",
+            bounds.postprocessing_work,
+            MAX_SUP_NORM_POSTPROCESSING_WORK,
+        ),
+        (
+            "certificate_bound",
+            bounds.certificate_scalar_digits,
+            MAX_SUP_NORM_CERTIFICATE_SCALAR_DIGITS,
+        ),
+    ):
+        if quantity > limit:
+            raise _resource(
+                reason, "derived exact work or scalar growth exceeds its owner envelope"
+            )
     return coefficients
 
 
@@ -352,9 +452,11 @@ def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
     return lower, Fraction(root + 1, value.denominator)
 
 
-def _rational_algebraic_value(value: Fraction) -> RealAlgebraicValue:
-    """Return the degree-one carrier of a rational maximum."""
+def _rational_algebraic_value(value: Fraction) -> RealAlgebraicValue | None:
+    """Return a rational maximum when it fits the shared exact carrier."""
 
+    if _digits(value) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS:
+        return None
     return RealAlgebraicValue._from_admitted_polynomial(
         polynomial=(value.denominator, -value.numerator),
         real_root_index=0,
@@ -457,7 +559,9 @@ def _flint_resultant_and_factors_impl(
     )
     t, y = context.gens()
     level_mpoly = y * (1 + t * t) ** degree - numerator_mpoly
+    request_checkpoint("before unit-circle FLINT resultant")
     resultant_mpoly = derivative_mpoly.resultant(level_mpoly, str(symbol))
+    request_checkpoint("after unit-circle FLINT resultant")
     resultant_terms = resultant_mpoly.to_dict()
     if any(exponents[0] != 0 for exponents in resultant_terms):
         raise _invalid_backend_output(
@@ -473,6 +577,7 @@ def _flint_resultant_and_factors_impl(
     if resultant_flint.is_zero():
         raise _invalid_backend_output("critical-value resultant vanished unexpectedly")
     content, raw_factors = resultant_flint.factor()
+    request_checkpoint("after unit-circle FLINT factorization")
     reconstructed = fmpq_poly([content])
     for factor, multiplicity in raw_factors:
         reconstructed *= factor ** int(multiplicity)
@@ -514,7 +619,11 @@ def _flint_resultant_and_factors(
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
     try:
         return _flint_resultant_and_factors_impl(coprime, numerator, degree, symbol)
-    except OperationBackendError:
+    except (
+        OperationBackendError,
+        OperationExecutionTimeoutError,
+        OperationExecutionCancelledError,
+    ):
         raise
     except Exception as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
@@ -589,7 +698,10 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     """Return a certified enclosure of ``max_{|z|=1} |P(z)|^2`` and its ledger."""
 
     execution = current_request_execution()
-    started = execution.started_at if execution is not None else time.monotonic()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return unit_circle_sup_norm_squared(polynomial)
+    started = execution.started_at
     deadline = started + 120.0
     if execution is not None and execution.deadline is not None:
         deadline = min(deadline, execution.deadline)
@@ -622,7 +734,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         constant = numerator[0] if numerator else Fraction(0)
         enclosure = _rational_interval(constant)
         lower, upper = _sqrt_bounds(constant)
-        return UnitCircleSupNormSquaredResult._from_kernel(
+        result = UnitCircleSupNormSquaredResult._from_kernel(
             polynomial=polynomial,
             degree=degree,
             transformed_numerator=numerator_canonical,
@@ -636,8 +748,10 @@ def unit_circle_sup_norm_squared(  # noqa: C901
             maximizing_status="FULL_CIRCLE",
             sup_norm_squared_enclosure=enclosure,
             sup_norm_squared_exact=_rational_algebraic_value(constant),
-            sup_norm_enclosure=_interval(lower, upper),
+            sup_norm_enclosure=_reported_interval(lower, upper),
         )
+        checkpoint()
+        return result
 
     symbol = sympy.Symbol("t", real=True)
     derivative_polynomial = sympy.Poly(
@@ -692,6 +806,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     for root_index, ((root_lower, root_upper), _multiplicity) in enumerate(isolating):
         lower = Fraction(int(root_lower.p), int(root_lower.q))
         upper = Fraction(int(root_upper.p), int(root_upper.q))
+        lower, upper = _bounded_parameter_interval(derivative_polynomial, lower, upper)
         key: int | None = None
         for target in _REFINEMENT_TARGETS:
             lower, upper = _refine_isolating_interval(
@@ -721,7 +836,13 @@ def unit_circle_sup_norm_squared(  # noqa: C901
                 "value_identification",
                 "a critical value could not be identified with a rational level",
             )
-        value_low, value_high = _value_enclosure(numerator, degree, lower, upper)
+        if value_roots[key] == (Fraction(0), Fraction(0)):
+            # Identity with zero was already established above. Retain it
+            # exactly: the nonnegative interval bound clips at zero, which
+            # would exclude this value from an OPEN nonsingleton enclosure.
+            value_low = value_high = Fraction(0)
+        else:
+            value_low, value_high = _value_enclosure(numerator, degree, lower, upper)
         entries.append((root_index, (lower, upper), (value_low, value_high), key))
     checkpoint()
 
@@ -745,9 +866,9 @@ def unit_circle_sup_norm_squared(  # noqa: C901
             UnitCircleCriticalPoint(
                 root_index=root_index,
                 parameter=_interval(lower, upper),
-                value=_interval(value_low, value_high),
-                z_real=_interval(real_low, real_high),
-                z_imaginary=_interval(imaginary_low, imaginary_high),
+                value=_reported_interval(value_low, value_high),
+                z_real=_reported_interval(real_low, real_high),
+                z_imaginary=_reported_interval(imaginary_low, imaginary_high),
                 comparison_rank=rank,
                 is_maximizer=rank == 0,
             )
@@ -771,8 +892,9 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         maximizing_values = [entry[2] for entry in entries if entry[3] == maximum_key]
         squared_low = min(value[0] for value in maximizing_values)
         squared_high = max(value[1] for value in maximizing_values)
-    sup_norm_low, _ = _sqrt_bounds(squared_low)
-    _, sup_norm_high = _sqrt_bounds(squared_high)
+    squared_enclosure = _reported_interval(squared_low, squared_high)
+    sup_norm_low, _ = _sqrt_bounds(squared_enclosure.lower.as_fraction())
+    _, sup_norm_high = _sqrt_bounds(squared_enclosure.upper.as_fraction())
 
     checkpoint()
     if endpoint_is_maximizer:
@@ -784,7 +906,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
             resultant_polynomial, resultant_factors, value_roots, maximum_key
         )
 
-    return UnitCircleSupNormSquaredResult._from_kernel(
+    result = UnitCircleSupNormSquaredResult._from_kernel(
         polynomial=polynomial,
         degree=degree,
         transformed_numerator=numerator_canonical,
@@ -796,10 +918,12 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         ),
         endpoint_minus_one_is_maximizer=endpoint_is_maximizer,
         maximizing_status=status,
-        sup_norm_squared_enclosure=_interval(squared_low, squared_high),
+        sup_norm_squared_enclosure=squared_enclosure,
         sup_norm_squared_exact=exact_maximum,
-        sup_norm_enclosure=_interval(sup_norm_low, sup_norm_high),
+        sup_norm_enclosure=_reported_interval(sup_norm_low, sup_norm_high),
     )
+    checkpoint()
+    return result
 
 
 def _compare_rational_to_value_roots(

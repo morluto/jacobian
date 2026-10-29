@@ -247,7 +247,4 @@ def test_catalog_example_runs_and_returns_source_bound_result() -> None:
     ).output
     assert output["logical_qubits"] == 1
     assert output["distance"] == 1
-    assert (
-        output["representative"]["qubit_register"]
-        == output["check_space"]["qubit_register"]
-    )
+    assert output["representative"]["register"] == output["check_space"]["register"]

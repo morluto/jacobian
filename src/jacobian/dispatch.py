@@ -159,7 +159,7 @@ def _operation_result_projector(
     result: StrictModel,
     started: float,
 ) -> OperationResult:
-    output = result.model_dump(mode="json")
+    output = result.model_dump(mode="json", by_alias=True)
     return OperationResult(
         operation_id=operation_id,
         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),

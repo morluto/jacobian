@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any, cast
@@ -33,6 +32,7 @@ from jacobian.dispatch import (
     OperationDomainValidationError,
     OperationExecutionTimeoutError,
     OperationRequestValidationError,
+    _operation_result_projector,
     _OperationResolutionError,
     execute_operation,
 )
@@ -274,11 +274,7 @@ async def math_run(
                     operation_id,
                     payload,
                     catalog,
-                    projector=lambda selected_id, result, started: OperationResult(
-                        operation_id=selected_id,
-                        runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-                        output=result.model_dump(mode="json"),
-                    ),
+                    projector=_operation_result_projector,
                     cancellation_signal=cancellation,
                     progress_sink=progress_sink,
                 ),

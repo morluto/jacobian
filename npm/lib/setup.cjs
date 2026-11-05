@@ -24,9 +24,15 @@ const CLIENTS = [
     displayName: "Claude Code",
     kind: "json",
     section: "mcpServers",
+    root: claudeConfigDirectory,
     paths: [".claude.json"],
-    skillPath: ".claude/skills/jacobian-math/SKILL.md",
-    detected: (home) => [".claude", ".claude.json"].some((entry) => exists(path.join(home, entry))),
+    skillRoot: (home) => claudeConfigDirectory() ?? path.join(home, ".claude"),
+    skillPath: "skills/jacobian-math/SKILL.md",
+    detected: (home) => {
+      const configured = claudeConfigDirectory();
+      if (configured) return exists(configured);
+      return [".claude", ".claude.json"].some((entry) => exists(path.join(home, entry)));
+    },
   },
   {
     id: "opencode",
@@ -81,6 +87,12 @@ const CLIENTS = [
 ];
 
 class SetupError extends Error {}
+
+// Claude Code keeps .claude.json and its skills under CLAUDE_CONFIG_DIR when set.
+function claudeConfigDirectory() {
+  const configured = process.env.CLAUDE_CONFIG_DIR;
+  return configured ? path.resolve(configured) : null;
+}
 
 function exists(candidate) {
   try {
@@ -158,7 +170,8 @@ function detectClients(home) {
 }
 
 function choosePath(client, home) {
-  const candidates = client.paths.map((relative) => path.join(home, relative));
+  const root = (client.root && client.root(home)) || home;
+  const candidates = client.paths.map((relative) => path.join(root, relative));
   return candidates.find((candidate) => exists(candidate)) || candidates[0];
 }
 
@@ -393,7 +406,7 @@ async function buildPlan(clientIds, home, version, force) {
       client.kind === "toml"
         ? planTomlEdit(filePath, original, runtime)
         : planJsonEdit(client, filePath, original, runtime);
-    const skillPath = path.join(home, client.skillPath);
+    const skillPath = path.join(client.skillRoot ? client.skillRoot(home) : home, client.skillPath);
     let skill = skillPlans.get(skillPath);
     if (!skill) {
       const skillOriginal = await readOptional(skillPath);

@@ -19,11 +19,13 @@ async function setupEnvironment(base) {
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "uvx"), "#!/bin/sh\nexit 0\n", "utf8");
   await chmod(join(bin, "uvx"), 0o755);
-  return {
+  const env = {
     ...process.env,
     HOME: home,
     PATH: `${bin}:${process.env.PATH}`,
   };
+  delete env.JACOBIAN_UV_BIN;
+  return env;
 }
 
 function runCarrier(args, env) {
@@ -747,10 +749,38 @@ test("setup blocks before any write when uvx is unavailable", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-prerequisite-"));
   try {
     const env = { ...process.env, HOME: join(base, "home"), PATH: "" };
+    delete env.JACOBIAN_UV_BIN;
     const result = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /requires uvx on PATH/);
     await assert.rejects(readFile(join(env.HOME, ".codex", "config.toml")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup checks the JACOBIAN_UV_BIN executable that the carrier launches", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-uv-bin-"));
+  try {
+    const uv = join(base, "tools", "uvx");
+    await mkdir(dirname(uv), { recursive: true });
+    await writeFile(uv, "#!/bin/sh\nexit 0\n", "utf8");
+    await chmod(uv, 0o755);
+    const env = { ...process.env, HOME: join(base, "home"), PATH: "", JACOBIAN_UV_BIN: uv };
+    const accepted = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(JSON.parse(accepted.stdout).status, "planned");
+
+    const broken = {
+      ...(await setupEnvironment(base)),
+      JACOBIAN_UV_BIN: join(base, "tools", "missing-uvx"),
+    };
+    const rejected = runCarrier(["setup", "--codex", "--yes", "--json"], broken);
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /JACOBIAN_UV_BIN does not run/);
+    await assert.rejects(readFile(join(broken.HOME, ".codex", "config.toml")), {
       code: "ENOENT",
     });
   } finally {

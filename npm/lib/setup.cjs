@@ -371,10 +371,17 @@ function planTomlEdit(filePath, original, runtime) {
 }
 
 function assertUvAvailable() {
-  const result = spawnSync("uvx", ["--version"], { stdio: "ignore" });
+  // Probe the executable the carrier launches, including its documented override.
+  const override = process.env.JACOBIAN_UV_BIN;
+  const result = spawnSync(override || "uvx", ["--version"], { stdio: "ignore" });
   if (result.error || result.status !== 0) {
+    if (override) {
+      throw new SetupError(
+        `JACOBIAN_UV_BIN does not run: ${override}. Fix it or unset it, then rerun setup; no configuration was changed.`,
+      );
+    }
     throw new SetupError(
-      "Jacobian requires uvx on PATH before MCP clients can start. Install uv, then rerun setup; no configuration was changed.",
+      "Jacobian requires uvx on PATH (or JACOBIAN_UV_BIN) before MCP clients can start. Install uv, then rerun setup; no configuration was changed.",
     );
   }
 }

@@ -275,10 +275,14 @@ function tomlTableHeader(keys) {
   return `\\[[ \\t]*${components.join("[ \\t]*\\.[ \\t]*")}[ \\t]*\\][ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n|$)`;
 }
 
+// A table body ends before any blank or comment-only lines that lead into the
+// next header, so replacing the body leaves those lines with that header.
+const TOML_TABLE_BODY_END = "(?=(?:\\r?\\n[ \\t]*(?:#[^\\r\\n]*)?)*(?:\\r?\\n[ \\t]*\\[|$))";
+
 function managedTomlBlock(source) {
   const escapedMarker = TOML_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
-    `(^|\\r?\\n)${escapedMarker}\\r?\\n${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?(?=\\r?\\n[ \\t]*\\[|$)`,
+    `(^|\\r?\\n)${escapedMarker}\\r?\\n${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?${TOML_TABLE_BODY_END}`,
   );
 }
 
@@ -337,7 +341,7 @@ function planTomlEdit(filePath, original, runtime) {
   if (current !== undefined) {
     const managedMatch = source.match(expression);
     const table = new RegExp(
-      `(^|\\r?\\n)[ \\t]*${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?(?=\\r?\\n[ \\t]*\\[|$)`,
+      `(^|\\r?\\n)[ \\t]*${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?${TOML_TABLE_BODY_END}`,
     );
     const tableMatch = source.match(table);
     const directEntry = directTomlEntry(source);

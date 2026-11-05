@@ -677,6 +677,36 @@ test("setup migrates a Codex inline registration and preserves neighboring table
   }
 });
 
+test("upgrade keeps comments that introduce the next Codex table", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-codex-comments-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    const neighbor = `\n# Work documentation server; keep before its table.\n# command = "docs-v1"\n[mcp_servers.docs]\ncommand = "docs"\n`;
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, `[mcp_servers.jacobian]\ncommand = "uv"\nargs = []\n${neighbor}`, "utf8");
+
+    const unmanaged = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+    assert.equal(unmanaged.status, 0, unmanaged.stderr);
+    const first = await readFile(configPath, "utf8");
+    assert.ok(first.endsWith(`startup_timeout_sec = 120\n${neighbor}`), first);
+
+    const managed = `# Managed by Jacobian setup.\n[mcp_servers.jacobian]\ncommand = "npx"\nargs = ["--yes", "jacobian@0.0.1", "mcp", "--managed-by-setup"]\nstartup_timeout_sec = 120\n${neighbor}`;
+    await writeFile(configPath, managed, "utf8");
+    const refresh = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+    assert.equal(refresh.status, 0, refresh.stderr);
+    const second = await readFile(configPath, "utf8");
+    assert.ok(second.endsWith(`startup_timeout_sec = 120\n${neighbor}`), second);
+    assert.equal(TOML.parse(second).mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+
+    const repeat = runCarrier(["upgrade", "--codex", "--dry-run", "--json"], env);
+    assert.equal(repeat.status, 0, repeat.stderr);
+    assert.equal(JSON.parse(repeat.stdout).clients[0].action, "already current");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("upgrade runs the pinned setup journey", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-"));
   try {

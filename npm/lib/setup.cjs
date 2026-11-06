@@ -275,15 +275,27 @@ function tomlTableHeader(keys) {
   return `\\[[ \\t]*${components.join("[ \\t]*\\.[ \\t]*")}[ \\t]*\\][ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n|$)`;
 }
 
-// A table body ends before any blank or comment-only lines that lead into the
-// next header, so replacing the body leaves those lines with that header.
-const TOML_TABLE_BODY_END = "(?=(?:\\r?\\n[ \\t]*(?:#[^\\r\\n]*)?)*(?:\\r?\\n[ \\t]*\\[|$))";
-
-function managedTomlBlock(source) {
+function tomlTableSpan(source) {
   const escapedMarker = TOML_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(
-    `(^|\\r?\\n)${escapedMarker}\\r?\\n${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?${TOML_TABLE_BODY_END}`,
+  const managed = new RegExp(
+    `(^|\\r?\\n)${escapedMarker}\\r?\\n${tomlTableHeader(["mcp_servers", SERVER_NAME])}`,
   );
+  const table = new RegExp(`(^|\\r?\\n)[ \\t]*${tomlTableHeader(["mcp_servers", SERVER_NAME])}`);
+  const header = source.match(managed) || source.match(table);
+  if (!header) return null;
+  const bodyStart = header.index + header[0].length;
+  const nextHeader = /^[ \t]*\[/gm;
+  nextHeader.lastIndex = bodyStart;
+  const next = nextHeader.exec(source);
+  let end = next ? next.index : source.length;
+  // Scan the bounded body once, then leave its trailing blank/comment lines
+  // with the next table (or EOF). This also handles a comment at bodyStart.
+  const lines = source.slice(bodyStart, end).split(/(?<=\n)/);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (!/^[ \t]*(?:#[^\r\n]*)?(?:\r?\n)?$/.test(lines[index])) break;
+    end -= lines[index].length;
+  }
+  return { start: header.index, end, prefix: header[1] };
 }
 
 function directTomlEntry(source) {
@@ -337,15 +349,8 @@ function planTomlEdit(filePath, original, runtime) {
   }
   const current = root.mcp_servers && root.mcp_servers[SERVER_NAME];
   const block = tomlBlock(runtime);
-  const expression = managedTomlBlock(source);
   if (current !== undefined) {
-    const managedMatch = source.match(expression);
-    const table = new RegExp(
-      `(^|\\r?\\n)[ \\t]*${tomlTableHeader(["mcp_servers", SERVER_NAME])}[\\s\\S]*?${TOML_TABLE_BODY_END}`,
-    );
-    const tableMatch = source.match(table);
     const directEntry = directTomlEntry(source);
-    const replacement = managedMatch || tableMatch;
     if (directEntry) {
       const withoutEntry = `${source.slice(0, directEntry.start)}${source.slice(directEntry.end)}`;
       const insertion = directEntry.bodyEnd - (directEntry.end - directEntry.start);
@@ -353,14 +358,14 @@ function planTomlEdit(filePath, original, runtime) {
       validateTomlEdit(filePath, root, updated, runtime);
       return { action: "update", updated };
     }
+    const replacement = tomlTableSpan(source);
     if (!replacement) {
       throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}`);
     }
-    const trailingNewlines = replacement[0].match(/(?:\r?\n)*$/)[0];
-    const updated = source.replace(
-      managedMatch ? expression : table,
-      `${replacement[1]}${block.trimEnd()}${trailingNewlines}`,
-    );
+    const replacementBlock = replacement.end === source.length
+      ? block.trimEnd() + (source.match(/\r?\n$/)?.[0] || "")
+      : block;
+    const updated = `${source.slice(0, replacement.start)}${replacement.prefix}${replacementBlock}${source.slice(replacement.end)}`;
     validateTomlEdit(filePath, root, updated, runtime);
     if (updated === source) return { action: "already current", updated: null };
     return { action: "update", updated };

@@ -24,6 +24,15 @@ evaluates canonicalization; declare any such ordering or normal-form rule in
 the public contract. Do not use `answer.txt` as an answer channel. Keep it only
 as non-authoritative source material, if it is needed at all.
 
+The template loader parses numeric tokens exactly and normalizes integral
+decimal/exponent spellings to integers: `2`, `2.0`, and `2e0` represent the same
+value. Nonintegral tokens remain exact rationals and cannot round into an integer
+field. Numeric tokens have a 4,300-character ceiling, expanded integers a 4,300-digit
+ceiling, and decimal exponents lie in [-4300,4300];
+publish this encoding policy and tighter task-owned magnitude and work limits
+in each task's public contract, including the loader's 16 MiB file limit. Legacy task-local support copies require an
+explicit migration; editing this template does not update them.
+
 The verifier must replay the claim from frozen `input.json`. Do not score a
 hidden `tests/expected.json` field, a lowest-terms rendering, a formula
 string, keyword-bearing prose, or a leaked derived conclusion. Do not default

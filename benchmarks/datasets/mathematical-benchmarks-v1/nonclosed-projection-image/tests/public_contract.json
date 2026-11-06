@@ -1,14 +1,17 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result. The finite replay envelope contains exactly 12 prefixes and 100 through 128 limit coordinates, matching tail_bound.verification_terms. Rational numerators have absolute value at most 2^1024-1 and denominators lie in [1, 2^1024-1]. Tail and growth exponents lie in [1,100]. These limits bound at most 128 rational squares and suffix sums; a suffix numerator/denominator has at most 2*1024*128+8 bits before reduction. Integer fields use exact JSON-number values: 2, 2.0, and 2e0 are equivalent. Numeric tokens are limited to 4300 characters, expanded integers to 4300 digits, and decimal exponents to [-4300,4300] before conversion, in addition to the tighter magnitude bounds above. The complete UTF-8 submission file, including whitespace, is limited to 16777216 bytes. Exact-number parsing also admits at most 67108864 cumulative numeric-storage charge bytes per JSON document, charging 256 + 8*(2*token characters + absolute decimal exponent) before each numeric conversion.",
     "schema_definitions": {
         "rational": {
             "additionalProperties": false,
             "properties": {
                 "denominator": {
+                    "maximum": 179769313486231590772930519078902473361797697894230657273430081157732675805500963132708477322407536021120113879871393357658789768814416622492847430639474124377767893424865485276302219601246094119453082952085005768838150682342462881473913110540827237163350510684586298239947245938479716304835356329624224137215,
                     "minimum": 1,
                     "type": "integer"
                 },
                 "numerator": {
+                    "maximum": 179769313486231590772930519078902473361797697894230657273430081157732675805500963132708477322407536021120113879871393357658789768814416622492847430639474124377767893424865485276302219601246094119453082952085005768838150682342462881473913110540827237163350510684586298239947245938479716304835356329624224137215,
+                    "minimum": -179769313486231590772930519078902473361797697894230657273430081157732675805500963132708477322407536021120113879871393357658789768814416622492847430639474124377767893424865485276302219601246094119453082952085005768838150682342462881473913110540827237163350510684586298239947245938479716304835356329624224137215,
                     "type": "integer"
                 }
             },
@@ -28,11 +31,18 @@
                 "items": {
                     "$ref": "#/$defs/rational"
                 },
+                "maxItems": 128,
                 "minItems": 100,
                 "type": "array"
             },
             "operator_bound": {
                 "$ref": "#/$defs/rational"
+            },
+            "operator_kind": {
+                "enum": [
+                    "DIAGONAL",
+                    "WEIGHTED_SHIFT"
+                ]
             },
             "prefixes": {
                 "items": {
@@ -42,6 +52,7 @@
                             "$ref": "#/$defs/rational"
                         },
                         "n": {
+                            "maximum": 12,
                             "minimum": 1,
                             "type": "integer"
                         },
@@ -64,6 +75,8 @@
                     ],
                     "type": "object"
                 },
+                "maxItems": 12,
+                "minItems": 12,
                 "type": "array"
             },
             "preimage_growth": {
@@ -73,6 +86,7 @@
                         "$ref": "#/$defs/rational"
                     },
                     "bound_exponent": {
+                        "maximum": 100,
                         "minimum": 1,
                         "type": "integer"
                     }
@@ -90,10 +104,12 @@
                         "$ref": "#/$defs/rational"
                     },
                     "bound_exponent": {
+                        "maximum": 100,
                         "minimum": 1,
                         "type": "integer"
                     },
                     "verification_terms": {
+                        "maximum": 128,
                         "minimum": 100,
                         "type": "integer"
                     }
@@ -104,12 +120,6 @@
                     "verification_terms"
                 ],
                 "type": "object"
-            },
-            "operator_kind": {
-                "enum": [
-                    "DIAGONAL",
-                    "WEIGHTED_SHIFT"
-                ]
             }
         },
         "required": [

@@ -122,11 +122,17 @@ def commands_for_plan(
     static_paths = _static_paths(paths, repository=repository)
     if static_paths:
         rendered_paths = " ".join(static_paths)
-        commands.extend(
-            (
-                ("make", "lint-scoped", f"PATHS={rendered_paths}"),
-                ("make", "typecheck-scoped", f"PATHS={rendered_paths}"),
-            )
+        commands.append(("make", "lint-scoped", f"PATHS={rendered_paths}"))
+    # Match check_benchmark_static.py: independent task-local modules and host
+    # fixtures receive Ruff and Harbor evidence, not one combined mypy package.
+    typecheck_paths = tuple(
+        path
+        for path in static_paths
+        if not path.startswith("benchmarks/") or path.startswith("benchmarks/tooling/")
+    )
+    if typecheck_paths:
+        commands.append(
+            ("make", "typecheck-scoped", f"PATHS={' '.join(typecheck_paths)}")
         )
     if plan.run_math:
         command = ["make", "test-math"]

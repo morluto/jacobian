@@ -19,7 +19,7 @@ nonnegativity, and proves residue-class coverage.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result.
+The verifier replays the task-specific mathematical predicate from the submitted result. The finite certificate envelope permits at most 18 affine families (twice the public modulus), parameter_min in [0,500], and affine integer components of absolute value at most 2^256-1. Residue lists contain at most nine distinct elements of [0,8]. This bounds symbolic cubic expansion to degree three and the existing finite coverage replay to at most 18*501 parameter instances. Integer fields use exact JSON-number values: 2, 2.0, and 2e0 are equivalent. Numeric tokens are limited to 4300 characters, expanded integers to 4300 digits, and decimal exponents to [-4300,4300] before conversion, in addition to the tighter magnitude bounds above. The complete UTF-8 submission file, including whitespace, is limited to 16777216 bytes. All residue arrays represent sets; order does not affect correctness. Exact-number parsing also admits at most 67108864 cumulative numeric-storage charge bytes per JSON document, charging 256 + 8*(2*token characters + absolute decimal exponent) before each numeric conversion.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

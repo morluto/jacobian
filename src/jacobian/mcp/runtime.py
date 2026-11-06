@@ -1,20 +1,24 @@
-"""Request-scoped state for local and remote MCP hosts."""
+"""Serving state for local and remote MCP hosts."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver import Context
 
 from jacobian.catalog.catalog import Catalog
+
+if TYPE_CHECKING:
+    from jacobian.mcp.delivery import ResultDelivery
 
 
 @dataclass(frozen=True, slots=True)
 class AppState:
     operation_catalog: Catalog
     authorize: Callable[[], None] | None = None
+    result_delivery: ResultDelivery | None = None
 
 
 class AuthenticationError(PermissionError):

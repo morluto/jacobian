@@ -33,6 +33,64 @@ the first result, pass that value unchanged; otherwise construct the requested
 payload from the relevant fields. Incomplete or unknown outcomes belong to the
 operation's own result model.
 
+## Optional local result delivery budget
+
+For a local host with a known observation budget, start
+`jacobian-mcp --inline-result-bytes 8192` (or
+`python -m jacobian.mcp --inline-result-bytes 8192`). The accepted range is
+4,096–1,048,576 bytes. Without this option, the ordinary SDK delivery and output
+schemas remain unchanged.
+
+This opt-in policy measures the UTF-8 JSON size of `CallToolResult`, excluding
+JSON-RPC framing. It runs in SDK response middleware after tool conversion and
+error classification. Encoding and sizing run in a worker; cancellation is
+checked again before the host publishes a reference. JSON-RPC protocol errors
+remain SDK-owned. Small responses
+retain their typed structured result and a compact text fallback, without
+allocating a temporary resource. A larger result
+or inspection returns `kind: "retained_result"`, an explicitly incomplete
+preview, byte count, expiry time, and a standard MCP resource link. The output
+schema advertises both delivery forms. A reference is serving metadata; retrieve
+the complete JSON before using an operation's mathematical output as input.
+Oversized SDK argument errors and operation errors retain `isError: true` and
+return `kind: "retained_error"`. Their resource contains the complete SDK
+`CallToolResult`, preserving the original diagnostic and its classification.
+The reference's `representation` distinguishes a `structured_result` from a
+full `tool_result`; an error reference never becomes a mathematical value.
+
+An SDK host can retain the bytes without putting the whole table in its model
+observation:
+
+```python
+from pathlib import Path
+
+result = await client.call_tool("math.run", request)
+if (result.structured_content or {}).get("kind") in {"retained_result", "retained_error"}:
+    resource = await client.read_resource(result.structured_content["uri"])
+    Path("complete-result.json").write_text(resource.contents[0].text, encoding="utf-8")
+```
+
+For embedded local SDK use, pass
+`result_delivery=ResultDelivery(8192)` to `create_server`, importing the policy
+from `jacobian.mcp.delivery`. One host retains at most 16 results and 64 MiB.
+References expire after at most 300 seconds. Expired entries are removed on
+access and by a background task scheduled at intervals of at most 30 seconds;
+shutdown of the final SDK session clears all retained bytes. Closing one of
+several live sessions does not discard their shared references. Existing live
+references are
+never evicted early to make room for another result. Capacity failure produces
+`RESULT_DELIVERY_FAILED` at `stage: result_delivery`; it establishes no
+mathematical conclusion. Unknown or expired references fail retrieval.
+
+Cancellation before publication allocates no result. Once a reference is
+published, a failed or cancelled transport may leave its bytes retained until
+expiry or shutdown; counts and bytes stay bounded. Native operation admission
+and exact values are independent of this delivery policy. The bulk
+`operation://catalog` resource remains an explicit full export. This pilot is
+local stdio/SDK only; the authenticated remote constructor does not enable
+temporary result retention, and the policy refuses HTTP requests even if its
+SDK server is mounted on an HTTP app.
+
 For the ordinary search-to-inspection-to-execution path, see
 [Discover and invoke operations](../how-to/invoke-domain-operations.md).
 

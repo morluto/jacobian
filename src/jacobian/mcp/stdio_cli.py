@@ -17,15 +17,30 @@ def _parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {__version__}",
     )
+    parser.add_argument(
+        "--inline-result-bytes",
+        type=int,
+        metavar="BYTES",
+        help="Opt into bounded local delivery (4096-1048576 bytes); larger complete results use temporary MCP resources.",
+    )
     return parser
 
 
 def main() -> None:
-    _parser().parse_args()
+    parser = _parser()
+    arguments = parser.parse_args()
 
+    from jacobian.mcp.delivery import ResultDelivery
     from jacobian.mcp.server import create_server
 
-    create_server().run("stdio")
+    delivery = None
+    if arguments.inline_result_bytes is not None:
+        try:
+            delivery = ResultDelivery(arguments.inline_result_bytes)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+    create_server(result_delivery=delivery).run("stdio")
 
 
 if __name__ == "__main__":

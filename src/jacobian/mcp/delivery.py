@@ -201,18 +201,28 @@ class ResultDelivery:
     ) -> CallToolResult:
         await anyio.lowlevel.checkpoint()
         try:
-            return self._project(result, protocol_version, serialized_result)
+            projected, candidate = await anyio.to_thread.run_sync(
+                self._prepare,
+                result,
+                protocol_version,
+                serialized_result,
+                abandon_on_cancel=True,
+            )
+            await anyio.lowlevel.checkpoint()
+            if candidate is not None:
+                self._publish(*candidate)
+            return projected
         except ToolError as exc:
             return CallToolResult(
                 content=[TextContent(type="text", text=str(exc))], is_error=True
             )
 
-    def _project(
+    def _prepare(
         self,
         result: CallToolResult,
         protocol_version: str | None,
         serialized_result: dict[str, Any] | None,
-    ) -> CallToolResult:
+    ) -> tuple[CallToolResult, tuple[str, _RetainedResult] | None]:
         structured = result.structured_content
         envelope = result.is_error or structured is None
         value = (
@@ -224,8 +234,10 @@ class ResultDelivery:
             if envelope
             else structured
         )
-        assert isinstance(value, dict)
+        if not isinstance(value, dict):
+            raise _delivery_error("the tool response has no JSON object to retain")
         text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        byte_count = len(text.encode("utf-8"))
         inline = (
             result
             if envelope
@@ -233,9 +245,11 @@ class ResultDelivery:
                 update={"content": [TextContent(type="text", text=text)]}
             )
         )
-        if _wire_size(inline, protocol_version) <= self.inline_result_bytes:
-            return inline
-        byte_count = len(text.encode("utf-8"))
+        if (
+            byte_count <= self.inline_result_bytes
+            and _wire_size(inline, protocol_version) <= self.inline_result_bytes
+        ):
+            return inline, None
         if byte_count > self.max_retained_bytes:
             raise _delivery_error(
                 "the complete result exceeds temporary retained-result capacity"
@@ -245,6 +259,7 @@ class ResultDelivery:
         reference_type = (
             RetainedErrorReference if result.is_error else RetainedResultReference
         )
+        deadline = time.monotonic() + self.lifetime_seconds
         reference = reference_type(
             uri=uri,
             byte_count=byte_count,
@@ -279,20 +294,24 @@ class ResultDelivery:
             raise _delivery_error(
                 "the configured budget cannot carry a result reference"
             )
+        return projected, (token, _RetainedResult(text, byte_count, deadline))
+
+    def _publish(self, token: str, retained: _RetainedResult) -> None:
         with self._lock:
             self._expire_locked()
+            if retained.deadline <= time.monotonic():
+                raise _delivery_error(
+                    "the temporary reference expired before publication"
+                )
             if token in self._results:
                 raise _delivery_error("could not allocate a unique temporary reference")
             if (
                 len(self._results) >= self.max_results
-                or self._retained_bytes + byte_count > self.max_retained_bytes
+                or self._retained_bytes + retained.byte_count > self.max_retained_bytes
             ):
                 raise _delivery_error("temporary retained-result capacity is exhausted")
-            self._results[token] = _RetainedResult(
-                text, byte_count, time.monotonic() + self.lifetime_seconds
-            )
-            self._retained_bytes += byte_count
-        return projected
+            self._results[token] = retained
+            self._retained_bytes += retained.byte_count
 
 
 def _wire(result: CallToolResult, protocol_version: str | None) -> dict[str, Any]:
@@ -325,19 +344,27 @@ def _delivery_error(message: str) -> ToolError:
 
 
 def _preview(value: dict[str, Any]) -> str:
-    if "output" in value:
+    if isinstance(value.get("output"), dict) and isinstance(
+        value.get("operation_id"), str
+    ):
         output = value["output"]
         fields = ", ".join(
             f"{key}: {len(item)} entries" if isinstance(item, list) else key
             for key, item in tuple(output.items())[:8]
         )
         summary = f"Exact result for {value['operation_id']}. {fields}. Retrieve the complete JSON before composition."
-    elif "operation" in value:
+    elif isinstance(value.get("operation"), dict):
         operation = value["operation"]
-        fields = ", ".join(operation.get("input_schema", {}).get("properties", {}))
+        schema = operation.get("input_schema")
+        properties = schema.get("properties") if isinstance(schema, dict) else None
+        fields = (
+            ", ".join(str(key) for key in properties)
+            if isinstance(properties, dict)
+            else ""
+        )
         summary = f"Full contract: {operation.get('title', '')}. Input fields: {fields[:160]}. {operation.get('description', '')}"
     else:
-        summary = "Discovery response retained as complete JSON. Retrieve it before selecting an operation."
+        summary = "Tool response retained as complete JSON. Retrieve it before using the result."
     # This is explicitly an incomplete description, never a truncated math value.
     return summary.encode("ascii", "backslashreplace")[:512].decode("ascii")
 

@@ -43,7 +43,9 @@ schemas remain unchanged.
 
 This opt-in policy measures the UTF-8 JSON size of `CallToolResult`, excluding
 JSON-RPC framing. It runs in SDK response middleware after tool conversion and
-error classification. JSON-RPC protocol errors remain SDK-owned. Small responses
+error classification. Encoding and sizing run in a worker; cancellation is
+checked again before the host publishes a reference. JSON-RPC protocol errors
+remain SDK-owned. Small responses
 retain their typed structured result and a compact text fallback, without
 allocating a temporary resource. A larger result
 or inspection returns `kind: "retained_result"`, an explicitly incomplete
@@ -74,7 +76,8 @@ from `jacobian.mcp.delivery`. One host retains at most 16 results and 64 MiB.
 References expire after at most 300 seconds. Expired entries are removed on
 access and by a background task scheduled at intervals of at most 30 seconds;
 shutdown of the final SDK session clears all retained bytes. Closing one of
-several live sessions does not discard their shared references. Existing live references are
+several live sessions does not discard their shared references. Existing live
+references are
 never evicted early to make room for another result. Capacity failure produces
 `RESULT_DELIVERY_FAILED` at `stage: result_delivery`; it establishes no
 mathematical conclusion. Unknown or expired references fail retrieval.

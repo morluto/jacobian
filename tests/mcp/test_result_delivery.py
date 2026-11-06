@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Literal
 
@@ -111,6 +112,84 @@ def test_large_sdk_result_is_retained_completely_with_bounded_observation(
             await _assert_gcd(client)
             assert delivery.retained_count == 1
         assert delivery.retained_count == delivery.retained_bytes == 0
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"output": "x" * 20_000},
+        {"output": {"large": "x" * 20_000}},
+        {"operation": "x" * 20_000},
+        {"operation": {"input_schema": [], "description": "x" * 20_000}},
+    ],
+)
+def test_added_sdk_tools_retain_valid_noncore_result_shapes(
+    payload: dict[str, Any],
+) -> None:
+    async def scenario() -> None:
+        server = create_server(result_delivery=ResultDelivery(4096))
+
+        async def added_tool() -> dict[str, Any]:
+            return payload
+
+        server.add_tool(added_tool, name="additional-json", structured_output=True)
+        async with Client(server, raise_exceptions=True) as client:
+            result = await client.call_tool("additional-json", {})
+            assert not result.is_error
+            assert _size(result) <= 4096
+            resource = await client.read_resource(result.structured_content["uri"])
+            assert json.loads(_resource_text(resource)) == payload
+
+    asyncio.run(scenario())
+
+
+def test_encoding_yields_to_other_calls_and_cancelled_preparation_never_publishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        delivery = ResultDelivery(4096)
+        prepared = threading.Event()
+        release = threading.Event()
+        exited = threading.Event()
+        prepare = delivery._prepare
+
+        def gated(
+            result: CallToolResult,
+            version: str | None,
+            serialized: dict[str, Any] | None,
+        ) -> tuple[CallToolResult, tuple[str, Any] | None]:
+            candidate = prepare(result, version, serialized)
+            if (result.structured_content or {}).get("operation_id") == PROFILE:
+                prepared.set()
+                try:
+                    if not release.wait(10):
+                        raise RuntimeError("test failed to release prepared result")
+                finally:
+                    exited.set()
+            return candidate
+
+        # Pause only after real native computation and real JSON preparation.
+        # The assertions prove event-loop progress and cancellation-before-publication.
+        monkeypatch.setattr(delivery, "_prepare", gated)
+        async with Client(create_server(result_delivery=delivery)) as client:
+            pending = asyncio.create_task(
+                client.call_tool(
+                    "math.run", {"operation_id": PROFILE, "payload": PAYLOAD}
+                )
+            )
+            try:
+                assert await asyncio.to_thread(prepared.wait, 10)
+                await _assert_gcd(client)
+                pending.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await pending
+            finally:
+                release.set()
+                await asyncio.to_thread(exited.wait, 10)
+            assert delivery.retained_count == delivery.retained_bytes == 0
+            await _assert_gcd(client)
 
     asyncio.run(scenario())
 

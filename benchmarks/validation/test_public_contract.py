@@ -245,6 +245,12 @@ class TestModelValidation:
         submission["witness"] *= 2
         assert not validator.is_valid(submission)
 
+    def test_witness_minimum_cannot_exceed_distinct_allowed_files(self) -> None:
+        data = _base_contract_dict()
+        data["witness"]["min_items"] = data["witness"]["max_items"] = 2
+        with pytest.raises(ValueError, match="exceeds the distinct allowed"):
+            PublicContract.model_validate(data)
+
     def test_artifact_filename_rejects_traversal(self) -> None:
         data = _base_contract_dict() | {
             "required_witness_filenames": ["../evidence/answer.txt"],

@@ -21,6 +21,7 @@ MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
 # Match Python's default decimal-integer parser ceiling before exponent expansion.
 MAX_JSON_NUMBER_DIGITS = 4_300
+MAX_JSON_NUMBER_STORAGE_BYTES = 64 * 1024 * 1024
 
 
 def is_regular_bounded_file(path: Path, *, max_bytes: int | None) -> bool:
@@ -94,6 +95,47 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise ValueError(f"duplicate JSON object key: {key}")
         seen.add(key)
     return dict(pairs)
+
+
+def _exact_json_loads(text: str) -> Any:
+    """Admit cumulative numeric storage before allocating expanded scalars.
+
+    CPython integers use fewer than eight bytes per decimal digit; a Fraction's
+    numerator and denominator together need at most twice the token length plus the
+    absolute decimal exponent in digits. The fixed charge covers scalar/header
+    overhead and references. Charges are conservative and never refunded, so
+    even duplicate keys and ultimately invalid arrays cannot evade this limit.
+    """
+
+    remaining = MAX_JSON_NUMBER_STORAGE_BYTES
+
+    def admit(token: str) -> None:
+        nonlocal remaining
+        if len(token) > MAX_JSON_NUMBER_DIGITS:
+            raise ValueError("JSON numeric token exceeds the decimal digit limit")
+        exponent = token.lower().partition("e")[2].lstrip("+-").lstrip("0")
+        if len(exponent) > 4 or (exponent and int(exponent) > 4300):
+            raise ValueError("JSON decimal exponent exceeds [-4300, 4300]")
+        charge = 256 + 8 * (2 * len(token) + int(exponent or "0"))
+        if charge > remaining:
+            raise ValueError("JSON cumulative numeric storage budget exceeded")
+        remaining -= charge
+
+    def integer(token: str) -> int:
+        admit(token)
+        return _exact_json_integer(token)
+
+    def number(token: str) -> int | Fraction:
+        admit(token)
+        return _exact_json_number(token)
+
+    return json.loads(
+        text,
+        object_pairs_hook=_reject_duplicate_keys,
+        parse_constant=_reject_nonfinite_json,
+        parse_int=integer,
+        parse_float=number,
+    )
 
 
 _JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
@@ -186,13 +228,7 @@ def _load_public_contract(
     if not is_regular_bounded_file(path, max_bytes=MAX_PUBLIC_CONTRACT_BYTES):
         return None
     try:
-        contract = json.loads(
-            path.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite_json,
-            parse_int=_exact_json_integer,
-            parse_float=_exact_json_number,
-        )
+        contract = _exact_json_loads(path.read_text())
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
     if not isinstance(contract, dict) or contract.get("schema_version") != "1":
@@ -229,13 +265,7 @@ def load_submission(
     if contract is None:
         return None
     try:
-        value = json.loads(
-            path.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite_json,
-            parse_int=_exact_json_integer,
-            parse_float=_exact_json_number,
-        )
+        value = _exact_json_loads(path.read_text())
     except (OSError, ValueError, RecursionError, MemoryError, TypeError):
         return None
     return (

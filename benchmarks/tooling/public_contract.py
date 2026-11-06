@@ -230,6 +230,10 @@ class PublicContract(BaseModel):
             )
         if len(artifacts) > self.witness.min_items:
             raise ValueError("witness.min_items cannot omit required witness filenames")
+        if self.witness.min_items > len(artifacts):
+            raise ValueError(
+                "witness.min_items exceeds the distinct allowed witness paths"
+            )
         return self
 
     # submission_schema is now derived, not stored

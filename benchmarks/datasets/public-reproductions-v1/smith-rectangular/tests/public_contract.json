@@ -1,5 +1,5 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result. Integer fields denote mathematical values: 2, 2.0, and 2e0 are equivalent and parsed exactly. Numeric tokens are limited to 4300 characters, expanded integers to 4300 digits, and decimal exponents to [-4300,4300] before conversion; booleans, strings, and nonintegral numbers are invalid integers. The complete UTF-8 submission file, including whitespace, is limited to 16777216 bytes.",
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result. Integer fields denote mathematical values: 2, 2.0, and 2e0 are equivalent and parsed exactly. Numeric tokens are limited to 4300 characters, expanded integers to 4300 digits, and decimal exponents to [-4300,4300] before conversion; booleans, strings, and nonintegral numbers are invalid integers. The complete UTF-8 submission file, including whitespace, is limited to 16777216 bytes. Exact-number parsing also admits at most 67108864 cumulative numeric-storage charge bytes per JSON document, charging 256 + 8*(2*token characters + absolute decimal exponent) before each numeric conversion.",
     "schema_definitions": {},
     "schema_version": "1",
     "submission_path": "/app/submission.json",

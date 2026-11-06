@@ -112,8 +112,10 @@ def _residue_lists_match(
     return (
         _strict_int_list(value["image_residues_mod_9"])
         and _strict_int_list(value["excluded_residues_mod_9"])
-        and value["image_residues_mod_9"] == image
-        and value["excluded_residues_mod_9"] == excluded
+        and len(value["image_residues_mod_9"]) == len(image)
+        and set(value["image_residues_mod_9"]) == set(image)
+        and len(value["excluded_residues_mod_9"]) == len(excluded)
+        and set(value["excluded_residues_mod_9"]) == set(excluded)
     )
 
 

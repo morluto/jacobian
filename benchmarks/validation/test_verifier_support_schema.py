@@ -130,7 +130,9 @@ def test_load_public_contract_rejects_invalid_schema(tmp_path: Path) -> None:
     assert _VS._load_public_contract(path) is None
 
 
-@pytest.mark.parametrize("number", ["NaN", "Infinity", "1e999"])
+@pytest.mark.parametrize(
+    "number", ["NaN", "Infinity", "1e9999999", "0e9999999999999999999"]
+)
 def test_load_submission_rejects_nonfinite_json(
     tmp_path: Path,
     contract_path: Path,
@@ -143,6 +145,68 @@ def test_load_submission_rejects_nonfinite_json(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
     assert _VS.load_submission(submission, require_input_binding=False) is None
+
+
+@pytest.mark.parametrize(
+    ("number", "expected"),
+    [
+        ("2.0", 2),
+        ("2e0", 2),
+        ("9007199254740993.0", 9007199254740993),
+        ("1e999", 10**999),
+    ],
+)
+def test_submission_normalizes_exact_integral_tokens(
+    tmp_path: Path,
+    contract_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    number: str,
+    expected: int,
+) -> None:
+    path = tmp_path / "submission.json"
+    path.write_text(f'{{"result": {{"count": {number}, "labels": []}}}}')
+    monkeypatch.setattr(
+        _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
+    )
+    loaded = _VS.load_submission(path, require_input_binding=False)
+    assert loaded["result"]["count"] == expected
+    assert type(loaded["result"]["count"]) is int
+
+
+@pytest.mark.parametrize(
+    "number", ["2.0000000000000001", "1e-9999999", "true", '"2"', "1" + "0" * 4300]
+)
+def test_integer_submission_does_not_round_or_expand_invalid_tokens(
+    tmp_path: Path,
+    contract_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    number: str,
+) -> None:
+    path = tmp_path / "submission.json"
+    path.write_text(f'{{"result": {{"count": {number}, "labels": []}}}}')
+    monkeypatch.setattr(
+        _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
+    )
+    assert _VS.load_submission(path, require_input_binding=False) is None
+
+
+@pytest.mark.parametrize(
+    ("number", "accepted"),
+    [("0.1", True), ("0.3", True), ("0.10000000000000001", False)],
+)
+def test_exact_numbers_and_decimal_schema_constraints_share_one_representation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, number: str, *, accepted: bool
+) -> None:
+    contract = tmp_path / "public_contract.json"
+    contract.write_text(
+        '{"schema_version":"1","submission_result":{"type":"number",'
+        '"minimum":0.1,"maximum":0.3,"multipleOf":0.1}}'
+    )
+    monkeypatch.setattr(_VS._load_public_contract, "__defaults__", (contract,))
+    path = tmp_path / "submission.json"
+    path.write_text('{"result":' + number + "}")
+    loaded = _VS.load_submission(path, require_input_binding=False)
+    assert (loaded is not None) is accepted
 
 
 def test_load_submission_enforces_the_complete_public_schema(

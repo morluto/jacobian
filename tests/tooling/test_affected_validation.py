@@ -154,6 +154,30 @@ def test_deleted_python_path_is_not_offered_to_scoped_static_tools() -> None:
     assert commands == (("make", "test-math"),)
 
 
+def test_benchmark_static_selection_keeps_independent_verifiers_out_of_mypy() -> None:
+    runner = _load()
+    paths = [
+        "benchmarks/datasets/public-reproductions-v1/smith-rectangular/tests/verifier_support.py",
+        "benchmarks/datasets/public-reproductions-v1/smith-rank-deficient/tests/verifier_support.py",
+        "benchmarks/validation/test_public_contract.py",
+        "benchmarks/tooling/public_contract.py",
+    ]
+    plan = runner.build_plan(
+        event="pull_request",
+        base_revision="a" * 40,
+        head_revision="b" * 40,
+        changed_paths=paths,
+        repository=ROOT,
+    )
+    commands = runner.commands_for_plan(plan, paths=paths, repository=ROOT)
+    assert commands[0] == ("make", "lint-scoped", "PATHS=" + " ".join(paths))
+    assert commands[1] == (
+        "make",
+        "typecheck-scoped",
+        "PATHS=benchmarks/tooling/public_contract.py",
+    )
+
+
 def test_qepcad_owner_selects_qepcad_without_singular_replay() -> None:
     runner = _load()
     path = "src/jacobian/math/polynomials/real_algebra/_plane_components.py"

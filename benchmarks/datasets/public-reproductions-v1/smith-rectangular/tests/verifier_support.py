@@ -6,6 +6,8 @@ import hashlib
 import json
 import math
 import stat
+from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,7 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
+MAX_JSON_NUMBER_DIGITS = 4_300
 
 
 def is_regular_bounded_file(path: Path, *, max_bytes: int | None) -> bool:
@@ -53,6 +56,32 @@ def _finite_json_float(value: str) -> float:
     if not math.isfinite(parsed):
         raise ValueError(f"out-of-range JSON number: {value}")
     return parsed
+
+
+def _exact_json_integer(value: str) -> int:
+    if len(value) > MAX_JSON_NUMBER_DIGITS:
+        raise ValueError("JSON integer exceeds the decimal digit limit")
+    return int(value)
+
+
+def _exact_json_number(value: str) -> int | Fraction:
+    """Normalize integral decimal/exponent tokens without binary-float rounding."""
+    if len(value) > MAX_JSON_NUMBER_DIGITS:
+        raise ValueError("JSON numeric token exceeds the decimal digit limit")
+    exponent = value.lower().partition("e")[2].lstrip("+-").lstrip("0")
+    if len(exponent) > 4 or (exponent and int(exponent) > 4300):
+        raise ValueError("JSON decimal exponent exceeds [-4300, 4300]")
+    try:
+        parsed = Decimal(value)
+        if not parsed.is_finite():
+            raise ValueError("non-finite JSON number")
+        if parsed == parsed.to_integral_value():
+            if parsed and parsed.adjusted() >= MAX_JSON_NUMBER_DIGITS:
+                raise ValueError("expanded JSON integer exceeds the digit limit")
+            return int(parsed)
+        return Fraction(parsed)
+    except InvalidOperation as exc:
+        raise ValueError("invalid exact JSON number") from exc
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -120,6 +149,20 @@ def _derive_submission_schema(contract: dict[str, Any]) -> dict[str, Any] | None
             "maxItems": max_items,
             "items": item_schema,
         }
+        required_paths = contract.get("required_witness_filenames", [])
+        if required_paths:
+            properties["witness"]["allOf"] = [
+                {
+                    "contains": {
+                        "type": "object",
+                        "required": ["path"],
+                        "properties": {"path": {"const": path}},
+                    },
+                    "minContains": 1,
+                    "maxContains": 1,
+                }
+                for path in required_paths
+            ]
         if min_items:
             required.append("witness")
     schema: dict[str, Any] = {
@@ -145,7 +188,8 @@ def _load_public_contract(
             path.read_text(),
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_json,
-            parse_float=_finite_json_float,
+            parse_int=_exact_json_integer,
+            parse_float=_exact_json_number,
         )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
@@ -186,7 +230,8 @@ def load_submission(
             path.read_text(),
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_json,
-            parse_float=_finite_json_float,
+            parse_int=_exact_json_integer,
+            parse_float=_exact_json_number,
         )
     except (OSError, ValueError, RecursionError, MemoryError, TypeError):
         return None

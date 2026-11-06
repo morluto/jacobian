@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/smith-rank-deficient" \
-      jacobian.checksum="1f7fedff9fc2992f8bd36b9fd77a5dcd6a9f8a29deccb9cd8c98089bae26a2c0"
+      jacobian.checksum="1a9ce91ebd375a1d566397b54677f962973db53ceb765d491bda6c6f9778bcfb"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

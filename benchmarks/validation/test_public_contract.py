@@ -15,6 +15,7 @@ written, or fanned out.  The tests exercise:
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -96,6 +97,21 @@ def test_checked_in_schema_accepts_current_result_and_witness_contracts() -> Non
     validator = Draft202012Validator(schema)
     assert list(validator.iter_errors(result_only)) == []
     assert list(validator.iter_errors(witness_contract)) == []
+
+
+def test_rendering_preserves_exact_decimal_schema_constraints(tmp_path: Path) -> None:
+    data = _base_contract_dict()
+    data.pop("witness")
+    data.pop("required_witness_filenames")
+    data["submission_result"] = {"type": "number", "minimum": "DECIMAL_TOKEN"}
+    text = json.dumps(data).replace('"DECIMAL_TOKEN"', "0.10000000000000001")
+    contract_path = tmp_path / "public_contract.json"
+    contract_path.write_text(text)
+    contract = load_contract(contract_path)
+    schema = json.loads(render_submission_schema(contract), parse_float=Decimal)
+    validator = Draft202012Validator(schema)
+    assert not validator.is_valid({"result": Decimal("0.1")})
+    assert validator.is_valid({"result": Decimal("0.10000000000000001")})
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +208,42 @@ class TestModelValidation:
         }
         with pytest.raises(ValueError, match="relative"):
             PublicContract.model_validate(data)
+
+    @pytest.mark.parametrize("with_witness", [False, True])
+    def test_required_witness_must_be_reachable(self, *, with_witness: bool) -> None:
+        data = _base_contract_dict()
+        if with_witness:
+            data["required_witness_filenames"].append("evidence/unreachable.txt")
+        else:
+            data.pop("witness")
+        with pytest.raises(ValueError, match="unreachable"):
+            PublicContract.model_validate(data)
+
+    def test_witness_capacity_must_carry_distinct_required_files(self) -> None:
+        data = _base_contract_dict()
+        paths = ["evidence/answer.txt", "evidence/trace.json"]
+        data["witness"]["allowed_paths"] = paths
+        data["required_witness_filenames"] = paths
+        with pytest.raises(ValueError, match="cannot carry"):
+            PublicContract.model_validate(data)
+        data["witness"]["max_items"] = 2
+        with pytest.raises(ValueError, match="cannot omit"):
+            PublicContract.model_validate(data)
+        data["witness"]["min_items"] = 2
+        contract = PublicContract.model_validate(data)
+        rendered = json.loads(render_submission_schema(contract))
+        submission = {
+            "result": {"witness": 1},
+            "witness": [
+                {"path": path, "sha256": "sha256:" + "a" * 64} for path in paths
+            ],
+        }
+        assert Draft202012Validator(rendered).is_valid(submission)
+        validator = Draft202012Validator(rendered)
+        submission["witness"] = submission["witness"][:1]
+        assert not validator.is_valid(submission)
+        submission["witness"] *= 2
+        assert not validator.is_valid(submission)
 
     def test_artifact_filename_rejects_traversal(self) -> None:
         data = _base_contract_dict() | {
@@ -306,7 +358,7 @@ class TestRendering:
     def test_submission_schema_witness_multi_path_renders_enum(self) -> None:
         data = _base_contract_dict() | {
             "witness": {
-                "min_items": 1,
+                "min_items": 2,
                 "max_items": 2,
                 "allowed_paths": ["evidence/answer.txt", "evidence/extra.txt"],
                 "media_types": ["text/plain"],

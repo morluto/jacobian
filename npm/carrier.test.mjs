@@ -24,14 +24,16 @@ async function setupEnvironment(base) {
     HOME: home,
     PATH: `${bin}:${process.env.PATH}`,
   };
+  delete env.JACOBIAN_UV_BIN;
   delete env.CLAUDE_CONFIG_DIR;
   return env;
 }
 
-function runCarrier(args, env) {
+function runCarrier(args, env, options = {}) {
   return spawnSync(process.execPath, [join(npmRoot, "bin", "jacobian.cjs"), ...args], {
     encoding: "utf8",
     env,
+    ...options,
   });
 }
 
@@ -679,6 +681,104 @@ test("setup migrates a Codex inline registration and preserves neighboring table
   }
 });
 
+test("upgrade keeps comments that introduce the next Codex table", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-codex-comments-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    const neighbor = `\n# Work documentation server; keep before its table.\n# command = "docs-v1"\n[mcp_servers.docs]\ncommand = "docs"\n`;
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, `[mcp_servers.jacobian]\ncommand = "uv"\nargs = []\n${neighbor}`, "utf8");
+
+    const unmanaged = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+    assert.equal(unmanaged.status, 0, unmanaged.stderr);
+    const first = await readFile(configPath, "utf8");
+    assert.ok(first.endsWith(`startup_timeout_sec = 120\n${neighbor}`), first);
+
+    const managed = `# Managed by Jacobian setup.\n[mcp_servers.jacobian]\ncommand = "npx"\nargs = ["--yes", "jacobian@0.0.1", "mcp", "--managed-by-setup"]\nstartup_timeout_sec = 120\n${neighbor}`;
+    await writeFile(configPath, managed, "utf8");
+    const refresh = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+    assert.equal(refresh.status, 0, refresh.stderr);
+    const second = await readFile(configPath, "utf8");
+    assert.ok(second.endsWith(`startup_timeout_sec = 120\n${neighbor}`), second);
+    assert.equal(TOML.parse(second).mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+
+    const repeat = runCarrier(["upgrade", "--codex", "--dry-run", "--json"], env);
+    assert.equal(repeat.status, 0, repeat.stderr);
+    assert.equal(JSON.parse(repeat.stdout).clients[0].action, "already current");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+for (const managed of [false, true]) {
+  for (const eol of ["\n", "\r\n"]) {
+    for (const atEof of [false, true]) {
+      test(`upgrade preserves empty-table comments: managed=${managed}, CRLF=${eol === "\r\n"}, EOF=${atEof}`, async () => {
+        const base = await mkdtemp(join(tmpdir(), "jacobian-empty-codex-comments-"));
+        try {
+          const env = await setupEnvironment(base);
+          const configPath = join(env.HOME, ".codex", "config.toml");
+          await mkdir(dirname(configPath), { recursive: true });
+          const suffix = `# Keep this comment.${eol}${atEof ? "" : `[mcp_servers.docs]${eol}command = "docs"${eol}`}`;
+          const marker = managed ? `# Managed by Jacobian setup.${eol}` : "";
+          await writeFile(configPath, `${marker}[mcp_servers.jacobian]${eol}${suffix}`, "utf8");
+          const result = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+          assert.equal(result.status, 0, result.stderr);
+          const updated = await readFile(configPath, "utf8");
+          assert.ok(updated.endsWith(suffix), updated);
+          assert.equal(TOML.parse(updated).mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+          const repeat = runCarrier(["upgrade", "--codex", "--dry-run", "--json"], env);
+          assert.equal(repeat.status, 0, repeat.stderr);
+          assert.equal(JSON.parse(repeat.stdout).clients[0].action, "already current");
+        } finally {
+          await rm(base, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+}
+
+test("upgrade handles a large internal comment run and preserves trailing comments", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-long-codex-comments-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    await mkdir(dirname(configPath), { recursive: true });
+    const suffix = '\n# Keep the docs configuration.\n[mcp_servers.docs]\ncommand = "docs"\n';
+    await writeFile(configPath, '# Managed by Jacobian setup.\n[mcp_servers.jacobian]\ncommand = "old"\n' + '# internal note\n'.repeat(20000) + `args = []\n${suffix}`, "utf8");
+    // A generous process deadline catches the old repeated-lookahead stall.
+    const result = runCarrier(["upgrade", "--codex", "--yes", "--json"], env, { timeout: 10000 });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+    const updated = await readFile(configPath, "utf8");
+    assert.ok(updated.endsWith(suffix));
+    assert.ok(!updated.includes("# internal note"));
+    assert.equal(TOML.parse(updated).mcp_servers.docs.command, "docs");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+for (const ending of ["", "\n", "\r\n"]) {
+  test(`upgrade preserves a current registration's final line ending ${JSON.stringify(ending)}`, async () => {
+    const base = await mkdtemp(join(tmpdir(), "jacobian-codex-final-newline-"));
+    try {
+      const env = await setupEnvironment(base);
+      const configPath = join(env.HOME, ".codex", "config.toml");
+      await mkdir(dirname(configPath), { recursive: true });
+      const current = `# Managed by Jacobian setup.\n[mcp_servers.jacobian]\ncommand = "npx"\nargs = ["--yes", "jacobian@${packageMetadata.version}", "mcp", "--managed-by-setup"]\nstartup_timeout_sec = 120${ending}`;
+      await writeFile(configPath, current, "utf8");
+      const result = runCarrier(["upgrade", "--codex", "--dry-run", "--json"], env);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).clients[0].action, "already current");
+      assert.equal(await readFile(configPath, "utf8"), current);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+}
+
 test("setup writes the Claude Code registration and skill under CLAUDE_CONFIG_DIR", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-claude-config-dir-"));
   try {
@@ -781,10 +881,39 @@ test("setup blocks before any write when uvx is unavailable", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-prerequisite-"));
   try {
     const env = { ...process.env, HOME: join(base, "home"), PATH: "" };
+    delete env.JACOBIAN_UV_BIN;
+  delete env.CLAUDE_CONFIG_DIR;
     const result = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /requires uvx on PATH/);
     await assert.rejects(readFile(join(env.HOME, ".codex", "config.toml")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup checks the JACOBIAN_UV_BIN executable that the carrier launches", { skip: process.platform === "win32" }, async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-uv-bin-"));
+  try {
+    const uv = join(base, "tools", "uvx");
+    await mkdir(dirname(uv), { recursive: true });
+    await writeFile(uv, "#!/bin/sh\nexit 0\n", "utf8");
+    await chmod(uv, 0o755);
+    const env = { ...process.env, HOME: join(base, "home"), PATH: "", JACOBIAN_UV_BIN: uv };
+    const accepted = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(JSON.parse(accepted.stdout).status, "planned");
+
+    const broken = {
+      ...(await setupEnvironment(base)),
+      JACOBIAN_UV_BIN: join(base, "tools", "missing-uvx"),
+    };
+    const rejected = runCarrier(["setup", "--codex", "--yes", "--json"], broken);
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /JACOBIAN_UV_BIN does not run/);
+    await assert.rejects(readFile(join(broken.HOME, ".codex", "config.toml")), {
       code: "ENOENT",
     });
   } finally {

@@ -7,32 +7,46 @@
       "properties": {
         "common_gcd": {
           "items": {
+            "maximum": 286297404070204943107692167168,
+            "minimum": -286297404070204943107692167168,
             "type": "integer"
           },
+          "maxItems": 14,
           "minItems": 2,
           "type": "array"
         },
         "parameter": {
+          "maximum": 90,
+          "minimum": -90,
           "type": "integer"
         },
         "quotient": {
           "items": {
+            "maximum": 286297404070204943107692167168,
+            "minimum": -286297404070204943107692167168,
             "type": "integer"
           },
+          "maxItems": 14,
           "minItems": 1,
           "type": "array"
         },
         "remainder_constant": {
           "items": {
+            "maximum": 286297404070204943107692167168,
+            "minimum": -286297404070204943107692167168,
             "type": "integer"
           },
+          "maxItems": 14,
           "minItems": 1,
           "type": "array"
         },
         "remainder_x": {
           "items": {
+            "maximum": 286297404070204943107692167168,
+            "minimum": -286297404070204943107692167168,
             "type": "integer"
           },
+          "maxItems": 14,
           "minItems": 1,
           "type": "array"
         }

@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
+from jacobian.mcp.delivery import ResultDelivery
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server
 from jacobian.process import run_bounded_process
@@ -58,7 +59,12 @@ def main() -> None:
         run=_run_process,
     )
     _build_server(
-        state=AppState(operation_catalog=Catalog((*BUILTIN_TOOLS, operation)))
+        state=AppState(
+            operation_catalog=Catalog((*BUILTIN_TOOLS, operation)),
+            result_delivery=ResultDelivery(4096)
+            if "--bounded-delivery" in sys.argv[1:]
+            else None,
+        )
     ).run("stdio")
 
 

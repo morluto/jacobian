@@ -19,6 +19,7 @@ dependencies = [
     "anyio>=4.5,<5",
     "CyPari>=2.5,<3",
     "mcp==2.2.0",
+    "mcp-types==2.2.0",
     "networkx==3.6.1",
     "pplpy==0.9.0",
     "pydantic>=2.12,<3",

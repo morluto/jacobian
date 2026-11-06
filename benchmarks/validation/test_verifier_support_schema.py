@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import json
 import sys
+import tracemalloc
 from pathlib import Path
 from types import ModuleType
 
@@ -22,6 +23,64 @@ _TEMPLATE = (
 
 
 _VS = load_source_module("_vs_under_test", _TEMPLATE)
+
+
+@pytest.mark.parametrize(
+    "support_path",
+    [_TEMPLATE]
+    + [
+        _TEMPLATE.parents[3] / "datasets" / dataset / task / "tests/verifier_support.py"
+        for dataset, tasks in (
+            ("public-reproductions-v1", ("smith-rectangular", "smith-rank-deficient")),
+            (
+                "mathematical-benchmarks-v1",
+                (
+                    "polynomial-tail-counterexample",
+                    "nonclosed-projection-image",
+                    "cubic-image-classification",
+                    "polynomial-divisibility-uniqueness",
+                ),
+            ),
+        )
+        for task in tasks
+    ],
+)
+def test_exact_json_rejects_cumulative_expansion_before_memory_exhaustion(
+    support_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 80 KB of valid JSON used to retain about 20 MB of expanded denominators;
+    # a file within the public byte cap could exceed a task's 1 GiB memory limit.
+    raw = "[" + ",".join(["1e-4300"] * 10_000) + "]"
+    # Keep the real task bundle immutable while probing its numeric behavior;
+    # the allocation and exact-value assertions below exercise its actual parser.
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    support = load_source_module("_numeric_budget_probe", support_path)
+    tracemalloc.start()
+    try:
+        with pytest.raises(ValueError, match="cumulative numeric storage"):
+            support._exact_json_loads(raw)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 16 * 1024 * 1024
+    # Each parse owns a fresh budget, including after failed parsing.
+    assert support._exact_json_loads("[2.0,2e0,9007199254740993.0]") == [
+        2,
+        2,
+        9007199254740993,
+    ]
+
+
+@pytest.mark.parametrize("token", ["1e-4300", "1e4299", "1"])
+def test_exact_numeric_budget_has_an_accepted_boundary(token: str) -> None:
+    exponent = int(token.partition("e")[2] or "0")
+    charge = 256 + 8 * (2 * len(token) + abs(exponent))
+    count = _VS.MAX_JSON_NUMBER_STORAGE_BYTES // charge
+    raw = "[" + ",".join([token] * count) + "]"
+    assert len(_VS._exact_json_loads(raw)) == count
+    with pytest.raises(ValueError, match="cumulative numeric storage"):
+        _VS._exact_json_loads(raw[:-1] + "," + token + "]")
 
 
 @pytest.mark.parametrize("preserve_existing", [False, True])
@@ -130,7 +189,9 @@ def test_load_public_contract_rejects_invalid_schema(tmp_path: Path) -> None:
     assert _VS._load_public_contract(path) is None
 
 
-@pytest.mark.parametrize("number", ["NaN", "Infinity", "1e999"])
+@pytest.mark.parametrize(
+    "number", ["NaN", "Infinity", "1e9999999", "0e9999999999999999999"]
+)
 def test_load_submission_rejects_nonfinite_json(
     tmp_path: Path,
     contract_path: Path,
@@ -143,6 +204,68 @@ def test_load_submission_rejects_nonfinite_json(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
     assert _VS.load_submission(submission, require_input_binding=False) is None
+
+
+@pytest.mark.parametrize(
+    ("number", "expected"),
+    [
+        ("2.0", 2),
+        ("2e0", 2),
+        ("9007199254740993.0", 9007199254740993),
+        ("1e999", 10**999),
+    ],
+)
+def test_submission_normalizes_exact_integral_tokens(
+    tmp_path: Path,
+    contract_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    number: str,
+    expected: int,
+) -> None:
+    path = tmp_path / "submission.json"
+    path.write_text(f'{{"result": {{"count": {number}, "labels": []}}}}')
+    monkeypatch.setattr(
+        _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
+    )
+    loaded = _VS.load_submission(path, require_input_binding=False)
+    assert loaded["result"]["count"] == expected
+    assert type(loaded["result"]["count"]) is int
+
+
+@pytest.mark.parametrize(
+    "number", ["2.0000000000000001", "1e-9999999", "true", '"2"', "1" + "0" * 4300]
+)
+def test_integer_submission_does_not_round_or_expand_invalid_tokens(
+    tmp_path: Path,
+    contract_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    number: str,
+) -> None:
+    path = tmp_path / "submission.json"
+    path.write_text(f'{{"result": {{"count": {number}, "labels": []}}}}')
+    monkeypatch.setattr(
+        _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
+    )
+    assert _VS.load_submission(path, require_input_binding=False) is None
+
+
+@pytest.mark.parametrize(
+    ("number", "accepted"),
+    [("0.1", True), ("0.3", True), ("0.10000000000000001", False)],
+)
+def test_exact_numbers_and_decimal_schema_constraints_share_one_representation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, number: str, *, accepted: bool
+) -> None:
+    contract = tmp_path / "public_contract.json"
+    contract.write_text(
+        '{"schema_version":"1","submission_result":{"type":"number",'
+        '"minimum":0.1,"maximum":0.3,"multipleOf":0.1}}'
+    )
+    monkeypatch.setattr(_VS._load_public_contract, "__defaults__", (contract,))
+    path = tmp_path / "submission.json"
+    path.write_text('{"result":' + number + "}")
+    loaded = _VS.load_submission(path, require_input_binding=False)
+    assert (loaded is not None) is accepted
 
 
 def test_load_submission_enforces_the_complete_public_schema(

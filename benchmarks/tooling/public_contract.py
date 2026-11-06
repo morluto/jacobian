@@ -44,6 +44,7 @@ import json
 import re
 import sys
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -217,6 +218,22 @@ class PublicContract(BaseModel):
                 raise ValueError(
                     f"witness path {ev_path!r} is not in required_witness_filenames"
                 )
+        unreachable = artifacts - set(self.witness.allowed_paths)
+        if unreachable:
+            raise ValueError(
+                "required witness filenames are unreachable through witness.allowed_paths: "
+                + ", ".join(sorted(unreachable))
+            )
+        if len(artifacts) > self.witness.max_items:
+            raise ValueError(
+                "witness.max_items cannot carry all required witness filenames"
+            )
+        if len(artifacts) > self.witness.min_items:
+            raise ValueError("witness.min_items cannot omit required witness filenames")
+        if self.witness.min_items > len(artifacts):
+            raise ValueError(
+                "witness.min_items exceeds the distinct allowed witness paths"
+            )
         return self
 
     # submission_schema is now derived, not stored
@@ -229,7 +246,36 @@ class PublicContract(BaseModel):
 
 def _dump_json(value: Any) -> str:
     """Deterministic JSON: 2-space indent, sorted keys, trailing newline."""
-    return json.dumps(value, indent=2, sort_keys=True) + "\n"
+    return _render_schema_json(value, 0) + "\n"
+
+
+def _render_schema_json(value: Any, depth: int) -> str:
+    """Retain Decimal literals; the standard encoder would round or quote them."""
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise ValueError("schema numbers must be finite")
+        return str(value)
+    indent = "  " * depth
+    child_indent = indent + "  "
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        entries = [
+            child_indent
+            + json.dumps(key)
+            + ": "
+            + _render_schema_json(value[key], depth + 1)
+            for key in sorted(value)
+        ]
+        return "{\n" + ",\n".join(entries) + "\n" + indent + "}"
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        entries = [
+            child_indent + _render_schema_json(item, depth + 1) for item in value
+        ]
+        return "[\n" + ",\n".join(entries) + "\n" + indent + "]"
+    return json.dumps(value, allow_nan=False)
 
 
 def _declared_schema(contract: PublicContract) -> dict[str, Any]:
@@ -240,6 +286,18 @@ def _declared_schema(contract: PublicContract) -> dict[str, Any]:
             "minItems": contract.witness.min_items,
             "maxItems": contract.witness.max_items,
             "items": contract.witness.item_schema(),
+            "allOf": [
+                {
+                    "contains": {
+                        "type": "object",
+                        "required": ["path"],
+                        "properties": {"path": {"const": path}},
+                    },
+                    "minContains": 1,
+                    "maxContains": 1,
+                }
+                for path in contract.required_witness_filenames
+            ],
         }
     required = ["result"]
     if contract.witness.min_items:
@@ -321,7 +379,7 @@ class ContractError(ValueError):
 
 def load_contract(path: Path) -> PublicContract:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"), parse_float=Decimal)
     except (OSError, json.JSONDecodeError) as exc:
         raise ContractError(f"cannot read contract {path}: {exc}") from exc
     if not isinstance(raw, dict):

@@ -47,14 +47,20 @@ async def _assert_pids_exit(pids: list[int]) -> None:
 
 
 @pytest.mark.skipif(os.name != "posix", reason="process-tree assertion is POSIX")
+@pytest.mark.parametrize("bounded_delivery", [False, True])
 def test_stdio_cancellation_reaps_tree_and_server_remains_responsive(
     tmp_path: Path,
+    *,
+    bounded_delivery: bool,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client, StdioServerParameters, stdio_client
 
         parameters = StdioServerParameters(
-            command=sys.executable, args=[str(SERVER)], env=dict(os.environ), cwd=ROOT
+            command=sys.executable,
+            args=[str(SERVER)] + (["--bounded-delivery"] if bounded_delivery else []),
+            env=dict(os.environ),
+            cwd=ROOT,
         )
         async with Client(stdio_client(parameters), raise_exceptions=True) as client:
             for attempt in range(3):

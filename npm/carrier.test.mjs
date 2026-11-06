@@ -25,6 +25,7 @@ async function setupEnvironment(base) {
     PATH: `${bin}:${process.env.PATH}`,
   };
   delete env.JACOBIAN_UV_BIN;
+  delete env.CLAUDE_CONFIG_DIR;
   return env;
 }
 
@@ -778,6 +779,38 @@ for (const ending of ["", "\n", "\r\n"]) {
   });
 }
 
+test("setup writes the Claude Code registration and skill under CLAUDE_CONFIG_DIR", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-claude-config-dir-"));
+  try {
+    const env = await setupEnvironment(base);
+    env.CLAUDE_CONFIG_DIR = join(base, "claude-work");
+    const configPath = join(env.CLAUDE_CONFIG_DIR, ".claude.json");
+    const skillPath = join(env.CLAUDE_CONFIG_DIR, "skills", "jacobian-math", "SKILL.md");
+    await mkdir(env.CLAUDE_CONFIG_DIR, { recursive: true });
+    await writeFile(configPath, JSON.stringify({ theme: "dark" }), "utf8");
+
+    const plan = runCarrier(["setup", "--claude", "--dry-run", "--json"], env);
+    assert.equal(plan.status, 0, plan.stderr);
+    const [planned] = JSON.parse(plan.stdout).clients;
+    assert.equal(planned.path, configPath);
+    assert.equal(planned.skill_path, skillPath);
+    assert.equal(planned.detected, true);
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+    assert.equal(result.status, 0, result.stderr);
+    const claude = JSON.parse(await readFile(configPath, "utf8"));
+    assert.equal(claude.theme, "dark");
+    assert.equal(claude.mcpServers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+    assert.match(await readFile(skillPath, "utf8"), /<!-- Managed by Jacobian setup\. -->/);
+    await assert.rejects(readFile(join(env.HOME, ".claude.json")), { code: "ENOENT" });
+    await assert.rejects(readFile(join(env.HOME, ".claude", "skills", "jacobian-math", "SKILL.md")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("upgrade runs the pinned setup journey", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-"));
   try {
@@ -849,6 +882,7 @@ test("setup blocks before any write when uvx is unavailable", async () => {
   try {
     const env = { ...process.env, HOME: join(base, "home"), PATH: "" };
     delete env.JACOBIAN_UV_BIN;
+  delete env.CLAUDE_CONFIG_DIR;
     const result = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /requires uvx on PATH/);

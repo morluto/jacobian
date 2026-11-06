@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -32,6 +33,26 @@ def _read_json(path: Path) -> dict[str, object]:
     value = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
+
+
+def _networked_eval_config(tmp_path: Path) -> Path:
+    task_dir = tmp_path / "networked-task"
+    task_dir.mkdir()
+    (task_dir / "task.toml").write_text(
+        '[environment]\nnetwork_mode = "public"\n', encoding="utf-8"
+    )
+    config = tmp_path / "networked-job.json"
+    config.write_text(
+        json.dumps(
+            {
+                "datasets": [
+                    {"path": str(tmp_path), "task_names": ["networked-task"]}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return config
 
 
 def test_observation_job_uses_harbor_dataset_selection() -> None:
@@ -179,6 +200,7 @@ def test_agent_eval_resolves_a_current_image_when_not_explicitly_set(
         "SELECTED_IMAGE": selected,
         "TRACE": str(trace),
     }
+    eval_config = _networked_eval_config(tmp_path)
 
     completed = run_operator_command(
         "make",
@@ -186,6 +208,8 @@ def test_agent_eval_resolves_a_current_image_when_not_explicitly_set(
             "agent-eval",
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
+            f"EVAL_CONFIG={eval_config}",
+            f"HARBOR_PROJECT_PYTHON={sys.executable}",
             f"UV_RUN={fake_uv}",
             f"HARBOR_RUNNER={fake_harbor}",
             "JACOBIAN_REGISTRY_IMAGE=registry.invalid/jacobian",
@@ -250,6 +274,12 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
         "UV_TRACE": str(uv_trace),
         "HOME": str(tmp_path),
     }
+    eval_config = _networked_eval_config(tmp_path)
+    selection_args = (
+        (f"EVAL_CONFIG={eval_config}", f"HARBOR_PROJECT_PYTHON={sys.executable}")
+        if proxy == "0"
+        else ()
+    )
     environment.pop("OPENAI_API_KEY", None)
     environment.pop("CODEX_FORCE_AUTH_JSON", None)
     completed = run_operator_command(
@@ -258,6 +288,7 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
             "agent-eval",
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
+            *selection_args,
             "JACOBIAN_IMAGE=jacobian:test",
             f"JACOBIAN_EVAL_PROXY={proxy}",
             "JACOBIAN_EVAL_HTTP_PROXY=http://proxy.invalid:7890",
@@ -447,6 +478,7 @@ def test_agent_eval_forwards_an_explicit_buildx_builder(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     fake_harbor.chmod(0o755)
+    eval_config = _networked_eval_config(tmp_path)
 
     completed = run_operator_command(
         "make",
@@ -454,6 +486,8 @@ def test_agent_eval_forwards_an_explicit_buildx_builder(tmp_path: Path) -> None:
             "agent-eval",
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
+            f"EVAL_CONFIG={eval_config}",
+            f"HARBOR_PROJECT_PYTHON={sys.executable}",
             "JACOBIAN_IMAGE=jacobian:test",
             "JACOBIAN_EVAL_BUILDX_BUILDER=jacobian-eval-proxy",
             f"HARBOR_RUNNER={fake_harbor}",
@@ -514,6 +548,7 @@ def test_agent_eval_reports_direct_egress_and_only_warns_for_a_configured_proxy(
     fake_harbor = tmp_path / "harbor"
     fake_harbor.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     fake_harbor.chmod(0o755)
+    eval_config = _networked_eval_config(tmp_path)
 
     completed = run_operator_command(
         "make",
@@ -521,6 +556,8 @@ def test_agent_eval_reports_direct_egress_and_only_warns_for_a_configured_proxy(
             "agent-eval",
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
+            f"EVAL_CONFIG={eval_config}",
+            f"HARBOR_PROJECT_PYTHON={sys.executable}",
             "JACOBIAN_IMAGE=jacobian:test",
             "JACOBIAN_EVAL_PROXY=0",
             f"JACOBIAN_EVAL_HTTP_PROXY={configured_proxy}",
@@ -542,3 +579,38 @@ def test_agent_eval_reports_direct_egress_and_only_warns_for_a_configured_proxy(
     assert (warning in output) is expects_warning
     assert (hint in output) is expects_warning
     assert "proxy.invalid" not in output
+
+
+def test_agent_eval_stops_before_harbor_for_selected_no_network_tasks(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "harbor-started.txt"
+    fake_harbor = tmp_path / "harbor"
+    fake_harbor.write_text(
+        '#!/bin/sh\nprintf started > "$TRACE"\n', encoding="utf-8"
+    )
+    fake_harbor.chmod(0o755)
+
+    completed = run_operator_command(
+        "make",
+        (
+            "agent-eval",
+            "EVAL_EXECUTE=1",
+            "JACOBIAN_MODEL=test-model",
+            "JACOBIAN_IMAGE=jacobian:test",
+            "TASKS=graph-counterexample",
+            f"HARBOR_PROJECT_PYTHON={sys.executable}",
+            f"HARBOR_RUNNER={fake_harbor}",
+        ),
+        cwd=ROOT,
+        environment=os.environ | {"TRACE": str(trace)},
+        timeout_seconds=30,
+    )
+
+    assert completed.status is ToolCommandStatus.EXITED
+    assert completed.exit_code == 2
+    output = completed.stderr.decode("utf-8", errors="replace")
+    assert "graph-counterexample" in output
+    assert "No trials were scheduled" in output
+    assert "JACOBIAN_EVAL_PROXY=1" in output
+    assert not trace.exists()

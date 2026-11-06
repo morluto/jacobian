@@ -50,6 +50,12 @@ Jacobian MCP endpoint. Harbor installs the complete Codex runtime inside the
 task environment through that proxy, so the evaluation does not bind-mount a
 host Codex executable or its Code Mode companion.
 
+Tasks with `environment.network_mode = "no-network"` cannot install that
+runtime through direct egress. The `agent-eval` preflight stops before Harbor
+schedules trials and identifies the selected task; rerun with
+`JACOBIAN_EVAL_PROXY=1` and a reachable upstream proxy. This keeps setup traffic
+on the configured proxy path while preserving the task's network policy.
+
 ### Build images through an opt-in proxy builder
 
 The trial proxy starts only after Docker has built the task image. A fresh

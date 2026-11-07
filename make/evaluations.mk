@@ -74,6 +74,11 @@ agent-eval: ## Run a Harbor observation (JACOBIAN_ENABLED=0|1, DATASET=..., TASK
 		echo "JACOBIAN_MODEL must be exported" >&2; \
 		exit 2; \
 	fi; \
+	if [ "$(JACOBIAN_EVAL_PROXY)" = "0" ]; then \
+		$(HARBOR_PYTHON) -m benchmarks.tooling.agent_eval_preflight \
+			--config "$(EVAL_CONFIG)" --dataset "$(or $(DATASET),mathematical-benchmarks-v1)" \
+			$(if $(TASKS),--tasks "$(TASKS)",); \
+	fi; \
 	if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then \
 		echo "Provider egress: proxy"; \
 		if [ -n "$(JACOBIAN_EVAL_BUILDX_BUILDER)" ]; then \

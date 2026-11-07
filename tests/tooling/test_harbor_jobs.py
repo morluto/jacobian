@@ -44,11 +44,7 @@ def _networked_eval_config(tmp_path: Path) -> Path:
     config = tmp_path / "networked-job.json"
     config.write_text(
         json.dumps(
-            {
-                "datasets": [
-                    {"path": str(tmp_path), "task_names": ["networked-task"]}
-                ]
-            }
+            {"datasets": [{"path": str(tmp_path), "task_names": ["networked-task"]}]}
         ),
         encoding="utf-8",
     )
@@ -586,9 +582,7 @@ def test_agent_eval_stops_before_harbor_for_selected_no_network_tasks(
 ) -> None:
     trace = tmp_path / "harbor-started.txt"
     fake_harbor = tmp_path / "harbor"
-    fake_harbor.write_text(
-        '#!/bin/sh\nprintf started > "$TRACE"\n', encoding="utf-8"
-    )
+    fake_harbor.write_text('#!/bin/sh\nprintf started > "$TRACE"\n', encoding="utf-8")
     fake_harbor.chmod(0o755)
 
     completed = run_operator_command(

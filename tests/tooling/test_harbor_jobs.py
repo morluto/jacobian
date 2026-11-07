@@ -308,7 +308,11 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
     assert completed.status is ToolCommandStatus.EXITED
     assert completed.exit_code == 0, completed.stderr.decode("utf-8", errors="replace")
     arguments = trace.read_text(encoding="utf-8").splitlines()
-    assert arguments[arguments.index("-c") + 1].endswith(expected_job)
+    selected_job = arguments[arguments.index("-c") + 1]
+    if proxy == "0":
+        assert selected_job == str(eval_config)
+    else:
+        assert selected_job.endswith(expected_job)
     mcp_index = arguments.index("--mcp-config")
     assert arguments[mcp_index + 1] == "benchmarks/config/jacobian-loopback.mcp.json"
     assert "web_search=enabled" in arguments

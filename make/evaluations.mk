@@ -75,7 +75,7 @@ agent-eval: ## Run a Harbor observation (JACOBIAN_ENABLED=0|1, DATASET=..., TASK
 		exit 2; \
 	fi; \
 	if [ "$(JACOBIAN_EVAL_PROXY)" = "0" ]; then \
-		$(HARBOR_PROJECT_PYTHON) -m benchmarks.tooling.agent_eval_preflight \
+		$(HARBOR_PYTHON) -m benchmarks.tooling.agent_eval_preflight \
 			--config "$(EVAL_CONFIG)" --dataset "$(or $(DATASET),mathematical-benchmarks-v1)" \
 			$(if $(TASKS),--tasks "$(TASKS)",); \
 	fi; \

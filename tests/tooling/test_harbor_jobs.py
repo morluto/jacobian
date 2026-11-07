@@ -205,7 +205,7 @@ def test_agent_eval_resolves_a_current_image_when_not_explicitly_set(
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
             f"EVAL_CONFIG={eval_config}",
-            f"HARBOR_PROJECT_PYTHON={sys.executable}",
+            f"HARBOR_PYTHON={sys.executable}",
             f"UV_RUN={fake_uv}",
             f"HARBOR_RUNNER={fake_harbor}",
             "JACOBIAN_REGISTRY_IMAGE=registry.invalid/jacobian",
@@ -272,7 +272,7 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
     }
     eval_config = _networked_eval_config(tmp_path)
     selection_args = (
-        (f"EVAL_CONFIG={eval_config}", f"HARBOR_PROJECT_PYTHON={sys.executable}")
+        (f"EVAL_CONFIG={eval_config}", f"HARBOR_PYTHON={sys.executable}")
         if proxy == "0"
         else ()
     )
@@ -487,7 +487,7 @@ def test_agent_eval_forwards_an_explicit_buildx_builder(tmp_path: Path) -> None:
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
             f"EVAL_CONFIG={eval_config}",
-            f"HARBOR_PROJECT_PYTHON={sys.executable}",
+            f"HARBOR_PYTHON={sys.executable}",
             "JACOBIAN_IMAGE=jacobian:test",
             "JACOBIAN_EVAL_BUILDX_BUILDER=jacobian-eval-proxy",
             f"HARBOR_RUNNER={fake_harbor}",
@@ -557,7 +557,7 @@ def test_agent_eval_reports_direct_egress_and_only_warns_for_a_configured_proxy(
             "EVAL_EXECUTE=1",
             "JACOBIAN_MODEL=test-model",
             f"EVAL_CONFIG={eval_config}",
-            f"HARBOR_PROJECT_PYTHON={sys.executable}",
+            f"HARBOR_PYTHON={sys.executable}",
             "JACOBIAN_IMAGE=jacobian:test",
             "JACOBIAN_EVAL_PROXY=0",
             f"JACOBIAN_EVAL_HTTP_PROXY={configured_proxy}",
@@ -588,6 +588,9 @@ def test_agent_eval_stops_before_harbor_for_selected_no_network_tasks(
     fake_harbor = tmp_path / "harbor"
     fake_harbor.write_text('#!/bin/sh\nprintf started > "$TRACE"\n', encoding="utf-8")
     fake_harbor.chmod(0o755)
+    fake_project_python = tmp_path / "project-python"
+    fake_project_python.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+    fake_project_python.chmod(0o755)
 
     completed = run_operator_command(
         "make",
@@ -597,7 +600,8 @@ def test_agent_eval_stops_before_harbor_for_selected_no_network_tasks(
             "JACOBIAN_MODEL=test-model",
             "JACOBIAN_IMAGE=jacobian:test",
             "TASKS=graph-counterexample",
-            f"HARBOR_PROJECT_PYTHON={sys.executable}",
+            f"HARBOR_PYTHON={sys.executable}",
+            f"HARBOR_PROJECT_PYTHON={fake_project_python}",
             f"HARBOR_RUNNER={fake_harbor}",
         ),
         cwd=ROOT,

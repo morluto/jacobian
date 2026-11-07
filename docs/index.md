@@ -61,8 +61,6 @@ Native Python callers can use domain functions without a catalog or server.
   polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Berry--Esseen operation](reference/probability-berry-esseen.md) — the
   i.i.d. finite-sum constant 14/25 with its exact error form.
-- [Berry--Esseen operation](reference/probability-berry-esseen.md) — the
-  i.i.d. finite-sum constant 14/25 with its exact error form.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and
   focused test lanes.
 

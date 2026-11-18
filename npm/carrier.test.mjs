@@ -381,6 +381,33 @@ fs.writeFileSync(process.env.JACOBIAN_TEST_COLLISION_LOG, collision);
   }
 });
 
+test("setup preserves an equivalent JSONC registration with reordered keys", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-key-order-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    await mkdir(env.HOME, { recursive: true });
+    const args = ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"];
+    const original = [
+      '{"mcpServers":{"jacobian":{',
+      "  // Keep the launcher argument list documented.",
+      `  "args": ${JSON.stringify(args)},`,
+      '  "command": "npx",',
+      "}}}",
+      "",
+    ].join("\n");
+    await writeFile(configPath, original, "utf8");
+
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).clients[0].action, "already current");
+    assert.equal(await readFile(configPath, "utf8"), original);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("setup rejects ambiguous duplicate JSONC keys before any write", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-duplicate-"));
   try {

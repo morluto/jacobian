@@ -256,10 +256,6 @@ function parseJson(source, filePath) {
   return value;
 }
 
-function sameJson(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function planJsonEdit(client, filePath, original, runtime) {
   const source = original === null ? "{}\n" : original;
   const root = parseJson(source, filePath);
@@ -269,7 +265,9 @@ function planJsonEdit(client, filePath, original, runtime) {
   }
   const current = section && section[SERVER_NAME];
   const expected = jsonEntry(client, runtime);
-  if (sameJson(current, expected)) return { action: "already current", updated: null };
+  // jsonc-parser represents object nodes with a null prototype.
+  const comparable = Object.assign(Object.create(null), expected);
+  if (isDeepStrictEqual(current, comparable)) return { action: "already current", updated: null };
   const edits = modify(source, [client.section, SERVER_NAME], expected, {
     formattingOptions: { insertSpaces: true, tabSize: 2, eol: "\n" },
   });

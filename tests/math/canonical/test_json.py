@@ -256,3 +256,22 @@ def test_strict_decoder_reports_invalid_unicode_as_encoding_error() -> None:
 
     with pytest.raises(CanonicalizationError, match="UTF-8"):
         loads_strict_json('"\ud800"')
+
+
+@pytest.mark.parametrize(
+    "source",
+    [r'"\ud800"', r'{"outer":{"\udfff":1}}', r'{"value":["\ud800A"]}'],
+)
+def test_strict_decoder_rejects_escaped_lone_surrogates(source: str) -> None:
+    from jacobian.canonical import loads_strict_json
+
+    with pytest.raises(CanonicalizationError, match="Unicode scalar"):
+        loads_strict_json(source)
+
+
+def test_strict_decoder_accepts_supplementary_unicode_scalars() -> None:
+    from jacobian.canonical import loads_strict_json
+
+    assert loads_strict_json(r'{"\ud83d\ude00":"\ud834\udd1e"}') == {
+        "\U0001f600": "\U0001d11e"
+    }

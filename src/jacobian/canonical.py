@@ -15,6 +15,7 @@ from typing import Any, NoReturn, SupportsInt
 import rfc8785
 
 _INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
 _MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 _BUILTIN_DECIMAL_DIGITS = sys.int_info.str_digits_check_threshold
 _BUILTIN_DECIMAL_BOUND = 10**_BUILTIN_DECIMAL_DIGITS
@@ -215,9 +216,19 @@ def _validate_json_value(value: Any, *, limits: CanonicalLimits, depth: int) -> 
     if isinstance(value, dict):
         _validate_json_object(value, limits=limits, depth=depth)
         return
-    if value is None or isinstance(value, str):
+    if isinstance(value, str):
+        _validate_json_string(value)
+        return
+    if value is None:
         return
     raise CanonicalizationError("unsupported JSON value type")
+
+
+def _validate_json_string(value: str) -> None:
+    if not value.isascii() and _SURROGATE.search(value):
+        raise CanonicalizationError(
+            "JSON strings must contain only Unicode scalar values"
+        )
 
 
 def _validate_json_integer(value: int) -> None:
@@ -240,6 +251,7 @@ def _validate_json_object(
     for key, nested in value.items():
         if not isinstance(key, str):
             raise CanonicalizationError("JSON object keys must be strings")
+        _validate_json_string(key)
         _validate_json_value(nested, limits=limits, depth=depth + 1)
 
 

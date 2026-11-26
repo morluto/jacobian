@@ -85,8 +85,14 @@ def main() -> None:
         from mcp.server.auth.settings import AuthSettings
         from pydantic import AnyHttpUrl
 
+        # IPv6 literals need brackets in a URL (RFC 3986).
+        url_host = (
+            f"[{args.host}]"
+            if ":" in args.host and not args.host.startswith("[")
+            else args.host
+        )
         public_base_url = str(
-            args.public_base_url or f"http://{args.host}:{args.port}"
+            args.public_base_url or f"http://{url_host}:{args.port}"
         ).rstrip("/")
         token_verifier = StaticTokenVerifier(
             load_static_token_file(args.auth_tokens_file)

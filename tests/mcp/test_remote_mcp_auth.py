@@ -248,3 +248,65 @@ def test_remote_cli_uses_stateless_http_by_default(
     )
     remote_cli.main()
     assert calls[0]["stateless_http"] is False
+
+
+@pytest.mark.parametrize(
+    ("host", "expected_base_url"),
+    [("::1", "http://[::1]:8000"), ("127.0.0.1", "http://127.0.0.1:8000")],
+)
+def test_remote_cli_builds_default_public_base_url_for_host(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    host: str,
+    expected_base_url: str,
+) -> None:
+    from mcp.server.auth.settings import AuthSettings
+
+    from jacobian.mcp import remote, remote_cli
+
+    created: dict[str, object] = {}
+    runs: list[dict[str, object]] = []
+
+    class _Server:
+        def run(self, _transport: str, **kwargs: object) -> None:
+            runs.append(kwargs)
+
+    def create_remote_server(**kwargs: object) -> _Server:
+        created.update(kwargs)
+        return _Server()
+
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(
+        json.dumps(
+            {
+                "tokens": [
+                    {
+                        "tenant_id": "alpha",
+                        "token": "a" * 32,
+                        "scopes": ["jacobian:use"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(remote, "create_remote_server", create_remote_server)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "jacobian-remote-mcp",
+            "--host",
+            host,
+            "--auth-tokens-file",
+            str(token_file),
+        ],
+    )
+
+    remote_cli.main()
+
+    auth = created["auth"]
+    assert isinstance(auth, AuthSettings)
+    assert str(auth.issuer_url) == f"{expected_base_url}/"
+    assert str(auth.resource_server_url) == f"{expected_base_url}/mcp"
+    assert runs[0]["host"] == host
